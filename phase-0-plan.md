@@ -587,11 +587,15 @@ git commit -m "chore: add shared eslint, prettier, and pre-commit hook"
 {
   "extends": "@jdm/tsconfig/node.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
   },
   "include": ["src/**/*", "test/**/*"]
 }
 ```
+
+Note: `module`/`moduleResolution` are overridden to `Bundler` because this package is source-only (`main` resolves to `src/index.ts`, consumed by bundlers and Vitest without a build step). The base `node.json` sets `NodeNext`, which would require `.js` extensions on every relative import. Add `"@types/node": "^22.10.0"` to `devDependencies` as well — the base `node.json` declares `types: ["node"]`.
 
 - [ ] **Step 3: Write failing test `packages/shared/test/ids.test.ts`**
 
@@ -794,11 +798,15 @@ volumes:
 {
   "extends": "@jdm/tsconfig/node.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
   },
   "include": ["src/**/*"]
 }
 ```
+
+Note: `module`/`moduleResolution` are overridden to `Bundler` because this is a source-only package (`main` points at `src/index.ts`, consumed by Vitest/Next/Metro without a build step). The base `node.json` sets `NodeNext` which would require `.js` extensions on imports — wrong for source-only packages.
 
 - [ ] **Step 4: Install workspace deps, then run `prisma init`**
 
