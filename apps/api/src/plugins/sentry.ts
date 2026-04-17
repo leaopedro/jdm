@@ -1,0 +1,26 @@
+import * as Sentry from '@sentry/node';
+import fp from 'fastify-plugin';
+
+import type { Env } from '../env.js';
+
+// eslint-disable-next-line @typescript-eslint/require-await
+export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {
+  if (!opts.env.SENTRY_DSN) {
+    app.log.info('Sentry disabled (no SENTRY_DSN)');
+    return;
+  }
+
+  Sentry.init({
+    dsn: opts.env.SENTRY_DSN,
+    environment: opts.env.NODE_ENV,
+    release: opts.env.GIT_SHA,
+    tracesSampleRate: 0.1,
+  });
+
+  app.addHook('onError', async (request, _reply, error) => {
+    Sentry.withScope((scope) => {
+      scope.setTag('request_id', request.id);
+      Sentry.captureException(error);
+    });
+  });
+});
