@@ -62,6 +62,7 @@ Each task ends with a Conventional Commit. Keep commits small — do not batch t
 - Create: `package.json`
 - Create: `pnpm-workspace.yaml`
 - Create: `turbo.json`
+- Create: `.npmrc`
 - Create: `.nvmrc`
 - Create: `.editorconfig`
 - Create: `.gitignore`
@@ -146,6 +147,14 @@ packages:
   - "packages/*"
 ```
 
+- [ ] **Step 4b: Create `.npmrc`** (Expo/Metro needs hoisted node_modules)
+
+```
+node-linker=hoisted
+store-dir=~/.pnpm-store
+strict-peer-dependencies=false
+```
+
 - [ ] **Step 5: Create root `package.json`**
 
 ```json
@@ -155,7 +164,8 @@ packages:
   "version": "0.0.0",
   "packageManager": "pnpm@10.4.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "pnpm": ">=10.4.1"
   },
   "scripts": {
     "build": "turbo run build",
@@ -179,7 +189,7 @@ packages:
 ```json
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env", ".nvmrc", "tsconfig.base.json"],
+  "globalDependencies": [".nvmrc", "tsconfig.base.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -190,7 +200,6 @@ packages:
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"],
       "outputs": []
     },
     "typecheck": {
@@ -198,12 +207,13 @@ packages:
       "outputs": ["**/*.tsbuildinfo"]
     },
     "test": {
-      "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     }
   }
 }
 ```
+
+Note: `.env` is intentionally not in `globalDependencies` — it's gitignored and per-developer. Per-variable cache busting lands as `globalEnv` entries in later tasks as real env vars emerge. `lint`/`test` don't depend on `^build` because workspace packages expose source (`main: "./src/index.ts"`), not compiled output.
 
 - [ ] **Step 7: Create placeholder directories**
 
@@ -225,7 +235,7 @@ Expected: install creates `pnpm-lock.yaml`; `turbo run build` prints "No tasks w
 - [ ] **Step 9: Commit**
 
 ```bash
-git add .nvmrc .editorconfig .gitignore pnpm-workspace.yaml package.json turbo.json pnpm-lock.yaml apps/.gitkeep packages/.gitkeep
+git add .nvmrc .editorconfig .gitignore .npmrc pnpm-workspace.yaml package.json turbo.json pnpm-lock.yaml apps/.gitkeep packages/.gitkeep
 git commit -m "chore: initialize pnpm + turborepo workspace"
 ```
 
