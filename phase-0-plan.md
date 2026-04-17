@@ -7,6 +7,7 @@
 **Architecture:** Single pnpm workspace orchestrated by Turborepo. Three apps (`apps/api`, `apps/mobile`, `apps/admin`) consume three shared packages (`packages/tsconfig`, `packages/shared`, `packages/db`). API is Fastify + Prisma on Postgres; mobile is Expo (managed) + Expo Router; admin is Next.js 15 App Router + Tailwind. CI (GitHub Actions) runs lint + typecheck + test across all workspaces. Deploy targets: Railway (API + Postgres), Vercel (admin), EAS (mobile).
 
 **Tech Stack:**
+
 - Node 22 LTS, pnpm 10, Turborepo 2, TypeScript 5.7 (strict)
 - Fastify 5, Pino, Prisma 6, Postgres 16
 - Expo SDK 52, React Native 0.76, Expo Router 4
@@ -17,6 +18,7 @@
 - Sentry SDKs (`@sentry/node`, `@sentry/nextjs`, `@sentry/react-native` via Expo plugin)
 
 **Repo conventions this plan locks in:**
+
 - Workspace names: `@jdm/api`, `@jdm/mobile`, `@jdm/admin`, `@jdm/shared`, `@jdm/db`, `@jdm/tsconfig`.
 - Env prefixes: API envs are unprefixed (`DATABASE_URL`, `JWT_SECRET`), mobile public envs use `EXPO_PUBLIC_*`, admin public envs use `NEXT_PUBLIC_*`.
 - Commit style: Conventional Commits (`feat:`, `chore:`, `docs:`, `test:`, `ci:`).
@@ -25,6 +27,7 @@
 **Out of scope for Phase 0:** Any feature work (auth, events, tickets, push). This phase only proves the pipes work.
 
 **Scaffolder usage:**
+
 - **Use scaffolders** in Task 5 (`prisma init`), Task 8 (`create-expo-app`), Task 9 (`eas init` + `eas build:configure`), Task 10 (`create-next-app`), Task 15 (`@sentry/wizard` for Next + Expo).
 - **Skip scaffolders** in Task 1 (`create-turbo` ships Next.js example apps + differently-named config packages that would need stripping/renaming — net negative) and Task 6 (`fastify-cli generate` imposes a plugin/autoload convention we don't want).
 - In every scaffolder task, run the scaffolder first, then patch specific files to match this plan's target state. Diff `git status` after each patch step to confirm only the intended files changed.
@@ -59,6 +62,7 @@ Each task ends with a Conventional Commit. Keep commits small — do not batch t
 ## Task 1: Monorepo scaffold (roadmap 0.1)
 
 **Files:**
+
 - Create: `package.json`
 - Create: `pnpm-workspace.yaml`
 - Create: `turbo.json`
@@ -143,8 +147,8 @@ apps/mobile/android/
 
 ```yaml
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 ```
 
 - [ ] **Step 4b: Create `.npmrc`** (Expo/Metro needs hoisted node_modules)
@@ -224,6 +228,7 @@ mkdir -p apps packages && touch apps/.gitkeep packages/.gitkeep
 - [ ] **Step 8: Verify install + empty turbo run succeed**
 
 Run:
+
 ```bash
 corepack enable && corepack prepare pnpm@10.4.1 --activate
 pnpm install
@@ -244,6 +249,7 @@ git commit -m "chore: initialize pnpm + turborepo workspace"
 ## Task 2: Shared TypeScript config package (roadmap 0.2)
 
 **Files:**
+
 - Create: `packages/tsconfig/package.json`
 - Create: `packages/tsconfig/base.json`
 - Create: `packages/tsconfig/node.json`
@@ -344,6 +350,7 @@ git commit -m "chore: initialize pnpm + turborepo workspace"
 - [ ] **Step 6: Add `@jdm/tsconfig` to workspace install**
 
 Run:
+
 ```bash
 pnpm install
 ```
@@ -362,6 +369,7 @@ git commit -m "chore: add shared tsconfig package"
 ## Task 3: Shared lint + format config (roadmap 0.3)
 
 **Files:**
+
 - Create: `eslint.config.js`
 - Create: `.prettierrc`
 - Create: `.prettierignore`
@@ -407,9 +415,9 @@ packages/db/prisma/migrations/
 
 ```js
 import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import importPlugin from 'eslint-plugin-import';
 import prettier from 'eslint-config-prettier';
+import importPlugin from 'eslint-plugin-import';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
@@ -429,7 +437,7 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: { allowDefaultProject: ['*.js'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -451,9 +459,19 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['eslint.config.js'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
   prettier,
 );
 ```
+
+Notes: `projectService.allowDefaultProject: ['*.js']` lets ESLint type-check `eslint.config.js` itself without a bespoke tsconfig. The final override scopes three `no-unsafe-*` rules off inside `eslint.config.js` only — the `typescript-eslint` / `eslint-plugin-import` spread APIs return `any`-typed values that would self-trigger those rules otherwise.
 
 - [ ] **Step 5: Create `.lintstagedrc.json`**
 
@@ -464,12 +482,15 @@ export default tseslint.config(
 }
 ```
 
-- [ ] **Step 6: Add root scripts + `simple-git-hooks` config**
+- [ ] **Step 6: Add root scripts + `simple-git-hooks` config + `"type": "module"`**
 
-Modify `package.json` — replace the `scripts` block and add the two new fields:
+Modify `package.json`: set `"type": "module"` (required because `eslint.config.js` uses ESM `import`), replace the `scripts` block, and add the `simple-git-hooks` config. Preserve `name`, `private`, `version`, `packageManager`, `engines` (with both `node` and `pnpm` pins), and `devDependencies`.
+
+Target additions:
 
 ```json
 {
+  "type": "module",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -517,6 +538,7 @@ git commit -m "chore: add shared eslint, prettier, and pre-commit hook"
 ## Task 4: `packages/shared` (roadmap 0.4)
 
 **Files:**
+
 - Create: `packages/shared/package.json`
 - Create: `packages/shared/tsconfig.json`
 - Create: `packages/shared/src/index.ts`
@@ -643,18 +665,21 @@ export const orderId = (value: string): OrderId => {
 - [ ] **Step 6: Stub the remaining modules (empty but importable)**
 
 `packages/shared/src/auth.ts`:
+
 ```ts
 // Auth schemas land here in F1 (see roadmap 1.1). Intentionally empty in Phase 0.
 export {};
 ```
 
 `packages/shared/src/events.ts`:
+
 ```ts
 // Event schemas land here in F3 (see roadmap 3.1). Intentionally empty in Phase 0.
 export {};
 ```
 
 `packages/shared/src/health.ts`:
+
 ```ts
 import { z } from 'zod';
 
@@ -668,6 +693,7 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
 ```
 
 `packages/shared/src/index.ts`:
+
 ```ts
 export * from './ids';
 export * from './health';
@@ -697,6 +723,7 @@ git commit -m "feat(shared): add branded id helpers and health schema"
 **Approach:** Use `prisma init` to generate `schema.prisma` + `.env` with the right provider block, then patch.
 
 **Files:**
+
 - Create: `packages/db/package.json`
 - Create: `packages/db/tsconfig.json`
 - Scaffold then patch: `packages/db/prisma/schema.prisma` (via `prisma init`)
@@ -717,11 +744,11 @@ services:
       POSTGRES_PASSWORD: jdm
       POSTGRES_DB: jdm
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - jdm_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U jdm -d jdm"]
+      test: ['CMD-SHELL', 'pg_isready -U jdm -d jdm']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -880,6 +907,7 @@ git commit -m "feat(db): bootstrap prisma with placeholder User model"
 ## Task 6: `apps/api` — Fastify skeleton (roadmap 0.6)
 
 **Files:**
+
 - Create: `apps/api/package.json`
 - Create: `apps/api/tsconfig.json`
 - Create: `apps/api/Dockerfile`
@@ -1263,6 +1291,7 @@ git commit -m "feat(api): fastify skeleton with /health, env, logger, request-id
 ## Task 7: `apps/api` — integration test harness (roadmap 0.7)
 
 **Files:**
+
 - Modify: `apps/api/package.json` (add deps)
 - Create: `apps/api/vitest.config.ts`
 - Create: `apps/api/test/setup.ts`
@@ -1394,6 +1423,7 @@ git commit -m "test(api): add vitest + testcontainers harness with /health integ
 **Approach:** Use `create-expo-app` with the `default` template — it ships Expo Router pre-wired, real 1024×1024 icon/splash/adaptive-icon PNGs, the correct `babel.config.js`, a working `app.json`, and the `expo-router/entry` main. Then patch for our monorepo (metro config, workspace package name, app.config.ts with variants, our screens).
 
 **Files after this task:**
+
 - Scaffolded: `apps/mobile/package.json` (patched), `babel.config.js`, `assets/*` (kept), `tsconfig.json` (replaced), `.gitignore` (kept), `app.json` (deleted — replaced by `app.config.ts`)
 - Replaced: `apps/mobile/app/_layout.tsx`, `app/index.tsx`
 - Added: `apps/mobile/metro.config.js`, `app.config.ts`, `.env.example`, `src/api/client.ts`, `src/theme/index.ts`, `src/components/Button.tsx`
@@ -1805,6 +1835,7 @@ git commit -m "feat(mobile): scaffold expo router app via create-expo-app and wi
 **Approach:** Use `eas init` to link the Expo project (writes `EAS_PROJECT_ID` under `extra.eas.projectId`), then `eas build:configure` to generate a default `eas.json`, then patch to our three profiles.
 
 **Files:**
+
 - Scaffold then patch: `apps/mobile/eas.json` (via `eas build:configure`)
 - Scaffold side effect: `apps/mobile/app.config.ts` gets `extra.eas.projectId` populated (or you set `EAS_PROJECT_ID` env instead)
 - Create: `docs/eas-credentials.md`
@@ -1881,6 +1912,7 @@ Everything below is obtained once per environment and stored in EAS's hosted
 credential store — never committed.
 
 ## Apple (iOS)
+
 - Apple Developer Program membership ($99/yr).
 - App Store Connect app records for each bundle identifier:
   - `com.jdmexperience.app.dev` (development)
@@ -1893,16 +1925,19 @@ credential store — never committed.
   profile.
 
 ## Google (Android)
+
 - Google Play Console account + app record for `com.jdmexperience.app`.
 - Play Console service account JSON with "Release manager" role, uploaded
   via `eas credentials` (never commit the JSON).
 - Upload keystore generated and stored in EAS.
 
 ## Expo
+
 - `EAS_PROJECT_ID` populated in EAS dashboard, mirrored to `apps/mobile/.env`
   and GitHub Actions secrets.
 
 ## Verification
+
 - `eas build --profile development --platform ios --local` dry-run succeeds.
 - `eas build --profile preview --platform ios` produces a TestFlight-ready IPA.
 - `eas build --profile preview --platform android` produces an installable APK.
@@ -1923,6 +1958,7 @@ git commit -m "chore(mobile): link eas project, add build profiles and credentia
 **Approach:** Use `create-next-app` with non-interactive flags to scaffold the App Router, Tailwind, ESLint, and `~/*` import alias. Then patch `tsconfig.json` to extend `@jdm/tsconfig`, add workspace deps, and replace the sample page with our health-fetch page.
 
 **Files after this task:**
+
 - Scaffolded: `apps/admin/package.json` (patched), `next.config.mjs`, `postcss.config.mjs`, `tailwind.config.ts` (patched), `app/layout.tsx`, `app/globals.css` (patched), `tsconfig.json` (patched), `next-env.d.ts`, `.eslintrc.json` (kept; Task 3's root eslint takes precedence for repo-wide runs)
 - Replaced: `apps/admin/app/page.tsx`
 - Added: `apps/admin/app/api/health/route.ts`, `apps/admin/src/lib/api.ts`, `apps/admin/.env.example`
@@ -2003,8 +2039,7 @@ const config = {
   reactStrictMode: true,
   transpilePackages: ['@jdm/shared'],
   env: {
-    NEXT_PUBLIC_API_BASE_URL:
-      process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
   },
 };
 
@@ -2169,6 +2204,7 @@ git commit -m "feat(admin): next.js app router skeleton with tailwind and api he
 ## Task 11: GitHub Actions CI (roadmap 0.11)
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Create `.github/workflows/ci.yml`**
@@ -2290,6 +2326,7 @@ git commit -m "ci: add lint/typecheck/test/build pipeline across workspaces"
 ## Task 12: Railway deploy — API + Postgres (roadmap 0.12)
 
 **Files:**
+
 - Create: `RAILWAY.md`
 - Create: `apps/api/railway.json`
 - Modify: `apps/api/package.json` (add `start:migrate` script)
@@ -2383,6 +2420,7 @@ Expected: `{"status":"ok","sha":"<commit>","uptimeSeconds":<n>}`. Tick the roadm
 ## Task 13: Vercel deploy — Admin (roadmap 0.13)
 
 **Files:**
+
 - Create: `apps/admin/vercel.json`
 - Modify: `RAILWAY.md` (cross-link from admin setup doc — see Step 3)
 
@@ -2432,6 +2470,7 @@ git commit -m "chore(admin): add vercel config and deploy runbook"
 ## Task 14: Secrets & env management (roadmap 0.14)
 
 **Files:**
+
 - Create: `docs/secrets.md`
 
 - [ ] **Step 1: Create `docs/secrets.md`**
@@ -2439,28 +2478,28 @@ git commit -m "chore(admin): add vercel config and deploy runbook"
 ```markdown
 # Secrets inventory
 
-| Secret | Used by | Stored in | Local source | Rotation |
-|---|---|---|---|---|
-| `DATABASE_URL` | api, db | Railway variables (prod/preview) | `apps/api/.env`, `packages/db/.env` | Rotate by regenerating Postgres plugin creds; redeploy. |
-| `JWT_ACCESS_SECRET` | api | Railway | `apps/api/.env` | Rotate every 90 days; rolling restart invalidates old access tokens only. |
-| `JWT_REFRESH_SECRET` | api | Railway | `apps/api/.env` | Rotate on incident; forces logout for all users. |
-| `SENTRY_DSN` (api) | api | Railway | `apps/api/.env` | Regenerate in Sentry project → update Railway. |
-| `SENTRY_DSN` (admin) | admin | Vercel | `apps/admin/.env.local` | Same. |
-| `SENTRY_DSN` (mobile) | mobile | EAS secrets | `apps/mobile/.env` | Same. Requires OTA release. |
-| `SENTRY_AUTH_TOKEN` | CI (source map upload) | GitHub Actions secret + Vercel | N/A | 180 days. |
-| `STRIPE_SECRET_KEY` | api | Railway | `apps/api/.env` | Rotate in Stripe dashboard; update Railway; redeploy. |
-| `STRIPE_WEBHOOK_SECRET` | api | Railway | `apps/api/.env` | Rotated whenever webhook endpoint URL changes. |
-| `ABACATEPAY_API_KEY` | api | Railway | `apps/api/.env` | Per AbacatePay dashboard. |
-| `ABACATEPAY_WEBHOOK_SECRET` | api | Railway | `apps/api/.env` | Same. |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | api | Railway | `apps/api/.env` | Cloudflare dashboard; rotate on incident. |
-| `R2_BUCKET` (prod + preview) | api | Railway | `apps/api/.env` | Immutable per environment. |
-| `EXPO_TOKEN` | CI (EAS build) | GitHub Actions secret | N/A | Rotate in expo.dev. |
-| `EAS_PROJECT_ID` | mobile | Committed to `app.config.ts` via env | `apps/mobile/.env` | Immutable. |
-| `APPLE_ID` / `ASC_APP_ID` | EAS submit | EAS secrets | N/A | Per Apple ID lifecycle. |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | EAS submit | EAS secrets | N/A | Regenerate in Play Console. |
-| `RESEND_API_KEY` (or Postmark) | api (email verify/reset) | Railway | `apps/api/.env` | Per provider; low traffic. |
-| `GOOGLE_OAUTH_AUDIENCE` | api (F1 Google sign-in) | Railway | `apps/api/.env` | Immutable unless client id changes. |
-| `APPLE_OAUTH_AUDIENCE` | api (F1 Apple sign-in) | Railway | `apps/api/.env` | Immutable unless bundle id changes. |
+| Secret                                                        | Used by                  | Stored in                            | Local source                        | Rotation                                                                  |
+| ------------------------------------------------------------- | ------------------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                | api, db                  | Railway variables (prod/preview)     | `apps/api/.env`, `packages/db/.env` | Rotate by regenerating Postgres plugin creds; redeploy.                   |
+| `JWT_ACCESS_SECRET`                                           | api                      | Railway                              | `apps/api/.env`                     | Rotate every 90 days; rolling restart invalidates old access tokens only. |
+| `JWT_REFRESH_SECRET`                                          | api                      | Railway                              | `apps/api/.env`                     | Rotate on incident; forces logout for all users.                          |
+| `SENTRY_DSN` (api)                                            | api                      | Railway                              | `apps/api/.env`                     | Regenerate in Sentry project → update Railway.                            |
+| `SENTRY_DSN` (admin)                                          | admin                    | Vercel                               | `apps/admin/.env.local`             | Same.                                                                     |
+| `SENTRY_DSN` (mobile)                                         | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | Same. Requires OTA release.                                               |
+| `SENTRY_AUTH_TOKEN`                                           | CI (source map upload)   | GitHub Actions secret + Vercel       | N/A                                 | 180 days.                                                                 |
+| `STRIPE_SECRET_KEY`                                           | api                      | Railway                              | `apps/api/.env`                     | Rotate in Stripe dashboard; update Railway; redeploy.                     |
+| `STRIPE_WEBHOOK_SECRET`                                       | api                      | Railway                              | `apps/api/.env`                     | Rotated whenever webhook endpoint URL changes.                            |
+| `ABACATEPAY_API_KEY`                                          | api                      | Railway                              | `apps/api/.env`                     | Per AbacatePay dashboard.                                                 |
+| `ABACATEPAY_WEBHOOK_SECRET`                                   | api                      | Railway                              | `apps/api/.env`                     | Same.                                                                     |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | api                      | Railway                              | `apps/api/.env`                     | Cloudflare dashboard; rotate on incident.                                 |
+| `R2_BUCKET` (prod + preview)                                  | api                      | Railway                              | `apps/api/.env`                     | Immutable per environment.                                                |
+| `EXPO_TOKEN`                                                  | CI (EAS build)           | GitHub Actions secret                | N/A                                 | Rotate in expo.dev.                                                       |
+| `EAS_PROJECT_ID`                                              | mobile                   | Committed to `app.config.ts` via env | `apps/mobile/.env`                  | Immutable.                                                                |
+| `APPLE_ID` / `ASC_APP_ID`                                     | EAS submit               | EAS secrets                          | N/A                                 | Per Apple ID lifecycle.                                                   |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`                            | EAS submit               | EAS secrets                          | N/A                                 | Regenerate in Play Console.                                               |
+| `RESEND_API_KEY` (or Postmark)                                | api (email verify/reset) | Railway                              | `apps/api/.env`                     | Per provider; low traffic.                                                |
+| `GOOGLE_OAUTH_AUDIENCE`                                       | api (F1 Google sign-in)  | Railway                              | `apps/api/.env`                     | Immutable unless client id changes.                                       |
+| `APPLE_OAUTH_AUDIENCE`                                        | api (F1 Apple sign-in)   | Railway                              | `apps/api/.env`                     | Immutable unless bundle id changes.                                       |
 
 ## New-developer setup
 
@@ -2483,6 +2522,7 @@ git commit -m "chore(admin): add vercel config and deploy runbook"
 - [ ] Record rotation date in this doc's change log below.
 
 ## Change log
+
 - (append entries: `YYYY-MM-DD · secret · rotated by`)
 ```
 
@@ -2500,6 +2540,7 @@ git commit -m "docs: add secrets inventory and rotation runbook"
 **Approach:** API is already wired (Task 6 Step 8). For admin + mobile, run `@sentry/wizard` to install SDKs, generate config files, wrap bundler configs, and set up source-map uploads — then overwrite the generated DSN-flow code to match our env conventions. Keep our `initSentry()` wrapper for mobile so the DSN stays centralized.
 
 **Files:**
+
 - Modify: `apps/api/src/app.ts` (add `/debug/boom` dev-only route; API Sentry plugin from Task 6 Step 8 is unchanged)
 - Scaffold via wizard then overwrite: `apps/admin/sentry.client.config.ts`, `apps/admin/sentry.server.config.ts`, `apps/admin/sentry.edge.config.ts`, `apps/admin/next.config.mjs`
 - Scaffold via wizard: `apps/admin/.sentryclirc`, `apps/mobile/.sentryclirc` (both committed; contain no secrets — auth token comes from env)
@@ -2512,11 +2553,11 @@ git commit -m "docs: add secrets inventory and rotation runbook"
 Append to `apps/api/src/app.ts` after the health route registration (inside `buildApp`):
 
 ```ts
-  if (env.NODE_ENV !== 'production') {
-    app.get('/debug/boom', async () => {
-      throw new Error('intentional boom for Sentry verification');
-    });
-  }
+if (env.NODE_ENV !== 'production') {
+  app.get('/debug/boom', async () => {
+    throw new Error('intentional boom for Sentry verification');
+  });
+}
 ```
 
 - [ ] **Step 2: Run `@sentry/wizard` for Next.js (admin)**
@@ -2584,8 +2625,7 @@ const config = {
   reactStrictMode: true,
   transpilePackages: ['@jdm/shared'],
   env: {
-    NEXT_PUBLIC_API_BASE_URL:
-      process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
   },
 };
 
@@ -2698,12 +2738,13 @@ git commit -m "feat: wire sentry across api, admin, and mobile via @sentry/wizar
 ## Task 16: README + CONTRIBUTING (roadmap 0.16)
 
 **Files:**
+
 - Create: `README.md`
 - Create: `CONTRIBUTING.md`
 
 - [ ] **Step 1: Create `README.md`**
 
-```markdown
+````markdown
 # JDM Experience
 
 Event-company app (React Native attendee app + Next.js admin web + Fastify API).
@@ -2739,8 +2780,10 @@ pnpm --filter @jdm/db db:generate
 # 4. Run everything
 pnpm dev
 ```
+````
 
 After `pnpm dev`:
+
 - API → http://localhost:4000/health
 - Admin → http://localhost:3000
 - Mobile → open the Expo Dev Tools QR, scan with Expo Go or a dev build.
@@ -2805,7 +2848,8 @@ listed in `.git/info/exclude` and are never committed.
 - Bugs: GitHub Issues in this repo.
 - Internal channels: see `docs/secrets.md` for where each external service
   lives.
-```
+
+````
 
 - [ ] **Step 2: Create `CONTRIBUTING.md`**
 
@@ -2865,7 +2909,7 @@ Before requesting review:
 - Webhook handlers must verify signatures and dedupe by provider event id.
 - All mutations that touch other users' data require an authorization check
   — keep the "can X do Y to Z" predicate in a service, not the route.
-```
+````
 
 - [ ] **Step 3: Verify lint/format accept the new docs**
 
