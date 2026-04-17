@@ -46,11 +46,21 @@ const config: ExpoConfig = {
       backgroundColor: '#0B0B0F',
     },
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    [
+      '@sentry/react-native/expo',
+      {
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT_MOBILE,
+      },
+    ],
+  ],
   experiments: { typedRoutes: true },
   extra: {
     variant,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
+    sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     eas: { projectId: process.env.EAS_PROJECT_ID ?? '' },
   },
 };

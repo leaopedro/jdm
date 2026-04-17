@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
@@ -7,4 +9,10 @@ const config = {
   },
 };
 
-export default config;
+export default withSentryConfig(config, {
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT_ADMIN,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  disableLogger: true,
+});

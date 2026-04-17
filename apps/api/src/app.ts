@@ -28,5 +28,11 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(errorHandlerPlugin);
   await app.register(healthRoutes);
 
+  if (env.NODE_ENV !== 'production') {
+    app.get('/debug/boom', () => {
+      throw new Error('intentional boom for Sentry verification');
+    });
+  }
+
   return app;
 };
