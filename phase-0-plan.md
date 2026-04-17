@@ -748,7 +748,7 @@ services:
       POSTGRES_PASSWORD: jdm
       POSTGRES_DB: jdm
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - jdm_pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -760,6 +760,8 @@ services:
 volumes:
   jdm_pg_data:
 ```
+
+**Port note:** host port is `5433` (not `5432`) to dodge collisions with a Homebrew Postgres that may already be listening on `5432`. The container listens internally on `5432`. Every local `.env.example` (db, api) references `localhost:5433`. CI (Task 11) runs Postgres on a clean GitHub Actions service container, so CI keeps `5432:5432` and the API CI env uses `localhost:5432`.
 
 - [ ] **Step 2: Create `packages/db/package.json`**
 
@@ -851,7 +853,7 @@ mv packages/db/.env packages/db/.env.example
 Edit `packages/db/.env.example` so it matches:
 
 ```
-DATABASE_URL="postgresql://jdm:jdm@localhost:5432/jdm?schema=public"
+DATABASE_URL="postgresql://jdm:jdm@localhost:5433/jdm?schema=public"
 ```
 
 Then recreate the ignored working copy:
@@ -1003,7 +1005,7 @@ git commit -m "feat(db): bootstrap prisma with placeholder User model"
 NODE_ENV=development
 PORT=4000
 LOG_LEVEL=info
-DATABASE_URL="postgresql://jdm:jdm@localhost:5432/jdm?schema=public"
+DATABASE_URL="postgresql://jdm:jdm@localhost:5433/jdm?schema=public"
 SENTRY_DSN=
 GIT_SHA=dev
 CORS_ORIGINS=http://localhost:3000,http://localhost:8081
