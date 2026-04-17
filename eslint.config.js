@@ -17,6 +17,8 @@ export default tseslint.config(
       'apps/mobile/babel.config.js',
       'apps/mobile/metro.config.js',
       'apps/mobile/eslint.config.js',
+      'apps/admin/*.config.mjs',
+      'apps/admin/eslint.config.mjs',
     ],
   },
   js.configs.recommended,

@@ -24,8 +24,7 @@ Conventional Commits only:
 - API changes require integration tests against a real Postgres (Testcontainers).
   No mocking the database.
 - Shared helpers get unit tests.
-- Mobile flows covered by Maestro in later phases — for Phase 0 a typecheck
-  - a manual Expo run is enough.
+- Mobile flows covered by Maestro in later phases — for Phase 0 a typecheck plus a manual Expo run is enough.
 
 ## PR checklist
 

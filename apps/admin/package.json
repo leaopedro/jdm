@@ -9,7 +9,7 @@
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "lint": "eslint app src",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@jdm/shared": "workspace:*",

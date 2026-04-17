@@ -2,7 +2,9 @@
   "extends": "@jdm/tsconfig/react-native.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": { "~/*": ["src/*"] }
+    "paths": {
+      "~/*": ["src/*"]
+    }
   },
-  "include": ["app/**/*", "src/**/*", "app.config.ts", "expo-env.d.ts"]
+  "include": ["app/**/*", "src/**/*", "app.config.ts", "expo-env.d.ts", ".expo/types/**/*.ts"]
 }
