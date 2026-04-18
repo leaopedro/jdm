@@ -1,10 +1,23 @@
 # Phase 1 — F1 Auth & Identity Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> ## Progress-tracking rules (read before touching this file)
+>
+> **This file is a live log, not a frozen artifact.** You MUST update checkboxes as you work. If you finish execution without ticking what you did, future agents will re-do it.
+>
+> 1. **Tick each step `- [ ]` → `- [x]` the moment that step is done.** Not at the end of the task. Not at the end of the chunk. The moment it is done on disk.
+> 2. **When a task's final commit lands on-branch, mark the whole task done** by prefixing its heading with `✅ ` (e.g. `## ✅ Task 1: Prisma schema …`). Leave the individual step checkboxes `[x]` — don't erase them; they are the evidence trail.
+> 3. **If you skip or merge a step** (e.g. combine two commits, skip an install because a dep is already present), write a one-line `> note:` below the step explaining why, and still tick it.
+> 4. **If you deviate from the planned approach** (different library, different file layout, different test shape), edit the step text in place to match what was actually done. Future agents read the plan to understand the code; a stale plan misleads them.
+> 5. **Do not delete completed tasks.** They document _what_ landed and _how_. Chunk B depends on Chunk A's evidence.
+> 6. **Roadmap sync:** when a task here maps to a `roadmap.md` item (e.g. F1 sub-task 1.1), DO NOT tick the roadmap box until the PR for that work is **merged to `main` and deployed**. Plan checkboxes reflect on-branch progress; roadmap checkboxes reflect shipped progress. They are not the same.
+>
+> **If a step's checkbox disagrees with the code, the code wins — fix the checkbox, not the code.**
 
 **Goal:** A user can create an account (email+password, Google, or Apple), verify email, log in, stay logged in across app restarts, reset a forgotten password, and log out. JWT access + opaque refresh tokens with rotation. All `/auth/*` endpoints rate-limited. Mobile screens in PT-BR. Tokens stored in SecureStore; expired access tokens transparently refresh.
 
-**Architecture:** Fastify routes under `apps/api/src/routes/auth/*.ts`, service modules under `apps/api/src/services/auth/*.ts`. Prisma models in `packages/db/prisma/schema.prisma`. Shared Zod in `packages/shared/src/auth.ts`. Mobile screens under `apps/mobile/app/(auth)/*.tsx` with an auth context (`apps/mobile/src/auth/context.tsx`) driving route guarding via `expo-router`. Access JWT is signed `HS256`, 15-minute TTL. Refresh tokens are opaque 32-byte random strings, SHA-256 hashed at rest, 30-day TTL, single-use (rotate on refresh). Email via a `Mailer` interface — `DevMailer` in dev/test (captures to an in-memory array), `ResendMailer` in prod. Google/Apple ID tokens are verified against the provider JWKS using `jose`.
+**Architecture:** Fastify routes under `apps/api/src/routes/auth/*.ts`, service modules under `apps/api/src/services/auth/*.ts`. Prisma models in `packages/db/prisma/schema.prisma`. Shared Zod in `packages/shared/src/auth.ts` — note `emailInputSchema` (trim + lowercase) for write paths vs `emailSchema` (plain) for response shapes. Mobile screens under `apps/mobile/app/(auth)/*.tsx` with an auth context (`apps/mobile/src/auth/context.tsx`) driving route guarding via `expo-router`. Access JWT is signed `HS256`, 15-minute TTL. Refresh tokens are opaque 32-byte random strings, HMAC-SHA256 with `REFRESH_TOKEN_PEPPER` at rest, 30-day TTL, single-use (rotate on refresh). Email via a `Mailer` interface — `DevMailer` in dev/test (captures to an in-memory array), `ResendMailer` in prod. Google/Apple ID tokens are verified against the provider JWKS using `jose`.
 
 **Tech Stack additions (on top of Phase 0):**
 
@@ -86,14 +99,14 @@ Each task ends with a Conventional Commit. Keep commits small — do not batch t
 
 ---
 
-## Task 1: Prisma schema — User fields, AuthProvider, RefreshToken, VerificationToken, PasswordResetToken (roadmap 1.1)
+## ✅ Task 1: Prisma schema — User fields, AuthProvider, RefreshToken, VerificationToken, PasswordResetToken (roadmap 1.1)
 
 **Files:**
 
 - Modify: `packages/db/prisma/schema.prisma`
 - Create: `packages/db/prisma/migrations/<timestamp>_auth/migration.sql`
 
-- [ ] **Step 1: Rewrite `packages/db/prisma/schema.prisma` to the F1 target**
+- [x] **Step 1: Rewrite `packages/db/prisma/schema.prisma` to the F1 target**
 
 ```prisma
 // Auth lands in F1 (roadmap 1.1). Subsequent features extend these models.
@@ -191,17 +204,21 @@ model PasswordResetToken {
 }
 ```
 
-- [ ] **Step 2: Run the migration against local Postgres**
+- [x] **Step 2: Run the migration against local Postgres**
 
 Run from repo root:
 
 ```bash
-pnpm --filter @jdm/db db:migrate -- --name auth
+pnpm --filter @jdm/db exec prisma migrate dev --name auth
 ```
 
-Expected: a new folder `packages/db/prisma/migrations/<timestamp>_auth/` with a `migration.sql` that drops the placeholder `User` columns we didn't have and creates the new tables + enums.
+> note: original command was `pnpm --filter @jdm/db db:migrate -- --name auth`, but pnpm doesn't forward the trailing `--name auth` through the script. Use `exec prisma migrate dev` directly.
 
-- [ ] **Step 3: Regenerate the Prisma client**
+Expected: a new folder `packages/db/prisma/migrations/<timestamp>_auth/` with a `migration.sql` that drops the placeholder `User` columns we didn't have and creates the new tables + enums. Applied migration: `20260418110341_auth`.
+
+An additional migration `20260418112703_authprovider_userid_unique` was added in review fixes to enforce `@@unique([userId, provider])` on `AuthProvider` (prevents one user linking two rows for the same provider).
+
+- [x] **Step 3: Regenerate the Prisma client**
 
 Run:
 
@@ -211,7 +228,7 @@ pnpm --filter @jdm/db db:generate
 
 Expected: stdout ends with `Generated Prisma Client … to ./node_modules/@prisma/client`.
 
-- [ ] **Step 4: Extend `packages/db/src/index.ts` re-exports**
+- [x] **Step 4: Extend `packages/db/src/index.ts` re-exports**
 
 Replace the `export type` line with:
 
@@ -228,7 +245,7 @@ export type {
 } from '@prisma/client';
 ```
 
-- [ ] **Step 5: Typecheck the workspace**
+- [x] **Step 5: Typecheck the workspace**
 
 Run:
 
@@ -238,7 +255,7 @@ pnpm typecheck
 
 Expected: all packages green (nothing consumes the new types yet, so this just confirms the re-exports compile).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/db/prisma packages/db/src
@@ -247,7 +264,7 @@ git commit -m "feat(db): add auth models (user, authprovider, refresh/verificati
 
 ---
 
-## Task 2: Shared Zod auth schemas (roadmap 1.1)
+## ✅ Task 2: Shared Zod auth schemas (roadmap 1.1)
 
 **Files:**
 
@@ -255,7 +272,7 @@ git commit -m "feat(db): add auth models (user, authprovider, refresh/verificati
 - Test: `packages/shared/test/auth.test.ts`
 - Modify: `packages/shared/src/index.ts`
 
-- [ ] **Step 1: Write the failing test `packages/shared/test/auth.test.ts`**
+- [x] **Step 1: Write the failing test `packages/shared/test/auth.test.ts`**
 
 ```typescript
 import { describe, expect, it } from 'vitest';
@@ -354,7 +371,7 @@ describe('auth schemas', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test — expect failure**
+- [x] **Step 2: Run the test — expect failure**
 
 ```bash
 pnpm --filter @jdm/shared test
@@ -362,7 +379,7 @@ pnpm --filter @jdm/shared test
 
 Expected: fail with "has no exported member 'signupSchema'" (and siblings).
 
-- [ ] **Step 3: Replace `packages/shared/src/auth.ts`**
+- [x] **Step 3: Replace `packages/shared/src/auth.ts`**
 
 ```typescript
 import { z } from 'zod';
@@ -462,7 +479,7 @@ export const messageResponseSchema = z.object({
 export type MessageResponse = z.infer<typeof messageResponseSchema>;
 ```
 
-- [ ] **Step 4: Re-run the test — expect pass**
+- [x] **Step 4: Re-run the test — expect pass**
 
 ```bash
 pnpm --filter @jdm/shared test
@@ -470,7 +487,7 @@ pnpm --filter @jdm/shared test
 
 Expected: 7 passed.
 
-- [ ] **Step 5: Lint + typecheck shared**
+- [x] **Step 5: Lint + typecheck shared**
 
 ```bash
 pnpm --filter @jdm/shared lint && pnpm --filter @jdm/shared typecheck
@@ -478,7 +495,7 @@ pnpm --filter @jdm/shared lint && pnpm --filter @jdm/shared typecheck
 
 Expected: both green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/shared
@@ -487,7 +504,7 @@ git commit -m "feat(shared): add zod auth schemas (signup, login, refresh, verif
 
 ---
 
-## Task 3: Env + secrets inventory (cross-cutting prep)
+## ✅ Task 3: Env + secrets inventory (cross-cutting prep)
 
 **Files:**
 
@@ -495,7 +512,7 @@ git commit -m "feat(shared): add zod auth schemas (signup, login, refresh, verif
 - Modify: `apps/api/.env.example`
 - Modify: `docs/secrets.md`
 
-- [ ] **Step 1: Extend `apps/api/src/env.ts`**
+- [x] **Step 1: Extend `apps/api/src/env.ts`**
 
 ```typescript
 import { z } from 'zod';
@@ -537,7 +554,7 @@ export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
 };
 ```
 
-- [ ] **Step 2: Update `apps/api/.env.example`**
+- [x] **Step 2: Update `apps/api/.env.example`**
 
 Append:
 
@@ -551,11 +568,11 @@ GOOGLE_CLIENT_ID=
 APPLE_CLIENT_ID=
 ```
 
-- [ ] **Step 3: Extend `docs/secrets.md`**
+- [x] **Step 3: Extend `docs/secrets.md`**
 
 Add a new section titled `## F1 — Auth` with the table from this plan's header (the secret inventory table above). Include a paragraph: "Generate `JWT_ACCESS_SECRET` and `REFRESH_TOKEN_PEPPER` with `openssl rand -base64 48`. Rotate them together when compromise is suspected; doing so logs every user out."
 
-- [ ] **Step 4: Update `apps/api/test/setup.ts` to inject the new test envs**
+- [x] **Step 4: Update `apps/api/test/setup.ts` to inject the new test envs**
 
 Add after `process.env.CORS_ORIGINS = '';`:
 
@@ -566,7 +583,7 @@ process.env.APP_WEB_BASE_URL = 'http://localhost:3000';
 process.env.MAIL_FROM = 'noreply@jdm.test';
 ```
 
-- [ ] **Step 5: Run API tests — still green**
+- [x] **Step 5: Run API tests — still green**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -574,7 +591,7 @@ pnpm --filter @jdm/api test
 
 Expected: 2 passed (health.test.ts).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/env.ts apps/api/.env.example apps/api/test/setup.ts docs/secrets.md
@@ -583,7 +600,7 @@ git commit -m "feat(api): extend env schema with auth secrets and mail config"
 
 ---
 
-## Task 4: Password hasher service
+## ✅ Task 4: Password hasher service
 
 **Files:**
 
@@ -591,7 +608,7 @@ git commit -m "feat(api): extend env schema with auth secrets and mail config"
 - Test: `apps/api/test/services/password.test.ts`
 - Modify: `apps/api/package.json` (add `bcrypt`, `@types/bcrypt`)
 
-- [ ] **Step 1: Install deps**
+- [x] **Step 1: Install deps**
 
 ```bash
 pnpm --filter @jdm/api add bcrypt
@@ -600,7 +617,7 @@ pnpm --filter @jdm/api add -D @types/bcrypt
 
 Expected: two installs; `apps/api/package.json` dependencies now include `bcrypt`.
 
-- [ ] **Step 2: Write failing test `apps/api/test/services/password.test.ts`**
+- [x] **Step 2: Write failing test `apps/api/test/services/password.test.ts`**
 
 ```typescript
 import { describe, expect, it } from 'vitest';
@@ -622,7 +639,7 @@ describe('password hashing', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test — expect failure**
+- [x] **Step 3: Run the test — expect failure**
 
 ```bash
 pnpm --filter @jdm/api test -- services/password
@@ -630,7 +647,7 @@ pnpm --filter @jdm/api test -- services/password
 
 Expected: fail with "Cannot find module '.../src/services/auth/password.js'".
 
-- [ ] **Step 4: Create `apps/api/src/services/auth/password.ts`**
+- [x] **Step 4: Create `apps/api/src/services/auth/password.ts`**
 
 ```typescript
 import bcrypt from 'bcrypt';
@@ -646,7 +663,7 @@ export const verifyPassword = async (plain: string, hash: string): Promise<boole
 };
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- services/password
@@ -654,7 +671,7 @@ pnpm --filter @jdm/api test -- services/password
 
 Expected: 2 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/package.json apps/api/src/services apps/api/test/services
@@ -663,7 +680,7 @@ git commit -m "feat(api): add bcrypt password hasher"
 
 ---
 
-## Task 5: JWT + refresh token services
+## ✅ Task 5: JWT + refresh token services
 
 **Files:**
 
@@ -671,17 +688,17 @@ git commit -m "feat(api): add bcrypt password hasher"
 - Test: `apps/api/test/services/tokens.test.ts`
 - Modify: `apps/api/package.json` (add `jsonwebtoken` + types)
 
-- [ ] **Step 1: Install deps**
+- [x] **Step 1: Install deps**
 
 ```bash
 pnpm --filter @jdm/api add jsonwebtoken
 pnpm --filter @jdm/api add -D @types/jsonwebtoken
 ```
 
-- [ ] **Step 2: Write failing test `apps/api/test/services/tokens.test.ts`**
+- [x] **Step 2: Write failing test `apps/api/test/services/tokens.test.ts`**
 
 ```typescript
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
@@ -716,9 +733,7 @@ describe('refresh tokens', () => {
     const { token, hash, expiresAt } = issueRefreshToken(env);
     expect(token).toHaveLength(43);
     expect(hash).toHaveLength(64);
-    const expected = createHash('sha256')
-      .update(`${env.REFRESH_TOKEN_PEPPER}:${token}`)
-      .digest('hex');
+    const expected = createHmac('sha256', env.REFRESH_TOKEN_PEPPER).update(token).digest('hex');
     expect(hash).toBe(expected);
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 29 * 24 * 3_600_000);
   });
@@ -730,7 +745,7 @@ describe('refresh tokens', () => {
 });
 ```
 
-- [ ] **Step 3: Run test — expect failure**
+- [x] **Step 3: Run test — expect failure**
 
 ```bash
 pnpm --filter @jdm/api test -- services/tokens
@@ -738,10 +753,10 @@ pnpm --filter @jdm/api test -- services/tokens
 
 Expected: module-not-found failure.
 
-- [ ] **Step 4: Create `apps/api/src/services/auth/tokens.ts`**
+- [x] **Step 4: Create `apps/api/src/services/auth/tokens.ts`**
 
 ```typescript
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import jwt from 'jsonwebtoken';
 
@@ -776,7 +791,7 @@ export const verifyAccessToken = (token: string, env: TokenEnv): AccessPayload =
 };
 
 export const hashRefreshToken = (token: string, env: TokenEnv): string => {
-  return createHash('sha256').update(`${env.REFRESH_TOKEN_PEPPER}:${token}`).digest('hex');
+  return createHmac('sha256', env.REFRESH_TOKEN_PEPPER).update(token).digest('hex');
 };
 
 export const issueRefreshToken = (
@@ -793,7 +808,7 @@ export const accessTtlSeconds = ACCESS_TTL_SECONDS;
 
 Note: Using `jsonwebtoken` directly (no `@fastify/jwt` wrapper) keeps the services unit-testable without a Fastify instance.
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- services/tokens
@@ -801,7 +816,7 @@ pnpm --filter @jdm/api test -- services/tokens
 
 Expected: 4 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/package.json apps/api/src/services/auth/tokens.ts apps/api/test/services/tokens.test.ts
@@ -810,7 +825,7 @@ git commit -m "feat(api): add jwt access + opaque refresh token services"
 
 ---
 
-## Task 6: Mailer abstraction (Dev + Resend)
+## ✅ Task 6: Mailer abstraction (Dev + Resend)
 
 **Files:**
 
@@ -822,13 +837,13 @@ git commit -m "feat(api): add jwt access + opaque refresh token services"
 - Modify: `apps/api/src/app.ts` (decorate `app.mailer`)
 - Modify: `apps/api/package.json` (add `resend`)
 
-- [ ] **Step 1: Install deps**
+- [x] **Step 1: Install deps**
 
 ```bash
 pnpm --filter @jdm/api add resend
 ```
 
-- [ ] **Step 2: Write failing test `apps/api/test/services/mailer.test.ts`**
+- [x] **Step 2: Write failing test `apps/api/test/services/mailer.test.ts`**
 
 ```typescript
 import { describe, expect, it } from 'vitest';
@@ -859,13 +874,13 @@ describe('DevMailer', () => {
 });
 ```
 
-- [ ] **Step 3: Run — expect failure (module not found)**
+- [x] **Step 3: Run — expect failure (module not found)**
 
 ```bash
 pnpm --filter @jdm/api test -- services/mailer
 ```
 
-- [ ] **Step 4: Create `apps/api/src/services/mailer/types.ts`**
+- [x] **Step 4: Create `apps/api/src/services/mailer/types.ts`**
 
 ```typescript
 export type MailMessage = {
@@ -880,7 +895,7 @@ export interface Mailer {
 }
 ```
 
-- [ ] **Step 5: Create `apps/api/src/services/mailer/dev.ts`**
+- [x] **Step 5: Create `apps/api/src/services/mailer/dev.ts`**
 
 ```typescript
 import type { MailMessage, Mailer } from './types.js';
@@ -908,7 +923,7 @@ export class DevMailer implements Mailer {
 }
 ```
 
-- [ ] **Step 6: Create `apps/api/src/services/mailer/resend.ts`**
+- [x] **Step 6: Create `apps/api/src/services/mailer/resend.ts`**
 
 ```typescript
 import { Resend } from 'resend';
@@ -938,7 +953,7 @@ export class ResendMailer implements Mailer {
 }
 ```
 
-- [ ] **Step 7: Create `apps/api/src/services/mailer/index.ts`**
+- [x] **Step 7: Create `apps/api/src/services/mailer/index.ts`**
 
 ```typescript
 import type { Env } from '../../env.js';
@@ -960,7 +975,7 @@ export const buildMailer = (env: Env): Mailer => {
 };
 ```
 
-- [ ] **Step 8: Decorate the Fastify instance in `apps/api/src/app.ts`**
+- [x] **Step 8: Decorate the Fastify instance in `apps/api/src/app.ts`**
 
 Add imports:
 
@@ -986,7 +1001,7 @@ declare module 'fastify' {
 }
 ```
 
-- [ ] **Step 9: Re-run mailer test and full API suite**
+- [x] **Step 9: Re-run mailer test and full API suite**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -994,7 +1009,7 @@ pnpm --filter @jdm/api test
 
 Expected: mailer test passes; existing `health.test.ts` still green.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/api
@@ -1003,7 +1018,7 @@ git commit -m "feat(api): add mailer abstraction with dev capture and resend dri
 
 ---
 
-## Task 7: `authenticate` decorator + `GET /me`
+## ✅ Task 7: `authenticate` decorator + `GET /me`
 
 **Files:**
 
@@ -1013,7 +1028,7 @@ git commit -m "feat(api): add mailer abstraction with dev capture and resend dri
 - Test: `apps/api/test/auth/me.test.ts`
 - Test: `apps/api/test/helpers.ts`
 
-- [ ] **Step 1: Create shared test helpers `apps/api/test/helpers.ts`**
+- [x] **Step 1: Create shared test helpers `apps/api/test/helpers.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1062,7 +1077,7 @@ export const bearer = (
 ) => `Bearer ${createAccessToken({ sub: userId, role }, env)}`;
 ```
 
-- [ ] **Step 2: Write failing test `apps/api/test/auth/me.test.ts`**
+- [x] **Step 2: Write failing test `apps/api/test/auth/me.test.ts`**
 
 ```typescript
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1113,13 +1128,13 @@ describe('GET /me', () => {
 });
 ```
 
-- [ ] **Step 3: Run — expect failure**
+- [x] **Step 3: Run — expect failure**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/me
 ```
 
-- [ ] **Step 4: Create `apps/api/src/plugins/auth.ts`**
+- [x] **Step 4: Create `apps/api/src/plugins/auth.ts`**
 
 ```typescript
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -1154,7 +1169,7 @@ export const authPlugin = fp(async (app) => {
 });
 ```
 
-- [ ] **Step 5: Create `apps/api/src/routes/me.ts`**
+- [x] **Step 5: Create `apps/api/src/routes/me.ts`**
 
 ```typescript
 import { publicUserSchema } from '@jdm/shared/auth';
@@ -1181,7 +1196,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 6: Wire both into `apps/api/src/app.ts`**
+- [x] **Step 6: Wire both into `apps/api/src/app.ts`**
 
 Add imports at the top:
 
@@ -1197,7 +1212,7 @@ await app.register(authPlugin);
 await app.register(meRoutes);
 ```
 
-- [ ] **Step 7: Re-run — expect pass**
+- [x] **Step 7: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -1205,7 +1220,7 @@ pnpm --filter @jdm/api test
 
 Expected: `me.test.ts` all green + prior tests still pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/api
