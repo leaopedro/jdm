@@ -18,7 +18,7 @@ export class ResendMailer implements Mailer {
       to: message.to,
       subject: message.subject,
       html: message.html,
-      text: message.text,
+      ...(message.text !== undefined ? { text: message.text } : {}),
     });
     if (error) throw new Error(`resend send failed: ${error.message}`);
   }
