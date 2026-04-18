@@ -12,6 +12,17 @@ declare module 'fastify' {
   }
 }
 
+/**
+ * Narrowing helper for handlers that run after `app.authenticate`.
+ * The preHandler guarantees `request.user` is set; this asserts it to TS.
+ */
+export const requireUser = (request: FastifyRequest): AccessPayload => {
+  if (!request.user) {
+    throw new Error('requireUser called without authenticate preHandler');
+  }
+  return request.user;
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const authPlugin = fp(async (app) => {
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {

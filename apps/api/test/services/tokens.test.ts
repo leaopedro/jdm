@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
@@ -33,9 +33,7 @@ describe('refresh tokens', () => {
     const { token, hash, expiresAt } = issueRefreshToken(env);
     expect(token).toHaveLength(43);
     expect(hash).toHaveLength(64);
-    const expected = createHash('sha256')
-      .update(`${env.REFRESH_TOKEN_PEPPER}:${token}`)
-      .digest('hex');
+    const expected = createHmac('sha256', env.REFRESH_TOKEN_PEPPER).update(token).digest('hex');
     expect(hash).toBe(expected);
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 29 * 24 * 3_600_000);
   });

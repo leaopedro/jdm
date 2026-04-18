@@ -2,12 +2,14 @@ import { z } from 'zod';
 
 export const MIN_PASSWORD_LENGTH = 10;
 
-export const emailSchema = z
+export const emailInputSchema = z
   .string()
   .trim()
   .email()
   .max(254)
   .transform((v) => v.toLowerCase());
+
+export const emailSchema = z.string().email().max(254);
 
 export const passwordSchema = z.string().min(MIN_PASSWORD_LENGTH).max(200);
 
@@ -25,14 +27,14 @@ export const publicUserSchema = z.object({
 export type PublicUser = z.infer<typeof publicUserSchema>;
 
 export const signupSchema = z.object({
-  email: emailSchema,
+  email: emailInputSchema,
   password: passwordSchema,
   name: z.string().trim().min(1).max(100),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
 export const loginSchema = z.object({
-  email: emailSchema,
+  email: emailInputSchema,
   password: passwordSchema,
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -51,12 +53,12 @@ export const verifyEmailSchema = z.object({
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
 export const resendVerifySchema = z.object({
-  email: emailSchema,
+  email: emailInputSchema,
 });
 export type ResendVerifyInput = z.infer<typeof resendVerifySchema>;
 
 export const forgotPasswordSchema = z.object({
-  email: emailSchema,
+  email: emailInputSchema,
 });
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 

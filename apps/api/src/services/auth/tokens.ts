@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import type { UserRoleName } from '@jdm/shared/auth';
 import jwt from 'jsonwebtoken';
@@ -32,7 +32,7 @@ export const verifyAccessToken = (token: string, env: TokenEnv): AccessPayload =
 };
 
 export const hashRefreshToken = (token: string, env: TokenEnv): string => {
-  return createHash('sha256').update(`${env.REFRESH_TOKEN_PEPPER}:${token}`).digest('hex');
+  return createHmac('sha256', env.REFRESH_TOKEN_PEPPER).update(token).digest('hex');
 };
 
 export const issueRefreshToken = (
