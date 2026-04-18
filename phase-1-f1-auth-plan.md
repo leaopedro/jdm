@@ -1500,7 +1500,7 @@ git commit -m "feat(api): add POST /auth/signup with verification email"
 
 ---
 
-## Task 9: `GET /auth/verify` (roadmap 1.5, first half)
+## ✅ Task 9: `GET /auth/verify` (roadmap 1.5, first half)
 
 **Files:**
 
@@ -1508,7 +1508,7 @@ git commit -m "feat(api): add POST /auth/signup with verification email"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/verify.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1561,13 +1561,13 @@ describe('GET /auth/verify', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/verify
 ```
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/verify.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/verify.ts`**
 
 ```typescript
 import { verifyEmailSchema } from '@jdm/shared/auth';
@@ -1592,7 +1592,7 @@ export const verifyRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
+- [x] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
 
 Add import and register:
 
@@ -1602,7 +1602,7 @@ import { verifyRoute } from './verify.js';
 await app.register(verifyRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/verify
@@ -1610,7 +1610,7 @@ pnpm --filter @jdm/api test -- auth/verify
 
 Expected: 3 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
