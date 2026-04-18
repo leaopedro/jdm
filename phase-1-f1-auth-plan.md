@@ -1229,7 +1229,7 @@ git commit -m "feat(api): add authenticate decorator and GET /me"
 
 ---
 
-## Task 8: `POST /auth/signup` (roadmap 1.2)
+## ✅ Task 8: `POST /auth/signup` (roadmap 1.2)
 
 **Files:**
 
@@ -1240,7 +1240,7 @@ git commit -m "feat(api): add authenticate decorator and GET /me"
 - Modify: `apps/api/src/app.ts`
 - Test: `apps/api/test/auth/signup.test.ts`
 
-- [ ] **Step 1: Failing test `apps/api/test/auth/signup.test.ts`**
+- [x] **Step 1: Failing test `apps/api/test/auth/signup.test.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1318,13 +1318,13 @@ describe('POST /auth/signup', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/signup
 ```
 
-- [ ] **Step 3: Create `apps/api/src/services/auth/verification.ts`**
+- [x] **Step 3: Create `apps/api/src/services/auth/verification.ts`**
 
 ```typescript
 import { createHash, randomBytes } from 'node:crypto';
@@ -1369,7 +1369,7 @@ export const consumeVerificationToken = async (
 };
 ```
 
-- [ ] **Step 4: Create `apps/api/src/services/auth/mail-templates.ts`**
+- [x] **Step 4: Create `apps/api/src/services/auth/mail-templates.ts`**
 
 ```typescript
 export type VerificationMail = { to: string; subject: string; html: string };
@@ -1398,7 +1398,7 @@ export const resetMail = (to: string, link: string): ResetMail => ({
 });
 ```
 
-- [ ] **Step 5: Create `apps/api/src/routes/auth/signup.ts`**
+- [x] **Step 5: Create `apps/api/src/routes/auth/signup.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1456,7 +1456,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 6: Create `apps/api/src/routes/auth/index.ts`**
+- [x] **Step 6: Create `apps/api/src/routes/auth/index.ts`**
 
 ```typescript
 import type { FastifyPluginAsync } from 'fastify';
@@ -1469,7 +1469,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 7: Register in `apps/api/src/app.ts`**
+- [x] **Step 7: Register in `apps/api/src/app.ts`**
 
 Add import:
 
@@ -1483,7 +1483,7 @@ After `await app.register(meRoutes);`, add:
 await app.register(authRoutes, { prefix: '/auth' });
 ```
 
-- [ ] **Step 8: Re-run — expect pass**
+- [x] **Step 8: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/signup
@@ -1491,7 +1491,7 @@ pnpm --filter @jdm/api test -- auth/signup
 
 Expected: 4 passed.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/api
