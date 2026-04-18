@@ -21,12 +21,32 @@ describe('POST /auth/reset-password', () => {
     const { user, password } = await createUser({ email: 'r@jdm.test', verified: true });
     const token = await issuePasswordResetToken(user.id);
 
+    await prisma.refreshToken.createMany({
+      data: [
+        {
+          userId: user.id,
+          tokenHash: `pre-${user.id}-a`,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+        {
+          userId: user.id,
+          tokenHash: `pre-${user.id}-b`,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+      ],
+    });
+
     const res = await app.inject({
       method: 'POST',
       url: '/auth/reset-password',
       payload: { token, password: 'a-brand-new-passphrase' },
     });
     expect(res.statusCode).toBe(200);
+
+    const liveRefresh = await prisma.refreshToken.count({
+      where: { userId: user.id, revokedAt: null },
+    });
+    expect(liveRefresh).toBe(0);
 
     const oldLogin = await app.inject({
       method: 'POST',

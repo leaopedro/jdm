@@ -1,34 +1,43 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import { prisma } from '@jdm/db';
 
-const RESET_TTL_MS = 3_600_000;
+import { sha256Hex } from './token-hash.js';
 
-const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
+const RESET_TTL_MS = 3_600_000;
 
 export const issuePasswordResetToken = async (userId: string): Promise<string> => {
   const token = randomBytes(32).toString('base64url');
-  await prisma.passwordResetToken.create({
-    data: {
-      userId,
-      tokenHash: sha256(token),
-      expiresAt: new Date(Date.now() + RESET_TTL_MS),
-    },
-  });
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.passwordResetToken.updateMany({
+      where: { userId, consumedAt: null },
+      data: { consumedAt: now },
+    }),
+    prisma.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: sha256Hex(token),
+        expiresAt: new Date(now.getTime() + RESET_TTL_MS),
+      },
+    }),
+  ]);
   return token;
 };
 
+// Consume is atomic: claim-by-where-clause prevents double-use under concurrent
+// requests. If the subsequent password update fails, the token stays consumed
+// and the user must request a new reset — acceptable over a TOCTOU window.
 export const consumePasswordResetToken = async (
   token: string,
 ): Promise<{ userId: string } | null> => {
-  const hash = sha256(token);
-  const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hash } });
-  if (!record) return null;
-  if (record.consumedAt) return null;
-  if (record.expiresAt.getTime() < Date.now()) return null;
-  await prisma.passwordResetToken.update({
-    where: { id: record.id },
-    data: { consumedAt: new Date() },
+  const hash = sha256Hex(token);
+  const now = new Date();
+  const claim = await prisma.passwordResetToken.updateMany({
+    where: { tokenHash: hash, consumedAt: null, expiresAt: { gt: now } },
+    data: { consumedAt: now },
   });
-  return { userId: record.userId };
+  if (claim.count !== 1) return null;
+  const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hash } });
+  return record ? { userId: record.userId } : null;
 };

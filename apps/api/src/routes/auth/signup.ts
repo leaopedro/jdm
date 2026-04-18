@@ -7,6 +7,11 @@ import { hashPassword } from '../../services/auth/password.js';
 import { createAccessToken, issueRefreshToken } from '../../services/auth/tokens.js';
 import { issueVerificationToken } from '../../services/auth/verification.js';
 
+// Signup intentionally returns an access+refresh pair so mobile can navigate
+// straight to the verify-email-pending screen without a separate login round
+// trip. The access token is usable for ~15m while emailVerifiedAt is null —
+// `/auth/login` gates on verification, and any verified-email-required
+// endpoints MUST re-check `user.emailVerifiedAt` rather than trust the JWT.
 // eslint-disable-next-line @typescript-eslint/require-await
 export const signupRoute: FastifyPluginAsync = async (app) => {
   app.post('/signup', async (request, reply) => {

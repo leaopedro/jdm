@@ -44,4 +44,18 @@ describe('GET /auth/verify', () => {
     const second = await app.inject({ method: 'GET', url: `/auth/verify?token=${token}` });
     expect(second.statusCode).toBe(400);
   });
+
+  it('only one concurrent consumption wins (no TOCTOU)', async () => {
+    const { user } = await createUser();
+    const token = await issueVerificationToken(user.id);
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        app.inject({ method: 'GET', url: `/auth/verify?token=${token}` }),
+      ),
+    );
+    const successes = results.filter((r) => r.statusCode === 200).length;
+    const failures = results.filter((r) => r.statusCode === 400).length;
+    expect(successes).toBe(1);
+    expect(failures).toBe(4);
+  });
 });
