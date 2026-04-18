@@ -18,6 +18,7 @@
     "@jdm/db": "workspace:*",
     "@jdm/shared": "workspace:*",
     "@sentry/node": "^8.42.0",
+    "bcrypt": "^6.0.0",
     "fastify": "^5.1.0",
     "fastify-plugin": "^5.0.1",
     "pino": "^9.5.0",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@jdm/tsconfig": "workspace:*",
     "@testcontainers/postgresql": "^10.13.0",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.19.17",
     "pino-pretty": "^13.0.0",
     "testcontainers": "^10.13.0",
