@@ -2486,6 +2486,8 @@ git commit -m "feat(api): add POST /auth/reset-password (revokes refresh tokens)
 
 ## Task 16: Google sign-in (roadmap 1.7)
 
+> note (2026-04-18): deferred to post-MVP. Email+password is sufficient for v0.1. Plan body retained for future pickup; AuthProvider schema is already in place from chunk A, so no migration will be needed when this is revived.
+
 **Files:**
 
 - Create: `apps/api/src/services/auth/google-verifier.ts`
@@ -2775,6 +2777,8 @@ git commit -m "feat(api): add POST /auth/google with injectable verifier"
 
 ## Task 17: Apple sign-in (roadmap 1.8)
 
+> note (2026-04-18): deferred to post-MVP alongside Task 16. Revive when social sign-in enters the backlog again.
+
 **Files:**
 
 - Create: `apps/api/src/services/auth/apple-verifier.ts`
@@ -2997,41 +3001,34 @@ git commit -m "feat(api): add POST /auth/apple with hide-my-email support"
 
 ---
 
-## Task 18: Rate limiting on `/auth/*` (roadmap 1.9)
+## ✅ Task 18: Rate limiting on `/auth/*` (roadmap 1.9)
+
+> note (2026-04-18): the planned `global:false` + per-route `onRoute` hook in `routes/auth/index.ts` did not fire before `@fastify/rate-limit`'s own `onRoute` hook (parent hook ordering), so per-route config was never read. Switched to registering `@fastify/rate-limit` _inside_ the auth scope with global limits — every `/auth/*` route inherits the same `(ip,email)` limit, no opt-in needed. `app.ts` no longer registers rate-limit. Same external behavior; simpler wiring.
 
 **Files:**
 
-- Modify: `apps/api/src/app.ts` (register `@fastify/rate-limit`)
-- Modify: `apps/api/src/routes/auth/index.ts` (attach limits)
+- Modify: `apps/api/src/routes/auth/index.ts` (scoped registration of `@fastify/rate-limit`)
 - Modify: `apps/api/package.json`
 - Test: `apps/api/test/auth/rate-limit.test.ts`
 
-- [ ] **Step 1: Install**
+- [x] **Step 1: Install**
 
 ```bash
 pnpm --filter @jdm/api add @fastify/rate-limit
 ```
 
-- [ ] **Step 2: Register globally in `apps/api/src/app.ts`**
+- [x] **Step 2: ~~Register globally in `apps/api/src/app.ts`~~** — skipped per deviation note above (rate-limit registered inside the auth scope instead).
 
-Import and register after `sensible` (the existing cors registration), disabled by default so routes opt-in:
+- [x] **Step 3: Register `@fastify/rate-limit` inside the auth scope in `apps/api/src/routes/auth/index.ts`**
+
+(Google + Apple route imports omitted — Tasks 16/17 deferred.)
 
 ```typescript
 import rateLimit from '@fastify/rate-limit';
-// ...
-await app.register(rateLimit, { global: false });
-```
 
-- [ ] **Step 3: Apply per-route config inside `apps/api/src/routes/auth/index.ts`**
-
-Replace the current body with:
-
-```typescript
 import type { FastifyPluginAsync } from 'fastify';
 
-import { appleRoute } from './apple.js';
 import { forgotPasswordRoute } from './forgot-password.js';
-import { googleRoute } from './google.js';
 import { loginRoute } from './login.js';
 import { logoutRoute } from './logout.js';
 import { refreshRoute } from './refresh.js';
@@ -3042,18 +3039,14 @@ import { verifyRoute } from './verify.js';
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   await app.register(async (scoped) => {
-    scoped.addHook('onRoute', (route) => {
-      if (route.method === 'POST' || route.method === 'GET') {
-        (route.config as Record<string, unknown>).rateLimit = {
-          max: 10,
-          timeWindow: '1 minute',
-          keyGenerator: (req) => {
-            const body = req.body as { email?: string } | undefined;
-            const email = body?.email ?? '';
-            return `${req.ip}:${email}`;
-          },
-        };
-      }
+    await scoped.register(rateLimit, {
+      max: 10,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const body = req.body as { email?: string } | undefined;
+        const email = body?.email ?? '';
+        return `${req.ip}:${email}`;
+      },
     });
 
     await scoped.register(signupRoute);
@@ -3064,13 +3057,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     await scoped.register(logoutRoute);
     await scoped.register(forgotPasswordRoute);
     await scoped.register(resetPasswordRoute);
-    await scoped.register(googleRoute);
-    await scoped.register(appleRoute);
   });
 };
 ```
 
-- [ ] **Step 4: Test `apps/api/test/auth/rate-limit.test.ts`**
+- [x] **Step 4: Test `apps/api/test/auth/rate-limit.test.ts`**
 
 ```typescript
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -3103,21 +3094,21 @@ describe('auth rate limit', () => {
 });
 ```
 
-- [ ] **Step 5: Run — expect pass**
+- [x] **Step 5: Run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/rate-limit
 ```
 
-- [ ] **Step 6: Full API suite green**
+- [x] **Step 6: Full API suite green**
 
 ```bash
 pnpm --filter @jdm/api test
 ```
 
-Expected: every auth/\* test plus `health.test.ts` pass.
+Expected: every auth/\* test plus `health.test.ts` pass. Result: 14 files / 43 tests green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api
@@ -4179,6 +4170,8 @@ git commit -m "feat(mobile): add forgot + reset password screens"
 
 ## Task 26: Mobile Google sign-in (roadmap 1.11)
 
+> note (2026-04-18): deferred to post-MVP, blocked on Task 16. Skip during the mobile chunk.
+
 **Files:**
 
 - Create: `apps/mobile/src/auth/google.ts`
@@ -4296,6 +4289,8 @@ git commit -m "feat(mobile): add Google sign-in via expo-auth-session"
 ---
 
 ## Task 27: Mobile Apple sign-in (roadmap 1.12)
+
+> note (2026-04-18): deferred to post-MVP, blocked on Task 17. Skip during the mobile chunk.
 
 **Files:**
 
