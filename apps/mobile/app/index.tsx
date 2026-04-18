@@ -1,7 +1,8 @@
+import { healthResponseSchema } from '@jdm/shared/health';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { api, ApiError } from '~/api/client';
+import { ApiError, request } from '~/api/client';
 import { Button } from '~/components/Button';
 import { theme } from '~/theme';
 
@@ -17,7 +18,7 @@ export default function HomeScreen() {
   const check = async () => {
     setState({ kind: 'loading' });
     try {
-      const result = await api.health();
+      const result = await request('/health', healthResponseSchema);
       setState({ kind: 'ok', sha: result.sha, uptime: result.uptimeSeconds });
     } catch (err) {
       const message = err instanceof ApiError ? `HTTP ${err.status}` : 'Network error';

@@ -3216,12 +3216,11 @@ export const request = async <T>(
 ): Promise<T> => {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.token) headers.authorization = `Bearer ${options.token}`;
-  const response = await fetch(`${baseUrl()}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
-  });
+  const init: RequestInit = { method: options.method ?? 'GET', headers };
+  if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  if (options.signal) init.signal = options.signal;
+  const response = await fetch(`${baseUrl()}${path}`, init);
+  // > note (2026-04-18): init built conditionally — exactOptionalPropertyTypes rejects undefined body/signal.
   const text = await response.text();
   const parsed: unknown = text.length > 0 ? JSON.parse(text) : null;
   if (!response.ok) {
