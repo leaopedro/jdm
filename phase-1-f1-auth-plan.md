@@ -1889,7 +1889,7 @@ git commit -m "feat(api): add POST /auth/login with verified-email guard"
 
 ---
 
-## Task 12: `POST /auth/refresh` (roadmap 1.4, first half)
+## ✅ Task 12: `POST /auth/refresh` (roadmap 1.4, first half)
 
 **Files:**
 
@@ -1897,7 +1897,7 @@ git commit -m "feat(api): add POST /auth/login with verified-email guard"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/refresh.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2001,9 +2001,9 @@ describe('POST /auth/refresh', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/refresh.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/refresh.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2063,7 +2063,7 @@ export const refreshRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
+- [x] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
 
 ```typescript
 import { refreshRoute } from './refresh.js';
@@ -2071,7 +2071,7 @@ import { refreshRoute } from './refresh.js';
 await app.register(refreshRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/refresh
@@ -2079,7 +2079,7 @@ pnpm --filter @jdm/api test -- auth/refresh
 
 Expected: 5 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
