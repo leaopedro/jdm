@@ -9,7 +9,7 @@ COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
 COPY packages/tsconfig/package.json packages/tsconfig/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS build
 COPY . .
@@ -20,9 +20,13 @@ FROM node:22-alpine AS runner
 RUN corepack enable
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /repo/node_modules /app/node_modules
-COPY --from=build /repo/apps/api/dist /app/dist
-COPY --from=build /repo/apps/api/package.json /app/package.json
-COPY --from=build /repo/packages /app/packages
+COPY --from=build /repo/apps/api/dist ./dist
+COPY --from=build /repo/apps/api/package.json ./
+COPY --from=build /repo/package.json ./root-package.json
+COPY --from=build /repo/pnpm-lock.yaml ./
+COPY --from=build /repo/pnpm-workspace.yaml ./
+COPY --from=build /repo/apps ./apps
+COPY --from=build /repo/packages ./packages
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 EXPOSE 4000
 CMD ["node", "dist/server.js"]
