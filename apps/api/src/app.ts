@@ -10,6 +10,7 @@ import { authPlugin } from './plugins/auth.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
+import { authRoutes } from './routes/auth/index.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
@@ -42,6 +43,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
     app.get('/debug/boom', () => {
