@@ -14,4 +14,13 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis.__prisma = prisma;
 }
 
-export type { Prisma, User } from '@prisma/client';
+export type {
+  Prisma,
+  User,
+  AuthProvider,
+  AuthProviderKind,
+  RefreshToken,
+  VerificationToken,
+  PasswordResetToken,
+  UserRole,
+} from '@prisma/client';
