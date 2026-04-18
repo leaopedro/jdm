@@ -2088,7 +2088,7 @@ git commit -m "feat(api): add POST /auth/refresh with single-use token rotation"
 
 ---
 
-## Task 13: `POST /auth/logout` (roadmap 1.4, second half)
+## ✅ Task 13: `POST /auth/logout` (roadmap 1.4, second half)
 
 **Files:**
 
@@ -2096,7 +2096,7 @@ git commit -m "feat(api): add POST /auth/refresh with single-use token rotation"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/logout.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2150,9 +2150,9 @@ describe('POST /auth/logout', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/logout.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/logout.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2175,7 +2175,7 @@ export const logoutRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register**
+- [x] **Step 4: Register**
 
 ```typescript
 import { logoutRoute } from './logout.js';
@@ -2183,13 +2183,13 @@ import { logoutRoute } from './logout.js';
 await app.register(logoutRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/logout
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
