@@ -2342,7 +2342,7 @@ git commit -m "feat(api): add POST /auth/forgot-password"
 
 ---
 
-## Task 15: `POST /auth/reset-password` (roadmap 1.6, second half)
+## ✅ Task 15: `POST /auth/reset-password` (roadmap 1.6, second half)
 
 **Files:**
 
@@ -2350,7 +2350,7 @@ git commit -m "feat(api): add POST /auth/forgot-password"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/reset-password.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2432,9 +2432,9 @@ describe('POST /auth/reset-password', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/reset-password.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/reset-password.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2465,7 +2465,7 @@ export const resetPasswordRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register**
+- [x] **Step 4: Register**
 
 ```typescript
 import { resetPasswordRoute } from './reset-password.js';
@@ -2473,9 +2473,9 @@ import { resetPasswordRoute } from './reset-password.js';
 await app.register(resetPasswordRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
