@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './storage';
 
 import { loginRequest, logoutRequest, meRequest, refreshRequest, signupRequest } from '~/api/auth';
+import { registerTokenProvider } from '~/api/client';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
 
@@ -94,6 +95,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await clearTokens();
     setState({ status: 'unauthenticated', user: null, tokens: null });
   }, [state.tokens]);
+
+  useEffect(() => {
+    registerTokenProvider({
+      getAccessToken: () => state.tokens?.accessToken ?? null,
+      refresh: async () => {
+        if (!state.tokens) throw new Error('no refresh token');
+        const refreshed = await refreshRequest(state.tokens.refreshToken);
+        await applySession(
+          { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken },
+          refreshed.user,
+        );
+        return refreshed.accessToken;
+      },
+      onSignOut: async () => {
+        await clearTokens();
+        setState({ status: 'unauthenticated', user: null, tokens: null });
+      },
+    });
+  }, [state.tokens, applySession]);
 
   const refreshUser: AuthContextValue['refreshUser'] = useCallback(async () => {
     if (!state.tokens) return;

@@ -12,7 +12,7 @@ import {
   type PublicUser,
 } from '@jdm/shared/auth';
 
-import { request } from './client';
+import { authedRequest, request } from './client';
 
 export const signupRequest = (input: SignupInput): Promise<AuthResponse> =>
   request('/auth/signup', authResponseSchema, { method: 'POST', body: input });
@@ -49,3 +49,5 @@ export const appleSignInRequest = (
 
 export const meRequest = (token: string): Promise<PublicUser> =>
   request('/me', publicUserSchema, { token });
+
+export const meAuthed = (): Promise<PublicUser> => authedRequest('/me', publicUserSchema);
