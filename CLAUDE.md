@@ -41,7 +41,9 @@ Greenfield. The repo is git-initialized against `git@github.com:leaopedro/jdm.gi
 Two untracked files at the repo root are the source of truth for this project. They are listed in `.git/info/exclude` and must stay local — never `git add` them.
 
 - `brainstorm.md` — high-level architecture brief: stack decisions, monorepo topology, feature map (F1–F12), data model sketch, payment flows, release plan (v0.1 → v0.6). Read this before proposing any design work.
-- `roadmap.md` — ordered, checkbox-tracked task list per phase. **Do not change its contents except to tick checkboxes when a task is merged and deployed.** This rule is stated in the file itself and must be respected.
+- `roadmap.md` — ordered, checkbox-tracked task list per phase. **Do not change its contents except to update status markers on task lines.** Flip `[ ]` → `[~]` when work starts on-branch, `[~]` → `[x]` only when merged to `main` AND deployed, `[-]` if dropped. Updates happen as part of the merge itself, never in a follow-up. This rule is stated in the file itself and must be respected.
+
+**Implementation plans** (`phase-N-fM-<slug>-plan.md` at repo root) are live logs, not frozen artifacts. While executing a plan you MUST tick each step's `- [ ]` checkbox the moment it is done, prefix a task's heading with `✅ ` once its final commit lands, add a one-line `> note:` when you deviate from the planned step, and edit step text in place to match reality. A stale plan misleads future agents.
 
 When the user asks for planning or implementation, align proposals with the phasing, stack, and feature boundaries already decided in these two files. Each feature F1–F12 is sized for its own downstream implementation spec rather than being bundled.
 
