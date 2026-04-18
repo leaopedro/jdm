@@ -3,8 +3,10 @@
 | Secret                                                        | Used by                  | Stored in                            | Local source                        | Rotation                                                                  |
 | ------------------------------------------------------------- | ------------------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------- |
 | `DATABASE_URL`                                                | api, db                  | Railway variables (prod/preview)     | `apps/api/.env`, `packages/db/.env` | Rotate by regenerating Postgres plugin creds; redeploy.                   |
-| `JWT_ACCESS_SECRET`                                           | api                      | Railway                              | `apps/api/.env`                     | Rotate every 90 days; rolling restart invalidates old access tokens only. |
-| `JWT_REFRESH_SECRET`                                          | api                      | Railway                              | `apps/api/.env`                     | Rotate on incident; forces logout for all users.                          |
+| `JWT_ACCESS_SECRET`                                           | api                      | Railway                              | `apps/api/.env`                     | 32+ bytes random. Rotating invalidates all access tokens instantly.       |
+| `REFRESH_TOKEN_PEPPER`                                        | api                      | Railway                              | `apps/api/.env`                     | Mixed into SHA-256 refresh-token hash. Rotating forces logout everywhere. |
+| `APP_WEB_BASE_URL`                                            | api                      | Railway + local                      | `apps/api/.env`                     | Used in verify/reset email links. Immutable per env.                      |
+| `MAIL_FROM`                                                   | api                      | Railway + local                      | `apps/api/.env`                     | e.g. `noreply@jdmexperience.com.br`.                                      |
 | `SENTRY_DSN` (api)                                            | api                      | Railway                              | `apps/api/.env`                     | Regenerate in Sentry project → update Railway.                            |
 | `SENTRY_DSN` (admin)                                          | admin                    | Vercel                               | `apps/admin/.env.local`             | Same.                                                                     |
 | `SENTRY_DSN` (mobile)                                         | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | Same. Requires OTA release.                                               |
@@ -20,8 +22,15 @@
 | `APPLE_ID` / `ASC_APP_ID`                                     | EAS submit               | EAS secrets                          | N/A                                 | Per Apple ID lifecycle.                                                   |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`                            | EAS submit               | EAS secrets                          | N/A                                 | Regenerate in Play Console.                                               |
 | `RESEND_API_KEY` (or Postmark)                                | api (email verify/reset) | Railway                              | `apps/api/.env`                     | Per provider; low traffic.                                                |
-| `GOOGLE_OAUTH_AUDIENCE`                                       | api (F1 Google sign-in)  | Railway                              | `apps/api/.env`                     | Immutable unless client id changes.                                       |
-| `APPLE_OAUTH_AUDIENCE`                                        | api (F1 Apple sign-in)   | Railway                              | `apps/api/.env`                     | Immutable unless bundle id changes.                                       |
+| `GOOGLE_CLIENT_ID`                                            | api (F1 Google sign-in)  | Railway                              | `apps/api/.env`                     | Web client ID (audience for mobile + admin ID tokens).                    |
+| `APPLE_CLIENT_ID`                                             | api (F1 Apple sign-in)   | Railway                              | `apps/api/.env`                     | Apple Service ID (audience) for mobile sign-in.                           |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS`                            | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | iOS OAuth client ID.                                                      |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID`                        | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | Android OAuth client ID.                                                  |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB`                            | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | Web client ID (matches `GOOGLE_CLIENT_ID` on API).                        |
+
+## F1 — Auth notes
+
+Generate `JWT_ACCESS_SECRET` and `REFRESH_TOKEN_PEPPER` with `openssl rand -base64 48`. Rotate them together when compromise is suspected; doing so logs every user out (access tokens expire immediately; refresh tokens no longer hash-match).
 
 ## New-developer setup
 

@@ -22,6 +22,10 @@ beforeAll(async () => {
   process.env.LOG_LEVEL = 'error';
   process.env.GIT_SHA = 'test';
   process.env.CORS_ORIGINS = '';
+  process.env.JWT_ACCESS_SECRET = 'a'.repeat(48);
+  process.env.REFRESH_TOKEN_PEPPER = 'b'.repeat(48);
+  process.env.APP_WEB_BASE_URL = 'http://localhost:3000';
+  process.env.MAIL_FROM = 'noreply@jdm.test';
 
   const dbPackageDir = path.resolve(here, '../../../packages/db');
   execSync('pnpm exec prisma migrate deploy', {

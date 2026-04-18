@@ -16,6 +16,13 @@ const envSchema = z.object({
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0),
     ),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  REFRESH_TOKEN_PEPPER: z.string().min(32),
+  APP_WEB_BASE_URL: z.string().url(),
+  MAIL_FROM: z.string().email(),
+  RESEND_API_KEY: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  APPLE_CLIENT_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
