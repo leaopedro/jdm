@@ -1734,7 +1734,7 @@ git commit -m "feat(api): add POST /auth/resend-verify with enumeration resistan
 
 ---
 
-## Task 11: `POST /auth/login` (roadmap 1.3)
+## ✅ Task 11: `POST /auth/login` (roadmap 1.3)
 
 **Files:**
 
@@ -1742,7 +1742,7 @@ git commit -m "feat(api): add POST /auth/resend-verify with enumeration resistan
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/login.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1809,9 +1809,9 @@ describe('POST /auth/login', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/login.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/login.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1866,7 +1866,7 @@ export const loginRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
+- [x] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
 
 ```typescript
 import { loginRoute } from './login.js';
@@ -1874,13 +1874,13 @@ import { loginRoute } from './login.js';
 await app.register(loginRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/login
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
