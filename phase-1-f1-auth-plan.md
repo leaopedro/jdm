@@ -2198,7 +2198,7 @@ git commit -m "feat(api): add POST /auth/logout with idempotent revocation"
 
 ---
 
-## Task 14: `POST /auth/forgot-password` (roadmap 1.6, first half)
+## ✅ Task 14: `POST /auth/forgot-password` (roadmap 1.6, first half)
 
 **Files:**
 
@@ -2207,7 +2207,7 @@ git commit -m "feat(api): add POST /auth/logout with idempotent revocation"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/forgot-password.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2257,9 +2257,9 @@ describe('POST /auth/forgot-password', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/services/auth/password-reset.ts`**
+- [x] **Step 3: Create `apps/api/src/services/auth/password-reset.ts`**
 
 ```typescript
 import { createHash, randomBytes } from 'node:crypto';
@@ -2298,7 +2298,7 @@ export const consumePasswordResetToken = async (
 };
 ```
 
-- [ ] **Step 4: Create `apps/api/src/routes/auth/forgot-password.ts`**
+- [x] **Step 4: Create `apps/api/src/routes/auth/forgot-password.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -2323,7 +2323,7 @@ export const forgotPasswordRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 5: Register**
+- [x] **Step 5: Register**
 
 ```typescript
 import { forgotPasswordRoute } from './forgot-password.js';
@@ -2331,9 +2331,9 @@ import { forgotPasswordRoute } from './forgot-password.js';
 await app.register(forgotPasswordRoute);
 ```
 
-- [ ] **Step 6: Re-run — expect pass**
+- [x] **Step 6: Re-run — expect pass**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api
