@@ -34,7 +34,11 @@ export default function LoginScreen() {
         if (err.status === 401)
           setError('password', { message: authCopy.errors.invalidCredentials });
         else if (err.status === 403)
-          setError('email', { message: authCopy.errors.emailNotVerified });
+          router.replace({
+            pathname: '/verify-email-pending',
+            params: { email: values.email },
+          });
+        else if (err.status === 429) setError('password', { message: authCopy.errors.rateLimited });
         else setError('password', { message: authCopy.errors.unknown });
       } else {
         setError('password', { message: authCopy.errors.network });

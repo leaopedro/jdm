@@ -34,6 +34,8 @@ export default function SignupScreen() {
         setError('email', { message: authCopy.errors.emailExists });
       } else if (err instanceof ApiError && err.status === 400) {
         setError('password', { message: authCopy.errors.weakPassword });
+      } else if (err instanceof ApiError && err.status === 429) {
+        setError('password', { message: authCopy.errors.rateLimited });
       } else {
         setError('password', { message: authCopy.errors.unknown });
       }

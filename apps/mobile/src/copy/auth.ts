@@ -7,6 +7,7 @@ export const authCopy = {
     back: 'Voltar',
     or: 'ou',
     loading: 'Carregando…',
+    logout: 'Sair',
   },
   errors: {
     network: 'Sem conexão. Tente novamente.',
@@ -15,6 +16,8 @@ export const authCopy = {
     emailExists: 'Esse e-mail já está cadastrado.',
     emailNotVerified: 'Confirme seu e-mail antes de entrar.',
     weakPassword: 'Use pelo menos 10 caracteres.',
+    rateLimited: 'Muitas tentativas. Aguarde um instante.',
+    invalidLink: 'Link inválido.',
   },
   login: {
     title: 'Entrar',
@@ -41,10 +44,23 @@ export const authCopy = {
     submit: 'Enviar link',
     sent: 'Se o e-mail existir, enviaremos um link em instantes.',
   },
+  reset: {
+    title: 'Nova senha',
+    password: 'Nova senha (mín. 10 caracteres)',
+    submit: 'Atualizar senha',
+    done: 'Senha atualizada.',
+  },
   verifyPending: {
     title: 'Confirme seu e-mail',
     body: (email: string) => `Enviamos um link para ${email}. Toque no link para ativar sua conta.`,
+    bodyNoEmail: 'Enviamos um link para o seu e-mail. Toque no link para ativar sua conta.',
     resend: 'Reenviar e-mail',
     resent: 'Enviamos novamente. Verifique sua caixa de entrada.',
+    checkAgain: 'Já confirmei',
+  },
+  welcome: {
+    greeting: (name: string) => `Olá, ${name}`,
+    fallbackName: 'piloto',
+    body: 'Você está dentro. Em breve, eventos e ingressos.',
   },
 };

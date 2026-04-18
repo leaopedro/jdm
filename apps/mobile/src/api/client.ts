@@ -50,9 +50,20 @@ type TokenProvider = {
 };
 
 let provider: TokenProvider | null = null;
+let refreshInflight: Promise<string> | null = null;
 
 export const registerTokenProvider = (p: TokenProvider): void => {
   provider = p;
+};
+
+const dedupedRefresh = (): Promise<string> => {
+  if (!provider) throw new Error('token provider not registered');
+  if (!refreshInflight) {
+    refreshInflight = provider.refresh().finally(() => {
+      refreshInflight = null;
+    });
+  }
+  return refreshInflight;
 };
 
 export const authedRequest = async <T>(
@@ -78,7 +89,7 @@ export const authedRequest = async <T>(
   let response = await attempt(current);
   if (response.status === 401) {
     try {
-      const refreshed = await provider.refresh();
+      const refreshed = await dedupedRefresh();
       response = await attempt(refreshed);
     } catch {
       await provider.onSignOut();

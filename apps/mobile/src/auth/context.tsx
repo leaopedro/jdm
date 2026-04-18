@@ -1,10 +1,18 @@
 import type { PublicUser } from '@jdm/shared/auth';
 import type { LoginInput, SignupInput } from '@jdm/shared/auth';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './storage';
 
-import { loginRequest, logoutRequest, meRequest, refreshRequest, signupRequest } from '~/api/auth';
+import { loginRequest, logoutRequest, meAuthed, refreshRequest, signupRequest } from '~/api/auth';
 import { registerTokenProvider } from '~/api/client';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
@@ -27,11 +35,38 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<AuthState>({ status: 'loading', user: null, tokens: null });
+  const tokensRef = useRef<StoredTokens | null>(null);
 
   const applySession = useCallback(async (tokens: StoredTokens, user: PublicUser) => {
+    tokensRef.current = tokens;
     await saveTokens(tokens);
     setState({ status: 'authenticated', tokens, user });
   }, []);
+
+  const signOut = useCallback(async () => {
+    tokensRef.current = null;
+    await clearTokens();
+    setState({ status: 'unauthenticated', user: null, tokens: null });
+  }, []);
+
+  // Register provider once. Reads/writes go through tokensRef so the
+  // closure never sees stale token state.
+  useEffect(() => {
+    registerTokenProvider({
+      getAccessToken: () => tokensRef.current?.accessToken ?? null,
+      refresh: async () => {
+        const current = tokensRef.current;
+        if (!current) throw new Error('no refresh token');
+        const refreshed = await refreshRequest(current.refreshToken);
+        await applySession(
+          { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken },
+          refreshed.user,
+        );
+        return refreshed.accessToken;
+      },
+      onSignOut: signOut,
+    });
+  }, [applySession, signOut]);
 
   useEffect(() => {
     const boot = async () => {
@@ -40,24 +75,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setState({ status: 'unauthenticated', user: null, tokens: null });
         return;
       }
+      tokensRef.current = stored;
       try {
-        const user = await meRequest(stored.accessToken);
-        setState({ status: 'authenticated', user, tokens: stored });
+        const user = await meAuthed();
+        setState({
+          status: 'authenticated',
+          user,
+          tokens: tokensRef.current ?? stored,
+        });
       } catch {
-        try {
-          const refreshed = await refreshRequest(stored.refreshToken);
-          await applySession(
-            { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken },
-            refreshed.user,
-          );
-        } catch {
-          await clearTokens();
-          setState({ status: 'unauthenticated', user: null, tokens: null });
-        }
+        await signOut();
       }
     };
     void boot();
-  }, [applySession]);
+  }, [signOut]);
 
   const signup: AuthContextValue['signup'] = useCallback(
     async (input) => {
@@ -84,7 +115,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const logout: AuthContextValue['logout'] = useCallback(async () => {
-    const current = state.tokens;
+    const current = tokensRef.current;
     if (current) {
       try {
         await logoutRequest(current.refreshToken);
@@ -92,38 +123,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // local clear proceeds regardless
       }
     }
-    await clearTokens();
-    setState({ status: 'unauthenticated', user: null, tokens: null });
-  }, [state.tokens]);
-
-  useEffect(() => {
-    registerTokenProvider({
-      getAccessToken: () => state.tokens?.accessToken ?? null,
-      refresh: async () => {
-        if (!state.tokens) throw new Error('no refresh token');
-        const refreshed = await refreshRequest(state.tokens.refreshToken);
-        await applySession(
-          { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken },
-          refreshed.user,
-        );
-        return refreshed.accessToken;
-      },
-      onSignOut: async () => {
-        await clearTokens();
-        setState({ status: 'unauthenticated', user: null, tokens: null });
-      },
-    });
-  }, [state.tokens, applySession]);
+    await signOut();
+  }, [signOut]);
 
   const refreshUser: AuthContextValue['refreshUser'] = useCallback(async () => {
-    if (!state.tokens) return;
+    if (!tokensRef.current) return;
     try {
-      const user = await meRequest(state.tokens.accessToken);
+      const user = await meAuthed();
       setState((prev) => ({ ...prev, user }));
     } catch {
-      // interceptor handles refresh; leave state alone
+      // authedRequest handles refresh + sign-out on failure
     }
-  }, [state.tokens]);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, signup, login, setSession: applySession, logout, refreshUser }),

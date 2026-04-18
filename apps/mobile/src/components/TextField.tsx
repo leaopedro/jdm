@@ -5,7 +5,7 @@ import { theme } from '../theme';
 
 type Props = TextInputProps & {
   label: string;
-  error?: string | undefined;
+  error: string | undefined;
 };
 
 export const TextField = ({ label, error, style, ...rest }: Props) => (

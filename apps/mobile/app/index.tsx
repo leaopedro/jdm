@@ -1,10 +1,8 @@
 import { Redirect } from 'expo-router';
 
-import { useAuth } from '~/auth/context';
-
 export default function Index() {
-  const auth = useAuth();
-  if (auth.status === 'loading') return null;
-  if (auth.status === 'authenticated') return <Redirect href="/welcome" />;
-  return <Redirect href="/login" />;
+  // Gate in _layout.tsx redirects loading/unauthenticated/verify-pending cases
+  // before this ever mounts. Reaching here means the user is authenticated
+  // and email-verified, so send them to /welcome.
+  return <Redirect href="/welcome" />;
 }

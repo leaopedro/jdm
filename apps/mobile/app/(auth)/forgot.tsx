@@ -7,6 +7,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { forgotPasswordRequest } from '~/api/auth';
+import { ApiError } from '~/api/client';
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
@@ -17,6 +18,7 @@ export default function ForgotScreen() {
   const {
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<ForgotPasswordInput>({
     resolver: zodResolver(forgotPasswordSchema),
@@ -24,8 +26,16 @@ export default function ForgotScreen() {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    await forgotPasswordRequest(values);
-    setSent(true);
+    try {
+      await forgotPasswordRequest(values);
+      setSent(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setError('email', { message: authCopy.errors.rateLimited });
+      } else {
+        setError('email', { message: authCopy.errors.unknown });
+      }
+    }
   });
 
   return (
