@@ -10,6 +10,14 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
 import { healthRoutes } from './routes/health.js';
+import { buildMailer, type Mailer } from './services/mailer/index.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    mailer: Mailer;
+    env: Env;
+  }
+}
 
 export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   const app = Fastify({
@@ -17,6 +25,9 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
     disableRequestLogging: false,
     genReqId: () => randomUUID(),
   });
+
+  app.decorate('mailer', buildMailer(env));
+  app.decorate('env', env);
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
