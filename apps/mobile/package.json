@@ -14,6 +14,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@expo/metro-runtime": "^6.1.2",
     "@hookform/resolvers": "^5.2.2",
     "@jdm/shared": "workspace:*",
     "@sentry/react-native": "^8.8.0",
@@ -24,10 +25,12 @@
     "expo-secure-store": "^55.0.13",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-hook-form": "^7.72.1",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+    "react-native-web": "^0.21.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
