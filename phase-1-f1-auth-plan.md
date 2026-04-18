@@ -1619,7 +1619,7 @@ git commit -m "feat(api): add GET /auth/verify (email confirmation)"
 
 ---
 
-## Task 10: `POST /auth/resend-verify` (roadmap 1.5, second half)
+## ✅ Task 10: `POST /auth/resend-verify` (roadmap 1.5, second half)
 
 **Files:**
 
@@ -1627,7 +1627,7 @@ git commit -m "feat(api): add GET /auth/verify (email confirmation)"
 - Modify: `apps/api/src/routes/auth/index.ts`
 - Test: `apps/api/test/auth/resend-verify.test.ts`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```typescript
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -1684,9 +1684,9 @@ describe('POST /auth/resend-verify', () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect failure**
+- [x] **Step 2: Run — expect failure**
 
-- [ ] **Step 3: Create `apps/api/src/routes/auth/resend-verify.ts`**
+- [x] **Step 3: Create `apps/api/src/routes/auth/resend-verify.ts`**
 
 ```typescript
 import { prisma } from '@jdm/db';
@@ -1711,7 +1711,7 @@ export const resendVerifyRoute: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
+- [x] **Step 4: Register in `apps/api/src/routes/auth/index.ts`**
 
 ```typescript
 import { resendVerifyRoute } from './resend-verify.js';
@@ -1719,13 +1719,13 @@ import { resendVerifyRoute } from './resend-verify.js';
 await app.register(resendVerifyRoute);
 ```
 
-- [ ] **Step 5: Re-run — expect pass**
+- [x] **Step 5: Re-run — expect pass**
 
 ```bash
 pnpm --filter @jdm/api test -- auth/resend-verify
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api
