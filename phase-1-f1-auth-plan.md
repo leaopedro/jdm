@@ -3117,7 +3117,7 @@ git commit -m "feat(api): rate-limit /auth/* endpoints per (ip,email)"
 
 ---
 
-## Task 19: Mobile SecureStore wrapper (roadmap 1.13, storage half)
+## ✅ Task 19: Mobile SecureStore wrapper (roadmap 1.13, storage half)
 
 **Files:**
 
@@ -3173,7 +3173,7 @@ git commit -m "feat(mobile): add SecureStore wrapper for auth tokens"
 
 ---
 
-## Task 20: Mobile typed auth API client
+## ✅ Task 20: Mobile typed auth API client
 
 **Files:**
 
@@ -3312,7 +3312,7 @@ git commit -m "feat(mobile): add typed auth api client"
 
 ---
 
-## Task 21: Mobile auth context + root route guard
+## ✅ Task 21: Mobile auth context + root route guard
 
 **Files:**
 
@@ -3625,7 +3625,7 @@ git commit -m "feat(mobile): add auth context and root route guard"
 
 ---
 
-## Task 22: Mobile login screen (roadmap 1.10, login half)
+## ✅ Task 22: Mobile login screen (roadmap 1.10, login half)
 
 **Files:**
 
@@ -3801,7 +3801,7 @@ git commit -m "feat(mobile): add login screen with react-hook-form + zod"
 
 ---
 
-## Task 23: Mobile signup screen (roadmap 1.10, signup half)
+## ✅ Task 23: Mobile signup screen (roadmap 1.10, signup half)
 
 **Files:**
 
@@ -3936,7 +3936,7 @@ git commit -m "feat(mobile): add signup screen"
 
 ---
 
-## Task 24: Mobile verify-email-pending screen (roadmap 1.10)
+## ✅ Task 24: Mobile verify-email-pending screen (roadmap 1.10)
 
 **Files:**
 
@@ -3997,7 +3997,7 @@ git commit -m "feat(mobile): add verify-email-pending screen with resend"
 
 ---
 
-## Task 25: Mobile forgot + reset password screens (roadmap 1.10)
+## ✅ Task 25: Mobile forgot + reset password screens (roadmap 1.10)
 
 **Files:**
 
@@ -4383,7 +4383,7 @@ git commit -m "feat(mobile): add Apple sign-in (ios only)"
 
 ---
 
-## Task 28: Mobile refresh interceptor + end-to-end smoke (roadmap 1.13 second half)
+## ✅ Task 28: Mobile refresh interceptor + end-to-end smoke (roadmap 1.13 second half)
 
 **Files:**
 
