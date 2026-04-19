@@ -131,3 +131,61 @@ model CarPhoto {
 
   @@index([carId, sortOrder])
 }
+
+enum EventType {
+  meeting
+  drift
+  other
+}
+
+enum EventStatus {
+  draft
+  published
+  cancelled
+}
+
+model Event {
+  id           String      @id @default(cuid())
+  slug         String      @unique @db.VarChar(140)
+  title        String      @db.VarChar(140)
+  description  String      @db.Text
+  coverObjectKey String?   @db.VarChar(300)
+  startsAt     DateTime
+  endsAt       DateTime
+  venueName    String      @db.VarChar(140)
+  venueAddress String      @db.VarChar(300)
+  lat          Float
+  lng          Float
+  city         String      @db.VarChar(100)
+  stateCode    String      @db.VarChar(2)
+  type         EventType
+  status       EventStatus @default(draft)
+  capacity     Int
+  publishedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tiers TicketTier[]
+
+  @@index([stateCode, city, startsAt])
+  @@index([status, startsAt])
+}
+
+model TicketTier {
+  id             String   @id @default(cuid())
+  eventId        String
+  name           String   @db.VarChar(80)
+  priceCents     Int
+  currency       String   @default("BRL") @db.VarChar(3)
+  quantityTotal  Int
+  quantitySold   Int      @default(0)
+  salesOpenAt    DateTime?
+  salesCloseAt   DateTime?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder])
+}
