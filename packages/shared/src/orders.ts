@@ -14,11 +14,12 @@ export const createOrderRequestSchema = z.object({
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 
 // clientSecret is returned only for card orders (Stripe). Pix uses a different shape in F4b.
+// The mobile client reads its publishable key from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+// not from this response, so it is intentionally omitted.
 export const createOrderResponseSchema = z.object({
   orderId: z.string().min(1),
   status: orderStatusSchema,
   clientSecret: z.string().min(1),
-  publishableKey: z.string().min(1),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });

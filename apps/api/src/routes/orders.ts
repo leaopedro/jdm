@@ -32,7 +32,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     if (existingTicket) {
       return reply
         .status(409)
-        .send({ error: 'Conflict', message: 'already has a ticket for this event' });
+        .send({ error: 'Conflict', message: 'already has a valid ticket for this event' });
     }
 
     const reservation = await prisma.ticketTier.updateMany({
@@ -79,14 +79,13 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           orderId: order.id,
           status: 'pending',
           clientSecret: intent.clientSecret,
-          publishableKey: app.stripe.publishableKey(),
           amountCents: tier.priceCents,
           currency: tier.currency,
         }),
       );
     } catch (err) {
-      await prisma.ticketTier.update({
-        where: { id: tier.id },
+      await prisma.ticketTier.updateMany({
+        where: { id: tier.id, quantitySold: { gt: 0 } },
         data: { quantitySold: { decrement: 1 } },
       });
       throw err;
