@@ -10,7 +10,10 @@
     "./auth": "./src/auth.ts",
     "./events": "./src/events.ts",
     "./health": "./src/health.ts",
-    "./ids": "./src/ids.ts"
+    "./ids": "./src/ids.ts",
+    "./profile": "./src/profile.ts",
+    "./cars": "./src/cars.ts",
+    "./uploads": "./src/uploads.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
