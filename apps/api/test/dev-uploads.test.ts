@@ -46,7 +46,7 @@ describe('dev upload server', () => {
   it('rejects path traversal attempts', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/dev-uploads/put/..%2F..%2Fetc%2Fpasswd',
+      url: '/dev-uploads/put/..%2f..%2fetc%2fpasswd',
       headers: { 'content-type': 'image/jpeg' },
       body: Buffer.from('evil'),
     });
