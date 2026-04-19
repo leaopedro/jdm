@@ -18,6 +18,7 @@ import { eventRoutes } from './routes/events.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { orderRoutes } from './routes/orders.js';
+import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
@@ -67,6 +68,7 @@ export const buildApp = async (
   await app.register(carRoutes);
   await app.register(eventRoutes);
   await app.register(orderRoutes);
+  await app.register(stripeWebhookRoutes);
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
 
