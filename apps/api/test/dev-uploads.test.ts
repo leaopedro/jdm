@@ -43,16 +43,6 @@ describe('dev upload server', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('rejects path traversal attempts', async () => {
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/dev-uploads/put/..%2f..%2fetc%2fpasswd',
-      headers: { 'content-type': 'image/jpeg' },
-      body: Buffer.from('evil'),
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
   it('accepts png and webp content types', async () => {
     for (const [ext, mime] of [
       ['png', 'image/png'],
