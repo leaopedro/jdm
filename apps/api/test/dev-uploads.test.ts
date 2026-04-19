@@ -1,13 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { makeApp, resetDatabase } from './helpers.js';
+import { makeApp } from './helpers.js';
 
 describe('dev upload server', () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
-    await resetDatabase();
     app = await makeApp();
   });
 
@@ -42,6 +41,16 @@ describe('dev upload server', () => {
       url: '/dev-uploads/avatar/nobody/nonexistent.jpg',
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects path traversal attempts', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/dev-uploads/put/..%2F..%2Fetc%2Fpasswd',
+      headers: { 'content-type': 'image/jpeg' },
+      body: Buffer.from('evil'),
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('accepts png and webp content types', async () => {
