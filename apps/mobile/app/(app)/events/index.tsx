@@ -36,7 +36,7 @@ export default function EventsIndex() {
       const stateCode = nextTab === 'nearby' ? (myState ?? undefined) : undefined;
       const res = await listEvents({
         window: windowFor(nextTab),
-        stateCode: stateCode ?? undefined,
+        stateCode,
       });
       setItems(res.items);
     },
