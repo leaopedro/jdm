@@ -13,6 +13,7 @@ import { sentryPlugin } from './plugins/sentry.js';
 import { authRoutes } from './routes/auth/index.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
+import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 
@@ -46,6 +47,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(uploadRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
