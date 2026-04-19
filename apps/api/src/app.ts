@@ -14,11 +14,13 @@ import { authRoutes } from './routes/auth/index.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { buildUploads, type Uploads } from './services/uploads/index.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     mailer: Mailer;
     env: Env;
+    uploads: Uploads;
   }
 }
 
@@ -31,6 +33,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
 
   app.decorate('mailer', buildMailer(env));
   app.decorate('env', env);
+  app.decorate('uploads', buildUploads(env));
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
