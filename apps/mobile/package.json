@@ -18,6 +18,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@jdm/shared": "workspace:*",
     "@sentry/react-native": "^8.8.0",
+    "@stripe/stripe-react-native": "^0.64.0",
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",
     "expo-image-picker": "~17.0.10",

@@ -61,6 +61,7 @@ const config: ExpoConfig = {
     variant,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    stripePublishableKey: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
     eas: { projectId: process.env.EAS_PROJECT_ID ?? '' },
   },
 };
