@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { publicUserSchema } from './auth.js';
-
 export const BRAZIL_STATE_CODES = [
   'AC',
   'AL',
@@ -46,7 +44,13 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 // publicProfileSchema is the API response shape. `avatarUrl` is server-derived
 // from User.avatarObjectKey via app.uploads.buildPublicUrl.
-export const publicProfileSchema = publicUserSchema.extend({
+export const publicProfileSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().email().max(254),
+  name: z.string().min(1),
+  role: z.enum(['user', 'organizer', 'admin']),
+  emailVerifiedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
   bio: z.string().nullable(),
   city: z.string().nullable(),
   stateCode: stateCodeSchema.nullable(),
