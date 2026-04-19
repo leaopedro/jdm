@@ -47,6 +47,11 @@ export default function RootLayout() {
   const stripeKey =
     (Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined)
       ?.stripePublishableKey ?? '';
+  if (!stripeKey && __DEV__) {
+    // Not thrown: dev builds without Stripe configured should still run
+    // screens unrelated to payment. StripeProvider just becomes a no-op.
+    console.warn('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set — payments will fail.');
+  }
   return (
     <StripeProvider publishableKey={stripeKey} merchantIdentifier="merchant.com.jdmexperience.app">
       <AuthProvider>

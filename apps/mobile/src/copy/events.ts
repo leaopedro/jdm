@@ -27,7 +27,6 @@ export const eventsCopy = {
     remaining: 'disponíveis',
     soldOut: 'Esgotado',
     buy: 'Comprar',
-    buyDisabled: 'Esgotado',
     back: 'Voltar',
   },
   errors: {
