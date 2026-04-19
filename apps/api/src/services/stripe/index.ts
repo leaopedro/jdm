@@ -32,6 +32,8 @@ type StripeEnv = {
 };
 
 export const buildStripe = (env: StripeEnv): StripeClient => {
+  // apiVersion is a string literal typed against stripe SDK's LatestApiVersion.
+  // Bump in lockstep with the `stripe` package version; TS will reject stale values.
   const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-03-25.dahlia' });
 
   return {
@@ -56,6 +58,8 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
         data: { object: event.data.object as unknown as Record<string, unknown> },
       };
     },
+    // Stripe's refund.reason is a constrained enum; callers pass free-form text
+    // which we persist in metadata, not in the enum field.
     refund: async (paymentIntentId, reason) => {
       await stripe.refunds.create({
         payment_intent: paymentIntentId,
@@ -63,6 +67,9 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
         metadata: { reason },
       });
     },
+    // Mobile also reads its own EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY; server echo
+    // is a convenience. Empty string is acceptable in dev/test; order-creating
+    // routes in prod must validate non-empty before returning this to clients.
     publishableKey: () => env.STRIPE_PUBLISHABLE_KEY ?? '',
   };
 };
