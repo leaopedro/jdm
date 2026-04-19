@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import { carInputSchema, carSchema } from '@jdm/shared/cars';
+import { carInputSchema, carSchema, carUpdateSchema } from '@jdm/shared/cars';
 import type { Car as DbCar, CarPhoto as DbPhoto } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -53,5 +53,37 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       include: { photos: true },
     });
     return reply.status(201).send(serializeCar(car, app.uploads));
+  });
+
+  app.patch('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const parsed = carUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
+    }
+    const owned = await prisma.car.findFirst({ where: { id, userId: sub } });
+    if (!owned) return reply.status(404).send({ error: 'NotFound' });
+    const { make, model, year, nickname } = parsed.data;
+    const updated = await prisma.car.update({
+      where: { id },
+      data: {
+        ...(make !== undefined ? { make } : {}),
+        ...(model !== undefined ? { model } : {}),
+        ...(year !== undefined ? { year } : {}),
+        ...(nickname !== undefined ? { nickname } : {}),
+      },
+      include: { photos: true },
+    });
+    return serializeCar(updated, app.uploads);
+  });
+
+  app.delete('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const owned = await prisma.car.findFirst({ where: { id, userId: sub } });
+    if (!owned) return reply.status(404).send({ error: 'NotFound' });
+    await prisma.car.delete({ where: { id } });
+    return reply.status(204).send();
   });
 };
