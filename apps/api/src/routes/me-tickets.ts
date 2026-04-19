@@ -1,5 +1,4 @@
 import { prisma } from '@jdm/db';
-import { eventSummarySchema } from '@jdm/shared/events';
 import { myTicketsResponseSchema } from '@jdm/shared/tickets';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -16,9 +15,11 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
     });
 
     const now = Date.now();
+    // "upcoming-or-live" = event has not yet finished. Keeps tickets for events
+    // currently in progress sorted with upcoming rather than buried under past.
     const sorted = tickets.slice().sort((a, b) => {
-      const aFuture = a.event.startsAt.getTime() >= now;
-      const bFuture = b.event.startsAt.getTime() >= now;
+      const aFuture = a.event.endsAt.getTime() >= now;
+      const bFuture = b.event.endsAt.getTime() >= now;
       if (aFuture !== bFuture) return aFuture ? -1 : 1;
       return aFuture
         ? a.event.startsAt.getTime() - b.event.startsAt.getTime()
@@ -34,7 +35,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
         tierName: t.tier.name,
         usedAt: t.usedAt?.toISOString() ?? null,
         createdAt: t.createdAt.toISOString(),
-        event: eventSummarySchema.parse({
+        event: {
           id: t.event.id,
           slug: t.event.slug,
           title: t.event.title,
@@ -47,7 +48,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
           city: t.event.city,
           stateCode: t.event.stateCode,
           type: t.event.type,
-        }),
+        },
       })),
     });
   });
