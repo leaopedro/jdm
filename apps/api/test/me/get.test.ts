@@ -39,7 +39,15 @@ describe('GET /me', () => {
       headers: { authorization: bearer(env, user.id) },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ id: user.id, email: 'me@jdm.test', role: 'user' });
+    expect(res.json()).toMatchObject({
+      id: user.id,
+      email: 'me@jdm.test',
+      role: 'user',
+      bio: null,
+      city: null,
+      stateCode: null,
+      avatarUrl: null,
+    });
     expect(res.json()).not.toHaveProperty('passwordHash');
   });
 });

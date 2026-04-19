@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { publicUserSchema } from './auth';
+import { publicUserSchema } from './auth.js';
 
 export const BRAZIL_STATE_CODES = [
   'AC',
