@@ -51,8 +51,7 @@ export const pickImage = async (): Promise<PickedImage | null> => {
   };
 };
 
-export const uploadToR2 = async (picked: PickedImage, presign: PresignResponse): Promise<void> => {
-  const blob = await (await fetch(picked.uri)).blob();
+export const uploadBlobToR2 = async (blob: Blob, presign: PresignResponse): Promise<void> => {
   const res = await fetch(presign.uploadUrl, {
     method: 'PUT',
     headers: presign.headers,
@@ -68,11 +67,12 @@ export const pickAndUpload = async (
 ): Promise<{ picked: PickedImage; presign: PresignResponse } | null> => {
   const picked = await pickImage();
   if (!picked) return null;
+  const blob = await (await fetch(picked.uri)).blob();
   const presign = await requestPresign({
     kind,
     contentType: picked.mime,
-    size: picked.size || 1,
+    size: blob.size,
   });
-  await uploadToR2(picked, presign);
+  await uploadBlobToR2(blob, presign);
   return { picked, presign };
 };
