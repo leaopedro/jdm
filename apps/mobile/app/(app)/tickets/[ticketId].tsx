@@ -12,20 +12,35 @@ import { theme } from '~/theme';
 
 export default function TicketDetail() {
   useKeepAwake();
-  const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
-  const [ticket, setTicket] = useState<MyTicket | null>(null);
+  const params = useLocalSearchParams<{ ticketId: string; ticket?: string }>();
+  const ticketId = params.ticketId;
+  const preloaded = params.ticket ? (JSON.parse(params.ticket) as MyTicket) : null;
+  const [ticket, setTicket] = useState<MyTicket | null>(preloaded);
+  const [loaded, setLoaded] = useState<boolean>(preloaded !== null);
 
   useEffect(() => {
+    if (preloaded) return;
     void (async () => {
-      const { items } = await listMyTickets();
-      setTicket(items.find((t) => t.id === ticketId) ?? null);
+      try {
+        const { items } = await listMyTickets();
+        setTicket(items.find((t) => t.id === ticketId) ?? null);
+      } finally {
+        setLoaded(true);
+      }
     })();
-  }, [ticketId]);
+  }, [ticketId, preloaded]);
 
-  if (!ticket) {
+  if (!loaded) {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
+      </View>
+    );
+  }
+  if (!ticket) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.sub}>{ticketsCopy.detail.notFound}</Text>
       </View>
     );
   }

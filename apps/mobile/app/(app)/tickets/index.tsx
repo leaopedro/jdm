@@ -70,7 +70,15 @@ export default function TicketsIndex() {
       contentContainerStyle={styles.list}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
       renderItem={({ item }) => (
-        <Pressable style={styles.card} onPress={() => router.push(`/tickets/${item.id}` as never)}>
+        <Pressable
+          style={styles.card}
+          onPress={() =>
+            router.push({
+              pathname: '/tickets/[ticketId]',
+              params: { ticketId: item.id, ticket: JSON.stringify(item) },
+            } as never)
+          }
+        >
           <Text style={styles.title}>{item.event.title}</Text>
           <Text style={styles.sub}>
             {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
