@@ -4,9 +4,32 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { issueTicketForPaidOrder } from '../services/tickets/issue.js';
 
+// Record the event as seen AFTER dispatch succeeds. If we did it first, a
+// dispatch failure would leave the event marked-seen forever and Stripe
+// retries would short-circuit at the dedup branch, stranding the order in
+// `pending`. issueTicketForPaidOrder is idempotent (already-paid path), and
+// the failed-path handler uses count-guarded updateMany, so running dispatch
+// on a redelivery is safe.
+const markProcessed = async (eventId: string, payload: unknown): Promise<boolean> => {
+  try {
+    await prisma.paymentWebhookEvent.create({
+      data: {
+        provider: 'stripe',
+        eventId,
+        payload: payload as Prisma.InputJsonValue,
+      },
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return false;
+    }
+    throw err;
+  }
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
-  // Scoped raw-body parser: Stripe signature verification needs exact bytes.
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
     done(null, body);
   });
@@ -24,46 +47,33 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'invalid signature' });
     }
 
-    // Dedupe by (provider, event.id) before any side effects.
-    try {
-      await prisma.paymentWebhookEvent.create({
-        data: {
-          provider: 'stripe',
-          eventId: event.id,
-          payload: event as unknown as Prisma.InputJsonValue,
-        },
-      });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        return reply.status(200).send({ ok: true, deduped: true });
-      }
-      throw err;
-    }
-
     const intent = event.data.object as { id?: string; metadata?: Record<string, string> };
     const orderId = intent.metadata?.orderId;
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
       await issueTicketForPaidOrder(orderId, intent.id, app.env);
-      request.log.info({ orderId, paymentIntentId: intent.id }, 'ticket issued');
-      return reply.status(200).send({ ok: true });
+      const firstTime = await markProcessed(event.id, event);
+      request.log.info(
+        { orderId, paymentIntentId: intent.id, firstTime },
+        'stripe webhook: ticket issued',
+      );
+      return reply.status(200).send({ ok: true, deduped: !firstTime });
     }
 
     if (event.type === 'payment_intent.payment_failed' && orderId) {
-      const order = await prisma.order.findUnique({ where: { id: orderId } });
-      if (order && order.status === 'pending') {
-        await prisma.$transaction([
-          prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'failed', failedAt: new Date() },
-          }),
-          prisma.ticketTier.update({
-            where: { id: order.tierId },
-            data: { quantitySold: { decrement: 1 } },
-          }),
-        ]);
+      const updated = await prisma.order.updateMany({
+        where: { id: orderId, status: 'pending' },
+        data: { status: 'failed', failedAt: new Date() },
+      });
+      if (updated.count === 1) {
+        const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+        await prisma.ticketTier.updateMany({
+          where: { id: order.tierId, quantitySold: { gt: 0 } },
+          data: { quantitySold: { decrement: 1 } },
+        });
       }
-      return reply.status(200).send({ ok: true });
+      const firstTime = await markProcessed(event.id, event);
+      return reply.status(200).send({ ok: true, deduped: !firstTime });
     }
 
     return reply.status(200).send({ ok: true, ignored: true });

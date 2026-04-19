@@ -183,4 +183,62 @@ describe('POST /stripe/webhook', () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  it('does not mark event processed when dispatch fails; retry works after conflict clears', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier, order } = await seedEventTierOrder(user.id);
+
+    // Pre-seed a conflicting valid ticket so issueTicketForPaidOrder throws
+    // TicketAlreadyExistsForEventError.
+    const conflicting = await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'comp',
+        status: 'valid',
+      },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_dispatch_fail',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+
+    const firstDelivery = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(firstDelivery.statusCode).toBe(500);
+
+    const dedupRow = await prisma.paymentWebhookEvent.findFirst({
+      where: { eventId: 'evt_dispatch_fail' },
+    });
+    expect(dedupRow).toBeNull();
+
+    // Clear the conflict and retry: dispatch now succeeds.
+    await prisma.ticket.update({
+      where: { id: conflicting.id },
+      data: { status: 'revoked' },
+    });
+
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(retry.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    const persisted = await prisma.paymentWebhookEvent.findFirst({
+      where: { eventId: 'evt_dispatch_fail' },
+    });
+    expect(persisted).not.toBeNull();
+  });
 });
