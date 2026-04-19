@@ -32,9 +32,9 @@ const events = [
     startsAt: daysFromNow(30),
     endsAt: daysFromNow(30),
     venueName: 'Autódromo Internacional de Curitiba',
-    venueAddress: 'Av. Victor Ferreira do Amaral, 3700',
-    lat: -25.4102,
-    lng: -49.213,
+    venueAddress: 'Rodovia Deputado João Leopoldo Jacomel, s/n, Pinhais',
+    lat: -25.4158,
+    lng: -49.1619,
     city: 'Curitiba',
     stateCode: 'PR',
     type: 'drift' as const,
@@ -81,12 +81,20 @@ const events = [
 const main = async (): Promise<void> => {
   for (const e of events) {
     const { tiers, ...rest } = e;
+    // Refresh time-sensitive fields on re-run so "upcoming" stays upcoming.
+    // Tiers are not touched on update: quantitySold is load-bearing once F4 ships.
+    const publishedAt = rest.status === 'published' ? new Date() : null;
     await prisma.event.upsert({
       where: { slug: rest.slug },
-      update: {},
+      update: {
+        startsAt: rest.startsAt,
+        endsAt: rest.endsAt,
+        status: rest.status,
+        publishedAt,
+      },
       create: {
         ...rest,
-        publishedAt: rest.status === 'published' ? new Date() : null,
+        publishedAt,
         tiers: { create: tiers },
       },
     });
