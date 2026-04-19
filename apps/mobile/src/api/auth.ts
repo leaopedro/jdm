@@ -6,6 +6,7 @@ import {
   type ResendVerifyInput,
   type ResetPasswordInput,
   type SignupInput,
+  type VerifyEmailInput,
   messageResponseSchema,
   type MessageResponse,
   publicUserSchema,
@@ -28,6 +29,9 @@ export const logoutRequest = (refreshToken: string): Promise<MessageResponse> =>
 
 export const resendVerifyRequest = (input: ResendVerifyInput): Promise<MessageResponse> =>
   request('/auth/resend-verify', messageResponseSchema, { method: 'POST', body: input });
+
+export const verifyEmailRequest = (input: VerifyEmailInput): Promise<MessageResponse> =>
+  request(`/verify?token=${encodeURIComponent(input.token)}`, messageResponseSchema);
 
 export const forgotPasswordRequest = (input: ForgotPasswordInput): Promise<MessageResponse> =>
   request('/auth/forgot-password', messageResponseSchema, { method: 'POST', body: input });

@@ -8,6 +8,7 @@ export class DevMailer implements Mailer {
     this.captured.push(message);
 
     console.log(`[dev-mail] to=${message.to} subject=${message.subject}`);
+    console.log(`[dev-mail] body:\n${message.text ?? message.html}`);
   }
 
   clear(): void {

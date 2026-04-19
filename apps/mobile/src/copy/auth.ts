@@ -50,6 +50,10 @@ export const authCopy = {
     submit: 'Atualizar senha',
     done: 'Senha atualizada.',
   },
+  verify: {
+    loading: 'Confirmando seu e-mail...',
+    done: 'E-mail confirmado. Redirecionando...',
+  },
   verifyPending: {
     title: 'Confirme seu e-mail',
     body: (email: string) => `Enviamos um link para ${email}. Toque no link para ativar sua conta.`,

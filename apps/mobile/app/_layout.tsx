@@ -15,7 +15,7 @@ const Gate = () => {
     pathname.startsWith('/signup') ||
     pathname.startsWith('/forgot') ||
     pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/verify-email-pending');
+    pathname.startsWith('/verify');
 
   if (auth.status === 'loading') {
     return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
@@ -23,16 +23,17 @@ const Gate = () => {
   if (auth.status === 'unauthenticated' && !inAuth) {
     return <Redirect href="/login" />;
   }
-  if (auth.status === 'authenticated' && inAuth) {
-    return <Redirect href="/welcome" />;
-  }
   if (
     auth.status === 'authenticated' &&
     auth.user &&
     !auth.user.emailVerifiedAt &&
-    pathname !== '/verify-email-pending'
+    pathname !== '/verify-email-pending' &&
+    pathname !== '/verify'
   ) {
     return <Redirect href="/verify-email-pending" />;
+  }
+  if (auth.status === 'authenticated' && inAuth && auth.user?.emailVerifiedAt) {
+    return <Redirect href="/welcome" />;
   }
   return <Slot />;
 };
