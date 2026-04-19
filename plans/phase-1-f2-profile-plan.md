@@ -14,7 +14,7 @@
 
 ## File structure
 
-**`packages/db/prisma/schema.prisma`** — extend `User`; add `Car`, `CarPhoto`.
+**`packages/db/prisma/schema.prisma`** — extend `User` (adds `avatarObjectKey`, not a URL); add `Car`, `CarPhoto` (stores `objectKey`, not `url`).
 
 **`packages/shared/src/profile.ts`** (new) — `updateProfileSchema`, `publicProfileSchema`.
 **`packages/shared/src/cars.ts`** (new) — `carInputSchema`, `carSchema`, `carPhotoSchema`, `carListResponseSchema`.
@@ -56,7 +56,7 @@
 ## Conventions (read before any task)
 
 - **Ownership guard:** always `prisma.car.findFirst({ where: { id, userId: sub } })` — returning `null` ⇒ 404.
-- **Never trust client-provided photo URLs.** Only accept opaque `objectKey` strings emitted by `/uploads/presign`, then compute `publicUrl` server-side.
+- **Never trust client-provided photo URLs.** Only accept opaque `objectKey` strings emitted by `/uploads/presign`. The database stores only `objectKey`; `url` is computed server-side at serialize time via `app.uploads.buildPublicUrl(objectKey)`. Same rule applies to avatars (`User.avatarObjectKey` → derived `avatarUrl` in the API response).
 - **R2 key format:** `${kind}/${userId}/${cuid}.${ext}`. Server verifies the key prefix starts with `kind/${userId}/` before accepting it in a subsequent API call.
 - **Test layout:** each API test file starts with `await resetDatabase(); app = await makeApp();` per `test/helpers.ts`.
 - **PT-BR copy:** anything user-visible goes in `apps/mobile/src/copy/profile.ts`. Never inline strings in screens.
@@ -87,10 +87,10 @@ model User {
   updatedAt       DateTime  @updatedAt
 
   // profile (F2)
-  bio       String? @db.VarChar(500)
-  city      String? @db.VarChar(100)
-  stateCode String? @db.VarChar(2)
-  avatarUrl String? @db.VarChar(500)
+  bio             String? @db.VarChar(500)
+  city            String? @db.VarChar(100)
+  stateCode       String? @db.VarChar(2)
+  avatarObjectKey String? @db.VarChar(300)
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
@@ -106,6 +106,7 @@ model Car {
   userId    String
   make      String   @db.VarChar(60)
   model     String   @db.VarChar(60)
+  // range enforced at the Zod boundary (carInputSchema)
   year      Int
   nickname  String?  @db.VarChar(60)
   createdAt DateTime @default(now())
@@ -121,11 +122,11 @@ model CarPhoto {
   id        String   @id @default(cuid())
   carId     String
   objectKey String   @db.VarChar(300)
-  url       String   @db.VarChar(500)
   width     Int?
   height    Int?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
 
@@ -254,11 +255,13 @@ export const updateProfileSchema = z
     bio: z.string().trim().max(500),
     city: z.string().trim().min(1).max(100),
     stateCode: stateCodeSchema,
-    avatarUrl: z.string().url().max(500),
+    avatarObjectKey: z.string().min(1).max(300).nullable(),
   })
   .partial();
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
+// publicProfileSchema is the API response shape. `avatarUrl` is server-derived
+// from User.avatarObjectKey via app.uploads.buildPublicUrl.
 export const publicProfileSchema = publicUserSchema.extend({
   bio: z.string().nullable(),
   city: z.string().nullable(),
@@ -388,6 +391,8 @@ git commit -m "feat(shared): add profile, cars, uploads zod schemas"
 
 ## Task 3: API — GET /me extended response + PATCH /me
 
+> **Depends on Task 4 (uploads service).** Serializing `User.avatarObjectKey` → `avatarUrl` uses `app.uploads.buildPublicUrl`. Run Task 4 before Task 3.
+
 **Files:**
 
 - Modify: `apps/api/src/routes/me.ts`
@@ -496,7 +501,9 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
 
-const serializeUser = (user: {
+import type { Uploads } from '../services/uploads/index.js';
+
+type DbUser = {
   id: string;
   email: string;
   name: string;
@@ -506,8 +513,10 @@ const serializeUser = (user: {
   bio: string | null;
   city: string | null;
   stateCode: string | null;
-  avatarUrl: string | null;
-}) =>
+  avatarObjectKey: string | null;
+};
+
+const serializeUser = (user: DbUser, uploads: Uploads) =>
   publicProfileSchema.parse({
     id: user.id,
     email: user.email,
@@ -518,7 +527,7 @@ const serializeUser = (user: {
     bio: user.bio,
     city: user.city,
     stateCode: user.stateCode,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: user.avatarObjectKey ? uploads.buildPublicUrl(user.avatarObjectKey) : null,
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -527,7 +536,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     const { sub } = requireUser(request);
     const user = await prisma.user.findUnique({ where: { id: sub } });
     if (!user) return reply.status(401).send({ error: 'Unauthorized' });
-    return serializeUser(user);
+    return serializeUser(user, app.uploads);
   });
 
   app.patch('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -537,7 +546,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
     }
     const user = await prisma.user.update({ where: { id: sub }, data: parsed.data });
-    return serializeUser(user);
+    return serializeUser(user, app.uploads);
   });
 };
 ```
@@ -1018,7 +1027,6 @@ describe('GET /me/cars', () => {
       data: {
         carId: mine.id,
         objectKey: `car_photo/${me.id}/p1.jpg`,
-        url: 'https://cdn.example/car_photo/p1.jpg',
         sortOrder: 0,
       },
     });
@@ -1109,10 +1117,11 @@ import type { Car as DbCar, CarPhoto as DbPhoto } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import type { Uploads } from '../services/uploads/index.js';
 
 type CarWithPhotos = DbCar & { photos: DbPhoto[] };
 
-const serializeCar = (car: CarWithPhotos) =>
+const serializeCar = (car: CarWithPhotos, uploads: Uploads) =>
   carSchema.parse({
     id: car.id,
     make: car.make,
@@ -1126,7 +1135,7 @@ const serializeCar = (car: CarWithPhotos) =>
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((p) => ({
         id: p.id,
-        url: p.url,
+        url: uploads.buildPublicUrl(p.objectKey),
         width: p.width,
         height: p.height,
         sortOrder: p.sortOrder,
@@ -1142,7 +1151,7 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       include: { photos: true },
       orderBy: { createdAt: 'desc' },
     });
-    return { cars: cars.map(serializeCar) };
+    return { cars: cars.map((c) => serializeCar(c, app.uploads)) };
   });
 
   app.post('/me/cars', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -1155,7 +1164,7 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       data: { ...parsed.data, userId: sub },
       include: { photos: true },
     });
-    return reply.status(201).send(serializeCar(car));
+    return reply.status(201).send(serializeCar(car, app.uploads));
   });
 };
 ```
@@ -1279,7 +1288,6 @@ describe('DELETE /me/cars/:id', () => {
       data: {
         carId: car.id,
         objectKey: `car_photo/${user.id}/x.jpg`,
-        url: 'https://cdn.example/x.jpg',
       },
     });
     const env = loadEnv();
@@ -1330,7 +1338,7 @@ app.patch('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, re
     data: parsed.data,
     include: { photos: true },
   });
-  return serializeCar(updated);
+  return serializeCar(updated, app.uploads);
 });
 
 app.delete('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -1433,7 +1441,6 @@ describe('car photos', () => {
       data: {
         carId: car.id,
         objectKey: `car_photo/${user.id}/x.jpg`,
-        url: 'https://cdn.example/x.jpg',
       },
     });
     const env = loadEnv();
@@ -1476,7 +1483,6 @@ app.post('/me/cars/:id/photos', { preHandler: [app.authenticate] }, async (reque
     data: {
       carId: id,
       objectKey: parsed.data.objectKey,
-      url: app.uploads.buildPublicUrl(parsed.data.objectKey),
       width: parsed.data.width ?? null,
       height: parsed.data.height ?? null,
       sortOrder: count,
@@ -1486,7 +1492,7 @@ app.post('/me/cars/:id/photos', { preHandler: [app.authenticate] }, async (reque
     where: { id },
     include: { photos: true },
   });
-  return reply.status(201).send(serializeCar(updated));
+  return reply.status(201).send(serializeCar(updated, app.uploads));
 });
 
 app.delete(
@@ -1883,7 +1889,7 @@ export default function ProfileScreen() {
     try {
       const up = await pickAndUpload('avatar');
       if (!up) return;
-      const updated = await updateProfile({ avatarUrl: up.presign.publicUrl });
+      const updated = await updateProfile({ avatarObjectKey: up.presign.objectKey });
       setProfile(updated);
     } catch {
       setBanner(profileCopy.errors.unknown);
