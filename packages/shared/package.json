@@ -13,7 +13,9 @@
     "./events": "./src/events.ts",
     "./health": "./src/health.ts",
     "./ids": "./src/ids.ts",
+    "./orders": "./src/orders.ts",
     "./profile": "./src/profile.ts",
+    "./tickets": "./src/tickets.ts",
     "./uploads": "./src/uploads.ts"
   },
   "scripts": {
