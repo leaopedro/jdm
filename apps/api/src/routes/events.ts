@@ -1,10 +1,12 @@
 import { prisma } from '@jdm/db';
 import {
+  eventDetailSchema,
   eventListQuerySchema,
   eventListResponseSchema,
   eventSummarySchema,
+  ticketTierSchema,
 } from '@jdm/shared/events';
-import type { Event as DbEvent, Prisma } from '@prisma/client';
+import type { Event as DbEvent, Prisma, TicketTier as DbTier } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { Uploads } from '../services/uploads/index.js';
@@ -29,6 +31,42 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
+  });
+
+const serializeTier = (t: DbTier) =>
+  ticketTierSchema.parse({
+    id: t.id,
+    name: t.name,
+    priceCents: t.priceCents,
+    currency: t.currency,
+    quantityTotal: t.quantityTotal,
+    remainingCapacity: Math.max(0, t.quantityTotal - t.quantitySold),
+    salesOpenAt: t.salesOpenAt?.toISOString() ?? null,
+    salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
+    sortOrder: t.sortOrder,
+  });
+
+const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
+  eventDetailSchema.parse({
+    id: e.id,
+    slug: e.slug,
+    title: e.title,
+    coverUrl: e.coverObjectKey ? uploads.buildPublicUrl(e.coverObjectKey) : null,
+    startsAt: e.startsAt.toISOString(),
+    endsAt: e.endsAt.toISOString(),
+    venueName: e.venueName,
+    venueAddress: e.venueAddress,
+    lat: e.lat,
+    lng: e.lng,
+    city: e.city,
+    stateCode: e.stateCode,
+    type: e.type,
+    description: e.description,
+    capacity: e.capacity,
+    tiers: e.tiers
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(serializeTier),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -75,5 +113,15 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       items: page.map((e) => serializeSummary(e, app.uploads)),
       nextCursor: hasMore && last ? encodeCursor(last) : null,
     });
+  });
+
+  app.get('/events/:slug', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const event = await prisma.event.findFirst({
+      where: { slug, status: 'published' },
+      include: { tiers: true },
+    });
+    if (!event) return reply.status(404).send({ error: 'NotFound' });
+    return serializeDetail(event, app.uploads);
   });
 };
