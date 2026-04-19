@@ -23,6 +23,12 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   APPLE_CLIENT_ID: z.string().optional(),
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_PUBLIC_BASE_URL: z.string().url().optional(),
+  UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().positive().default(300),
 });
 
 export type Env = z.infer<typeof envSchema>;

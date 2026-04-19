@@ -8,6 +8,8 @@ import { createAccessToken } from '../src/services/auth/tokens.js';
 export const makeApp = () => buildApp(loadEnv());
 
 export const resetDatabase = async (): Promise<void> => {
+  await prisma.carPhoto.deleteMany();
+  await prisma.car.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.verificationToken.deleteMany();
   await prisma.refreshToken.deleteMany();

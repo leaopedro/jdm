@@ -11,14 +11,20 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
 import { authRoutes } from './routes/auth/index.js';
+import { carRoutes } from './routes/cars.js';
+import { devUploadRoutes } from './routes/dev-uploads.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
+import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { DevUploads } from './services/uploads/dev.js';
+import { buildUploads, type Uploads } from './services/uploads/index.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     mailer: Mailer;
     env: Env;
+    uploads: Uploads;
   }
 }
 
@@ -31,6 +37,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
 
   app.decorate('mailer', buildMailer(env));
   app.decorate('env', env);
+  app.decorate('uploads', buildUploads(env));
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
@@ -43,9 +50,16 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(uploadRoutes);
+  await app.register(carRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
+    // Register dev file server only when DevUploads is active.
+    // Staging with R2 keys present uses R2Uploads and skips this.
+    if (app.uploads instanceof DevUploads) {
+      await app.register(devUploadRoutes);
+    }
     app.get('/debug/boom', () => {
       throw new Error('intentional boom for Sentry verification');
     });
