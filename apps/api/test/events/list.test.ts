@@ -132,4 +132,33 @@ describe('GET /events', () => {
     const res = await app.inject({ method: 'GET', url: '/events?stateCode=XX' });
     expect(res.statusCode).toBe(400);
   });
+
+  it('last page returns nextCursor null', async () => {
+    for (let i = 0; i < 4; i++) {
+      await makeEvent({ slug: `q-${i}`, startsAt: new Date(Date.now() + (i + 1) * 86400_000) });
+    }
+    const first = await app.inject({ method: 'GET', url: '/events?limit=2' });
+    const firstBody = eventListResponseSchema.parse(first.json());
+    expect(firstBody.items).toHaveLength(2);
+    expect(firstBody.nextCursor).not.toBeNull();
+
+    const second = await app.inject({
+      method: 'GET',
+      url: `/events?limit=2&cursor=${encodeURIComponent(firstBody.nextCursor!)}`,
+    });
+    const secondBody = eventListResponseSchema.parse(second.json());
+    expect(secondBody.items).toHaveLength(2);
+    expect(secondBody.nextCursor).toBeNull();
+  });
+
+  it('window=upcoming includes currently in-progress events', async () => {
+    const inProgress = await makeEvent({
+      slug: 'in-progress',
+      startsAt: new Date(Date.now() - 60 * 60 * 1000),
+      endsAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    const res = await app.inject({ method: 'GET', url: '/events?window=upcoming' });
+    const body = eventListResponseSchema.parse(res.json());
+    expect(body.items.map((i) => i.slug)).toContain(inProgress.slug);
+  });
 });

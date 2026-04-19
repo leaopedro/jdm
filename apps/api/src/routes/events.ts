@@ -4,7 +4,7 @@ import {
   eventListResponseSchema,
   eventSummarySchema,
 } from '@jdm/shared/events';
-import type { Event as DbEvent } from '@prisma/client';
+import type { Event as DbEvent, Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { Uploads } from '../services/uploads/index.js';
@@ -34,14 +34,12 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
 // eslint-disable-next-line @typescript-eslint/require-await
 export const eventRoutes: FastifyPluginAsync = async (app) => {
   app.get('/events', async (request, reply) => {
-    const parsed = eventListQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
-    }
-    const { window, type, stateCode, city, cursor, limit } = parsed.data;
+    const { window, type, stateCode, city, cursor, limit } = eventListQuerySchema.parse(
+      request.query,
+    );
     const now = new Date();
 
-    const where: Record<string, unknown> = { status: 'published' };
+    const where: Prisma.EventWhereInput = { status: 'published' };
     if (type) where.type = type;
     if (stateCode) where.stateCode = stateCode;
     if (city) where.city = city;
@@ -55,7 +53,10 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       try {
         const { startsAt, id } = decodeCursor(cursor);
         const cmp = asc ? 'gt' : 'lt';
-        where.OR = [{ startsAt: { [cmp]: startsAt } }, { startsAt, id: { [cmp]: id } }];
+        where.OR = [
+          { startsAt: { [cmp]: startsAt } } as Prisma.EventWhereInput,
+          { startsAt, id: { [cmp]: id } } as Prisma.EventWhereInput,
+        ];
       } catch {
         return reply.status(400).send({ error: 'BadRequest', message: 'invalid cursor' });
       }
