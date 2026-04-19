@@ -7,6 +7,7 @@ const sign = (ticketId: string, secret: string): string =>
 
 export const signTicketCode = (ticketId: string, env: CodeEnv): string => {
   if (!ticketId) throw new Error('ticketId required');
+  if (ticketId.includes('.')) throw new Error('ticketId must not contain "."');
   return `${ticketId}.${sign(ticketId, env.TICKET_CODE_SECRET)}`;
 };
 

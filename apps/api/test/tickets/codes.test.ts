@@ -33,4 +33,16 @@ describe('ticket codes', () => {
     const b = signTicketCode('t1', { TICKET_CODE_SECRET: 'b'.repeat(32) });
     expect(a).not.toBe(b);
   });
+
+  it('rejects equal-length forged signature (covers timingSafeEqual byte compare)', () => {
+    const code = signTicketCode('ticket_123', env);
+    const [id, sig] = code.split('.');
+    const flipped = Buffer.from(sig!, 'base64url');
+    flipped[0] = flipped[0]! ^ 0x01;
+    expect(() => verifyTicketCode(`${id!}.${flipped.toString('base64url')}`, env)).toThrow();
+  });
+
+  it('refuses to sign a ticketId containing "."', () => {
+    expect(() => signTicketCode('a.b', env)).toThrow();
+  });
 });
