@@ -7,3 +7,6 @@ process.env.JWT_ACCESS_SECRET = 'a'.repeat(48);
 process.env.REFRESH_TOKEN_PEPPER = 'b'.repeat(48);
 process.env.APP_WEB_BASE_URL = 'http://localhost:3000';
 process.env.MAIL_FROM = 'noreply@jdm.test';
+process.env.STRIPE_SECRET_KEY = 'test_stripe_secret_key_minimum_32_chars_xx';
+process.env.STRIPE_WEBHOOK_SECRET = 'test_stripe_webhook_secret_32_chars_min_xx';
+process.env.TICKET_CODE_SECRET = 'test_ticket_code_secret_32_chars_min_xx';
