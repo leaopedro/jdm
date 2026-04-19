@@ -113,4 +113,27 @@ describe('GET /events/:slug', () => {
     const res = await app.inject({ method: 'GET', url: '/events/draft-one' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns 404 for cancelled event', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'cancelled-one',
+        title: 't',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        lat: 0,
+        lng: 0,
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'cancelled',
+        capacity: 10,
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/events/cancelled-one' });
+    expect(res.statusCode).toBe(404);
+  });
 });
