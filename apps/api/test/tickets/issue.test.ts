@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
 import { verifyTicketCode } from '../../src/services/tickets/codes.js';
-import { issueTicketForPaidOrder } from '../../src/services/tickets/issue.js';
+import {
+  OrderNotPendingError,
+  TicketAlreadyExistsForEventError,
+  issueTicketForPaidOrder,
+} from '../../src/services/tickets/issue.js';
 import { createUser, resetDatabase } from '../helpers.js';
 
 const env = loadEnv();
@@ -115,7 +119,7 @@ describe('issueTicketForPaidOrder', () => {
       },
     });
     await expect(issueTicketForPaidOrder(order.id, 'pi_test_failed', env)).rejects.toThrow(
-      /order is not pending/i,
+      OrderNotPendingError,
     );
   });
 
@@ -134,7 +138,7 @@ describe('issueTicketForPaidOrder', () => {
     const order = await createPendingOrder(user.id, event.id, tier.id);
 
     await expect(issueTicketForPaidOrder(order.id, order.providerRef!, env)).rejects.toThrow(
-      /already has a valid ticket/i,
+      TicketAlreadyExistsForEventError,
     );
 
     const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
