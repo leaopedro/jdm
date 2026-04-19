@@ -2,7 +2,10 @@ import { prisma } from '@jdm/db';
 import { Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
-import { issueTicketForPaidOrder } from '../services/tickets/issue.js';
+import {
+  issueTicketForPaidOrder,
+  TicketAlreadyExistsForEventError,
+} from '../services/tickets/issue.js';
 
 // Record the event as seen AFTER dispatch succeeds. If we did it first, a
 // dispatch failure would leave the event marked-seen forever and Stripe
@@ -51,7 +54,24 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     const orderId = intent.metadata?.orderId;
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
-      await issueTicketForPaidOrder(orderId, intent.id, app.env);
+      try {
+        await issueTicketForPaidOrder(orderId, intent.id, app.env);
+      } catch (err) {
+        // Customer paid but we can't issue a ticket (usually because an
+        // unrelated valid ticket exists: comp or premium_grant landed between
+        // POST /orders and webhook delivery). Refund so Stripe stops retrying
+        // and the customer isn't charged for nothing.
+        if (err instanceof TicketAlreadyExistsForEventError) {
+          await app.stripe.refund(intent.id, 'duplicate-ticket');
+          await markProcessed(event.id, event);
+          request.log.warn(
+            { orderId, paymentIntentId: intent.id },
+            'stripe webhook: duplicate ticket, refunded',
+          );
+          return reply.status(200).send({ ok: true, refunded: true });
+        }
+        throw err;
+      }
       const firstTime = await markProcessed(event.id, event);
       request.log.info(
         { orderId, paymentIntentId: intent.id, firstTime },
@@ -61,17 +81,24 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (event.type === 'payment_intent.payment_failed' && orderId) {
-      const updated = await prisma.order.updateMany({
-        where: { id: orderId, status: 'pending' },
-        data: { status: 'failed', failedAt: new Date() },
-      });
-      if (updated.count === 1) {
-        const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
-        await prisma.ticketTier.updateMany({
-          where: { id: order.tierId, quantitySold: { gt: 0 } },
-          data: { quantitySold: { decrement: 1 } },
+      // Atomic: either both the order flip and the capacity release commit,
+      // or neither does. Without the transaction, a crash between the two
+      // writes would strand the reservation (status=failed, quantitySold
+      // still incremented) because Stripe retries would skip release
+      // (updateMany count=0 on the no-longer-pending order).
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.order.updateMany({
+          where: { id: orderId, status: 'pending' },
+          data: { status: 'failed', failedAt: new Date() },
         });
-      }
+        if (updated.count === 1) {
+          const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+          await tx.ticketTier.updateMany({
+            where: { id: order.tierId, quantitySold: { gt: 0 } },
+            data: { quantitySold: { decrement: 1 } },
+          });
+        }
+      });
       const firstTime = await markProcessed(event.id, event);
       return reply.status(200).send({ ok: true, deduped: !firstTime });
     }

@@ -184,13 +184,13 @@ describe('POST /stripe/webhook', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('does not mark event processed when dispatch fails; retry works after conflict clears', async () => {
+  it('refunds and dedups when issuance fails with TicketAlreadyExistsForEventError', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier, order } = await seedEventTierOrder(user.id);
 
-    // Pre-seed a conflicting valid ticket so issueTicketForPaidOrder throws
-    // TicketAlreadyExistsForEventError.
-    const conflicting = await prisma.ticket.create({
+    // Pre-seed a conflicting valid ticket (e.g. comp grant) so
+    // issueTicketForPaidOrder throws TicketAlreadyExistsForEventError.
+    await prisma.ticket.create({
       data: {
         userId: user.id,
         eventId: event.id,
@@ -201,44 +201,54 @@ describe('POST /stripe/webhook', () => {
     });
 
     stripe.nextEvent = {
-      id: 'evt_dispatch_fail',
+      id: 'evt_dup_refund',
       type: 'payment_intent.succeeded',
       data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
     };
 
-    const firstDelivery = await app.inject({
+    const res = await app.inject({
       method: 'POST',
       url: '/stripe/webhook',
       headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
       payload: rawJson(stripe.nextEvent),
     });
-    expect(firstDelivery.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ refunded: true });
+
+    const refundCalls = stripe.calls.filter((c) => c.kind === 'refund');
+    expect(refundCalls).toHaveLength(1);
+    expect(refundCalls[0]?.payload).toMatchObject({ paymentIntentId: order.providerRef });
+
+    // No ticket issued for this paid order (the comp ticket is the single valid one).
+    const issued = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    expect(issued).toBeNull();
+
+    // Dedup row written so Stripe retries short-circuit.
+    const dedupRow = await prisma.paymentWebhookEvent.findFirst({
+      where: { eventId: 'evt_dup_refund' },
+    });
+    expect(dedupRow).not.toBeNull();
+  });
+
+  it('does not mark event processed when dispatch fails with a non-duplicate error', async () => {
+    stripe.nextEvent = {
+      id: 'evt_dispatch_fail',
+      type: 'payment_intent.succeeded',
+      // orderId that does not exist -> OrderNotFoundError propagates.
+      data: { object: { id: 'pi_test_missing', metadata: { orderId: 'missing-order-id' } } },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(500);
 
     const dedupRow = await prisma.paymentWebhookEvent.findFirst({
       where: { eventId: 'evt_dispatch_fail' },
     });
     expect(dedupRow).toBeNull();
-
-    // Clear the conflict and retry: dispatch now succeeds.
-    await prisma.ticket.update({
-      where: { id: conflicting.id },
-      data: { status: 'revoked' },
-    });
-
-    const retry = await app.inject({
-      method: 'POST',
-      url: '/stripe/webhook',
-      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
-      payload: rawJson(stripe.nextEvent),
-    });
-    expect(retry.statusCode).toBe(200);
-
-    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
-    expect(reloaded.status).toBe('paid');
-
-    const persisted = await prisma.paymentWebhookEvent.findFirst({
-      where: { eventId: 'evt_dispatch_fail' },
-    });
-    expect(persisted).not.toBeNull();
   });
 });
