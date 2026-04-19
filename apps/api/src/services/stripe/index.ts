@@ -28,7 +28,7 @@ export type StripeClient = {
 type StripeEnv = {
   readonly STRIPE_SECRET_KEY: string;
   readonly STRIPE_WEBHOOK_SECRET: string;
-  readonly STRIPE_PUBLISHABLE_KEY?: string;
+  readonly STRIPE_PUBLISHABLE_KEY?: string | undefined;
 };
 
 export const buildStripe = (env: StripeEnv): StripeClient => {

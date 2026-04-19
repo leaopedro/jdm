@@ -19,6 +19,7 @@ import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 
@@ -27,10 +28,18 @@ declare module 'fastify' {
     mailer: Mailer;
     env: Env;
     uploads: Uploads;
+    stripe: StripeClient;
   }
 }
 
-export const buildApp = async (env: Env): Promise<FastifyInstance> => {
+export type BuildAppOverrides = {
+  stripe?: StripeClient;
+};
+
+export const buildApp = async (
+  env: Env,
+  overrides: BuildAppOverrides = {},
+): Promise<FastifyInstance> => {
   const app = Fastify({
     logger: buildLoggerOptions(env),
     disableRequestLogging: false,
@@ -40,6 +49,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   app.decorate('mailer', buildMailer(env));
   app.decorate('env', env);
   app.decorate('uploads', buildUploads(env));
+  app.decorate('stripe', overrides.stripe ?? buildStripe(env));
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });

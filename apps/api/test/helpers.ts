@@ -4,8 +4,18 @@ import { buildApp } from '../src/app.js';
 import { loadEnv } from '../src/env.js';
 import { hashPassword } from '../src/services/auth/password.js';
 import { createAccessToken } from '../src/services/auth/tokens.js';
+import { buildFakeStripe, type FakeStripe } from '../src/services/stripe/fake.js';
 
 export const makeApp = () => buildApp(loadEnv());
+
+export const makeAppWithFakeStripe = async (): Promise<{
+  app: Awaited<ReturnType<typeof buildApp>>;
+  stripe: FakeStripe;
+}> => {
+  const stripe = buildFakeStripe();
+  const app = await buildApp(loadEnv(), { stripe });
+  return { app, stripe };
+};
 
 export const resetDatabase = async (): Promise<void> => {
   await prisma.ticket.deleteMany();
