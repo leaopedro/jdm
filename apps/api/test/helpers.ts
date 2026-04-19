@@ -8,6 +8,9 @@ import { createAccessToken } from '../src/services/auth/tokens.js';
 export const makeApp = () => buildApp(loadEnv());
 
 export const resetDatabase = async (): Promise<void> => {
+  await prisma.ticket.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.paymentWebhookEvent.deleteMany();
   await prisma.adminAudit.deleteMany();
   await prisma.ticketTier.deleteMany();
   await prisma.event.deleteMany();
