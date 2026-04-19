@@ -26,7 +26,7 @@ export const ticketTierSchema = z.object({
 });
 export type TicketTier = z.infer<typeof ticketTierSchema>;
 
-// List item — lightweight, no tiers.
+// List item: lightweight, no tiers.
 export const eventSummarySchema = z.object({
   id: z.string().min(1),
   slug: z.string().min(1).max(140),
@@ -41,7 +41,7 @@ export const eventSummarySchema = z.object({
 });
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
-// Detail — full payload with tiers + venue geo.
+// Detail: full payload with tiers + venue geo.
 export const eventDetailSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string(),
