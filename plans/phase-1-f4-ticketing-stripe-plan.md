@@ -189,7 +189,8 @@ model Ticket {
   event Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
 
-  @@unique([userId, eventId])
+  // Partial unique (valid only) added in raw SQL at the end of the migration
+  @@index([userId, eventId])
   @@index([userId, createdAt])
   @@index([eventId])
 }
