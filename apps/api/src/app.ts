@@ -16,6 +16,7 @@ import { carRoutes } from './routes/cars.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
 import { eventRoutes } from './routes/events.js';
 import { healthRoutes } from './routes/health.js';
+import { meTicketsRoutes } from './routes/me-tickets.js';
 import { meRoutes } from './routes/me.js';
 import { orderRoutes } from './routes/orders.js';
 import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
@@ -64,6 +65,7 @@ export const buildApp = async (
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(meTicketsRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
