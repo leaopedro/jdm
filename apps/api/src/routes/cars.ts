@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import { carInputSchema, carSchema, carUpdateSchema } from '@jdm/shared/cars';
+import { addCarPhotoSchema, carInputSchema, carSchema, carUpdateSchema } from '@jdm/shared/cars';
 import type { Car as DbCar, CarPhoto as DbPhoto } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -86,4 +86,49 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
     await prisma.car.delete({ where: { id } });
     return reply.status(204).send();
   });
+
+  app.post('/me/cars/:id/photos', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const parsed = addCarPhotoSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
+    }
+    if (!app.uploads.isOwnedKey(parsed.data.objectKey, sub, 'car_photo')) {
+      return reply.status(400).send({ error: 'BadRequest', message: 'object key not owned' });
+    }
+    const car = await prisma.car.findFirst({ where: { id, userId: sub } });
+    if (!car) return reply.status(404).send({ error: 'NotFound' });
+
+    const count = await prisma.carPhoto.count({ where: { carId: id } });
+    await prisma.carPhoto.create({
+      data: {
+        carId: id,
+        objectKey: parsed.data.objectKey,
+        width: parsed.data.width ?? null,
+        height: parsed.data.height ?? null,
+        sortOrder: count,
+      },
+    });
+    const updated = await prisma.car.findUniqueOrThrow({
+      where: { id },
+      include: { photos: true },
+    });
+    return reply.status(201).send(serializeCar(updated, app.uploads));
+  });
+
+  app.delete(
+    '/me/cars/:id/photos/:photoId',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub } = requireUser(request);
+      const { id, photoId } = request.params as { id: string; photoId: string };
+      const car = await prisma.car.findFirst({ where: { id, userId: sub } });
+      if (!car) return reply.status(404).send({ error: 'NotFound' });
+      const photo = await prisma.carPhoto.findFirst({ where: { id: photoId, carId: id } });
+      if (!photo) return reply.status(404).send({ error: 'NotFound' });
+      await prisma.carPhoto.delete({ where: { id: photoId } });
+      return reply.status(204).send();
+    },
+  );
 };
