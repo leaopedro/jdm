@@ -54,14 +54,14 @@
 
 ---
 
-## Task 1: Prisma schema — Event + TicketTier + enums
+## ✅ Task 1: Prisma schema — Event + TicketTier + enums
 
 **Files:**
 
 - Modify: `packages/db/prisma/schema.prisma`
 - Create migration: `packages/db/prisma/migrations/<timestamp>_events_catalog/migration.sql` (via Prisma)
 
-- [ ] **Step 1: Edit `schema.prisma`** — append two enums and two models at the end of the file. Do not touch existing models except to note we'll add relations to `User` and `Event`/`TicketTier` in F4.
+- [x] **Step 1: Edit `schema.prisma`** — append two enums and two models at the end of the file. Do not touch existing models except to note we'll add relations to `User` and `Event`/`TicketTier` in F4.
 
 ```prisma
 enum EventType {
@@ -123,7 +123,7 @@ model TicketTier {
 }
 ```
 
-- [ ] **Step 2: Create the migration**
+- [x] **Step 2: Create the migration**
 
 Run from repo root:
 
@@ -131,9 +131,11 @@ Run from repo root:
 pnpm --filter @jdm/db prisma migrate dev --name events_catalog
 ```
 
+> note: used `pnpm --filter @jdm/db exec prisma migrate dev --name events_catalog` (no `prisma` npm script exists). Migration folder: `20260419204258_events_catalog`.
+
 Expected: new folder under `packages/db/prisma/migrations/<timestamp>_events_catalog/` containing `migration.sql` with `CREATE TYPE "EventType"`, `CREATE TYPE "EventStatus"`, `CREATE TABLE "Event"`, `CREATE TABLE "TicketTier"`, and the two `CREATE INDEX` statements. Prisma client is regenerated automatically.
 
-- [ ] **Step 3: Verify typecheck passes across the monorepo**
+- [x] **Step 3: Verify typecheck passes across the monorepo**
 
 Run:
 
@@ -143,7 +145,9 @@ pnpm -w typecheck
 
 Expected: all 6 packages clean.
 
-- [ ] **Step 4: Commit**
+> note: 5 packages have a typecheck script (`@jdm/tsconfig` is config-only); all 5 pass.
+
+- [x] **Step 4: Commit**
 
 ```bash
 git checkout -b feat/f3-events
@@ -151,15 +155,17 @@ git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/
 git commit -m "feat(db): add Event + TicketTier models and enums"
 ```
 
+> note: also first-committed the plan file itself on the new branch as `399d1f0 docs: add F3 events catalog implementation plan`, matching the pattern set by the F2b dev-upload plan.
+
 ---
 
-## Task 2: Shared Zod schemas — events
+## ✅ Task 2: Shared Zod schemas — events
 
 **Files:**
 
 - Modify: `packages/shared/src/events.ts`
 
-- [ ] **Step 1: Replace the stub with the full schema set**
+- [x] **Step 1: Replace the stub with the full schema set**
 
 ```ts
 import { z } from 'zod';
@@ -234,7 +240,7 @@ export const eventListResponseSchema = z.object({
 export type EventListResponse = z.infer<typeof eventListResponseSchema>;
 ```
 
-- [ ] **Step 2: Confirm typecheck**
+- [x] **Step 2: Confirm typecheck**
 
 ```bash
 pnpm --filter @jdm/shared typecheck
@@ -242,16 +248,18 @@ pnpm --filter @jdm/shared typecheck
 
 Expected: clean.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add packages/shared/src/events.ts
 git commit -m "feat(shared): add event zod schemas (summary, detail, list query)"
 ```
 
+> note: follow-up `style(shared): drop em-dashes from events.ts comments` applied after code review.
+
 ---
 
-## Task 3: API — GET /events (list with filters, window, cursor pagination) — TDD
+## ✅ Task 3: API — GET /events (list with filters, window, cursor pagination) — TDD
 
 **Files:**
 
@@ -260,7 +268,7 @@ git commit -m "feat(shared): add event zod schemas (summary, detail, list query)
 - Modify: `apps/api/test/helpers.ts` (extend `resetDatabase`)
 - Create: `apps/api/test/events/list.test.ts`
 
-- [ ] **Step 1: Extend `resetDatabase`**
+- [x] **Step 1: Extend `resetDatabase`**
 
 Edit `apps/api/test/helpers.ts`, adding `ticketTier` and `event` deletes before `carPhoto`:
 
@@ -278,7 +286,7 @@ export const resetDatabase = async (): Promise<void> => {
 };
 ```
 
-- [ ] **Step 2: Write failing tests** — create `apps/api/test/events/list.test.ts`
+- [x] **Step 2: Write failing tests** — create `apps/api/test/events/list.test.ts`
 
 ```ts
 import { prisma } from '@jdm/db';
@@ -418,7 +426,7 @@ describe('GET /events', () => {
 });
 ```
 
-- [ ] **Step 3: Run tests to confirm failure**
+- [x] **Step 3: Run tests to confirm failure**
 
 ```bash
 pnpm --filter @jdm/api test -- events/list.test.ts
@@ -426,7 +434,7 @@ pnpm --filter @jdm/api test -- events/list.test.ts
 
 Expected: FAIL — route not registered / 404s.
 
-- [ ] **Step 4: Implement `apps/api/src/routes/events.ts`**
+- [x] **Step 4: Implement `apps/api/src/routes/events.ts`**
 
 ```ts
 import { prisma } from '@jdm/db';
@@ -509,7 +517,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 5: Register route in `apps/api/src/app.ts`**
+- [x] **Step 5: Register route in `apps/api/src/app.ts`**
 
 Add the import near the other route imports:
 
@@ -524,7 +532,7 @@ await app.register(carRoutes);
 await app.register(eventRoutes);
 ```
 
-- [ ] **Step 6: Run tests to confirm pass**
+- [x] **Step 6: Run tests to confirm pass**
 
 ```bash
 pnpm --filter @jdm/api test -- events/list.test.ts
@@ -532,7 +540,7 @@ pnpm --filter @jdm/api test -- events/list.test.ts
 
 Expected: all 6 tests PASS.
 
-- [ ] **Step 7: Run full API suite + monorepo typecheck**
+- [x] **Step 7: Run full API suite + monorepo typecheck**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -541,7 +549,7 @@ pnpm -w typecheck
 
 Expected: green across the board (prior 70 tests + new 6 = 76).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/api/src/routes/events.ts apps/api/src/app.ts \
@@ -549,16 +557,18 @@ git add apps/api/src/routes/events.ts apps/api/src/app.ts \
 git commit -m "feat(api): GET /events with filters, window, cursor pagination"
 ```
 
+> note: follow-up `99648de refactor(api): use Prisma.EventWhereInput and unify validation error shape` applied after code review (typed `where`, switched to `.parse` + global ZodError handler, added 2 tests: last-page null cursor, in-progress event included under window=upcoming).
+
 ---
 
-## Task 4: API — GET /events/:slug (detail with tiers) — TDD
+## ✅ Task 4: API — GET /events/:slug (detail with tiers) — TDD
 
 **Files:**
 
 - Modify: `apps/api/src/routes/events.ts`
 - Create: `apps/api/test/events/detail.test.ts`
 
-- [ ] **Step 1: Write failing tests** — `apps/api/test/events/detail.test.ts`
+- [x] **Step 1: Write failing tests** — `apps/api/test/events/detail.test.ts`
 
 ```ts
 import { prisma } from '@jdm/db';
@@ -679,7 +689,7 @@ describe('GET /events/:slug', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 
 ```bash
 pnpm --filter @jdm/api test -- events/detail.test.ts
@@ -687,7 +697,9 @@ pnpm --filter @jdm/api test -- events/detail.test.ts
 
 Expected: FAIL (404 on all because route doesn't exist yet).
 
-- [ ] **Step 3: Extend `apps/api/src/routes/events.ts` with the detail route**
+> note: 2 happy-path tests failed as expected; 2 404-case tests happened to pass pre-implementation because Fastify's default NotFound handler returned 404 for any unrouted path.
+
+- [x] **Step 3: Extend `apps/api/src/routes/events.ts` with the detail route**
 
 Add inside `eventRoutes` after the list handler. Also add imports + helpers at the top of the file:
 
@@ -745,7 +757,7 @@ app.get('/events/:slug', async (request, reply) => {
 });
 ```
 
-- [ ] **Step 4: Run tests to confirm pass**
+- [x] **Step 4: Run tests to confirm pass**
 
 ```bash
 pnpm --filter @jdm/api test -- events/detail.test.ts
@@ -753,7 +765,7 @@ pnpm --filter @jdm/api test -- events/detail.test.ts
 
 Expected: all 4 tests PASS.
 
-- [ ] **Step 5: Run full suite + typecheck**
+- [x] **Step 5: Run full suite + typecheck**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -762,23 +774,29 @@ pnpm -w typecheck
 
 Expected: 80 tests pass, all packages typecheck clean.
 
-- [ ] **Step 6: Commit**
+> note: full suite lands at 82 passing (77 from Task 3 + 4 detail + 1 cancelled-404 follow-up).
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/events.ts apps/api/test/events/detail.test.ts
 git commit -m "feat(api): GET /events/:slug with tiers and remaining capacity"
 ```
 
+> note: follow-up `16605d4 test(api): cover status=cancelled 404 on /events/:slug` added per code review (pin-test for cancelled events).
+
 ---
 
-## Task 5: Prisma seed — sample events
+## ✅ Task 5: Prisma seed — sample events
 
 **Files:**
 
 - Create: `packages/db/prisma/seed.ts`
 - Modify: `packages/db/package.json`
 
-- [ ] **Step 1: Create `packages/db/prisma/seed.ts`**
+- [x] **Step 1: Create `packages/db/prisma/seed.ts`**
+
+> note: em-dashes in the planned title/venue/placeholder strings were replaced with `:`, `,`, `-` per CLAUDE.md's no-em-dash rule. `eslint-disable-next-line no-console` directives were omitted (no `no-console` rule in project ESLint config; unused directives would be flagged). Also had to extend `packages/db/tsconfig.json` `include` to `["src/**/*", "prisma/**/*"]` for ESLint `projectService` to type-check the seed file.
 
 ```ts
 import { PrismaClient } from '@prisma/client';
@@ -889,7 +907,7 @@ main()
   });
 ```
 
-- [ ] **Step 2: Wire seed into `packages/db/package.json`**
+- [x] **Step 2: Wire seed into `packages/db/package.json`**
 
 Check current contents:
 
@@ -917,7 +935,7 @@ Add a `prisma` block and a `db:seed` script. If `tsx` isn't already a devDep, ad
 }
 ```
 
-- [ ] **Step 3: Install + run the seed against a local DB**
+- [x] **Step 3: Install + run the seed against a local DB**
 
 ```bash
 pnpm install
@@ -926,22 +944,24 @@ pnpm --filter @jdm/db db:seed
 
 Expected: `Seeded 4 events.` and four rows visible in Prisma Studio.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/db/prisma/seed.ts packages/db/package.json pnpm-lock.yaml
 git commit -m "chore(db): add dev seed script with sample events"
 ```
 
+> note: follow-up `fix(db): refresh time fields on seed re-run and use accurate Curitiba coords` — `upsert.update` now rewrites `startsAt`/`endsAt`/`status`/`publishedAt` so the seed stays "upcoming" across days; Curitiba lat/lng and address corrected to the Pinhais track location.
+
 ---
 
-## Task 6: Mobile — events API client
+## ✅ Task 6: Mobile — events API client
 
 **Files:**
 
 - Create: `apps/mobile/src/api/events.ts`
 
-- [ ] **Step 1: Create the client**
+- [x] **Step 1: Create the client**
 
 ```ts
 import {
@@ -973,7 +993,7 @@ export const getEvent = (slug: string): Promise<EventDetail> =>
   request(`/events/${encodeURIComponent(slug)}`, eventDetailSchema);
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 ```bash
 pnpm --filter @jdm/mobile typecheck
@@ -981,7 +1001,7 @@ pnpm --filter @jdm/mobile typecheck
 
 Expected: clean.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/mobile/src/api/events.ts
@@ -990,14 +1010,14 @@ git commit -m "feat(mobile): add events API client"
 
 ---
 
-## Task 7: Mobile — events copy + formatting helpers
+## ✅ Task 7: Mobile — events copy + formatting helpers
 
 **Files:**
 
 - Create: `apps/mobile/src/copy/events.ts`
 - Create: `apps/mobile/src/lib/format.ts`
 
-- [ ] **Step 1: Create `apps/mobile/src/copy/events.ts`**
+- [x] **Step 1: Create `apps/mobile/src/copy/events.ts`**
 
 ```ts
 export const eventsCopy = {
@@ -1039,7 +1059,7 @@ export const eventsCopy = {
 };
 ```
 
-- [ ] **Step 2: Create `apps/mobile/src/lib/format.ts`**
+- [x] **Step 2: Create `apps/mobile/src/lib/format.ts`**
 
 ```ts
 export const formatBRL = (cents: number): string =>
@@ -1065,7 +1085,7 @@ export const formatEventDateRange = (startsAtIso: string, endsAtIso: string): st
 };
 ```
 
-- [ ] **Step 3: Typecheck + commit**
+- [x] **Step 3: Typecheck + commit**
 
 ```bash
 pnpm --filter @jdm/mobile typecheck
@@ -1075,14 +1095,16 @@ git commit -m "feat(mobile): add events copy (PT-BR) and format helpers"
 
 ---
 
-## Task 8: Mobile — switch `(app)` to tab layout with Events tab
+## ✅ Task 8: Mobile — switch `(app)` to tab layout with Events tab
 
 **Files:**
 
 - Modify: `apps/mobile/app/(app)/_layout.tsx`
 - Create: `apps/mobile/app/(app)/events/_layout.tsx`
 
-- [ ] **Step 1: Replace `(app)/_layout.tsx` with Tabs**
+- [x] **Step 1: Replace `(app)/_layout.tsx` with Tabs**
+
+> note: extra `(app)/garage/_layout.tsx` Stack wrapper added in the same commit — switching (app) to Tabs collapsed the implicit Stack that nested garage screens relied on. Also added a follow-up `fix(mobile): avoid double headers` setting Tabs `headerShown: false` (per-screen override on profile, which has no inner Stack).
 
 ```tsx
 import { Tabs } from 'expo-router';
@@ -1098,7 +1120,7 @@ export default function AppLayout() {
 }
 ```
 
-- [ ] **Step 2: Create `apps/mobile/app/(app)/events/_layout.tsx`** so the list+detail stack sits under the tab
+- [x] **Step 2: Create `apps/mobile/app/(app)/events/_layout.tsx`** so the list+detail stack sits under the tab
 
 ```tsx
 import { Stack } from 'expo-router';
@@ -1108,7 +1130,7 @@ export default function EventsLayout() {
 }
 ```
 
-- [ ] **Step 3: Typecheck + commit**
+- [x] **Step 3: Typecheck + commit**
 
 ```bash
 pnpm --filter @jdm/mobile typecheck
@@ -1116,15 +1138,24 @@ git add apps/mobile/app/\(app\)/_layout.tsx apps/mobile/app/\(app\)/events/_layo
 git commit -m "feat(mobile): introduce bottom tabs with events, garage, profile"
 ```
 
+> note: final commit message used was `feat(mobile): switch (app) to bottom tabs with events, garage, profile`.
+
 ---
 
-## Task 9: Mobile — events list screen
+## ✅ Task 9: Mobile — events list screen
 
 **Files:**
 
 - Create: `apps/mobile/app/(app)/events/index.tsx`
 
-- [ ] **Step 1: Implement the list screen**
+- [x] **Step 1: Implement the list screen**
+
+> notes:
+>
+> - Plan's `meAuthed` reference → actual export is `getProfile` in `apps/mobile/src/api/profile.ts`.
+> - `myState` stored as `StateCode | null | undefined` (not `string | null`) so enum narrowing flows into `listEvents`.
+> - `RefreshControl onRefresh` wrapped in a sync void arrow to satisfy `@typescript-eslint/no-misused-promises`.
+> - Follow-up `fix(mobile): set events stack titles and drop redundant state coalesce` added titles to `events/_layout.tsx` (`index` → "Eventos", `[slug]` → blank so detail screen can set its own) and removed a redundant `?? undefined` call flagged in code review.
 
 ```tsx
 import type { EventSummary, EventWindow } from '@jdm/shared/events';
@@ -1282,11 +1313,13 @@ const styles = StyleSheet.create({
 
 > **Note:** If `meAuthed` is exported under a different name in `~/api/profile`, adjust the import. The plan assumes F2's mobile profile client exports an authed `GET /me` helper (mentioned in observation 387). Verify with `grep -n meAuthed apps/mobile/src/api/profile.ts` before Step 1 and rename if needed.
 
-- [ ] **Step 2: Manual smoke test**
+- [-] **Step 2: Manual smoke test**
 
 Start API + mobile locally; open the app, sign in, and confirm the Events tab lists the 3 published seeded events with correct dates and state codes. Switch to "Anteriores" — the March RJ event shows. Switch to "Perto de mim" with profile state=SP — only SP events show.
 
-- [ ] **Step 3: Typecheck + commit**
+> note: skipped per user rule (no background shells / autonomous verification). Typecheck stands in for the verification gate.
+
+- [x] **Step 3: Typecheck + commit**
 
 ```bash
 pnpm --filter @jdm/mobile typecheck
@@ -1296,13 +1329,14 @@ git commit -m "feat(mobile): events list screen with tabs, filters, pull-to-refr
 
 ---
 
-## Task 10: Mobile — event detail screen
+## ✅ Task 10: Mobile — event detail screen
 
 **Files:**
 
 - Create: `apps/mobile/app/(app)/events/[slug].tsx`
+- Modify: `apps/mobile/src/components/Button.tsx` (added `disabled` prop)
 
-- [ ] **Step 1: Implement the detail screen**
+- [x] **Step 1: Implement the detail screen**
 
 ```tsx
 import type { EventDetail } from '@jdm/shared/events';
@@ -1378,7 +1412,7 @@ export default function EventDetail() {
         <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
         <Text style={styles.body}>{event.venueName}</Text>
         <Text style={styles.sub}>
-          {event.venueAddress} — {event.city}/{event.stateCode}
+          {event.venueAddress} - {event.city}/{event.stateCode}
         </Text>
         <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
           <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
@@ -1455,11 +1489,13 @@ const styles = StyleSheet.create({
 
 > **Note:** If `Button` doesn't accept a `disabled` prop, extend it with an optional `disabled?: boolean` that applies `opacity: 0.5` and blocks `onPress`. Verify in `apps/mobile/src/components/Button.tsx` before Step 1.
 
-- [ ] **Step 2: Manual smoke test**
+> note: Button did not accept `disabled`. Extended with `disabled?: boolean`: sets `Pressable` `disabled`, `accessibilityState.disabled`, and `opacity: 0.5` when true. Also swapped the em-dash separator in the venue line for a plain ASCII `-` per CLAUDE.md formatting rules.
 
-Open a published event from the list. Confirm title, date range, venue card, description, and tiers render with correct BRL-formatted prices and remaining counts. Tap "Abrir no mapa" — native maps (or browser) opens on the venue coordinates. The "Em breve" button is visibly disabled.
+- [-] **Step 2: Manual smoke test**
 
-- [ ] **Step 3: Typecheck + commit**
+Skipped per user rule (no autonomous verification / background shells). Typecheck stands in.
+
+- [x] **Step 3: Typecheck + commit**
 
 ```bash
 pnpm --filter @jdm/mobile typecheck
