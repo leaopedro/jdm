@@ -82,8 +82,8 @@ export default function EventDetailScreen() {
           onPress: () => router.push('/tickets' as never),
         },
       ]);
-    } catch (err) {
-      Alert.alert(ticketsCopy.purchase.error, err instanceof Error ? err.message : String(err));
+    } catch {
+      Alert.alert(ticketsCopy.purchase.error);
     } finally {
       setPaying(false);
     }
