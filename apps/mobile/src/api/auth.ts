@@ -31,7 +31,7 @@ export const resendVerifyRequest = (input: ResendVerifyInput): Promise<MessageRe
   request('/auth/resend-verify', messageResponseSchema, { method: 'POST', body: input });
 
 export const verifyEmailRequest = (input: VerifyEmailInput): Promise<MessageResponse> =>
-  request(`/verify?token=${encodeURIComponent(input.token)}`, messageResponseSchema);
+  request(`/auth/verify?token=${encodeURIComponent(input.token)}`, messageResponseSchema);
 
 export const forgotPasswordRequest = (input: ForgotPasswordInput): Promise<MessageResponse> =>
   request('/auth/forgot-password', messageResponseSchema, { method: 'POST', body: input });
