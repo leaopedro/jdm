@@ -18,6 +18,8 @@ export const listCars = async (): Promise<Car[]> => {
   return res.cars;
 };
 
+export const getCar = (id: string): Promise<Car> => authedRequest(`/me/cars/${id}`, carSchema);
+
 export const createCar = (input: CarInput): Promise<Car> =>
   authedRequest('/me/cars', carSchema, {
     method: 'POST',

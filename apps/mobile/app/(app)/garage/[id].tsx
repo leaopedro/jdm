@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 
-import { addCarPhoto, deleteCar, listCars, removeCarPhoto, updateCar } from '~/api/cars';
+import { addCarPhoto, deleteCar, getCar, removeCarPhoto, updateCar } from '~/api/cars';
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
@@ -35,17 +35,14 @@ export default function CarDetail() {
 
   useEffect(() => {
     void (async () => {
-      const all = await listCars();
-      const found = all.find((c) => c.id === id) ?? null;
+      const found = await getCar(id);
       setCar(found);
-      if (found) {
-        form.reset({
-          make: found.make,
-          model: found.model,
-          year: found.year,
-          nickname: found.nickname ?? undefined,
-        });
-      }
+      form.reset({
+        make: found.make,
+        model: found.model,
+        year: found.year,
+        nickname: found.nickname ?? undefined,
+      });
     })();
   }, [form, id]);
 
@@ -86,10 +83,9 @@ export default function CarDetail() {
         text: profileCopy.garage.delete,
         style: 'destructive',
         onPress: () => {
-          void (async () => {
-            await deleteCar(car.id);
+          void deleteCar(car.id).then(() => {
             router.replace('/garage' as never);
-          })();
+          });
         },
       },
     ]);

@@ -12,10 +12,12 @@ import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
 import { authRoutes } from './routes/auth/index.js';
 import { carRoutes } from './routes/cars.js';
+import { devUploadRoutes } from './routes/dev-uploads.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 
 declare module 'fastify' {
@@ -53,6 +55,11 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
+    // Register dev file server only when DevUploads is active.
+    // Staging with R2 keys present uses R2Uploads and skips this.
+    if (app.uploads instanceof DevUploads) {
+      await app.register(devUploadRoutes);
+    }
     app.get('/debug/boom', () => {
       throw new Error('intentional boom for Sentry verification');
     });

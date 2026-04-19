@@ -1,6 +1,6 @@
 import type { Car } from '@jdm/shared/cars';
-import { Link, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,9 +20,11 @@ export default function GarageIndex() {
   const router = useRouter();
   const [cars, setCars] = useState<Car[] | null>(null);
 
-  useEffect(() => {
-    void (async () => setCars(await listCars()))();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => setCars(await listCars()))();
+    }, []),
+  );
 
   if (!cars) {
     return (
@@ -50,7 +52,7 @@ export default function GarageIndex() {
                 ) : (
                   <View style={[styles.thumb, styles.thumbPlaceholder]} />
                 )}
-                <View style={{ flex: 1 }}>
+                <View style={styles.cardText}>
                   <Text style={styles.title}>
                     {item.year} {item.make} {item.model}
                   </Text>
@@ -87,6 +89,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
     borderRadius: theme.radii.md,
   },
+  cardText: { flex: 1 },
   thumb: { width: 64, height: 64, borderRadius: theme.radii.sm },
   thumbPlaceholder: { backgroundColor: theme.colors.muted },
   title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },

@@ -1,4 +1,4 @@
-import type { PresignResponse, UploadKind } from '@jdm/shared/uploads';
+import { ALLOWED_IMAGE_TYPES, type PresignResponse, type UploadKind } from '@jdm/shared/uploads';
 import * as ImagePicker from 'expo-image-picker';
 
 import { requestPresign } from '~/api/uploads';
@@ -18,14 +18,10 @@ const MIME_FROM_EXT: Record<string, PickedImage['mime']> = {
   webp: 'image/webp',
 };
 
-const ALLOWED_MIME: Record<PickedImage['mime'], true> = {
-  'image/jpeg': true,
-  'image/png': true,
-  'image/webp': true,
-};
+const ALLOWED_MIME = new Set<string>(ALLOWED_IMAGE_TYPES);
 
 const inferMime = (asset: ImagePicker.ImagePickerAsset): PickedImage['mime'] | null => {
-  if (asset.mimeType && asset.mimeType in ALLOWED_MIME) {
+  if (asset.mimeType && ALLOWED_MIME.has(asset.mimeType)) {
     return asset.mimeType as PickedImage['mime'];
   }
   const ext = asset.uri.split('.').pop()?.toLowerCase() ?? '';

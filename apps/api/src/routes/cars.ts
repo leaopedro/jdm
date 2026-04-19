@@ -41,13 +41,20 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
     return { cars: cars.map((c) => serializeCar(c, app.uploads)) };
   });
 
+  app.get('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const car = await prisma.car.findFirst({
+      where: { id, userId: sub },
+      include: { photos: true },
+    });
+    if (!car) return reply.status(404).send({ error: 'NotFound' });
+    return serializeCar(car, app.uploads);
+  });
+
   app.post('/me/cars', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
-    const parsed = carInputSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
-    }
-    const { make, model, year, nickname } = parsed.data;
+    const { make, model, year, nickname } = carInputSchema.parse(request.body);
     const car = await prisma.car.create({
       data: { make, model, year, ...(nickname !== undefined ? { nickname } : {}), userId: sub },
       include: { photos: true },
@@ -58,13 +65,9 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
   app.patch('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
     const { id } = request.params as { id: string };
-    const parsed = carUpdateSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
-    }
     const owned = await prisma.car.findFirst({ where: { id, userId: sub } });
     if (!owned) return reply.status(404).send({ error: 'NotFound' });
-    const { make, model, year, nickname } = parsed.data;
+    const { make, model, year, nickname } = carUpdateSchema.parse(request.body);
     const updated = await prisma.car.update({
       where: { id },
       data: {
@@ -81,20 +84,16 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/me/cars/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
     const { id } = request.params as { id: string };
-    const owned = await prisma.car.findFirst({ where: { id, userId: sub } });
-    if (!owned) return reply.status(404).send({ error: 'NotFound' });
-    await prisma.car.delete({ where: { id } });
+    const { count } = await prisma.car.deleteMany({ where: { id, userId: sub } });
+    if (count === 0) return reply.status(404).send({ error: 'NotFound' });
     return reply.status(204).send();
   });
 
   app.post('/me/cars/:id/photos', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
     const { id } = request.params as { id: string };
-    const parsed = addCarPhotoSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'BadRequest', issues: parsed.error.flatten() });
-    }
-    if (!app.uploads.isOwnedKey(parsed.data.objectKey, sub, 'car_photo')) {
+    const { objectKey, width, height } = addCarPhotoSchema.parse(request.body);
+    if (!app.uploads.isOwnedKey(objectKey, sub, 'car_photo')) {
       return reply.status(400).send({ error: 'BadRequest', message: 'object key not owned' });
     }
     const car = await prisma.car.findFirst({ where: { id, userId: sub } });
@@ -104,9 +103,9 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
     await prisma.carPhoto.create({
       data: {
         carId: id,
-        objectKey: parsed.data.objectKey,
-        width: parsed.data.width ?? null,
-        height: parsed.data.height ?? null,
+        objectKey,
+        width: width ?? null,
+        height: height ?? null,
         sortOrder: count,
       },
     });
@@ -125,9 +124,8 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       const { id, photoId } = request.params as { id: string; photoId: string };
       const car = await prisma.car.findFirst({ where: { id, userId: sub } });
       if (!car) return reply.status(404).send({ error: 'NotFound' });
-      const photo = await prisma.carPhoto.findFirst({ where: { id: photoId, carId: id } });
-      if (!photo) return reply.status(404).send({ error: 'NotFound' });
-      await prisma.carPhoto.delete({ where: { id: photoId } });
+      const { count } = await prisma.carPhoto.deleteMany({ where: { id: photoId, carId: id } });
+      if (count === 0) return reply.status(404).send({ error: 'NotFound' });
       return reply.status(204).send();
     },
   );

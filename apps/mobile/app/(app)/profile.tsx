@@ -5,7 +5,7 @@ import {
   updateProfileSchema,
   type UpdateProfileInput,
 } from '@jdm/shared/profile';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
@@ -28,6 +28,13 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [uploading, setUploading] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showBanner = (msg: string) => {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner(msg);
+    bannerTimer.current = setTimeout(() => setBanner(null), 3000);
+  };
 
   const form = useForm<UpdateProfileInput>({
     resolver: zodResolver(updateProfileSchema),
@@ -51,9 +58,9 @@ export default function ProfileScreen() {
     try {
       const updated = await updateProfile(values);
       setProfile(updated);
-      setBanner(profileCopy.profile.saved);
+      showBanner(profileCopy.profile.saved);
     } catch {
-      setBanner(profileCopy.profile.saveFailed);
+      showBanner(profileCopy.profile.saveFailed);
     }
   });
 
@@ -65,7 +72,7 @@ export default function ProfileScreen() {
       const updated = await updateProfile({ avatarObjectKey: up.presign.objectKey });
       setProfile(updated);
     } catch {
-      setBanner(profileCopy.errors.unknown);
+      showBanner(profileCopy.errors.unknown);
     } finally {
       setUploading(false);
     }
