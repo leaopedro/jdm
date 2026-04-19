@@ -71,7 +71,7 @@ export default function EventDetailScreen() {
         <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
         <Text style={styles.body}>{event.venueName}</Text>
         <Text style={styles.sub}>
-          {event.venueAddress} - {event.city}/{event.stateCode}
+          {event.venueAddress}, {event.city}/{event.stateCode}
         </Text>
         <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
           <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>

@@ -119,7 +119,7 @@ export default function EventsIndex() {
                 <Text style={styles.title}>{item.title}</Text>
                 <Text style={styles.sub}>{formatEventDateRange(item.startsAt, item.endsAt)}</Text>
                 <Text style={styles.sub}>
-                  {item.venueName} - {item.city}/{item.stateCode}
+                  {item.venueName}, {item.city}/{item.stateCode}
                 </Text>
               </View>
             </Pressable>

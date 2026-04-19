@@ -1505,14 +1505,14 @@ git commit -m "feat(mobile): event detail screen with tiers, map link, disabled 
 
 ---
 
-## Task 11: Roadmap + handoff updates
+## ✅ Task 11: Roadmap + handoff updates
 
 **Files:**
 
 - Modify: `plans/roadmap.md`
 - Modify: `handoff.md`
 
-- [ ] **Step 1: Flip roadmap statuses on branch start**
+- [x] **Step 1: Flip roadmap statuses on branch start**
 
 In `plans/roadmap.md`, change the checkbox on each of 3.1, 3.2, 3.3, 3.4, 3.5 from `[ ]` to `[~]` with a note referencing the PR once it's open. Example for 3.1:
 
@@ -1526,7 +1526,7 @@ In `plans/roadmap.md`, change the checkbox on each of 3.1, 3.2, 3.3, 3.4, 3.5 fr
 
 Do the same for 3.2–3.5. **Do not** mark them `[x]` — that happens only after merge-to-main + Railway/EAS deploy, per the file's own rules.
 
-- [ ] **Step 2: Rewrite `handoff.md`**
+- [x] **Step 2: Rewrite `handoff.md`**
 
 Replace the F2 handoff with an F3 handoff summarizing:
 
@@ -1537,12 +1537,14 @@ Replace the F2 handoff with an F3 handoff summarizing:
 5. Known next steps: F7a will add admin event CRUD; F4 will wire the Buy CTA and add `Order`/`Ticket` models.
 6. Open edges: no real geolocation for "Perto de mim" — currently uses profile state code.
 
-- [ ] **Step 3: Commit**
+- [-] **Step 3: Commit**
 
 ```bash
 git add plans/roadmap.md handoff.md
 git commit -m "docs: mark roadmap 3.1-3.5 in-progress; update handoff for F3"
 ```
+
+> note: skipped — `plans/roadmap.md` and `handoff.md` are in `.git/info/exclude` per CLAUDE.md (local-only). Edits live on disk for this session but aren't tracked. The plan file itself was updated in place and its edits rode along with the feature commits.
 
 ---
 
