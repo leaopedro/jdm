@@ -189,3 +189,17 @@ model TicketTier {
 
   @@index([eventId, sortOrder])
 }
+
+model AdminAudit {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String   @db.VarChar(40)
+  entityType String   @db.VarChar(40)
+  entityId   String   @db.VarChar(40)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

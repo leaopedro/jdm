@@ -1,0 +1,137 @@
+'use client';
+
+import type { AdminTicketTier } from '@jdm/shared/admin';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
+
+import {
+  createTierAction,
+  deleteTierAction,
+  updateTierAction,
+  type TierFormState,
+} from '~/lib/tier-actions';
+
+const initial: TierFormState = { error: null };
+
+const Submit = ({ label }: { label: string }) => {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded bg-[color:var(--color-accent)] px-3 py-1 text-sm font-semibold disabled:opacity-50"
+    >
+      {pending ? '…' : label}
+    </button>
+  );
+};
+
+const formatBRL = (cents: number) =>
+  (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) => {
+  const [state, action] = useActionState(updateTierAction.bind(null, eventId, tier.id), initial);
+  return (
+    <tr className="border-b border-[color:var(--color-border)]">
+      <td className="py-2">
+        <form action={action} className="flex items-center gap-2">
+          <input
+            name="name"
+            defaultValue={tier.name}
+            className="w-32 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+          <input
+            name="priceCents"
+            type="number"
+            min={0}
+            defaultValue={tier.priceCents}
+            className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+          <input
+            name="quantityTotal"
+            type="number"
+            min={0}
+            defaultValue={tier.quantityTotal}
+            className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+          <Submit label="Salvar" />
+          {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}
+        </form>
+      </td>
+      <td className="text-sm">{formatBRL(tier.priceCents)}</td>
+      <td className="text-sm">
+        {tier.quantitySold}/{tier.quantityTotal}
+      </td>
+      <td>
+        <form
+          action={() => {
+            void deleteTierAction(eventId, tier.id);
+          }}
+        >
+          <button type="submit" className="text-sm text-red-400 hover:underline">
+            Remover
+          </button>
+        </form>
+      </td>
+    </tr>
+  );
+};
+
+export const TierList = ({ eventId, tiers }: { eventId: string; tiers: AdminTicketTier[] }) => {
+  const [state, action] = useActionState(createTierAction.bind(null, eventId), initial);
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-lg font-semibold">Ingressos</h2>
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="text-sm text-[color:var(--color-muted)]">
+            <th className="py-2">Tier</th>
+            <th>Preço</th>
+            <th>Vendidos</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {tiers.map((t) => (
+            <TierRow key={t.id} eventId={eventId} tier={t} />
+          ))}
+        </tbody>
+      </table>
+      <form
+        action={action}
+        className="flex items-end gap-2 border-t border-[color:var(--color-border)] pt-3"
+      >
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[color:var(--color-muted)]">Nome</span>
+          <input
+            name="name"
+            required
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[color:var(--color-muted)]">Preço (centavos)</span>
+          <input
+            name="priceCents"
+            type="number"
+            min={0}
+            required
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-[color:var(--color-muted)]">Quantidade</span>
+          <input
+            name="quantityTotal"
+            type="number"
+            min={0}
+            required
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+          />
+        </label>
+        <Submit label="Adicionar" />
+        {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}
+      </form>
+    </section>
+  );
+};

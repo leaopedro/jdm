@@ -26,7 +26,11 @@ export class DevUploads implements Uploads {
     return `${this.publicBase}/${objectKey}`;
   }
 
-  isOwnedKey(objectKey: string, userId: string, kind: 'avatar' | 'car_photo'): boolean {
+  isOwnedKey(
+    objectKey: string,
+    userId: string,
+    kind: 'avatar' | 'car_photo' | 'event_cover',
+  ): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }
 }

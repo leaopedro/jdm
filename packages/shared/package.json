@@ -7,12 +7,13 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./admin": "./src/admin.ts",
     "./auth": "./src/auth.ts",
+    "./cars": "./src/cars.ts",
     "./events": "./src/events.ts",
     "./health": "./src/health.ts",
     "./ids": "./src/ids.ts",
     "./profile": "./src/profile.ts",
-    "./cars": "./src/cars.ts",
     "./uploads": "./src/uploads.ts"
   },
   "scripts": {
