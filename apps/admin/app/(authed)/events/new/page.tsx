@@ -4,6 +4,7 @@ import { BRAZIL_STATE_CODES } from '@jdm/shared/profile';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { DateTimeField } from '~/components/date-time-field';
 import { createEventAction, type EventFormState } from '~/lib/event-actions';
 
 const initial: EventFormState = { error: null };
@@ -81,17 +82,15 @@ export default function NewEventPage() {
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
-        <Field
+        <DateTimeField
           label="Início"
           name="startsAt"
-          type="datetime-local"
           required
           defaultValue={v.startsAt ?? defaults.starts}
         />
-        <Field
+        <DateTimeField
           label="Fim"
           name="endsAt"
-          type="datetime-local"
           required
           defaultValue={v.endsAt ?? defaults.ends}
         />

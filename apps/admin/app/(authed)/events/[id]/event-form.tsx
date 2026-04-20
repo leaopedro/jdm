@@ -6,6 +6,7 @@ import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { CoverUploader } from '~/components/cover-uploader';
+import { DateTimeField } from '~/components/date-time-field';
 import {
   cancelEventAction,
   publishEventAction,
@@ -82,24 +83,8 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Início</span>
-          <input
-            name="startsAt"
-            type="datetime-local"
-            defaultValue={isoToLocal(event.startsAt)}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Fim</span>
-          <input
-            name="endsAt"
-            type="datetime-local"
-            defaultValue={isoToLocal(event.endsAt)}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
+        <DateTimeField label="Início" name="startsAt" defaultValue={isoToLocal(event.startsAt)} />
+        <DateTimeField label="Fim" name="endsAt" defaultValue={isoToLocal(event.endsAt)} />
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Local (opcional)</span>
           <input
