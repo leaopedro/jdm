@@ -43,9 +43,10 @@ export default function EventDetailScreen() {
   }, [slug]);
 
   const openMap = (e: EventDetail) => {
-    const q = encodeURIComponent(`${e.venueName}, ${e.venueAddress}`);
-    const url = `https://www.google.com/maps/search/?api=1&query=${q}&ll=${e.lat},${e.lng}`;
-    void Linking.openURL(url);
+    const parts = [e.venueName, e.venueAddress, e.city, e.stateCode].filter(Boolean);
+    if (parts.length === 0) return;
+    const q = encodeURIComponent(parts.join(', '));
+    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
   };
 
   const buy = async (tier: TicketTier) => {
@@ -118,16 +119,23 @@ export default function EventDetailScreen() {
         <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
-        <Text style={styles.body}>{event.venueName}</Text>
-        <Text style={styles.sub}>
-          {event.venueAddress}, {event.city}/{event.stateCode}
-        </Text>
-        <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
-          <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
-        </Pressable>
-      </View>
+      {(() => {
+        const locationLine = [event.venueAddress, event.city, event.stateCode]
+          .filter(Boolean)
+          .join(', ');
+        const hasAny = event.venueName || locationLine;
+        if (!hasAny) return null;
+        return (
+          <View style={styles.section}>
+            <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
+            {event.venueName ? <Text style={styles.body}>{event.venueName}</Text> : null}
+            {locationLine ? <Text style={styles.sub}>{locationLine}</Text> : null}
+            <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
+              <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
+            </Pressable>
+          </View>
+        );
+      })()}
 
       <View style={styles.section}>
         <Text style={styles.body}>{event.description}</Text>

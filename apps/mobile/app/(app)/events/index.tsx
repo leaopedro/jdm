@@ -141,9 +141,15 @@ export default function EventsIndex() {
               <View style={styles.cardText}>
                 <Text style={styles.title}>{item.title}</Text>
                 <Text style={styles.sub}>{formatEventDateRange(item.startsAt, item.endsAt)}</Text>
-                <Text style={styles.sub}>
-                  {item.venueName}, {item.city}/{item.stateCode}
-                </Text>
+                {(() => {
+                  const line = [
+                    item.venueName,
+                    [item.city, item.stateCode].filter(Boolean).join('/'),
+                  ]
+                    .filter(Boolean)
+                    .join(', ');
+                  return line ? <Text style={styles.sub}>{line}</Text> : null;
+                })()}
               </View>
             </Pressable>
           )}

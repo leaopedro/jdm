@@ -13,12 +13,26 @@ import {
 import { ApiError } from './api';
 import { toIso, toNumber } from './form-helpers';
 
-export type EventFormState = { error: string | null };
+// Values are echoed back to the form on error so the user does not have to
+// re-type everything. React 19 resets form inputs after any <form action>
+// settles; round-tripping the values via state + defaultValue is the
+// simplest way to preserve them.
+export type EventFormValues = Record<string, string>;
+export type EventFormState = { error: string | null; values?: EventFormValues };
+
+const captureValues = (fd: FormData): EventFormValues => {
+  const out: EventFormValues = {};
+  for (const [k, v] of fd.entries()) {
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+};
 
 export const createEventAction = async (
   _prev: EventFormState,
   fd: FormData,
 ): Promise<EventFormState> => {
+  const values = captureValues(fd);
   const parsed = adminEventCreateSchema.safeParse({
     slug: fd.get('slug'),
     title: fd.get('title'),
@@ -28,8 +42,6 @@ export const createEventAction = async (
     endsAt: toIso(fd.get('endsAt')),
     venueName: fd.get('venueName'),
     venueAddress: fd.get('venueAddress'),
-    lat: toNumber(fd.get('lat')),
-    lng: toNumber(fd.get('lng')),
     city: fd.get('city'),
     stateCode: fd.get('stateCode'),
     type: fd.get('type'),
@@ -38,14 +50,15 @@ export const createEventAction = async (
   if (!parsed.success) {
     return {
       error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      values,
     };
   }
   let created;
   try {
     created = await createAdminEvent(parsed.data);
   } catch (e) {
-    if (e instanceof ApiError) return { error: e.message };
-    return { error: 'Erro ao criar.' };
+    if (e instanceof ApiError) return { error: e.message, values };
+    return { error: 'Erro ao criar.', values };
   }
   revalidatePath('/events');
   redirect(`/events/${created.id}`);
@@ -56,20 +69,16 @@ export const updateEventAction = async (
   _prev: EventFormState,
   fd: FormData,
 ): Promise<EventFormState> => {
+  const values = captureValues(fd);
   const raw: Record<string, unknown> = {};
-  for (const key of [
-    'title',
-    'description',
-    'venueName',
-    'venueAddress',
-    'city',
-    'stateCode',
-    'type',
-  ]) {
+  for (const key of ['title', 'description', 'venueName', 'venueAddress', 'city', 'type']) {
     const v = fd.get(key);
-    if (typeof v === 'string' && v !== '') raw[key] = v;
+    if (typeof v === 'string') raw[key] = v;
   }
-  for (const key of ['lat', 'lng', 'capacity']) {
+  // stateCode: empty-string -> null so the user can clear a previously set value.
+  const stateCode = fd.get('stateCode');
+  if (typeof stateCode === 'string') raw.stateCode = stateCode === '' ? null : stateCode;
+  for (const key of ['capacity']) {
     const v = fd.get(key);
     if (typeof v === 'string' && v !== '') raw[key] = Number(v);
   }
@@ -84,13 +93,14 @@ export const updateEventAction = async (
   if (!parsed.success) {
     return {
       error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      values,
     };
   }
   try {
     await updateAdminEvent(id, parsed.data);
   } catch (e) {
-    if (e instanceof ApiError) return { error: e.message };
-    return { error: 'Erro ao salvar.' };
+    if (e instanceof ApiError) return { error: e.message, values };
+    return { error: 'Erro ao salvar.', values };
   }
   revalidatePath(`/events/${id}`);
   revalidatePath('/events');

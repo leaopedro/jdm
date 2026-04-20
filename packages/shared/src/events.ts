@@ -34,19 +34,17 @@ export const eventSummarySchema = z.object({
   coverUrl: z.string().url().nullable(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
-  venueName: z.string(),
-  city: z.string(),
-  stateCode: stateCodeSchema,
+  venueName: z.string().nullable(),
+  city: z.string().nullable(),
+  stateCode: stateCodeSchema.nullable(),
   type: eventTypeSchema,
 });
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
-// Detail: full payload with tiers + venue geo.
+// Detail: full payload with tiers + venue.
 export const eventDetailSchema = eventSummarySchema.extend({
   description: z.string(),
-  venueAddress: z.string(),
-  lat: z.number(),
-  lng: z.number(),
+  venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
   tiers: z.array(ticketTierSchema),
 });

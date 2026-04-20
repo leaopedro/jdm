@@ -17,8 +17,6 @@ const seedEventTierOrder = async (userId: string) => {
       endsAt: new Date(Date.now() + 90000_000),
       venueName: 'v',
       venueAddress: 'a',
-      lat: 0,
-      lng: 0,
       city: 'São Paulo',
       stateCode: 'SP',
       type: 'meeting',

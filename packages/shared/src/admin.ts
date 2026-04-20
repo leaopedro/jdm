@@ -33,6 +33,14 @@ const coverObjectKeySchema = z
   .regex(/^event_cover\//, 'must be an event_cover key')
   .nullable();
 
+// Nullable inputs coerce empty strings to null so the admin form can post
+// blank optional fields without client-side plumbing.
+const optionalText = (max: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().min(1).max(max).nullable(),
+  );
+
 export const adminEventCreateSchema = z
   .object({
     slug: slugSchema,
@@ -41,12 +49,13 @@ export const adminEventCreateSchema = z
     coverObjectKey: coverObjectKeySchema,
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
-    venueName: z.string().trim().min(1).max(140),
-    venueAddress: z.string().trim().min(1).max(300),
-    lat: z.number().gte(-90).lte(90),
-    lng: z.number().gte(-180).lte(180),
-    city: z.string().trim().min(1).max(100),
-    stateCode: stateCodeSchema,
+    venueName: optionalText(140),
+    venueAddress: optionalText(300),
+    city: optionalText(100),
+    stateCode: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+      stateCodeSchema.nullable(),
+    ),
     type: eventTypeSchema,
     capacity: z.number().int().nonnegative(),
   })
@@ -65,12 +74,13 @@ export const adminEventUpdateSchema = z
     coverObjectKey: coverObjectKeySchema,
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
-    venueName: z.string().trim().min(1).max(140),
-    venueAddress: z.string().trim().min(1).max(300),
-    lat: z.number().gte(-90).lte(90),
-    lng: z.number().gte(-180).lte(180),
-    city: z.string().trim().min(1).max(100),
-    stateCode: stateCodeSchema,
+    venueName: optionalText(140),
+    venueAddress: optionalText(300),
+    city: optionalText(100),
+    stateCode: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+      stateCodeSchema.nullable(),
+    ),
     type: eventTypeSchema,
     capacity: z.number().int().nonnegative(),
   })
@@ -104,8 +114,8 @@ export const adminEventRowSchema = z.object({
   type: eventTypeSchema,
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
-  city: z.string(),
-  stateCode: stateCodeSchema,
+  city: z.string().nullable(),
+  stateCode: stateCodeSchema.nullable(),
   capacity: z.number().int().nonnegative(),
   publishedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),

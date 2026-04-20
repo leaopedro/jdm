@@ -24,8 +24,6 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
     endsAt: e.endsAt.toISOString(),
     venueName: e.venueName,
     venueAddress: e.venueAddress,
-    lat: e.lat,
-    lng: e.lng,
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
@@ -57,8 +55,6 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
           endsAt: new Date(input.endsAt),
           venueName: input.venueName,
           venueAddress: input.venueAddress,
-          lat: input.lat,
-          lng: input.lng,
           city: input.city,
           stateCode: input.stateCode,
           type: input.type,
@@ -107,8 +103,6 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     if (input.endsAt !== undefined) data.endsAt = new Date(input.endsAt);
     if (input.venueName !== undefined) data.venueName = input.venueName;
     if (input.venueAddress !== undefined) data.venueAddress = input.venueAddress;
-    if (input.lat !== undefined) data.lat = input.lat;
-    if (input.lng !== undefined) data.lng = input.lng;
     if (input.city !== undefined) data.city = input.city;
     if (input.stateCode !== undefined) data.stateCode = input.stateCode;
     if (input.type !== undefined) data.type = input.type;
