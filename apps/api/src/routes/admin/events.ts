@@ -137,6 +137,58 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     return serializeDetail(updated, app.uploads);
   });
 
+  app.post('/events/:id/publish', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'NotFound' });
+    if (existing.status === 'published') {
+      return reply.status(409).send({ error: 'Conflict', message: 'already published' });
+    }
+    if (existing.status === 'cancelled') {
+      return reply
+        .status(409)
+        .send({ error: 'Conflict', message: 'cancelled events cannot be re-published' });
+    }
+    const updated = await prisma.event.update({
+      where: { id },
+      data: {
+        status: 'published',
+        publishedAt: existing.publishedAt ?? new Date(),
+      },
+      include: { tiers: true },
+    });
+    await recordAudit({
+      actorId: sub,
+      action: 'event.publish',
+      entityType: 'event',
+      entityId: id,
+    });
+    return serializeDetail(updated, app.uploads);
+  });
+
+  app.post('/events/:id/cancel', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'NotFound' });
+    if (existing.status === 'cancelled') {
+      return reply.status(409).send({ error: 'Conflict', message: 'already cancelled' });
+    }
+    const updated = await prisma.event.update({
+      where: { id },
+      data: { status: 'cancelled' },
+      include: { tiers: true },
+    });
+    await recordAudit({
+      actorId: sub,
+      action: 'event.cancel',
+      entityType: 'event',
+      entityId: id,
+    });
+    return serializeDetail(updated, app.uploads);
+  });
+
   app.get('/events', async () => {
     const events = await prisma.event.findMany({ orderBy: { createdAt: 'desc' } });
     return {
