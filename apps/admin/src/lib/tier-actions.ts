@@ -3,9 +3,9 @@
 import { adminTierCreateSchema, adminTierUpdateSchema } from '@jdm/shared/admin';
 import { revalidatePath } from 'next/cache';
 
-import { createTier, deleteTier, updateTier } from './admin-api.js';
-import { ApiError } from './api.js';
-import { toNumber } from './form-helpers.js';
+import { createTier, deleteTier, updateTier } from './admin-api';
+import { ApiError } from './api';
+import { toNumber } from './form-helpers';
 
 export type TierFormState = { error: string | null };
 

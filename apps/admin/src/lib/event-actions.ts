@@ -9,9 +9,9 @@ import {
   createAdminEvent,
   publishAdminEvent,
   updateAdminEvent,
-} from './admin-api.js';
-import { ApiError } from './api.js';
-import { toIso, toNumber } from './form-helpers.js';
+} from './admin-api';
+import { ApiError } from './api';
+import { toIso, toNumber } from './form-helpers';
 
 export type EventFormState = { error: string | null };
 

@@ -2,7 +2,7 @@
 
 import { presignRequestSchema, presignResponseSchema } from '@jdm/shared/uploads';
 
-import { apiFetch } from './api.js';
+import { apiFetch } from './api';
 
 export type PresignInput = { contentType: string; size: number };
 

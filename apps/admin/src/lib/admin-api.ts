@@ -8,7 +8,7 @@ import {
   adminTicketTierSchema,
 } from '@jdm/shared/admin';
 
-import { apiFetch } from './api.js';
+import { apiFetch } from './api';
 
 export const listAdminEvents = () =>
   apiFetch('/admin/events', { schema: adminEventListResponseSchema });

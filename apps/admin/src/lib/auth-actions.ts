@@ -3,8 +3,8 @@
 import { authResponseSchema, loginSchema } from '@jdm/shared/auth';
 import { redirect } from 'next/navigation';
 
-import { apiFetch, ApiError } from './api.js';
-import { clearSession, writeSession } from './auth-session.js';
+import { apiFetch, ApiError } from './api';
+import { clearSession, writeSession } from './auth-session';
 
 export type LoginState = { error: string | null };
 
