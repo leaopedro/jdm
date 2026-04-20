@@ -6,9 +6,10 @@ import { theme } from '../theme';
 type Props = Omit<PressableProps, 'children'> & {
   label: string;
   variant?: 'primary' | 'secondary';
+  disabled?: boolean;
 };
 
-export const Button = ({ label, variant = 'primary', ...rest }: Props) => {
+export const Button = ({ label, variant = 'primary', disabled = false, ...rest }: Props) => {
   const bg = variant === 'primary' ? theme.colors.accent : 'transparent';
   const fg = variant === 'primary' ? theme.colors.fg : theme.colors.fg;
   const borderColor = variant === 'secondary' ? theme.colors.border : bg;
@@ -16,9 +17,15 @@ export const Button = ({ label, variant = 'primary', ...rest }: Props) => {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: bg, borderColor, opacity: pressed ? 0.8 : 1 },
+        {
+          backgroundColor: bg,
+          borderColor,
+          opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
+        },
       ]}
       {...rest}
     >

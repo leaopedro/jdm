@@ -13,6 +13,7 @@ import { sentryPlugin } from './plugins/sentry.js';
 import { authRoutes } from './routes/auth/index.js';
 import { carRoutes } from './routes/cars.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
+import { eventRoutes } from './routes/events.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { uploadRoutes } from './routes/uploads.js';
@@ -52,6 +53,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(meRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
+  await app.register(eventRoutes);
   await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
