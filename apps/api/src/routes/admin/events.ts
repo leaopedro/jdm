@@ -1,0 +1,90 @@
+import { prisma } from '@jdm/db';
+import { adminEventCreateSchema, adminEventDetailSchema } from '@jdm/shared/admin';
+import type { Event as DbEvent, TicketTier as DbTier, Prisma } from '@prisma/client';
+import type { FastifyPluginAsync } from 'fastify';
+
+import { requireUser } from '../../plugins/auth.js';
+import { recordAudit } from '../../services/admin-audit.js';
+import type { Uploads } from '../../services/uploads/index.js';
+
+const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
+  adminEventDetailSchema.parse({
+    id: e.id,
+    slug: e.slug,
+    title: e.title,
+    coverUrl: e.coverObjectKey ? uploads.buildPublicUrl(e.coverObjectKey) : null,
+    startsAt: e.startsAt.toISOString(),
+    endsAt: e.endsAt.toISOString(),
+    venueName: e.venueName,
+    venueAddress: e.venueAddress,
+    lat: e.lat,
+    lng: e.lng,
+    city: e.city,
+    stateCode: e.stateCode,
+    type: e.type,
+    description: e.description,
+    capacity: e.capacity,
+    status: e.status,
+    publishedAt: e.publishedAt?.toISOString() ?? null,
+    createdAt: e.createdAt.toISOString(),
+    updatedAt: e.updatedAt.toISOString(),
+    tiers: e.tiers
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        priceCents: t.priceCents,
+        currency: t.currency,
+        quantityTotal: t.quantityTotal,
+        quantitySold: t.quantitySold,
+        remainingCapacity: Math.max(0, t.quantityTotal - t.quantitySold),
+        salesOpenAt: t.salesOpenAt?.toISOString() ?? null,
+        salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
+        sortOrder: t.sortOrder,
+      })),
+  });
+
+// eslint-disable-next-line @typescript-eslint/require-await
+export const adminEventRoutes: FastifyPluginAsync = async (app) => {
+  app.post('/events', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const input = adminEventCreateSchema.parse(request.body);
+    try {
+      const event = await prisma.event.create({
+        data: {
+          slug: input.slug,
+          title: input.title,
+          description: input.description,
+          coverObjectKey: input.coverObjectKey,
+          startsAt: new Date(input.startsAt),
+          endsAt: new Date(input.endsAt),
+          venueName: input.venueName,
+          venueAddress: input.venueAddress,
+          lat: input.lat,
+          lng: input.lng,
+          city: input.city,
+          stateCode: input.stateCode,
+          type: input.type,
+          capacity: input.capacity,
+          status: 'draft',
+        },
+        include: { tiers: true },
+      });
+      await recordAudit({
+        actorId: sub,
+        action: 'event.create',
+        entityType: 'event',
+        entityId: event.id,
+        metadata: { slug: event.slug },
+      });
+      return reply.status(201).send(serializeDetail(event, app.uploads));
+    } catch (e) {
+      const err = e as Prisma.PrismaClientKnownRequestError;
+      if (err.code === 'P2002') {
+        return reply.status(409).send({ error: 'Conflict', message: 'slug already exists' });
+      }
+      throw e;
+    }
+  });
+};

@@ -10,6 +10,7 @@ import { authPlugin } from './plugins/auth.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
+import { adminRoutes } from './routes/admin/index.js';
 import { authRoutes } from './routes/auth/index.js';
 import { carRoutes } from './routes/cars.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
@@ -54,6 +55,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
+  await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
 
   if (env.NODE_ENV !== 'production') {
