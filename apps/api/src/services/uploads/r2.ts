@@ -47,7 +47,11 @@ export class R2Uploads implements Uploads {
     return `${this.publicBase.replace(/\/$/, '')}/${objectKey}`;
   }
 
-  isOwnedKey(objectKey: string, userId: string, kind: 'avatar' | 'car_photo'): boolean {
+  isOwnedKey(
+    objectKey: string,
+    userId: string,
+    kind: 'avatar' | 'car_photo' | 'event_cover',
+  ): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }
 }
