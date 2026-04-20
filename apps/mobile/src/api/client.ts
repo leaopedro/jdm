@@ -73,10 +73,8 @@ export const authedRequest = async <T>(
 ): Promise<T> => {
   if (!provider) throw new Error('token provider not registered');
   const attempt = async (token: string): Promise<Response> => {
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
-    };
+    const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+    if (options.body !== undefined) headers['content-type'] = 'application/json';
     const init: RequestInit = { method: options.method ?? 'GET', headers };
     if (options.body !== undefined) init.body = JSON.stringify(options.body);
     if (options.signal) init.signal = options.signal;

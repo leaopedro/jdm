@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type Car, carUpdateSchema, type CarUpdateInput } from '@jdm/shared/cars';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -99,8 +99,11 @@ export default function CarDetail() {
     );
   }
 
+  const title = car.nickname ?? `${car.make} ${car.model}`;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Stack.Screen options={{ title }} />
       <FlatList
         horizontal
         data={car.photos}
