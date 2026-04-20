@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 import type { AdminAuditAction } from '@jdm/shared/admin';
+import { Prisma } from '@prisma/client';
 
 export type RecordAuditInput = {
   actorId: string;
@@ -16,7 +17,7 @@ export const recordAudit = async (input: RecordAuditInput): Promise<void> => {
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
-      metadata: input.metadata ?? null,
+      metadata: (input.metadata ?? Prisma.JsonNull) as Prisma.InputJsonValue,
     },
   });
 };
