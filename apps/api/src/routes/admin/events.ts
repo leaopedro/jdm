@@ -88,6 +88,13 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.get('/events/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const event = await prisma.event.findUnique({ where: { id }, include: { tiers: true } });
+    if (!event) return reply.status(404).send({ error: 'NotFound' });
+    return serializeDetail(event, app.uploads);
+  });
+
   app.get('/events', async () => {
     const events = await prisma.event.findMany({ orderBy: { createdAt: 'desc' } });
     return {
