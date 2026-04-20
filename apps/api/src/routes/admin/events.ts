@@ -87,4 +87,24 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       throw e;
     }
   });
+
+  app.get('/events', async () => {
+    const events = await prisma.event.findMany({ orderBy: { createdAt: 'desc' } });
+    return {
+      items: events.map((e) => ({
+        id: e.id,
+        slug: e.slug,
+        title: e.title,
+        status: e.status,
+        type: e.type,
+        startsAt: e.startsAt.toISOString(),
+        endsAt: e.endsAt.toISOString(),
+        city: e.city,
+        stateCode: e.stateCode,
+        capacity: e.capacity,
+        publishedAt: e.publishedAt?.toISOString() ?? null,
+        createdAt: e.createdAt.toISOString(),
+      })),
+    };
+  });
 };
