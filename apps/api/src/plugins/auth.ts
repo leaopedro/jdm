@@ -1,4 +1,5 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { UserRoleName } from '@jdm/shared/auth';
+import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 
 import { verifyAccessToken, type AccessPayload } from '../services/auth/tokens.js';
@@ -6,6 +7,7 @@ import { verifyAccessToken, type AccessPayload } from '../services/auth/tokens.j
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireRole: (...roles: UserRoleName[]) => preHandlerAsyncHookHandler;
   }
   interface FastifyRequest {
     user?: AccessPayload;
@@ -37,5 +39,16 @@ export const authPlugin = fp(async (app) => {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid token' });
     }
     return undefined;
+  });
+
+  app.decorate('requireRole', (...roles: UserRoleName[]): preHandlerAsyncHookHandler => {
+    const allowed = new Set(roles);
+    return async (request, reply) => {
+      const user = requireUser(request);
+      if (!allowed.has(user.role)) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'insufficient role' });
+      }
+      return undefined;
+    };
   });
 });
