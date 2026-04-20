@@ -1611,5 +1611,6 @@ EOF
 
 - Admin event CRUD → F7a
 - Order/Ticket models + purchase race-condition tests → F4
+- `TicketTier.type` enum (general, vip, pit, etc): **F4 must add this**. Current schema has name, price, and quantity but no tier category field. Needed for Stripe metadata and analytics grouping.
 - Real geolocation for "Perto de mim" → tracked as open edge in handoff
 - Event cover upload by organizers → F7a (uses existing `/uploads/presign` with new `UPLOAD_KINDS` entry)
