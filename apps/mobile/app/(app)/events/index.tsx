@@ -29,16 +29,28 @@ export default function EventsIndex() {
   const [tab, setTab] = useState<TabKey>('upcoming');
   const [items, setItems] = useState<EventSummary[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [myState, setMyState] = useState<StateCode | null | undefined>(undefined);
 
   const load = useCallback(
     async (nextTab: TabKey) => {
-      const stateCode = nextTab === 'nearby' ? (myState ?? undefined) : undefined;
-      const res = await listEvents({
-        window: windowFor(nextTab),
-        stateCode,
-      });
-      setItems(res.items);
+      if (nextTab === 'nearby' && myState === null) {
+        setItems([]);
+        setError(null);
+        return;
+      }
+      try {
+        const stateCode = nextTab === 'nearby' ? (myState ?? undefined) : undefined;
+        const res = await listEvents({
+          window: windowFor(nextTab),
+          stateCode,
+        });
+        setItems(res.items);
+        setError(null);
+      } catch {
+        setItems([]);
+        setError(eventsCopy.errors.load);
+      }
     },
     [myState],
   );
@@ -87,6 +99,17 @@ export default function EventsIndex() {
       {items === null ? (
         <View style={styles.center}>
           <ActivityIndicator />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>{error}</Text>
+          <Pressable onPress={() => void load(tab)} style={styles.retry}>
+            <Text style={styles.retryLabel}>{eventsCopy.list.retry}</Text>
+          </Pressable>
+        </View>
+      ) : tab === 'nearby' && myState === null ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>{eventsCopy.list.noLocation}</Text>
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
@@ -159,4 +182,12 @@ const styles = StyleSheet.create({
   cardText: { padding: theme.spacing.md, gap: theme.spacing.xs },
   title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
   sub: { color: theme.colors.muted },
+  retry: {
+    marginTop: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.border,
+  },
+  retryLabel: { color: theme.colors.fg, fontWeight: '600' },
 });

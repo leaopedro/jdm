@@ -16,8 +16,9 @@ export const eventsCopy = {
   },
   list: {
     empty: 'Nenhum evento encontrado.',
-    loadMore: 'Carregar mais',
     refreshing: 'Atualizando…',
+    noLocation: 'Defina seu estado no perfil para ver eventos perto de você.',
+    retry: 'Tentar novamente',
   },
   detail: {
     venue: 'Local',

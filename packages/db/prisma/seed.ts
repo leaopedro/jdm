@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const daysFromNow = (n: number) => new Date(Date.now() + n * 86_400_000);
+const hours = (n: number) => n * 3_600_000;
 
 const events = [
   {
@@ -10,7 +11,7 @@ const events = [
     title: 'Encontro JDM São Paulo: Maio',
     description: 'Domingo de exposição e rolê no autódromo. Traga seu carro e venha curtir.',
     startsAt: daysFromNow(14),
-    endsAt: daysFromNow(14),
+    endsAt: new Date(daysFromNow(14).getTime() + hours(8)),
     venueName: 'Autódromo de Interlagos',
     venueAddress: 'Av. Senador Teotônio Vilela, 261, Interlagos',
     lat: -23.7014,
@@ -30,7 +31,7 @@ const events = [
     title: 'Drift Day Curitiba',
     description: 'Sessão de drift aberta a inscritos. Vagas limitadas.',
     startsAt: daysFromNow(30),
-    endsAt: daysFromNow(30),
+    endsAt: new Date(daysFromNow(30).getTime() + hours(10)),
     venueName: 'Autódromo Internacional de Curitiba',
     venueAddress: 'Rodovia Deputado João Leopoldo Jacomel, s/n, Pinhais',
     lat: -25.4158,
@@ -47,7 +48,7 @@ const events = [
     title: 'Encontro JDM Rio: Março (encerrado)',
     description: 'Edição anterior.',
     startsAt: daysFromNow(-30),
-    endsAt: daysFromNow(-30),
+    endsAt: new Date(daysFromNow(-30).getTime() + hours(6)),
     venueName: 'Aterro do Flamengo',
     venueAddress: 'Av. Infante Dom Henrique',
     lat: -22.9285,
@@ -64,7 +65,7 @@ const events = [
     title: 'Rascunho (não deve aparecer)',
     description: 'Evento em rascunho.',
     startsAt: daysFromNow(60),
-    endsAt: daysFromNow(60),
+    endsAt: new Date(daysFromNow(60).getTime() + hours(4)),
     venueName: '-',
     venueAddress: '-',
     lat: 0,

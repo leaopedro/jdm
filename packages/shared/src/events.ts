@@ -58,7 +58,7 @@ export const eventListQuerySchema = z.object({
   type: eventTypeSchema.optional(),
   stateCode: stateCodeSchema.optional(),
   city: z.string().trim().min(1).max(100).optional(),
-  cursor: z.string().min(1).optional(),
+  cursor: z.string().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type EventListQuery = z.infer<typeof eventListQuerySchema>;
