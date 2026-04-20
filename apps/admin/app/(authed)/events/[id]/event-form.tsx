@@ -71,7 +71,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           />
         </label>
         <div className="col-span-2">
-          <CoverUploader initialKey={null} initialUrl={event.coverUrl} />
+          <CoverUploader initialKey={event.coverObjectKey} initialUrl={event.coverUrl} />
         </div>
         <label className="col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>

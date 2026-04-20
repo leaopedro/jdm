@@ -17,6 +17,7 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
     slug: e.slug,
     title: e.title,
     coverUrl: e.coverObjectKey ? uploads.buildPublicUrl(e.coverObjectKey) : null,
+    coverObjectKey: e.coverObjectKey,
     startsAt: e.startsAt.toISOString(),
     endsAt: e.endsAt.toISOString(),
     venueName: e.venueName,

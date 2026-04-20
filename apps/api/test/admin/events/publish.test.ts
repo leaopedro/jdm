@@ -87,4 +87,32 @@ describe('POST /admin/events/:id/publish', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('409 when event is cancelled (cancelled cannot be re-published)', async () => {
+    const event = await prisma.event.create({
+      data: {
+        slug: 'ev-cancelled-publish',
+        title: 't',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        lat: 0,
+        lng: 0,
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        capacity: 10,
+        status: 'cancelled',
+      },
+    });
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/publish`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(409);
+  });
 });

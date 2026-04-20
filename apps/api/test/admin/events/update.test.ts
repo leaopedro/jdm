@@ -92,4 +92,36 @@ describe('PATCH /admin/events/:id', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('preserves coverObjectKey when patching an unrelated field', async () => {
+    const event = await prisma.event.create({
+      data: {
+        slug: 'ev-cover-preserved',
+        title: 'Old',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        lat: 0,
+        lng: 0,
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        capacity: 10,
+        status: 'draft',
+        coverObjectKey: 'event_cover/u/abc.jpg',
+      },
+    });
+    const { user } = await createUser({ email: 'o2@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { title: 'New' },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.coverObjectKey).toBe('event_cover/u/abc.jpg');
+  });
 });

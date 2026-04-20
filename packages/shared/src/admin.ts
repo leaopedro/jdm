@@ -87,6 +87,7 @@ export type AdminTicketTier = z.infer<typeof adminTicketTierSchema>;
 // Admin event detail — public detail + admin-only fields, with adminTicketTierSchema tiers.
 export const adminEventDetailSchema = eventDetailSchema.omit({ tiers: true }).extend({
   status: eventStatusSchema,
+  coverObjectKey: z.string().nullable(),
   publishedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
