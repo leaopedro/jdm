@@ -52,6 +52,18 @@ Generate `JWT_ACCESS_SECRET` and `REFRESH_TOKEN_PEPPER` with `openssl rand -base
 - [ ] Verify `/health` + a canary endpoint still return 200.
 - [ ] Record rotation date in this doc's change log below.
 
+## Admin (Vercel)
+
+The admin app runs on Vercel and calls the Railway API from the browser. All `NEXT_PUBLIC_*` vars are exposed to clients.
+
+- `NEXT_PUBLIC_API_BASE_URL` — Railway API base URL. Local dev: `http://localhost:4000`. Production: e.g. `https://api-production.up.railway.app`. Immutable per environment.
+- `SENTRY_DSN` — Sentry ingest URL for the admin project. Exposed to browser.
+- `SENTRY_ORG` — Sentry organization slug (used at build time for source map upload).
+- `SENTRY_PROJECT_ADMIN` — Sentry project identifier for admin (used at build time).
+- `SENTRY_AUTH_TOKEN` — Sentry API token for releasing/source map uploads. Build-time only; never sent to browser.
+
+Note: The Railway API must configure `CORS_ORIGINS` to include the admin domain (Vercel preview URL + production domain) so browser requests succeed.
+
 ## Change log
 
 - (append entries: `YYYY-MM-DD · secret · rotated by`)
