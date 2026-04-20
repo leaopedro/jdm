@@ -56,7 +56,9 @@ export const apiFetch = async <T>(
   const jar = await cookies();
   const access = jar.get('session_access')?.value;
   const h = new Headers(headers);
-  h.set('content-type', 'application/json');
+  // Fastify rejects an empty body when content-type is application/json,
+  // so only set it for requests that actually carry a body.
+  if (rest.body) h.set('content-type', 'application/json');
   if (auth && access) h.set('authorization', `Bearer ${access}`);
 
   let res = await fetch(`${base}${path}`, { ...rest, headers: h, cache: 'no-store' });
