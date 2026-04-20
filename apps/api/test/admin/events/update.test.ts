@@ -1,0 +1,95 @@
+import { prisma } from '@jdm/db';
+import type { FastifyInstance } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { loadEnv } from '../../../src/env.js';
+import { bearer, createUser, makeApp, resetDatabase } from '../../helpers.js';
+
+const mkEvent = () =>
+  prisma.event.create({
+    data: {
+      slug: 'old',
+      title: 'Old',
+      description: 'd',
+      startsAt: new Date(Date.now() + 86400_000),
+      endsAt: new Date(Date.now() + 90000_000),
+      venueName: 'v',
+      venueAddress: 'a',
+      lat: 0,
+      lng: 0,
+      city: 'São Paulo',
+      stateCode: 'SP',
+      type: 'meeting',
+      capacity: 10,
+      status: 'draft',
+    },
+  });
+
+describe('PATCH /admin/events/:id', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('403 for user role', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'u@jdm.test', verified: true, role: 'user' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'user') },
+      payload: { title: 'New' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('applies a partial update and writes audit row', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { title: 'New' },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.title).toBe('New');
+    const audits = await prisma.adminAudit.findMany({ where: { actorId: user.id } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      action: 'event.update',
+      entityType: 'event',
+      entityId: event.id,
+    });
+  });
+
+  it('rejects passing status via PATCH (use publish/cancel actions)', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { status: 'published' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('404 unknown id', async () => {
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/events/missing',
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { title: 'New' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

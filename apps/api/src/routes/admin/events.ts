@@ -1,5 +1,9 @@
 import { prisma } from '@jdm/db';
-import { adminEventCreateSchema, adminEventDetailSchema } from '@jdm/shared/admin';
+import {
+  adminEventCreateSchema,
+  adminEventDetailSchema,
+  adminEventUpdateSchema,
+} from '@jdm/shared/admin';
 import type { Event as DbEvent, TicketTier as DbTier, Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -93,6 +97,44 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     const event = await prisma.event.findUnique({ where: { id }, include: { tiers: true } });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializeDetail(event, app.uploads);
+  });
+
+  app.patch('/events/:id', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const input = adminEventUpdateSchema.parse(request.body);
+
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'NotFound' });
+
+    const data: Prisma.EventUpdateInput = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.description !== undefined) data.description = input.description;
+    if (input.coverObjectKey !== undefined) data.coverObjectKey = input.coverObjectKey;
+    if (input.startsAt !== undefined) data.startsAt = new Date(input.startsAt);
+    if (input.endsAt !== undefined) data.endsAt = new Date(input.endsAt);
+    if (input.venueName !== undefined) data.venueName = input.venueName;
+    if (input.venueAddress !== undefined) data.venueAddress = input.venueAddress;
+    if (input.lat !== undefined) data.lat = input.lat;
+    if (input.lng !== undefined) data.lng = input.lng;
+    if (input.city !== undefined) data.city = input.city;
+    if (input.stateCode !== undefined) data.stateCode = input.stateCode;
+    if (input.type !== undefined) data.type = input.type;
+    if (input.capacity !== undefined) data.capacity = input.capacity;
+
+    const updated = await prisma.event.update({
+      where: { id },
+      data,
+      include: { tiers: true },
+    });
+    await recordAudit({
+      actorId: sub,
+      action: 'event.update',
+      entityType: 'event',
+      entityId: id,
+      metadata: { fields: Object.keys(input) },
+    });
+    return serializeDetail(updated, app.uploads);
   });
 
   app.get('/events', async () => {
