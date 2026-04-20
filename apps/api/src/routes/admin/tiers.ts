@@ -6,6 +6,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
 
+import { serializeAdminTier } from './serializers.js';
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminTierRoutes: FastifyPluginAsync = async (app) => {
   app.post('/events/:eventId/tiers', async (request, reply) => {
@@ -39,18 +41,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
       metadata: { eventId },
     });
 
-    return reply.status(201).send({
-      id: tier.id,
-      name: tier.name,
-      priceCents: tier.priceCents,
-      currency: tier.currency,
-      quantityTotal: tier.quantityTotal,
-      quantitySold: tier.quantitySold,
-      remainingCapacity: Math.max(0, tier.quantityTotal - tier.quantitySold),
-      salesOpenAt: tier.salesOpenAt?.toISOString() ?? null,
-      salesCloseAt: tier.salesCloseAt?.toISOString() ?? null,
-      sortOrder: tier.sortOrder,
-    });
+    return reply.status(201).send(serializeAdminTier(tier));
   });
 
   app.patch('/events/:eventId/tiers/:tierId', async (request, reply) => {
@@ -79,18 +70,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
       entityId: tierId,
       metadata: { fields: Object.keys(input) },
     });
-    return {
-      id: updated.id,
-      name: updated.name,
-      priceCents: updated.priceCents,
-      currency: updated.currency,
-      quantityTotal: updated.quantityTotal,
-      quantitySold: updated.quantitySold,
-      remainingCapacity: Math.max(0, updated.quantityTotal - updated.quantitySold),
-      salesOpenAt: updated.salesOpenAt?.toISOString() ?? null,
-      salesCloseAt: updated.salesCloseAt?.toISOString() ?? null,
-      sortOrder: updated.sortOrder,
-    };
+    return serializeAdminTier(updated);
   });
 
   app.delete('/events/:eventId/tiers/:tierId', async (request, reply) => {

@@ -5,10 +5,9 @@ import { revalidatePath } from 'next/cache';
 
 import { createTier, deleteTier, updateTier } from './admin-api.js';
 import { ApiError } from './api.js';
+import { toNumber } from './form-helpers.js';
 
 export type TierFormState = { error: string | null };
-
-const toNum = (v: FormDataEntryValue | null) => (v == null || v === '' ? NaN : Number(v));
 
 export const createTierAction = async (
   eventId: string,
@@ -17,8 +16,8 @@ export const createTierAction = async (
 ): Promise<TierFormState> => {
   const parsed = adminTierCreateSchema.safeParse({
     name: fd.get('name'),
-    priceCents: toNum(fd.get('priceCents')),
-    quantityTotal: toNum(fd.get('quantityTotal')),
+    priceCents: toNumber(fd.get('priceCents')),
+    quantityTotal: toNumber(fd.get('quantityTotal')),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join('; ') };

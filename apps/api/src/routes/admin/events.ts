@@ -11,6 +11,8 @@ import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
 import type { Uploads } from '../../services/uploads/index.js';
 
+import { serializeAdminTier } from './serializers.js';
+
 const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
   adminEventDetailSchema.parse({
     id: e.id,
@@ -36,18 +38,7 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        priceCents: t.priceCents,
-        currency: t.currency,
-        quantityTotal: t.quantityTotal,
-        quantitySold: t.quantitySold,
-        remainingCapacity: Math.max(0, t.quantityTotal - t.quantitySold),
-        salesOpenAt: t.salesOpenAt?.toISOString() ?? null,
-        salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
-        sortOrder: t.sortOrder,
-      })),
+      .map(serializeAdminTier),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -191,7 +182,23 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/events', async () => {
-    const events = await prisma.event.findMany({ orderBy: { createdAt: 'desc' } });
+    const events = await prisma.event.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        status: true,
+        type: true,
+        startsAt: true,
+        endsAt: true,
+        city: true,
+        stateCode: true,
+        capacity: true,
+        publishedAt: true,
+        createdAt: true,
+      },
+    });
     return {
       items: events.map((e) => ({
         id: e.id,

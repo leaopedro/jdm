@@ -11,15 +11,9 @@ import {
   updateAdminEvent,
 } from './admin-api.js';
 import { ApiError } from './api.js';
+import { toIso, toNumber } from './form-helpers.js';
 
 export type EventFormState = { error: string | null };
-
-const toNumber = (v: FormDataEntryValue | null) => (v == null || v === '' ? NaN : Number(v));
-const toIso = (v: FormDataEntryValue | null) => {
-  if (typeof v !== 'string' || v === '') return '';
-  // HTML datetime-local returns "YYYY-MM-DDTHH:MM" — append :00Z for Zod datetime().
-  return new Date(v).toISOString();
-};
 
 export const createEventAction = async (
   _prev: EventFormState,
