@@ -15,7 +15,18 @@ config.resolver.disableHierarchicalLookup = true;
 // Shared packages use NodeNext-style `.js` imports in `.ts` source. Strip the
 // extension so Metro resolves the TypeScript file.
 const defaultResolve = config.resolver.resolveRequest;
+const stripeWebStub = path.resolve(projectRoot, 'src/stripe/web-stub.tsx');
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Stripe RN is native-only. On web, alias every path under the package to
+  // a stub so the bundle doesn't try to import codegenNativeCommands. Payment
+  // hooks return a graceful error on web; the rest of the app renders normally.
+  if (
+    platform === 'web' &&
+    (moduleName === '@stripe/stripe-react-native' ||
+      moduleName.startsWith('@stripe/stripe-react-native/'))
+  ) {
+    return { type: 'sourceFile', filePath: stripeWebStub };
+  }
   if (moduleName.startsWith('.') && moduleName.endsWith('.js')) {
     try {
       const inner = (ctx, name, plat) =>

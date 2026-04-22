@@ -5,3 +5,5 @@ export * from './cars';
 export * from './uploads';
 export * from './events';
 export * from './admin';
+export * from './orders';
+export * from './tickets';

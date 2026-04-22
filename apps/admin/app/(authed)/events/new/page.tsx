@@ -4,9 +4,19 @@ import { BRAZIL_STATE_CODES } from '@jdm/shared/profile';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { DateTimeField } from '~/components/date-time-field';
 import { createEventAction, type EventFormState } from '~/lib/event-actions';
 
 const initial: EventFormState = { error: null };
+
+// Pre-fill start = today 19:00, end = today 22:00 in the local timezone, in
+// the "YYYY-MM-DDTHH:MM" format that <input type="datetime-local"> expects.
+const defaultDateTimes = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return { starts: `${date}T19:00`, ends: `${date}T22:00` };
+};
 
 const Submit = () => {
   const { pending } = useFormStatus();
@@ -25,17 +35,20 @@ const Field = ({
   label,
   name,
   type = 'text',
+  defaultValue,
   ...rest
 }: {
   label: string;
   name: string;
   type?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) => (
+  defaultValue?: string;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'defaultValue'>) => (
   <label className="flex flex-col gap-1">
     <span className="text-sm text-[color:var(--color-muted)]">{label}</span>
     <input
       name={name}
       type={type}
+      defaultValue={defaultValue}
       {...rest}
       className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
     />
@@ -44,37 +57,58 @@ const Field = ({
 
 export default function NewEventPage() {
   const [state, action] = useActionState(createEventAction, initial);
+  const defaults = defaultDateTimes();
+  const v = state.values ?? {};
 
   return (
     <section className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">Novo evento</h1>
       <form action={action} className="grid grid-cols-2 gap-4">
-        <Field label="Slug" name="slug" required placeholder="encontro-sp-maio" />
-        <Field label="Título" name="title" required />
+        <Field
+          label="Slug"
+          name="slug"
+          required
+          placeholder="encontro-sp-maio"
+          defaultValue={v.slug ?? ''}
+        />
+        <Field label="Título" name="title" required defaultValue={v.title ?? ''} />
         <label className="col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
             name="description"
             required
             rows={5}
+            defaultValue={v.description ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
-        <Field label="Início" name="startsAt" type="datetime-local" required />
-        <Field label="Fim" name="endsAt" type="datetime-local" required />
-        <Field label="Local (nome)" name="venueName" required />
-        <Field label="Endereço" name="venueAddress" required />
-        <Field label="Latitude" name="lat" type="number" step="0.000001" required />
-        <Field label="Longitude" name="lng" type="number" step="0.000001" required />
-        <Field label="Cidade" name="city" required />
+        <DateTimeField
+          label="Início"
+          name="startsAt"
+          required
+          defaultValue={v.startsAt ?? defaults.starts}
+        />
+        <DateTimeField
+          label="Fim"
+          name="endsAt"
+          required
+          defaultValue={v.endsAt ?? defaults.ends}
+        />
+        <Field label="Local (opcional)" name="venueName" defaultValue={v.venueName ?? ''} />
+        <Field
+          label="Endereço (opcional)"
+          name="venueAddress"
+          defaultValue={v.venueAddress ?? ''}
+        />
+        <Field label="Cidade (opcional)" name="city" defaultValue={v.city ?? ''} />
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Estado</span>
+          <span className="text-sm text-[color:var(--color-muted)]">Estado (opcional)</span>
           <select
             name="stateCode"
-            required
-            defaultValue="SP"
+            defaultValue={v.stateCode ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
+            <option value="">—</option>
             {BRAZIL_STATE_CODES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -87,7 +121,7 @@ export default function NewEventPage() {
           <select
             name="type"
             required
-            defaultValue="meeting"
+            defaultValue={v.type ?? 'meeting'}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
             <option value="meeting">Encontro</option>
@@ -95,7 +129,14 @@ export default function NewEventPage() {
             <option value="other">Outro</option>
           </select>
         </label>
-        <Field label="Capacidade" name="capacity" type="number" min={0} required />
+        <Field
+          label="Capacidade"
+          name="capacity"
+          type="number"
+          min={0}
+          required
+          defaultValue={v.capacity ?? ''}
+        />
         <input type="hidden" name="coverObjectKey" value="" />
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">

@@ -1,3 +1,5 @@
+import { StripeProvider } from '@stripe/stripe-react-native';
+import Constants from 'expo-constants';
 import { Redirect, Slot, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -42,10 +44,20 @@ export default function RootLayout() {
   useEffect(() => {
     initSentry();
   }, []);
+  const stripeKey =
+    (Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined)
+      ?.stripePublishableKey ?? '';
+  if (!stripeKey && __DEV__) {
+    // Not thrown: dev builds without Stripe configured should still run
+    // screens unrelated to payment. StripeProvider just becomes a no-op.
+    console.warn('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set — payments will fail.');
+  }
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <Gate />
-    </AuthProvider>
+    <StripeProvider publishableKey={stripeKey} merchantIdentifier="merchant.com.jdmexperience.app">
+      <AuthProvider>
+        <StatusBar style="light" />
+        <Gate />
+      </AuthProvider>
+    </StripeProvider>
   );
 }

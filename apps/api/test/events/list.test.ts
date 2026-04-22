@@ -26,8 +26,6 @@ const makeEvent = async (
       endsAt: overrides.endsAt ?? new Date(Date.now() + 7 * 86400_000 + 3600_000),
       venueName: 'Autódromo',
       venueAddress: 'Rua X, 100',
-      lat: -23.55,
-      lng: -46.63,
       city: overrides.city ?? 'São Paulo',
       stateCode: overrides.stateCode ?? 'SP',
       type: overrides.type ?? 'meeting',

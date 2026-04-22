@@ -1,8 +1,10 @@
-import type { EventDetail } from '@jdm/shared/events';
-import { useLocalSearchParams } from 'expo-router';
+import type { EventDetail, TicketTier } from '@jdm/shared/events';
+import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Linking,
   Pressable,
@@ -13,15 +15,21 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
+import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { eventsCopy } from '~/copy/events';
+import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
+  const router = useRouter();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -35,9 +43,51 @@ export default function EventDetailScreen() {
   }, [slug]);
 
   const openMap = (e: EventDetail) => {
-    const q = encodeURIComponent(`${e.venueName}, ${e.venueAddress}`);
-    const url = `https://www.google.com/maps/search/?api=1&query=${q}&ll=${e.lat},${e.lng}`;
-    void Linking.openURL(url);
+    const parts = [e.venueName, e.venueAddress, e.city, e.stateCode].filter(Boolean);
+    if (parts.length === 0) return;
+    const q = encodeURIComponent(parts.join(', '));
+    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
+  };
+
+  const buy = async (tier: TicketTier) => {
+    if (!event) return;
+    setPaying(true);
+    try {
+      const order = await createOrder({ eventId: event.id, tierId: tier.id, method: 'card' });
+
+      const init = await initPaymentSheet({
+        merchantDisplayName: 'JDM Experience',
+        paymentIntentClientSecret: order.clientSecret,
+        applePay: { merchantCountryCode: 'BR' },
+        googlePay: { merchantCountryCode: 'BR', testEnv: true },
+        defaultBillingDetails: {},
+      });
+      if (init.error) {
+        Alert.alert(ticketsCopy.purchase.error, init.error.message);
+        return;
+      }
+
+      const sheet = await presentPaymentSheet();
+      if (sheet.error) {
+        if (sheet.error.code === PaymentSheetError.Canceled) {
+          Alert.alert(ticketsCopy.purchase.cancelled);
+        } else {
+          Alert.alert(ticketsCopy.purchase.error, sheet.error.message);
+        }
+        return;
+      }
+
+      Alert.alert(ticketsCopy.purchase.success, undefined, [
+        {
+          text: ticketsCopy.purchase.successCta,
+          onPress: () => router.push('/tickets' as never),
+        },
+      ]);
+    } catch {
+      Alert.alert(ticketsCopy.purchase.error);
+    } finally {
+      setPaying(false);
+    }
   };
 
   if (error) {
@@ -55,6 +105,8 @@ export default function EventDetailScreen() {
     );
   }
 
+  const selectedTier = event.tiers.find((t) => t.id === selectedTierId) ?? null;
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {event.coverUrl ? (
@@ -67,43 +119,63 @@ export default function EventDetailScreen() {
         <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
-        <Text style={styles.body}>{event.venueName}</Text>
-        <Text style={styles.sub}>
-          {event.venueAddress}, {event.city}/{event.stateCode}
-        </Text>
-        <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
-          <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
-        </Pressable>
-      </View>
+      {(() => {
+        const locationLine = [event.venueAddress, event.city, event.stateCode]
+          .filter(Boolean)
+          .join(', ');
+        const hasAny = event.venueName || locationLine;
+        if (!hasAny) return null;
+        return (
+          <View style={styles.section}>
+            <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
+            {event.venueName ? <Text style={styles.body}>{event.venueName}</Text> : null}
+            {locationLine ? <Text style={styles.sub}>{locationLine}</Text> : null}
+            <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
+              <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
+            </Pressable>
+          </View>
+        );
+      })()}
 
       <View style={styles.section}>
         <Text style={styles.body}>{event.description}</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.h2}>{eventsCopy.detail.tiers}</Text>
+        <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
         {event.tiers.map((t) => {
           const soldOut = t.remainingCapacity === 0;
+          const isSelected = selectedTierId === t.id;
           return (
-            <View key={t.id} style={styles.tier}>
+            <Pressable
+              key={t.id}
+              onPress={() => !soldOut && setSelectedTierId(t.id)}
+              style={[
+                styles.tier,
+                isSelected && styles.tierSelected,
+                soldOut && styles.tierDisabled,
+              ]}
+            >
               <View style={styles.tierTop}>
                 <Text style={styles.tierName}>{t.name}</Text>
                 <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
               </View>
               <Text style={styles.sub}>
                 {soldOut
-                  ? eventsCopy.detail.soldOut
+                  ? ticketsCopy.purchase.soldOut
                   : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
               </Text>
-            </View>
+            </Pressable>
           );
         })}
       </View>
 
       <View style={styles.section}>
-        <Button label={eventsCopy.detail.buyDisabled} onPress={() => undefined} disabled />
+        <Button
+          label={paying ? ticketsCopy.purchase.paying : ticketsCopy.purchase.confirm}
+          onPress={() => selectedTier && void buy(selectedTier)}
+          disabled={!selectedTier || paying}
+        />
       </View>
     </ScrollView>
   );
@@ -136,10 +208,15 @@ const styles = StyleSheet.create({
   mapLabel: { color: theme.colors.fg },
   tier: {
     paddingVertical: theme.spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
   },
+  tierSelected: { borderColor: theme.colors.fg, borderWidth: 2 },
+  tierDisabled: { opacity: 0.5 },
   tierTop: { flexDirection: 'row', justifyContent: 'space-between' },
   tierName: { color: theme.colors.fg, fontWeight: '600' },
   tierPrice: { color: theme.colors.fg },

@@ -42,6 +42,8 @@ model User {
   verificationTokens  VerificationToken[]
   passwordResetTokens PasswordResetToken[]
   cars                Car[]
+  orders              Order[]
+  tickets             Ticket[]
 
   @@index([createdAt])
 }
@@ -152,12 +154,10 @@ model Event {
   coverObjectKey String?   @db.VarChar(300)
   startsAt     DateTime
   endsAt       DateTime
-  venueName    String      @db.VarChar(140)
-  venueAddress String      @db.VarChar(300)
-  lat          Float
-  lng          Float
-  city         String      @db.VarChar(100)
-  stateCode    String      @db.VarChar(2)
+  venueName    String?     @db.VarChar(140)
+  venueAddress String?     @db.VarChar(300)
+  city         String?     @db.VarChar(100)
+  stateCode    String?     @db.VarChar(2)
   type         EventType
   status       EventStatus @default(draft)
   capacity     Int
@@ -165,7 +165,9 @@ model Event {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  tiers TicketTier[]
+  tiers   TicketTier[]
+  orders  Order[]
+  tickets Ticket[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -185,7 +187,9 @@ model TicketTier {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders  Order[]
+  tickets Ticket[]
 
   @@index([eventId, sortOrder])
 }
@@ -201,5 +205,94 @@ model AdminAudit {
 
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+enum PaymentMethod {
+  card
+  pix
+}
+
+enum PaymentProvider {
+  stripe
+  abacatepay
+}
+
+enum OrderStatus {
+  pending
+  paid
+  failed
+  refunded
+  expired
+}
+
+enum TicketStatus {
+  valid
+  used
+  revoked
+}
+
+enum TicketSource {
+  purchase
+  premium_grant
+  comp
+}
+
+model Order {
+  id              String          @id @default(cuid())
+  userId          String
+  eventId         String
+  tierId          String
+  amountCents     Int
+  currency        String          @default("BRL") @db.VarChar(3)
+  method          PaymentMethod
+  provider        PaymentProvider
+  providerRef     String?         @db.VarChar(200)
+  status          OrderStatus     @default(pending)
+  paidAt          DateTime?
+  failedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event  Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tier   TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  ticket Ticket?
+
+  @@unique([provider, providerRef])
+  @@index([userId, createdAt])
+  @@index([eventId, status])
+  @@index([status, createdAt])
+}
+
+model Ticket {
+  id        String       @id @default(cuid())
+  orderId   String?      @unique
+  userId    String
+  eventId   String
+  tierId    String
+  source    TicketSource @default(purchase)
+  status    TicketStatus @default(valid)
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  order Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([eventId])
+}
+
+model PaymentWebhookEvent {
+  id        String          @id @default(cuid())
+  provider  PaymentProvider
+  eventId   String          @db.VarChar(200)
+  payload   Json
+  createdAt DateTime        @default(now())
+
+  @@unique([provider, eventId])
   @@index([createdAt])
 }

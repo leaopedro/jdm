@@ -14,8 +14,6 @@ const validBody = {
   endsAt: new Date(Date.now() + 7 * 86400_000 + 6 * 3600_000).toISOString(),
   venueName: 'Autódromo',
   venueAddress: 'Rua X, 100',
-  lat: -23.55,
-  lng: -46.63,
   city: 'São Paulo',
   stateCode: 'SP',
   type: 'meeting',

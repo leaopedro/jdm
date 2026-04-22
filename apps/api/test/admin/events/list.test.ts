@@ -16,8 +16,6 @@ const mkEvent = (slug: string, status: 'draft' | 'published' | 'cancelled') =>
       endsAt: new Date(Date.now() + 7 * 86400_000 + 3600_000),
       venueName: 'v',
       venueAddress: 'a',
-      lat: 0,
-      lng: 0,
       city: 'São Paulo',
       stateCode: 'SP',
       type: 'meeting',

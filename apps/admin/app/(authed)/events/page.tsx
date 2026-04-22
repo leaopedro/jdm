@@ -42,9 +42,7 @@ export default async function EventsPage() {
                 <StatusBadge status={e.status} />
               </td>
               <td className="text-sm">{fmtDate(e.startsAt)}</td>
-              <td className="text-sm">
-                {e.city}/{e.stateCode}
-              </td>
+              <td className="text-sm">{[e.city, e.stateCode].filter(Boolean).join('/') || '—'}</td>
             </tr>
           ))}
           {items.length === 0 ? (

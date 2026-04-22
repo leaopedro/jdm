@@ -16,9 +16,13 @@ import { carRoutes } from './routes/cars.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
 import { eventRoutes } from './routes/events.js';
 import { healthRoutes } from './routes/health.js';
+import { meTicketsRoutes } from './routes/me-tickets.js';
 import { meRoutes } from './routes/me.js';
+import { orderRoutes } from './routes/orders.js';
+import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 
@@ -27,10 +31,18 @@ declare module 'fastify' {
     mailer: Mailer;
     env: Env;
     uploads: Uploads;
+    stripe: StripeClient;
   }
 }
 
-export const buildApp = async (env: Env): Promise<FastifyInstance> => {
+export type BuildAppOverrides = {
+  stripe?: StripeClient;
+};
+
+export const buildApp = async (
+  env: Env,
+  overrides: BuildAppOverrides = {},
+): Promise<FastifyInstance> => {
   const app = Fastify({
     logger: buildLoggerOptions(env),
     disableRequestLogging: false,
@@ -40,6 +52,7 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   app.decorate('mailer', buildMailer(env));
   app.decorate('env', env);
   app.decorate('uploads', buildUploads(env));
+  app.decorate('stripe', overrides.stripe ?? buildStripe(env));
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
@@ -52,9 +65,12 @@ export const buildApp = async (env: Env): Promise<FastifyInstance> => {
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(meTicketsRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
+  await app.register(orderRoutes);
+  await app.register(stripeWebhookRoutes);
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
 

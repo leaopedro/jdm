@@ -1,0 +1,28 @@
+export const ticketsCopy = {
+  tab: 'Ingressos',
+  list: {
+    empty: 'Você ainda não tem ingressos.',
+    loading: 'Carregando seus ingressos...',
+    upcoming: 'Próximos',
+    past: 'Anteriores',
+  },
+  detail: {
+    title: 'Seu ingresso',
+    brightness: 'Aumente o brilho da tela para o QR ser lido com facilidade.',
+    used: 'Utilizado',
+    revoked: 'Cancelado',
+    valid: 'Válido',
+    notFound: 'Ingresso não encontrado.',
+  },
+  purchase: {
+    pickTier: 'Escolha um ingresso',
+    confirm: 'Confirmar compra',
+    paying: 'Processando pagamento...',
+    success: 'Ingresso confirmado!',
+    successCta: 'Ver ingresso',
+    soldOut: 'Esgotado',
+    alreadyHas: 'Você já tem um ingresso para este evento.',
+    error: 'Não conseguimos concluir seu pagamento. Tente novamente.',
+    cancelled: 'Pagamento cancelado.',
+  },
+};

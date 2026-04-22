@@ -56,8 +56,6 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
     endsAt: e.endsAt.toISOString(),
     venueName: e.venueName,
     venueAddress: e.venueAddress,
-    lat: e.lat,
-    lng: e.lng,
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,

@@ -6,6 +6,7 @@ import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { CoverUploader } from '~/components/cover-uploader';
+import { DateTimeField } from '~/components/date-time-field';
 import {
   cancelEventAction,
   publishEventAction,
@@ -82,75 +83,40 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
+        <DateTimeField label="Início" name="startsAt" defaultValue={isoToLocal(event.startsAt)} />
+        <DateTimeField label="Fim" name="endsAt" defaultValue={isoToLocal(event.endsAt)} />
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Início</span>
-          <input
-            name="startsAt"
-            type="datetime-local"
-            defaultValue={isoToLocal(event.startsAt)}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Fim</span>
-          <input
-            name="endsAt"
-            type="datetime-local"
-            defaultValue={isoToLocal(event.endsAt)}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Local</span>
+          <span className="text-sm text-[color:var(--color-muted)]">Local (opcional)</span>
           <input
             name="venueName"
-            defaultValue={event.venueName}
+            defaultValue={event.venueName ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Endereço</span>
+          <span className="text-sm text-[color:var(--color-muted)]">Endereço (opcional)</span>
           <input
             name="venueAddress"
-            defaultValue={event.venueAddress}
+            defaultValue={event.venueAddress ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Latitude</span>
-          <input
-            name="lat"
-            type="number"
-            step="0.000001"
-            defaultValue={event.lat}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Longitude</span>
-          <input
-            name="lng"
-            type="number"
-            step="0.000001"
-            defaultValue={event.lng}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Cidade</span>
+          <span className="text-sm text-[color:var(--color-muted)]">Cidade (opcional)</span>
           <input
             name="city"
-            defaultValue={event.city}
+            defaultValue={event.city ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Estado</span>
+          <span className="text-sm text-[color:var(--color-muted)]">Estado (opcional)</span>
           <select
             name="stateCode"
-            defaultValue={event.stateCode}
+            defaultValue={event.stateCode ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
+            <option value="">—</option>
             {BRAZIL_STATE_CODES.map((s) => (
               <option key={s} value={s}>
                 {s}
