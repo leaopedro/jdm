@@ -1,9 +1,6 @@
-import { authResponseSchema } from '@jdm/shared/auth';
 import { healthResponseSchema, type HealthResponse } from '@jdm/shared/health';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { ZodType } from 'zod';
-
-import { writeSession } from './auth-session';
 
 const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -19,33 +16,25 @@ export class ApiError extends Error {
 
 type FetchOptions = RequestInit & { auth?: boolean };
 
-// Trade the refresh cookie for a fresh access token. Writes new session
-// cookies best-effort: in server actions / route handlers the set persists;
-// in server components it throws and we swallow it — the new token is still
-// valid for this single request.
+// Refresh via the Next.js route handler so cookies can always be written,
+// even when called from a Server Component (where direct cookie writes fail).
 const refreshAccessToken = async (): Promise<string | null> => {
-  const jar = await cookies();
-  const refreshToken = jar.get('session_refresh')?.value;
-  if (!refreshToken) return null;
-  const res = await fetch(`${base}/auth/refresh`, {
+  const reqHeaders = await headers();
+  const host = reqHeaders.get('host') ?? 'localhost:3000';
+  const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  const cookie = reqHeaders.get('cookie') ?? '';
+  const res = await fetch(`${proto}://${host}/api/auth/refresh`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    headers: { cookie },
     cache: 'no-store',
   });
   if (!res.ok) return null;
-  let parsed;
   try {
-    parsed = authResponseSchema.parse(await res.json());
+    const { accessToken } = (await res.json()) as { accessToken: string };
+    return accessToken ?? null;
   } catch {
     return null;
   }
-  try {
-    await writeSession(parsed);
-  } catch {
-    // cookies are read-only in server components.
-  }
-  return parsed.accessToken;
 };
 
 export const apiFetch = async <T>(
