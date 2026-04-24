@@ -117,7 +117,7 @@ describe('POST /admin/tickets/check-in', () => {
   });
 
   it('writes a ticket.check_in audit row on admit (once)', async () => {
-    const { event, code } = await seedTicket();
+    const { event, code, ticket } = await seedTicket();
     const { user: actor } = await createUser({
       email: 'a-audit@jdm.test',
       verified: true,
@@ -133,6 +133,8 @@ describe('POST /admin/tickets/check-in', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.actorId).toBe(actor.id);
     expect(rows[0]!.entityType).toBe('ticket');
+    expect(rows[0]!.entityId).toBe(ticket.id);
+    expect(rows[0]!.metadata).toEqual({ eventId: event.id });
   });
 
   it('idempotent: already_used on second call does NOT write a second audit row', async () => {
