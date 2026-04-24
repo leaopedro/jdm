@@ -1,4 +1,9 @@
-import { ticketCheckInRequestSchema, ticketCheckInResponseSchema } from '@jdm/shared/check-in';
+import { prisma } from '@jdm/db';
+import {
+  checkInEventsResponseSchema,
+  ticketCheckInRequestSchema,
+  ticketCheckInResponseSchema,
+} from '@jdm/shared/check-in';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
@@ -68,5 +73,41 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
       }
       throw err;
     }
+  });
+
+  app.get('/check-in/events', async (_request, reply) => {
+    const cutoff = new Date(Date.now() - 24 * 3600_000);
+    const events = await prisma.event.findMany({
+      where: {
+        status: 'published',
+        endsAt: { gte: cutoff },
+      },
+      orderBy: [{ startsAt: 'asc' }],
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        startsAt: true,
+        endsAt: true,
+        venueName: true,
+        city: true,
+        stateCode: true,
+      },
+    });
+
+    return reply.send(
+      checkInEventsResponseSchema.parse({
+        items: events.map((e) => ({
+          id: e.id,
+          slug: e.slug,
+          title: e.title,
+          startsAt: e.startsAt.toISOString(),
+          endsAt: e.endsAt.toISOString(),
+          venueName: e.venueName,
+          city: e.city,
+          stateCode: e.stateCode,
+        })),
+      }),
+    );
   });
 };
