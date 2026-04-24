@@ -7,6 +7,13 @@ import {
   type AdminTierUpdate,
   adminTicketTierSchema,
 } from '@jdm/shared/admin';
+import {
+  checkInEventsResponseSchema,
+  ticketCheckInRequestSchema,
+  ticketCheckInResponseSchema,
+  type TicketCheckInRequest,
+  type TicketCheckInResponse,
+} from '@jdm/shared/check-in';
 
 import { apiFetch } from './api';
 
@@ -60,4 +67,14 @@ export const deleteTier = (eventId: string, tierId: string) =>
   apiFetch(`/admin/events/${eventId}/tiers/${tierId}`, {
     method: 'DELETE',
     schema: adminTicketTierSchema, // returns 204; apiFetch returns undefined
+  });
+
+export const listCheckInEvents = () =>
+  apiFetch('/admin/check-in/events', { schema: checkInEventsResponseSchema });
+
+export const checkInTicket = (input: TicketCheckInRequest): Promise<TicketCheckInResponse> =>
+  apiFetch('/admin/tickets/check-in', {
+    method: 'POST',
+    body: JSON.stringify(ticketCheckInRequestSchema.parse(input)),
+    schema: ticketCheckInResponseSchema,
   });
