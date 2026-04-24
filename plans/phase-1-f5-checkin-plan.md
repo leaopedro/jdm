@@ -410,14 +410,16 @@ git commit -m "feat(shared): add check-in request/response schemas"
 
 ---
 
-## Task 5: Check-in service (TDD)
+## ✅ Task 5: Check-in service (TDD)
 
 **Files:**
 
 - Create: `apps/api/src/services/tickets/check-in.ts`
 - Create: `apps/api/test/tickets/check-in.test.ts`
 
-- [ ] **Step 1: Write the failing service tests**
+- [x] **Step 1: Write the failing service tests**
+
+> note: the planned test literal `type: 'meet'` does not match the Prisma `EventType` enum (`meeting | drift | other`); changed to `'meeting'` in both event creations.
 
 Create `apps/api/test/tickets/check-in.test.ts`:
 
@@ -582,7 +584,7 @@ describe('checkInTicket', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 ```bash
 pnpm --filter @jdm/api test -- tickets/check-in.test.ts
@@ -590,7 +592,7 @@ pnpm --filter @jdm/api test -- tickets/check-in.test.ts
 
 Expected: FAIL — module `../../src/services/tickets/check-in.js` does not exist.
 
-- [ ] **Step 3: Implement the service**
+- [x] **Step 3: Implement the service**
 
 Create `apps/api/src/services/tickets/check-in.ts`:
 
@@ -679,7 +681,7 @@ export const checkInTicket = async (
 };
 ```
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 ```bash
 pnpm --filter @jdm/api test -- tickets/check-in.test.ts
@@ -687,7 +689,7 @@ pnpm --filter @jdm/api test -- tickets/check-in.test.ts
 
 Expected: PASS, 8 tests (1 admit, 1 idempotent, 2 invalid-code, 1 not-found, 1 wrong-event, 1 revoked, 1 concurrency).
 
-- [ ] **Step 5: Run the full API suite to confirm no regressions**
+- [x] **Step 5: Run the full API suite to confirm no regressions**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -695,7 +697,9 @@ pnpm --filter @jdm/api test
 
 Expected: 151 + 8 = 159 tests, all green.
 
-- [ ] **Step 6: Commit**
+> note: actual observed total was 160 passing tests across 42 files (baseline had 152 before this task, not 151).
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/services/tickets/check-in.ts apps/api/test/tickets/check-in.test.ts
@@ -837,14 +841,16 @@ git commit -m "refactor(api): split admin routes into staff-scoped and organizer
 
 ---
 
-## Task 7: `POST /admin/tickets/check-in` route (TDD)
+## ✅ Task 7: `POST /admin/tickets/check-in` route (TDD)
 
 **Files:**
 
 - Modify: `apps/api/src/routes/admin/check-in.ts`
 - Create: `apps/api/test/admin/check-in.route.test.ts`
 
-- [ ] **Step 1: Write the failing route tests**
+- [x] **Step 1: Write the failing route tests**
+
+> note: `res.json() as T` casts hit `@typescript-eslint/no-unsafe-assignment`. Used the project's `res.json<T>()` generic form instead.
 
 Create `apps/api/test/admin/check-in.route.test.ts`:
 
@@ -1100,7 +1106,7 @@ describe('POST /admin/tickets/check-in', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 
 ```bash
 pnpm --filter @jdm/api test -- admin/check-in.route.test.ts
@@ -1108,7 +1114,7 @@ pnpm --filter @jdm/api test -- admin/check-in.route.test.ts
 
 Expected: FAIL — route returns 404 because the placeholder plugin registers nothing.
 
-- [ ] **Step 3: Implement the route**
+- [x] **Step 3: Implement the route**
 
 Replace `apps/api/src/routes/admin/check-in.ts`:
 
@@ -1187,7 +1193,7 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
 };
 ```
 
-- [ ] **Step 4: Run tests to confirm green**
+- [x] **Step 4: Run tests to confirm green**
 
 ```bash
 pnpm --filter @jdm/api test -- admin/check-in.route.test.ts
@@ -1195,7 +1201,7 @@ pnpm --filter @jdm/api test -- admin/check-in.route.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Full suite**
+- [x] **Step 5: Full suite**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -1203,7 +1209,7 @@ pnpm --filter @jdm/api test
 
 Expected: all tests green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/admin/check-in.ts apps/api/test/admin/check-in.route.test.ts
@@ -1212,14 +1218,14 @@ git commit -m "feat(api): POST /admin/tickets/check-in with idempotent admit + a
 
 ---
 
-## Task 8: `GET /admin/check-in/events` route (TDD)
+## ✅ Task 8: `GET /admin/check-in/events` route (TDD)
 
 **Files:**
 
 - Modify: `apps/api/src/routes/admin/check-in.ts`
 - Create: `apps/api/test/admin/check-in-events.route.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `apps/api/test/admin/check-in-events.route.test.ts`:
 
@@ -1318,7 +1324,7 @@ describe('GET /admin/check-in/events', () => {
 });
 ```
 
-- [ ] **Step 2: Confirm they fail**
+- [x] **Step 2: Confirm they fail**
 
 ```bash
 pnpm --filter @jdm/api test -- admin/check-in-events.route.test.ts
@@ -1326,7 +1332,7 @@ pnpm --filter @jdm/api test -- admin/check-in-events.route.test.ts
 
 Expected: FAIL — route returns 404.
 
-- [ ] **Step 3: Implement the list endpoint**
+- [x] **Step 3: Implement the list endpoint**
 
 Edit `apps/api/src/routes/admin/check-in.ts`. Add the following imports at the top (alongside existing):
 
@@ -1375,7 +1381,7 @@ app.get('/check-in/events', async (_request, reply) => {
 });
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 pnpm --filter @jdm/api test -- admin/check-in-events.route.test.ts
@@ -1383,7 +1389,7 @@ pnpm --filter @jdm/api test -- admin/check-in-events.route.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Full suite**
+- [x] **Step 5: Full suite**
 
 ```bash
 pnpm --filter @jdm/api test
@@ -1391,7 +1397,7 @@ pnpm --filter @jdm/api test
 
 Expected: all tests green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/admin/check-in.ts apps/api/test/admin/check-in-events.route.test.ts
@@ -1611,13 +1617,13 @@ git commit -m "feat(admin): check-in API client functions"
 
 ---
 
-## Task 12: `/check-in` event picker page
+## ✅ Task 12: `/check-in` event picker page
 
 **Files:**
 
 - Create: `apps/admin/app/(authed)/check-in/page.tsx`
 
-- [ ] **Step 1: Write the page**
+- [x] **Step 1: Write the page**
 
 Create `apps/admin/app/(authed)/check-in/page.tsx`:
 
@@ -1674,7 +1680,7 @@ export default async function CheckInIndexPage() {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 ```bash
 pnpm --filter @jdm/admin typecheck
@@ -1682,16 +1688,18 @@ pnpm --filter @jdm/admin typecheck
 
 Expected: clean.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/admin/app/(authed)/check-in/page.tsx
 git commit -m "feat(admin): /check-in event picker page"
 ```
 
+> note: adapted hover class from `hover:bg-[color:var(--color-surface-hover)]` to `hover:opacity-80` (variable does not exist in theme)
+
 ---
 
-## Task 13: Scanner page with `@zxing/browser`
+## ✅ Task 13: Scanner page with `@zxing/browser`
 
 **Files:**
 
@@ -1700,7 +1708,7 @@ git commit -m "feat(admin): /check-in event picker page"
 - Create: `apps/admin/app/(authed)/check-in/[eventId]/page.tsx`
 - Create: `apps/admin/app/(authed)/check-in/[eventId]/scanner.tsx`
 
-- [ ] **Step 1: Add the QR decoder dep**
+- [x] **Step 1: Add the QR decoder dep**
 
 Edit `apps/admin/package.json`. Add to `dependencies`:
 
@@ -1715,7 +1723,7 @@ Then install:
 pnpm --filter @jdm/admin install
 ```
 
-- [ ] **Step 2: Server action wrapping the API call**
+- [x] **Step 2: Server action wrapping the API call**
 
 Create `apps/admin/src/lib/check-in-actions.ts`:
 
@@ -1757,7 +1765,7 @@ export const submitCheckIn = async (
 };
 ```
 
-- [ ] **Step 3: Server page shell**
+- [x] **Step 3: Server page shell**
 
 Create `apps/admin/app/(authed)/check-in/[eventId]/page.tsx`:
 
@@ -1792,7 +1800,7 @@ export default async function CheckInScannerPage({
 }
 ```
 
-- [ ] **Step 4: Client scanner component**
+- [x] **Step 4: Client scanner component**
 
 Create `apps/admin/app/(authed)/check-in/[eventId]/scanner.tsx`:
 
@@ -1953,7 +1961,7 @@ function friendlyError(code: string): { title: string; subtitle?: string } {
 }
 ```
 
-- [ ] **Step 5: Typecheck + lint**
+- [x] **Step 5: Typecheck + lint**
 
 ```bash
 pnpm --filter @jdm/admin typecheck
@@ -1962,7 +1970,7 @@ pnpm --filter @jdm/admin lint
 
 Expected: both clean.
 
-- [ ] **Step 6: Build verification**
+- [x] **Step 6: Build verification**
 
 ```bash
 pnpm --filter @jdm/admin build
@@ -1970,7 +1978,7 @@ pnpm --filter @jdm/admin build
 
 Expected: build completes without errors (confirms the @zxing/browser import resolves under webpack).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/admin/package.json apps/admin/src/lib/check-in-actions.ts apps/admin/app/(authed)/check-in apps/admin/../pnpm-lock.yaml
