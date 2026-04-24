@@ -14,6 +14,7 @@ export const loginAction = async (_prev: LoginState, formData: FormData): Promis
     password: formData.get('password'),
   });
   if (!parsed.success) return { error: 'Email ou senha inválidos.' };
+  let role: string;
   try {
     const res = await apiFetch('/auth/login', {
       method: 'POST',
@@ -25,6 +26,7 @@ export const loginAction = async (_prev: LoginState, formData: FormData): Promis
       return { error: 'Conta sem permissão de administrador.' };
     }
     await writeSession(res);
+    role = res.user.role;
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       return { error: 'Credenciais inválidas.' };
@@ -34,7 +36,7 @@ export const loginAction = async (_prev: LoginState, formData: FormData): Promis
     }
     return { error: 'Erro ao entrar. Tente novamente.' };
   }
-  redirect('/events');
+  redirect(role === 'staff' ? '/check-in' : '/events');
 };
 
 export const logoutAction = async (): Promise<void> => {
