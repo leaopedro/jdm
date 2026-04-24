@@ -22,7 +22,7 @@ export const loginAction = async (_prev: LoginState, formData: FormData): Promis
       schema: authResponseSchema,
       auth: false,
     });
-    if (res.user.role !== 'organizer' && res.user.role !== 'admin') {
+    if (res.user.role !== 'organizer' && res.user.role !== 'admin' && res.user.role !== 'staff') {
       return { error: 'Conta sem permissão de administrador.' };
     }
     await writeSession(res);
