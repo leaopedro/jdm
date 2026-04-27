@@ -10,6 +10,7 @@
     "./admin": "./src/admin.ts",
     "./auth": "./src/auth.ts",
     "./cars": "./src/cars.ts",
+    "./check-in": "./src/check-in.ts",
     "./events": "./src/events.ts",
     "./health": "./src/health.ts",
     "./ids": "./src/ids.ts",

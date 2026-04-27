@@ -9,7 +9,7 @@ type DbUser = {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'organizer' | 'admin';
+  role: 'user' | 'organizer' | 'admin' | 'staff';
   emailVerifiedAt: Date | null;
   createdAt: Date;
   bio: string | null;

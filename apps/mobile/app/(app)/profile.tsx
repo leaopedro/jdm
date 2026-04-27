@@ -18,13 +18,16 @@ import {
 } from 'react-native';
 
 import { getProfile, updateProfile } from '~/api/profile';
+import { useAuth } from '~/auth/context';
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
+import { authCopy } from '~/copy/auth';
 import { profileCopy } from '~/copy/profile';
 import { pickAndUpload } from '~/lib/upload-image';
 import { theme } from '~/theme';
 
 export default function ProfileScreen() {
+  const { logout } = useAuth();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [uploading, setUploading] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -160,6 +163,7 @@ export default function ProfileScreen() {
 
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <Button label={profileCopy.profile.save} onPress={() => void onSave()} />
+      <Button label={authCopy.common.logout} variant="secondary" onPress={() => void logout()} />
     </ScrollView>
   );
 }

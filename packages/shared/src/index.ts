@@ -7,3 +7,4 @@ export * from './events';
 export * from './admin';
 export * from './orders';
 export * from './tickets';
+export * from './check-in';

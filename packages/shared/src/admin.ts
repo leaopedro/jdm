@@ -17,6 +17,7 @@ export const adminAuditActionSchema = z.enum([
   'tier.create',
   'tier.update',
   'tier.delete',
+  'ticket.check_in',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 

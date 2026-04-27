@@ -13,7 +13,7 @@ export const emailSchema = z.string().email().max(254);
 
 export const passwordSchema = z.string().min(MIN_PASSWORD_LENGTH).max(200);
 
-export const userRoleSchema = z.enum(['user', 'organizer', 'admin']);
+export const userRoleSchema = z.enum(['user', 'organizer', 'admin', 'staff']);
 export type UserRoleName = z.infer<typeof userRoleSchema>;
 
 export const publicUserSchema = z.object({

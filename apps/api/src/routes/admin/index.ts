@@ -1,12 +1,22 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { adminCheckInRoutes } from './check-in.js';
 import { adminEventRoutes } from './events.js';
 import { adminTierRoutes } from './tiers.js';
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', app.authenticate);
-  app.addHook('preHandler', app.requireRole('organizer', 'admin'));
 
-  await app.register(adminEventRoutes);
-  await app.register(adminTierRoutes);
+  // Check-in surface: staff can reach this; organizer/admin can too.
+  await app.register(async (scope) => {
+    scope.addHook('preHandler', scope.requireRole('organizer', 'admin', 'staff'));
+    await scope.register(adminCheckInRoutes);
+  });
+
+  // Event + tier management: organizer/admin only. Staff are rejected here.
+  await app.register(async (scope) => {
+    scope.addHook('preHandler', scope.requireRole('organizer', 'admin'));
+    await scope.register(adminEventRoutes);
+    await scope.register(adminTierRoutes);
+  });
 };

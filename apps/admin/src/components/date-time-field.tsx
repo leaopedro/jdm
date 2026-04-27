@@ -41,12 +41,12 @@ export const DateTimeField = ({
   }, [open]);
 
   return (
-    <label className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <span className="text-sm text-[color:var(--color-muted)]">{label}</span>
       <div ref={rootRef} className="relative flex gap-2">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(true)}
           className="flex-1 rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left"
         >
           {displayLabel}
@@ -73,6 +73,6 @@ export const DateTimeField = ({
         ) : null}
       </div>
       <input type="hidden" name={name} value={value} required={required} />
-    </label>
+    </div>
   );
 };

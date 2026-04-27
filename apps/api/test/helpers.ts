@@ -39,7 +39,7 @@ export const createUser = async (
     password: string;
     name: string;
     verified: boolean;
-    role: 'user' | 'organizer' | 'admin';
+    role: 'user' | 'organizer' | 'admin' | 'staff';
   }> = {},
 ) => {
   const password = overrides.password ?? 'correct-horse-battery-staple';
@@ -58,5 +58,5 @@ export const createUser = async (
 export const bearer = (
   env: ReturnType<typeof loadEnv>,
   userId: string,
-  role: 'user' | 'organizer' | 'admin' = 'user',
+  role: 'user' | 'organizer' | 'admin' | 'staff' = 'user',
 ) => `Bearer ${createAccessToken({ sub: userId, role }, env)}`;
