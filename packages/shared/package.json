@@ -16,6 +16,7 @@
     "./ids": "./src/ids.ts",
     "./orders": "./src/orders.ts",
     "./profile": "./src/profile.ts",
+    "./push": "./src/push.ts",
     "./tickets": "./src/tickets.ts",
     "./uploads": "./src/uploads.ts"
   },
