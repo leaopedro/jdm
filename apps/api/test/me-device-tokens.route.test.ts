@@ -117,4 +117,14 @@ describe('DELETE /me/device-tokens/:token', () => {
     expect(res.statusCode).toBe(204);
     expect(await prisma.deviceToken.count({ where: { userId: user.id } })).toBe(0);
   });
+
+  it('returns 204 when token does not exist (idempotent)', async () => {
+    const { user } = await createUser({ verified: true });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/me/device-tokens/ExponentPushToken%5Bnope%5D',
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(204);
+  });
 });
