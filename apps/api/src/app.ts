@@ -27,6 +27,7 @@ import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
+import { startEventRemindersWorker } from './workers/event-reminders.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -79,6 +80,13 @@ export const buildApp = async (
   await app.register(stripeWebhookRoutes);
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
+
+  if (env.WORKER_ENABLED && env.NODE_ENV === 'production') {
+    const worker = startEventRemindersWorker({ sender: app.push, log: app.log });
+    app.addHook('onClose', () => {
+      worker.stop();
+    });
+  }
 
   if (env.NODE_ENV !== 'production') {
     // Register dev file server only when DevUploads is active.
