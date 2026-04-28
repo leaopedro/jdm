@@ -49,6 +49,13 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     [
+      'expo-notifications',
+      {
+        icon: './assets/notification-icon.png',
+        color: '#0B0B0F',
+      },
+    ],
+    [
       '@sentry/react-native/expo',
       {
         organization: process.env.SENTRY_ORG,

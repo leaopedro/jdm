@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 import { Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
   issueTicketForPaidOrder,
   TicketAlreadyExistsForEventError,
@@ -55,7 +56,31 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
       try {
-        await issueTicketForPaidOrder(orderId, intent.id, app.env);
+        const issued = await issueTicketForPaidOrder(orderId, intent.id, app.env);
+        const firstTime = await markProcessed(event.id, event);
+        request.log.info(
+          { orderId, paymentIntentId: intent.id, firstTime },
+          'stripe webhook: ticket issued',
+        );
+        try {
+          await sendTransactionalPush(
+            {
+              userId: issued.userId,
+              kind: 'ticket.confirmed',
+              dedupeKey: orderId,
+              title: 'Ingresso confirmado',
+              body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
+              data: { orderId, ticketId: issued.ticketId, eventId: issued.eventId },
+            },
+            { sender: app.push },
+          );
+        } catch (pushErr) {
+          request.log.warn(
+            { err: pushErr, orderId },
+            'stripe webhook: ticket-confirmed push failed',
+          );
+        }
+        return reply.status(200).send({ ok: true, deduped: !firstTime });
       } catch (err) {
         // Customer paid but we can't issue a ticket (usually because an
         // unrelated valid ticket exists: comp or premium_grant landed between
@@ -72,12 +97,6 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         }
         throw err;
       }
-      const firstTime = await markProcessed(event.id, event);
-      request.log.info(
-        { orderId, paymentIntentId: intent.id, firstTime },
-        'stripe webhook: ticket issued',
-      );
-      return reply.status(200).send({ ok: true, deduped: !firstTime });
     }
 
     if (event.type === 'payment_intent.payment_failed' && orderId) {

@@ -5,7 +5,13 @@ import { signTicketCode } from './codes.js';
 
 type IssueEnv = { readonly TICKET_CODE_SECRET: string };
 
-export type IssueResult = { ticketId: string; code: string };
+export type IssueResult = {
+  ticketId: string;
+  code: string;
+  userId: string;
+  eventId: string;
+  eventTitle: string;
+};
 
 export class OrderNotFoundError extends Error {
   readonly code = 'ORDER_NOT_FOUND' as const;
@@ -51,13 +57,22 @@ export const issueTicketForPaidOrder = async (
   env: IssueEnv,
 ): Promise<IssueResult> => {
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { event: { select: { title: true } } },
+    });
     if (!order) throw new OrderNotFoundError(orderId);
 
     if (order.status === 'paid') {
       const existing = await tx.ticket.findUnique({ where: { orderId } });
       if (!existing) throw new OrderPaidWithoutTicketError(orderId);
-      return { ticketId: existing.id, code: signTicketCode(existing.id, env) };
+      return {
+        ticketId: existing.id,
+        code: signTicketCode(existing.id, env),
+        userId: existing.userId,
+        eventId: existing.eventId,
+        eventTitle: order.event.title,
+      };
     }
 
     if (order.status !== 'pending') {
@@ -98,6 +113,12 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    return { ticketId: ticket.id, code: signTicketCode(ticket.id, env) };
+    return {
+      ticketId: ticket.id,
+      code: signTicketCode(ticket.id, env),
+      userId: order.userId,
+      eventId: order.eventId,
+      eventTitle: order.event.title,
+    };
   });
 };

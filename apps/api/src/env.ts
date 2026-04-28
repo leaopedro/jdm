@@ -33,6 +33,11 @@ const envSchema = z.object({
   R2_BUCKET: z.string().optional(),
   R2_PUBLIC_BASE_URL: z.string().url().optional(),
   UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  EXPO_ACCESS_TOKEN: z.string().optional(),
+  WORKER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;
