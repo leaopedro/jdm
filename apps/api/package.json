@@ -23,6 +23,7 @@
     "@paralleldrive/cuid2": "^3.3.0",
     "@sentry/node": "^8.42.0",
     "bcrypt": "^6.0.0",
+    "expo-server-sdk": "^6.1.0",
     "fastify": "^5.1.0",
     "fastify-plugin": "^5.0.1",
     "jsonwebtoken": "^9.0.3",
