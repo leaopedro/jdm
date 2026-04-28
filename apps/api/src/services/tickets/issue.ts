@@ -57,21 +57,21 @@ export const issueTicketForPaidOrder = async (
   env: IssueEnv,
 ): Promise<IssueResult> => {
   return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { event: { select: { title: true } } },
+    });
     if (!order) throw new OrderNotFoundError(orderId);
 
     if (order.status === 'paid') {
-      const existing = await tx.ticket.findUnique({
-        where: { orderId },
-        include: { event: { select: { title: true } } },
-      });
+      const existing = await tx.ticket.findUnique({ where: { orderId } });
       if (!existing) throw new OrderPaidWithoutTicketError(orderId);
       return {
         ticketId: existing.id,
         code: signTicketCode(existing.id, env),
         userId: existing.userId,
         eventId: existing.eventId,
-        eventTitle: existing.event.title,
+        eventTitle: order.event.title,
       };
     }
 
@@ -113,16 +113,12 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    const event = await tx.event.findUniqueOrThrow({
-      where: { id: order.eventId },
-      select: { title: true },
-    });
     return {
       ticketId: ticket.id,
       code: signTicketCode(ticket.id, env),
       userId: order.userId,
       eventId: order.eventId,
-      eventTitle: event.title,
+      eventTitle: order.event.title,
     };
   });
 };
