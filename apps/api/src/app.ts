@@ -22,6 +22,7 @@ import { orderRoutes } from './routes/orders.js';
 import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
+import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
@@ -32,11 +33,13 @@ declare module 'fastify' {
     env: Env;
     uploads: Uploads;
     stripe: StripeClient;
+    push: PushSender;
   }
 }
 
 export type BuildAppOverrides = {
   stripe?: StripeClient;
+  push?: PushSender;
 };
 
 export const buildApp = async (
@@ -53,6 +56,7 @@ export const buildApp = async (
   app.decorate('env', env);
   app.decorate('uploads', buildUploads(env));
   app.decorate('stripe', overrides.stripe ?? buildStripe(env));
+  app.decorate('push', overrides.push ?? buildPushSender(env));
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
