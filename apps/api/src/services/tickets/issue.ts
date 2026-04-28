@@ -5,7 +5,13 @@ import { signTicketCode } from './codes.js';
 
 type IssueEnv = { readonly TICKET_CODE_SECRET: string };
 
-export type IssueResult = { ticketId: string; code: string };
+export type IssueResult = {
+  ticketId: string;
+  code: string;
+  userId: string;
+  eventId: string;
+  eventTitle: string;
+};
 
 export class OrderNotFoundError extends Error {
   readonly code = 'ORDER_NOT_FOUND' as const;
@@ -55,9 +61,18 @@ export const issueTicketForPaidOrder = async (
     if (!order) throw new OrderNotFoundError(orderId);
 
     if (order.status === 'paid') {
-      const existing = await tx.ticket.findUnique({ where: { orderId } });
+      const existing = await tx.ticket.findUnique({
+        where: { orderId },
+        include: { event: { select: { title: true } } },
+      });
       if (!existing) throw new OrderPaidWithoutTicketError(orderId);
-      return { ticketId: existing.id, code: signTicketCode(existing.id, env) };
+      return {
+        ticketId: existing.id,
+        code: signTicketCode(existing.id, env),
+        userId: existing.userId,
+        eventId: existing.eventId,
+        eventTitle: existing.event.title,
+      };
     }
 
     if (order.status !== 'pending') {
@@ -98,6 +113,16 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    return { ticketId: ticket.id, code: signTicketCode(ticket.id, env) };
+    const event = await tx.event.findUniqueOrThrow({
+      where: { id: order.eventId },
+      select: { title: true },
+    });
+    return {
+      ticketId: ticket.id,
+      code: signTicketCode(ticket.id, env),
+      userId: order.userId,
+      eventId: order.eventId,
+      eventTitle: event.title,
+    };
   });
 };
