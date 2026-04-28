@@ -22,7 +22,7 @@ const WINDOWS: Array<{ kind: ReminderKind; lowerMs: number; upperMs: number; cop
   },
 ];
 
-export type RunTickDeps = { sender: PushSender; now?: Date };
+export type RunTickDeps = { sender: PushSender; now?: Date; log?: FastifyBaseLogger };
 
 export const runEventRemindersTick = async (deps: RunTickDeps): Promise<void> => {
   const now = deps.now ?? new Date();
@@ -46,8 +46,11 @@ export const runEventRemindersTick = async (deps: RunTickDeps): Promise<void> =>
         distinct: ['userId'],
       });
 
+      let sent = 0;
+      let deduped = 0;
+      let invalidated = 0;
       for (const t of tickets) {
-        await sendTransactionalPush(
+        const result = await sendTransactionalPush(
           {
             userId: t.userId,
             kind: w.kind,
@@ -58,7 +61,21 @@ export const runEventRemindersTick = async (deps: RunTickDeps): Promise<void> =>
           },
           { sender: deps.sender },
         );
+        if (result.deduped) deduped += 1;
+        else sent += result.sent;
+        invalidated += result.invalidatedTokens;
       }
+      deps.log?.info(
+        {
+          eventId: event.id,
+          kind: w.kind,
+          totalUsers: tickets.length,
+          sent,
+          deduped,
+          invalidated,
+        },
+        'event reminders: dispatched',
+      );
     }
   }
 };
@@ -68,7 +85,7 @@ export const startEventRemindersWorker = (deps: {
   log: FastifyBaseLogger;
 }): { stop: () => void } => {
   const task = cron.schedule('* * * * *', () => {
-    void runEventRemindersTick({ sender: deps.sender }).catch((err: unknown) => {
+    void runEventRemindersTick({ sender: deps.sender, log: deps.log }).catch((err: unknown) => {
       deps.log.error({ err }, 'event reminders tick failed');
     });
   });
