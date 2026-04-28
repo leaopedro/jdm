@@ -14,6 +14,7 @@ import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './storag
 
 import { loginRequest, logoutRequest, meAuthed, refreshRequest, signupRequest } from '~/api/auth';
 import { registerTokenProvider } from '~/api/client';
+import { usePushRegistration } from '~/notifications/use-push-registration';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
 
@@ -135,6 +136,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // authedRequest handles refresh + sign-out on failure
     }
   }, []);
+
+  usePushRegistration({ isAuthenticated: state.status === 'authenticated' });
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, signup, login, setSession: applySession, logout, refreshUser }),
