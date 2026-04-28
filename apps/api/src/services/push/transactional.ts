@@ -2,7 +2,7 @@ import { prisma } from '@jdm/db';
 import type { PushKind } from '@jdm/shared/push';
 import { Prisma } from '@prisma/client';
 
-import type { PushSender } from './types.js';
+import type { PushMessage, PushSender } from './types.js';
 
 export type SendTransactionalPushInput = {
   userId: string;
@@ -50,12 +50,15 @@ export const sendTransactionalPush = async (
   }
 
   const result = await deps.sender.send(
-    tokens.map((t) => ({
-      to: t.expoPushToken,
-      title: input.title,
-      body: input.body,
-      data: input.data,
-    })),
+    tokens.map((t) => {
+      const message: PushMessage = {
+        to: t.expoPushToken,
+        title: input.title,
+        body: input.body,
+      };
+      if (input.data !== undefined) message.data = input.data;
+      return message;
+    }),
   );
 
   let sent = 0;
