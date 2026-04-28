@@ -45,6 +45,8 @@ model User {
   cars                Car[]
   orders              Order[]
   tickets             Ticket[]
+  deviceTokens        DeviceToken[]
+  notifications       Notification[]
 
   @@index([createdAt])
 }
@@ -296,4 +298,41 @@ model PaymentWebhookEvent {
 
   @@unique([provider, eventId])
   @@index([createdAt])
+}
+
+enum DevicePlatform {
+  ios
+  android
+}
+
+model DeviceToken {
+  id            String         @id @default(cuid())
+  userId        String
+  expoPushToken String         @db.VarChar(200)
+  platform      DevicePlatform
+  lastSeenAt    DateTime       @default(now())
+  createdAt     DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, expoPushToken])
+  @@index([userId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String    @db.VarChar(40)
+  title     String    @db.VarChar(200)
+  body      String    @db.VarChar(500)
+  data      Json
+  dedupeKey String    @db.VarChar(80)
+  sentAt    DateTime?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, dedupeKey])
+  @@index([userId, createdAt])
 }
