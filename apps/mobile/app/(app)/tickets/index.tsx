@@ -78,6 +78,9 @@ export default function TicketsIndex() {
               params: { ticketId: item.id, ticket: JSON.stringify(item) },
             } as never)
           }
+          accessibilityRole="button"
+          accessibilityLabel={`${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}`}
+          accessibilityHint="Opens ticket QR code"
         >
           <Text style={styles.title}>{item.event.title}</Text>
           <Text style={styles.sub}>

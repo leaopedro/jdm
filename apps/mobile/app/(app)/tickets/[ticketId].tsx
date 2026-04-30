@@ -60,7 +60,12 @@ export default function TicketDetail() {
       </Text>
       <Text style={styles.sub}>{ticket.tierName}</Text>
 
-      <View style={styles.qrBox}>
+      <View
+        style={styles.qrBox}
+        accessible={true}
+        accessibilityRole="image"
+        accessibilityLabel={`QR code for ${ticket.event.title}`}
+      >
         <QRCode value={ticket.code} size={240} />
       </View>
       <Text style={styles.hint}>{ticketsCopy.detail.brightness}</Text>

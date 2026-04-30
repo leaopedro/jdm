@@ -110,12 +110,25 @@ export default function CarDetail() {
         keyExtractor={(p) => p.id}
         contentContainerStyle={styles.photoRow}
         renderItem={({ item }) => (
-          <Pressable onLongPress={() => void onRemovePhoto(item.id)}>
-            <Image source={{ uri: item.url }} style={styles.photo} />
+          <Pressable
+            onLongPress={() => void onRemovePhoto(item.id)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="Car photo"
+            accessibilityHint="Long press to remove this photo"
+          >
+            <Image source={{ uri: item.url }} style={styles.photo} accessible={false} />
           </Pressable>
         )}
         ListFooterComponent={
-          <Pressable style={[styles.photo, styles.photoAdd]} onPress={() => void onAddPhoto()}>
+          <Pressable
+            style={[styles.photo, styles.photoAdd]}
+            onPress={() => void onAddPhoto()}
+            accessibilityRole="button"
+            accessibilityLabel={
+              uploading ? profileCopy.garage.photoUploading : profileCopy.garage.addPhoto
+            }
+            accessibilityState={{ busy: uploading }}
+          >
             <Text style={styles.photoAddLabel}>
               {uploading ? profileCopy.garage.photoUploading : profileCopy.garage.addPhoto}
             </Text>

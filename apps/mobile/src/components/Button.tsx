@@ -17,6 +17,7 @@ export const Button = ({ label, variant = 'primary', disabled = false, ...rest }
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       style={({ pressed }) => [

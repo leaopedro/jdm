@@ -110,7 +110,7 @@ export default function EventDetailScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {event.coverUrl ? (
-        <Image source={{ uri: event.coverUrl }} style={styles.cover} />
+        <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
       ) : (
         <View style={[styles.cover, styles.coverPlaceholder]} />
       )}
@@ -130,7 +130,13 @@ export default function EventDetailScreen() {
             <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
             {event.venueName ? <Text style={styles.body}>{event.venueName}</Text> : null}
             {locationLine ? <Text style={styles.sub}>{locationLine}</Text> : null}
-            <Pressable onPress={() => openMap(event)} style={styles.mapButton}>
+            <Pressable
+              onPress={() => openMap(event)}
+              style={styles.mapButton}
+              accessibilityRole="button"
+              accessibilityLabel={eventsCopy.detail.openMaps}
+              accessibilityHint="Opens location in Maps"
+            >
               <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
             </Pressable>
           </View>
@@ -150,11 +156,16 @@ export default function EventDetailScreen() {
             <Pressable
               key={t.id}
               onPress={() => !soldOut && setSelectedTierId(t.id)}
+              disabled={soldOut}
               style={[
                 styles.tier,
                 isSelected && styles.tierSelected,
                 soldOut && styles.tierDisabled,
               ]}
+              accessibilityRole="radio"
+              accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
+              accessibilityState={{ selected: isSelected, disabled: soldOut }}
+              accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
             >
               <View style={styles.tierTop}>
                 <Text style={styles.tierName}>{t.name}</Text>
