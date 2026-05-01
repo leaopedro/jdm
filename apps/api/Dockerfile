@@ -4,7 +4,7 @@ RUN corepack enable
 WORKDIR /repo
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
@@ -22,17 +22,8 @@ RUN pnpm --filter @jdm/db build
 RUN pnpm --filter @jdm/shared build
 RUN pnpm --filter @jdm/api build
 
-FROM node:22-alpine AS runner
-RUN corepack enable
-WORKDIR /app
+FROM base AS runner
 ENV NODE_ENV=production
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/apps/api/dist ./dist
-COPY --from=build /repo/apps/api/package.json ./
-COPY --from=build /repo/package.json ./root-package.json
-COPY --from=build /repo/pnpm-lock.yaml ./
-COPY --from=build /repo/pnpm-workspace.yaml ./
-COPY --from=build /repo/apps ./apps
-COPY --from=build /repo/packages ./packages
+COPY --from=build /repo /repo
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["node", "apps/api/dist/server.js"]
