@@ -48,17 +48,20 @@ export const buildApp = async (
   env: Env,
   overrides: BuildAppOverrides = {},
 ): Promise<FastifyInstance> => {
+  process.stderr.write('[app] creating fastify instance\n');
   const app = Fastify({
     logger: buildLoggerOptions(env),
     disableRequestLogging: false,
     genReqId: () => randomUUID(),
   });
 
+  process.stderr.write('[app] decorating services\n');
   app.decorate('mailer', buildMailer(env));
   app.decorate('env', env);
   app.decorate('uploads', buildUploads(env));
   app.decorate('stripe', overrides.stripe ?? buildStripe(env));
   app.decorate('push', overrides.push ?? buildPushSender(env));
+  process.stderr.write('[app] services ready, registering plugins\n');
 
   await app.register(requestIdPlugin);
   await app.register(sentryPlugin, { env });
@@ -80,6 +83,7 @@ export const buildApp = async (
   await app.register(stripeWebhookRoutes);
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
+  process.stderr.write('[app] routes registered\n');
 
   if (env.WORKER_ENABLED && env.NODE_ENV === 'production') {
     const worker = startEventRemindersWorker({ sender: app.push, log: app.log });
