@@ -9,12 +9,10 @@ COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
 COPY packages/tsconfig/package.json packages/tsconfig/
-# Keep this `pnpm install` without `--prod`: Railway's start command
-# (apps/api/railway.json) runs `prisma migrate deploy` at boot, which
-# needs the `prisma` CLI from devDependencies. If you tighten this to
-# `--prod` for image size, either move `prisma` to dependencies in
-# packages/db/package.json or move the migrate step to a Railway
-# predeploy job.
+# Keep `pnpm install` without `--prod`: the start command in railway.json
+# (repo root) runs `prisma migrate deploy` at boot, which needs the
+# `prisma` CLI from devDependencies. If you tighten this to `--prod`,
+# move `prisma` to dependencies in packages/db/package.json first.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS build
