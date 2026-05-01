@@ -147,17 +147,16 @@ Railway Postgres backups are automatic and continuous (point-in-time):
 | Pro   | 30 days   | Daily + PITR    |
 
 Backups are managed by Railway — no manual cron needed. Confirm the backup
-toggle is enabled in Railway dashboard → Postgres service → Settings →
-Backup.
+toggle is enabled in Railway dashboard → Postgres service → **Backups** tab.
 
 ### RPO / RTO targets
 
-| Target | Value | Notes                                                  |
-| ------ | ----- | ------------------------------------------------------ |
-| RPO    | 24 h  | Worst-case data loss using daily snapshot recovery     |
-| RTO    | 2 h   | Target time to restore + apply migrations + smoke test |
+| Target | Value | Notes                                                                            |
+| ------ | ----- | -------------------------------------------------------------------------------- |
+| RPO    | 24 h  | Worst-case data loss on Hobby plan (daily snapshots). Pro PITR lowers to ~5 min. |
+| RTO    | 2 h   | Target time to restore + apply migrations + smoke test                           |
 
-Pro plan PITR lowers RPO to ~5 minutes. Upgrade if RPO 24 h is
+RPO 24 h applies on the Hobby plan. Upgrade to Pro if 24 h data loss is
 unacceptable after v0.1 launch.
 
 ### Restore procedure
@@ -172,13 +171,22 @@ Two options depending on severity:
    restored snapshot (does **not** overwrite the live service).
 4. Update the API service's `DATABASE_URL` env var to point at the new
    service, or swap the service reference if using a Railway reference.
-5. Trigger a redeploy — `prisma migrate deploy` runs on startup and
-   confirms schema state.
+5. Trigger a redeploy — the start command runs
+   `pnpm --filter @jdm/db db:deploy` (alias for `prisma migrate deploy`)
+   on startup and confirms schema state.
 6. Run the row-count check below to verify data integrity.
-7. Once satisfied, delete the old broken Postgres service.
+7. **Verify the restored service's region is GRU (São Paulo)** — Railway may
+   not inherit the source service's region on a new provision. Check
+   Settings → General on the new service before cutting over.
+8. Once satisfied, delete the old broken Postgres service.
 
 **Option B — Manual `pg_dump` / `pg_restore` (for cross-environment
 restores or when Railway UI is unavailable)**
+
+> **Hot dump warning:** the dump runs against a live database. For v0.1 with
+> low traffic this is acceptable, but ideally quiesce the API first (scale
+> replicas to 0 in Railway, or put the service in maintenance mode) to ensure
+> a consistent snapshot.
 
 Requires `postgres:18` Docker image (pg_dump must match the server major
 version):
@@ -212,6 +220,10 @@ docker run --rm \
     --dbname=railway \
     --no-acl \
     --no-owner \
+    --clean \
+    --if-exists \
+    --exit-on-error \
+    --verbose \
     /out/"$DUMP_FILE"
 
 # 3. Verify schema state
@@ -236,13 +248,18 @@ SELECT
   (SELECT COUNT(*) FROM "Ticket")             AS ticket_count,
   (SELECT COUNT(*) FROM "TicketTier")         AS ticket_tier_count,
   (SELECT COUNT(*) FROM "Car")                AS car_count,
+  (SELECT COUNT(*) FROM "AuthProvider")       AS auth_provider_count,
+  (SELECT COUNT(*) FROM "PaymentWebhookEvent") AS webhook_event_count,
+  (SELECT COUNT(*) FROM "Membership")         AS membership_count,
   (SELECT COUNT(*) FROM "_prisma_migrations") AS migration_count;
 ```
 
 Compare against counts taken from the source DB before the restore. For
 schema-only restores (no user data), all data counts will be 0 and
-`migration_count` must equal the number of migration files in
-`packages/db/prisma/migrations/` (currently **10**).
+`migration_count` must equal the number of directories under
+`packages/db/prisma/migrations/` — run
+`ls packages/db/prisma/migrations/ | grep -v '\.toml' | wc -l` to get the
+current number.
 
 ### Rehearsal log
 
