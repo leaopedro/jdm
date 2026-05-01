@@ -3,24 +3,64 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./admin": "./src/admin.ts",
-    "./auth": "./src/auth.ts",
-    "./cars": "./src/cars.ts",
-    "./check-in": "./src/check-in.ts",
-    "./events": "./src/events.ts",
-    "./health": "./src/health.ts",
-    "./ids": "./src/ids.ts",
-    "./orders": "./src/orders.ts",
-    "./profile": "./src/profile.ts",
-    "./push": "./src/push.ts",
-    "./tickets": "./src/tickets.ts",
-    "./uploads": "./src/uploads.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./admin": {
+      "types": "./dist/admin.d.ts",
+      "default": "./dist/admin.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./cars": {
+      "types": "./dist/cars.d.ts",
+      "default": "./dist/cars.js"
+    },
+    "./check-in": {
+      "types": "./dist/check-in.d.ts",
+      "default": "./dist/check-in.js"
+    },
+    "./events": {
+      "types": "./dist/events.d.ts",
+      "default": "./dist/events.js"
+    },
+    "./health": {
+      "types": "./dist/health.d.ts",
+      "default": "./dist/health.js"
+    },
+    "./ids": {
+      "types": "./dist/ids.d.ts",
+      "default": "./dist/ids.js"
+    },
+    "./orders": {
+      "types": "./dist/orders.d.ts",
+      "default": "./dist/orders.js"
+    },
+    "./profile": {
+      "types": "./dist/profile.d.ts",
+      "default": "./dist/profile.js"
+    },
+    "./push": {
+      "types": "./dist/push.d.ts",
+      "default": "./dist/push.js"
+    },
+    "./tickets": {
+      "types": "./dist/tickets.d.ts",
+      "default": "./dist/tickets.js"
+    },
+    "./uploads": {
+      "types": "./dist/uploads.d.ts",
+      "default": "./dist/uploads.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint src"

@@ -19,6 +19,7 @@ FROM deps AS build
 COPY . .
 RUN pnpm --filter @jdm/db db:generate
 RUN pnpm --filter @jdm/db build
+RUN pnpm --filter @jdm/shared build
 RUN pnpm --filter @jdm/api build
 
 FROM node:22-alpine AS runner
