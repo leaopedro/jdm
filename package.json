@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
-    "eas-cli": "^14.0.0",
+    "eas-cli": "^14.7.1",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.31.0",
