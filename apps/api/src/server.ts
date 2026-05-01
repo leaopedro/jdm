@@ -1,5 +1,11 @@
+process.stdout.write(
+  `[boot] node starting (pid=${process.pid}, node=${process.version}, cwd=${process.cwd()})\n`,
+);
+
 import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
+
+process.stdout.write('[boot] modules loaded\n');
 
 const log = (msg: string) => process.stdout.write(`${msg}\n`);
 
