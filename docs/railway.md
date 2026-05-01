@@ -119,3 +119,18 @@ Every successful deploy should show:
   ```
 
   Then redeploy.
+
+## Troubleshooting
+
+### `TS2307: Cannot find module '@prisma/client'` during Docker build
+
+`prisma generate` writes the client into the `packages/db` workspace
+(`node_modules/.pnpm/@prisma+client@…`). With pnpm strict isolation in
+the Docker build, `apps/api` cannot resolve `@prisma/client` unless it
+declares it as a **direct dependency** in its own `package.json`. Local
+dev may work because pnpm hoists packages in a single workspace install,
+but the multi-stage Docker build does not.
+
+**Fix:** add `"@prisma/client": "^<version>"` to
+`apps/api/package.json` `dependencies` and run `pnpm install` to update
+the lockfile. Keep the version range in sync with `packages/db`.

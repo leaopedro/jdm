@@ -20,6 +20,7 @@
     "@fastify/sensible": "^6.0.1",
     "@jdm/db": "workspace:*",
     "@jdm/shared": "workspace:*",
+    "@prisma/client": "^6.1.0",
     "@paralleldrive/cuid2": "^3.3.0",
     "@sentry/node": "^8.42.0",
     "bcrypt": "^6.0.0",
