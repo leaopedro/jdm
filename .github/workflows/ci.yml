@@ -49,6 +49,8 @@ jobs:
 
       - run: pnpm --filter @jdm/db exec prisma migrate deploy
 
+      - run: pnpm --filter @jdm/db build
+
       - run: pnpm lint
 
       - run: pnpm format:check
