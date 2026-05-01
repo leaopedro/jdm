@@ -59,15 +59,13 @@ Keep steps numbered and atomic ("tap X" + "see Y"), not "do the auth flow."
 A QA agent who can't reproduce the steps cold has been given an
 insufficient smoke.
 
-The F4 Stripe ticketing smoke in `docs/smoke-test.md` is a good shape for
-the steps and pass criteria (the file has copy-paste noise that needs a
-cleanup pass — tracked separately).
+The F4 Stripe ticketing smoke in §3.1 is a good reference for the steps and pass criteria.
 
 ## 3. Existing smoke playbooks
 
 Living references; update these as features land.
 
-- **F4 Stripe ticketing** — `docs/smoke-test.md` (signup → buy → QR).
+- **F4 Stripe ticketing** — §3.1 below (signup → buy → QR).
   Sandbox keys + Stripe CLI `stripe listen`.
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
@@ -81,6 +79,125 @@ Future playbooks to author as features land:
   test for `[x]`-flipping the v0.1 phase.
 - F8 Premium subscription + grant backfill.
 - LGPD `/me/delete` purge timing test.
+
+### 3.1 F4 Stripe ticketing
+
+Covers signup → buy → QR; also tests failure, idempotency, and refund-on-duplicate paths.
+
+**Prerequisites (one-time)**
+
+- Install Stripe CLI: `brew install stripe/stripe-cli/stripe`
+- Log in: `stripe login` (opens browser, pairs CLI to your test account)
+- Grab Secret key (test mode) and Publishable key (test mode) from the Stripe dashboard
+
+**Step 1 — Set secrets locally**
+
+Edit `apps/api/.env`:
+
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...    # filled in at step 3
+TICKET_CODE_SECRET=<openssl rand -hex 32>
+STRIPE_PUBLISHABLE_KEY=pk_test_... # optional
+```
+
+Edit `apps/mobile/.env.local` (create if missing):
+
+```env
+EXPO_PUBLIC_API_URL=http://localhost:4000
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+**Step 2 — Bring up Postgres, apply migration, seed**
+
+```bash
+docker compose up -d
+pnpm --filter @jdm/db prisma migrate deploy
+pnpm --filter @jdm/db db:seed
+```
+
+**Step 3 — Start Stripe CLI listener (terminal A)**
+
+```bash
+stripe listen --forward-to localhost:4000/stripe/webhook
+```
+
+It prints `> Ready! Your webhook signing secret is whsec_XXXX` — copy that into `STRIPE_WEBHOOK_SECRET` in `apps/api/.env` and restart the API. Leave this terminal running.
+
+**Step 4 — Start the API (terminal B)**
+
+```bash
+pnpm --filter @jdm/api dev
+```
+
+Wait for `server listening on :4000`.
+
+**Step 5 — Start the iOS dev client (terminal C)**
+
+```bash
+pnpm --filter @jdm/mobile ios
+```
+
+First run builds the native project (~5 min). Subsequent runs are fast.
+
+**Step 6 — Happy path: successful purchase**
+
+1. Sign up a new account; verify email (dev shortcut: set `emailVerifiedAt` via Prisma Studio).
+2. Open the seeded event from the Eventos list.
+3. Tap a tier (e.g. "Geral") — border highlights.
+4. Tap **Confirmar compra**.
+5. Payment Sheet opens; enter test card:
+   - Number: `4242 4242 4242 4242` / Expiry: any future / CVC: any 3 digits / ZIP: any 5 digits
+6. Tap **Pay**.
+
+Expected:
+
+- Payment Sheet closes; "Ingresso confirmado!" alert shows.
+- Terminal A prints `payment_intent.succeeded forwarded → [200 OK]`.
+- Tap "Ver ingresso" → Ingressos tab → tap card → QR renders, screen stays awake.
+- DB: `SELECT status FROM "Order" WHERE user_id = ...` is `paid`; one `Ticket` row with `status='valid'`.
+
+**Step 7 — Failure path: declined card releases reservation**
+
+1. Log in as a different user (previous user now has a valid ticket and is blocked).
+2. Pick the same tier; note remaining count.
+3. Pay with decline card `4000 0000 0000 9995`.
+
+Expected:
+
+- Payment Sheet shows a decline error.
+- Terminal A prints `payment_intent.payment_failed → [200 OK]`.
+- DB: order `status='failed'`; `ticketTier.quantitySold` back to pre-attempt value.
+
+**Step 8 — Idempotency: replay a delivered event**
+
+1. Copy the event id from Terminal A output (`evt_...`).
+2. Run: `stripe events resend <evt_id>`
+3. Watch the API logs.
+
+Expected: webhook returns `200` with `deduped: true`; no second `Ticket` row created.
+
+**Step 9 — Refund-on-duplicate (optional edge case)**
+
+1. Pick a user with no ticket for event X.
+2. In Prisma Studio, manually insert a `Ticket` row: `userId=<user>`, `eventId=<X>`, `tierId=<any>`, `source=comp`, `status=valid`.
+3. Trigger `payment_intent.succeeded` for that user via Stripe CLI.
+
+Expected: webhook returns `200 refunded:true`; `stripe listen` shows a refund event shortly after.
+
+**Step 10 — Sanity checks before flipping roadmap [x]**
+
+- Apple Pay button visible on Payment Sheet (requires real iPhone or properly configured simulator).
+- Force-quit mid-payment; confirm no orphan `paid` row appears.
+- `GET /me/tickets` (Ingressos tab) shows upcoming first, past last.
+
+**Common failures**
+
+| Symptom                                                  | Fix                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `webhook signature verification failed`                  | `STRIPE_WEBHOOK_SECRET` doesn't match `stripe listen` output. Re-copy and restart API.     |
+| `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set` in Metro | `.env.local` missing or Metro cache stale — run `pnpm --filter @jdm/mobile expo start -c`. |
+| "Merchant identifier is invalid" on Apple Pay            | Expected on simulator without provisioning profile; card path still works.                 |
 
 ## 4. Roles
 
@@ -200,7 +317,7 @@ the regression cost grows with the user base.
 
 - iOS device or simulator with VoiceOver enabled (Settings → Accessibility → VoiceOver), or
 - Android device/emulator with TalkBack enabled (Settings → Accessibility → TalkBack).
-- App built and running (see `docs/smoke-test.md` steps 1–5 for setup).
+- App built and running (see §3.1 steps 1–5 for setup).
 
 ### Dynamic Type
 
