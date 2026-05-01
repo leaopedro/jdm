@@ -32,10 +32,6 @@ const countR2Vars = (env: Env): number =>
 export const buildUploads = (env: Env): Uploads => {
   const r2Ready = hasR2Env(env);
 
-  if (env.NODE_ENV === 'production' && !r2Ready) {
-    throw new Error('R2 env vars required in production');
-  }
-
   // fail loudly in any environment if the operator set some but not all R2 vars
   const count = countR2Vars(env);
   if (!r2Ready && count > 0) {
@@ -57,5 +53,8 @@ export const buildUploads = (env: Env): Uploads => {
     );
   }
 
+  if (env.NODE_ENV === 'production') {
+    console.warn('[uploads] R2 not configured — upload routes will use dev fallback');
+  }
   return new DevUploads();
 };
