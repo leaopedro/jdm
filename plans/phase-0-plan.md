@@ -2558,7 +2558,7 @@ git commit -m "docs: add secrets inventory and rotation runbook"
 - Create: `apps/mobile/src/lib/sentry.ts`
 - Modify: `apps/mobile/app/_layout.tsx` (call `initSentry()`)
 
-- [ ] **Step 1: Add the dev-only `/debug/boom` route**
+- [x] **Step 1: Add the dev-only `/debug/boom` route**
 
 Append to `apps/api/src/app.ts` after the health route registration (inside `buildApp`):
 
@@ -2570,7 +2570,7 @@ if (env.NODE_ENV !== 'production') {
 }
 ```
 
-- [ ] **Step 2: Run `@sentry/wizard` for Next.js (admin)**
+- [x] **Step 2: Run `@sentry/wizard` for Next.js (admin)**
 
 The wizard installs `@sentry/nextjs`, generates `sentry.{client,server,edge}.config.ts`, wraps `next.config.mjs` with `withSentryConfig`, and creates `.sentryclirc` for source-map uploads. Requires a Sentry account + auth token (one-time prompt).
 
@@ -2582,7 +2582,7 @@ Expected: wizard completes and prints a checklist. Verify these files exist: `ap
 
 **Patch the generated files** to match our DSN convention below (Steps 3–6). The wizard writes its own defaults — overwrite them.
 
-- [ ] **Step 2b: Run `@sentry/wizard` for Expo (mobile)**
+- [x] **Step 2b: Run `@sentry/wizard` for Expo (mobile)**
 
 ```bash
 pnpm --filter @jdm/mobile dlx @sentry/wizard@latest -i reactNative --saas
@@ -2590,7 +2590,7 @@ pnpm --filter @jdm/mobile dlx @sentry/wizard@latest -i reactNative --saas
 
 Expected: installs `@sentry/react-native`, adds the Sentry plugin to `app.config.ts` (or `app.json`), and creates `.sentryclirc`. It may prompt to modify metro.config.js — accept; our monorepo-aware metro.config.js merges cleanly with the Sentry wrapper (`getSentryExpoConfig`). If the wizard asks to overwrite metro.config.js, review the diff and preserve the monorepo `watchFolders` + `nodeModulesPaths` from Task 8 Step 6.
 
-- [ ] **Step 3: Replace `apps/admin/sentry.client.config.ts`** with our DSN convention
+- [x] **Step 3: Replace `apps/admin/sentry.client.config.ts`** with our DSN convention
 
 ```ts
 import * as Sentry from '@sentry/nextjs';
@@ -2603,7 +2603,7 @@ Sentry.init({
 });
 ```
 
-- [ ] **Step 4: Replace `apps/admin/sentry.server.config.ts`**
+- [x] **Step 4: Replace `apps/admin/sentry.server.config.ts`**
 
 ```ts
 import * as Sentry from '@sentry/nextjs';
@@ -2614,7 +2614,7 @@ Sentry.init({
 });
 ```
 
-- [ ] **Step 5: Replace `apps/admin/sentry.edge.config.ts`**
+- [x] **Step 5: Replace `apps/admin/sentry.edge.config.ts`**
 
 ```ts
 import * as Sentry from '@sentry/nextjs';
@@ -2625,7 +2625,7 @@ Sentry.init({
 });
 ```
 
-- [ ] **Step 6: Overwrite wizard-generated `apps/admin/next.config.mjs`** (the wizard's version works but wraps our config differently; pin to this shape)
+- [x] **Step 6: Overwrite wizard-generated `apps/admin/next.config.mjs`** (the wizard's version works but wraps our config differently; pin to this shape)
 
 ```js
 import { withSentryConfig } from '@sentry/nextjs';
@@ -2648,7 +2648,7 @@ export default withSentryConfig(config, {
 });
 ```
 
-- [ ] **Step 7: Create `apps/mobile/src/lib/sentry.ts`** (wraps `@sentry/react-native` installed by the wizard)
+- [x] **Step 7: Create `apps/mobile/src/lib/sentry.ts`** (wraps `@sentry/react-native` installed by the wizard)
 
 ```ts
 import Constants from 'expo-constants';
@@ -2667,7 +2667,7 @@ export const initSentry = () => {
 };
 ```
 
-- [ ] **Step 8: Call `initSentry()` from `apps/mobile/app/_layout.tsx`**
+- [x] **Step 8: Call `initSentry()` from `apps/mobile/app/_layout.tsx`**
 
 Replace the file with:
 
@@ -2699,7 +2699,7 @@ export default function RootLayout() {
 }
 ```
 
-- [ ] **Step 9: Confirm `apps/mobile/app.config.ts` carries our plugin block + `sentryDsn` extra**
+- [x] **Step 9: Confirm `apps/mobile/app.config.ts` carries our plugin block + `sentryDsn` extra**
 
 The wizard at Step 2b added `@sentry/react-native/expo` to `plugins`. Merge it with our existing `expo-router` entry and add the `sentryDsn` value. Final shapes of the two blocks:
 

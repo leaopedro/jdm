@@ -30,6 +30,10 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://jdm:jdm@localhost:5432/jdm?schema=public
+      GIT_SHA: ${{ github.sha }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT_ADMIN: ${{ secrets.SENTRY_PROJECT_ADMIN }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
