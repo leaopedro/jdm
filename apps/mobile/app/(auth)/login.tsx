@@ -82,10 +82,20 @@ export default function LoginScreen() {
         label={isSubmitting ? authCopy.common.loading : authCopy.login.submit}
         onPress={() => void onSubmit()}
       />
-      <Link style={styles.link} href="/forgot">
+      <Link
+        style={styles.link}
+        href="/forgot"
+        accessibilityRole="link"
+        accessibilityLabel={authCopy.login.forgot}
+      >
         {authCopy.login.forgot}
       </Link>
-      <Link style={styles.link} href="/signup">
+      <Link
+        style={styles.link}
+        href="/signup"
+        accessibilityRole="link"
+        accessibilityLabel={authCopy.login.noAccount}
+      >
         {authCopy.login.noAccount}
       </Link>
     </View>

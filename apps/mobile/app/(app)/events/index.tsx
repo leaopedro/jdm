@@ -88,6 +88,9 @@ export default function EventsIndex() {
             key={t}
             onPress={() => setTab(t)}
             style={[styles.tab, tab === t && styles.tabActive]}
+            accessibilityRole="tab"
+            accessibilityLabel={eventsCopy.tabs[t]}
+            accessibilityState={{ selected: tab === t }}
           >
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
               {eventsCopy.tabs[t]}
@@ -103,7 +106,12 @@ export default function EventsIndex() {
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.empty}>{error}</Text>
-          <Pressable onPress={() => void load(tab)} style={styles.retry}>
+          <Pressable
+            onPress={() => void load(tab)}
+            style={styles.retry}
+            accessibilityRole="button"
+            accessibilityLabel={eventsCopy.list.retry}
+          >
             <Text style={styles.retryLabel}>{eventsCopy.list.retry}</Text>
           </Pressable>
         </View>
@@ -132,9 +140,12 @@ export default function EventsIndex() {
             <Pressable
               style={styles.card}
               onPress={() => router.push(`/events/${item.slug}` as never)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title}, ${formatEventDateRange(item.startsAt, item.endsAt)}`}
+              accessibilityHint="Opens event details"
             >
               {item.coverUrl ? (
-                <Image source={{ uri: item.coverUrl }} style={styles.cover} />
+                <Image source={{ uri: item.coverUrl }} style={styles.cover} accessible={false} />
               ) : (
                 <View style={[styles.cover, styles.coverPlaceholder]} />
               )}

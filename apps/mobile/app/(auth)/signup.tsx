@@ -90,7 +90,12 @@ export default function SignupScreen() {
         onPress={() => void onSubmit()}
       />
       <Text style={styles.agree}>{authCopy.signup.agree}</Text>
-      <Link style={styles.link} href="/login">
+      <Link
+        style={styles.link}
+        href="/login"
+        accessibilityRole="link"
+        accessibilityLabel={authCopy.signup.haveAccount}
+      >
         {authCopy.signup.haveAccount}
       </Link>
     </View>

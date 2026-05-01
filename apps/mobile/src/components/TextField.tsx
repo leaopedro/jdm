@@ -12,6 +12,7 @@ export const TextField = ({ label, error, style, ...rest }: Props) => (
   <View style={styles.wrap}>
     <Text style={styles.label}>{label}</Text>
     <TextInput
+      accessibilityLabel={error ? `${label}, error: ${error}` : label}
       placeholderTextColor={theme.colors.muted}
       style={[styles.input, error ? styles.inputError : null, style]}
       {...rest}

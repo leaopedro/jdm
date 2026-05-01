@@ -95,9 +95,13 @@ export default function ProfileScreen() {
         onPress={() => void onChangeAvatar()}
         style={styles.avatarBtn}
         accessibilityRole="button"
+        accessibilityLabel={
+          uploading ? profileCopy.profile.avatarUploading : profileCopy.profile.avatarChange
+        }
+        accessibilityState={{ busy: uploading }}
       >
         {profile.avatarUrl ? (
-          <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+          <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} accessible={false} />
         ) : (
           <View style={[styles.avatar, styles.avatarPlaceholder]} />
         )}

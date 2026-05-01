@@ -46,9 +46,18 @@ export default function GarageIndex() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
             <Link href={`/garage/${item.id}` as never} asChild>
-              <Pressable style={styles.card}>
+              <Pressable
+                style={styles.card}
+                accessibilityRole="link"
+                accessibilityLabel={`${item.year} ${item.make} ${item.model}${item.nickname ? `, ${item.nickname}` : ''}`}
+                accessibilityHint="Opens car details"
+              >
                 {item.photos[0] ? (
-                  <Image source={{ uri: item.photos[0].url }} style={styles.thumb} />
+                  <Image
+                    source={{ uri: item.photos[0].url }}
+                    style={styles.thumb}
+                    accessible={false}
+                  />
                 ) : (
                   <View style={[styles.thumb, styles.thumbPlaceholder]} />
                 )}

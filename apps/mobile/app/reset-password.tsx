@@ -64,7 +64,9 @@ export default function ResetPasswordScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>{authCopy.reset.title}</Text>
       {done ? (
-        <Text style={styles.body}>{authCopy.reset.done}</Text>
+        <Text style={styles.body} accessibilityLiveRegion="polite">
+          {authCopy.reset.done}
+        </Text>
       ) : (
         <>
           <Controller

@@ -63,9 +63,16 @@ export default function ForgotScreen() {
           />
         </>
       ) : (
-        <Text style={styles.body}>{authCopy.forgot.sent}</Text>
+        <Text style={styles.body} accessibilityLiveRegion="polite">
+          {authCopy.forgot.sent}
+        </Text>
       )}
-      <Link style={styles.link} href="/login">
+      <Link
+        style={styles.link}
+        href="/login"
+        accessibilityRole="link"
+        accessibilityLabel={authCopy.common.back}
+      >
         {authCopy.common.back}
       </Link>
     </View>

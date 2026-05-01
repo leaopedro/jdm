@@ -71,6 +71,7 @@ Living references; update these as features land.
   Sandbox keys + Stripe CLI `stripe listen`.
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
+- **X.6 Accessibility** — Section 10 below.
 
 Future playbooks to author as features land:
 
@@ -190,3 +191,106 @@ hired, retroactively for any feature still on the bench.
 A v0.1 release without a hired QA agent is acceptable for the TestFlight /
 internal stage. v0.2 (public launch) should have QA in the loop because
 the regression cost grows with the user base.
+
+---
+
+## 10. Accessibility playbook (X.6)
+
+### Prerequisites
+
+- iOS device or simulator with VoiceOver enabled (Settings → Accessibility → VoiceOver), or
+- Android device/emulator with TalkBack enabled (Settings → Accessibility → TalkBack).
+- App built and running (see `docs/smoke-test.md` steps 1–5 for setup).
+
+### Dynamic Type
+
+1. On iOS go to Settings → Accessibility → Display & Text Size → Larger Text. Drag the slider to the largest size.
+2. Open the app and walk through every screen listed below.
+3. Verify text is not clipped, truncated, or overflowing containers.
+
+Screens to check: Login, Signup, Forgot password, Events list, Event detail, Tickets list, Ticket QR, Profile, Garage list, Garage detail, New car.
+
+### Color Contrast (WCAG AA)
+
+All primary text uses `theme.colors.fg` (#FFFFFF or equivalent dark-mode contrast) against `theme.colors.bg`. Muted text uses `theme.colors.muted`. Confirm both meet 4.5:1 contrast ratio for body text and 3:1 for large text (18pt / 14pt bold).
+
+Tool: use the Accessibility Inspector (Xcode) or Android's Accessibility Scanner to flag any failing pairs.
+
+### VoiceOver / TalkBack — Signup → Buy Ticket → Show QR Flow
+
+Run with a screen reader active. Expected behavior at each step:
+
+**1. Welcome / Login screen**
+
+- VoiceOver reads the title automatically on focus.
+- "Esqueci minha senha" and "Ainda não tenho conta" links are announced as "link" with their label text.
+
+**2. Signup screen**
+
+- Each text field announces its label (e.g. "Nome", "E-mail", "Senha (mín. 10 caracteres)") when focused.
+- Validation errors are appended to the field label (e.g. "Nome, error: Campo obrigatório").
+- Submit button reads "Criar conta".
+- "Já tenho conta" reads as a link.
+
+**3. Email verification (verify-email-pending)**
+
+- Screen title and body text are readable.
+- Status message (resend confirmation) is announced via live region without requiring manual focus.
+- Back-to-login link is announced as a link.
+
+**4. Login screen**
+
+- Email and password fields announce their labels.
+- Submit button reads "Entrar".
+- Password error on wrong credentials is read from the field label.
+
+**5. Events list**
+
+- Tab bar buttons announce "Upcoming", "Past", "Nearby" (or Portuguese equivalents) with `selected` state.
+- Each event card announces the event title and date range; hint says "Opens event details".
+
+**6. Event detail**
+
+- Cover image is skipped (decorative).
+- "Abrir no Maps" button is announced as a button with that label.
+- Ticket tier rows announce name, price, and `selected`/`disabled` state. Sold-out tiers are announced as disabled.
+- Buy button reads "Confirmar compra" or "Processando…".
+
+**7. Tickets list**
+
+- Each ticket card announces event title, tier name, and status (e.g. "válido").
+- Hint says "Opens ticket QR code".
+
+**8. Ticket QR screen**
+
+- The QR box announces as an image: "QR code for [event title]".
+- Status text (e.g. "válido") is readable below.
+
+**9. Profile screen**
+
+- Avatar button announces "Alterar foto" (or "Enviando foto…" while uploading) with `busy` state.
+- All four text fields (name, bio, city, state) announce their labels.
+- Save and logout buttons announce their labels.
+
+**10. Garage**
+
+- "Adicionar carro" button is announced.
+- Each car card announces make/model/year and optional nickname as a link.
+- In car detail: photo thumbnails announce "Car photo" with long-press hint.
+- "Adicionar foto" button announces uploading state.
+- All form fields (make, model, year, nickname) announce their labels.
+
+**11. Reset password**
+
+- Success confirmation text is announced via live region without requiring manual focus.
+
+### Checklist
+
+- [ ] Dynamic type: all screens legible at max font size.
+- [ ] Contrast: all text passes WCAG AA via Accessibility Inspector / Scanner.
+- [ ] VoiceOver/TalkBack can complete signup → buy ticket → show QR without visual assistance.
+- [ ] All interactive elements have `accessibilityRole`, `accessibilityLabel`, and (where relevant) `accessibilityState`.
+- [ ] Decorative images are marked `accessible={false}`.
+- [ ] Error states are announced as part of the field label.
+- [ ] Loading/busy states are announced via `accessibilityState={{ busy: true }}`.
+- [ ] Dynamic status text (reset-password success, verify-email resend result) announced via `accessibilityLiveRegion="polite"`.
