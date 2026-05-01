@@ -55,6 +55,8 @@ jobs:
 
       - run: pnpm --filter @jdm/db build
 
+      - run: pnpm --filter @jdm/shared build
+
       - run: pnpm lint
 
       - run: pnpm format:check
@@ -75,5 +77,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @jdm/shared build
       - run: pnpm --filter @jdm/mobile typecheck
       - run: pnpm --filter @jdm/mobile exec expo config --type public

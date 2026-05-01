@@ -40,3 +40,6 @@ coverage/
 # iOS / Android local builds
 apps/mobile/ios/
 apps/mobile/android/
+
+# Git worktrees
+.worktrees/
