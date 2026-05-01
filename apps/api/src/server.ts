@@ -1,12 +1,22 @@
 import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
 
+const fatal = (label: string, err: unknown): never => {
+  const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  process.stderr.write(`[server] ${label}: ${msg}\n`);
+  process.exit(1);
+};
+
+process.on('uncaughtException', (err) => fatal('uncaughtException', err));
+process.on('unhandledRejection', (err) => fatal('unhandledRejection', err));
+
 const main = async () => {
-  console.log('[server] loading env…');
+  process.stderr.write('[server] loading env\n');
   const env = loadEnv();
-  console.log('[server] env loaded, building app…');
+  process.stderr.write(`[server] env loaded (NODE_ENV=${env.NODE_ENV}, PORT=${env.PORT})\n`);
+
   const app = await buildApp(env);
-  console.log('[server] app built, binding to port %d…', env.PORT);
+  process.stderr.write('[server] app built, binding port\n');
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, 'shutdown initiated');
@@ -23,10 +33,7 @@ const main = async () => {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
-  console.log('[server] listening on 0.0.0.0:%d', env.PORT);
+  process.stderr.write(`[server] listening on 0.0.0.0:${env.PORT}\n`);
 };
 
-main().catch((err) => {
-  console.error('[server] fatal startup error:', err);
-  setTimeout(() => process.exit(1), 200);
-});
+main().catch((err) => fatal('startup failed', err));
