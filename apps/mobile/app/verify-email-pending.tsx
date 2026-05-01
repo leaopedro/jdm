@@ -42,7 +42,12 @@ export default function VerifyEmailPendingScreen() {
         {email ? authCopy.verifyPending.body(email) : authCopy.verifyPending.bodyNoEmail}
       </Text>
       {message ? (
-        <Text style={message.kind === 'ok' ? styles.ok : styles.err}>{message.text}</Text>
+        <Text
+          style={message.kind === 'ok' ? styles.ok : styles.err}
+          accessibilityLiveRegion="polite"
+        >
+          {message.text}
+        </Text>
       ) : null}
       <Button
         label={pending ? authCopy.common.loading : authCopy.verifyPending.resend}
@@ -54,7 +59,7 @@ export default function VerifyEmailPendingScreen() {
           <Button label={authCopy.common.cancel} onPress={() => void logout()} />
         </>
       ) : (
-        <Link style={styles.link} href="/login">
+        <Link style={styles.link} href="/login" accessibilityRole="link">
           {authCopy.common.back}
         </Link>
       )}
