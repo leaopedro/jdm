@@ -134,3 +134,131 @@ but the multi-stage Docker build does not.
 **Fix:** add `"@prisma/client": "^<version>"` to
 `apps/api/package.json` `dependencies` and run `pnpm install` to update
 the lockfile. Keep the version range in sync with `packages/db`.
+
+## Backup & Restore
+
+### Backup cadence and retention
+
+Railway Postgres backups are automatic and continuous (point-in-time):
+
+| Plan  | Retention | Cadence         |
+| ----- | --------- | --------------- |
+| Hobby | 7 days    | Daily snapshots |
+| Pro   | 30 days   | Daily + PITR    |
+
+Backups are managed by Railway — no manual cron needed. Confirm the backup
+toggle is enabled in Railway dashboard → Postgres service → Settings →
+Backup.
+
+### RPO / RTO targets
+
+| Target | Value | Notes                                                  |
+| ------ | ----- | ------------------------------------------------------ |
+| RPO    | 24 h  | Worst-case data loss using daily snapshot recovery     |
+| RTO    | 2 h   | Target time to restore + apply migrations + smoke test |
+
+Pro plan PITR lowers RPO to ~5 minutes. Upgrade if RPO 24 h is
+unacceptable after v0.1 launch.
+
+### Restore procedure
+
+Two options depending on severity:
+
+**Option A — Railway dashboard (preferred for full restores)**
+
+1. Open Railway dashboard → Postgres service → Backups.
+2. Select the backup point-in-time to restore from.
+3. Click "Restore" — Railway provisions a new Postgres service with the
+   restored snapshot (does **not** overwrite the live service).
+4. Update the API service's `DATABASE_URL` env var to point at the new
+   service, or swap the service reference if using a Railway reference.
+5. Trigger a redeploy — `prisma migrate deploy` runs on startup and
+   confirms schema state.
+6. Run the row-count check below to verify data integrity.
+7. Once satisfied, delete the old broken Postgres service.
+
+**Option B — Manual `pg_dump` / `pg_restore` (for cross-environment
+restores or when Railway UI is unavailable)**
+
+Requires `postgres:18` Docker image (pg_dump must match the server major
+version):
+
+```bash
+# 1. Dump from source (prod public URL from Railway variables)
+DUMP_FILE="jdm-backup-$(date +%Y%m%d-%H%M%S).dump"
+docker run --rm \
+  -e PGPASSWORD="<PGPASSWORD>" \
+  -v "$PWD":/out \
+  postgres:18 \
+  pg_dump \
+    --host=<RAILWAY_TCP_PROXY_DOMAIN> \
+    --port=<RAILWAY_TCP_PROXY_PORT> \
+    --username=postgres \
+    --dbname=railway \
+    --format=custom \
+    --no-acl \
+    --no-owner \
+    --file=/out/"$DUMP_FILE"
+
+# 2. Restore to target (new Railway Postgres public URL)
+docker run --rm \
+  -e PGPASSWORD="<TARGET_PGPASSWORD>" \
+  -v "$PWD":/out \
+  postgres:18 \
+  pg_restore \
+    --host=<TARGET_HOST> \
+    --port=<TARGET_PORT> \
+    --username=postgres \
+    --dbname=railway \
+    --no-acl \
+    --no-owner \
+    /out/"$DUMP_FILE"
+
+# 3. Verify schema state
+DATABASE_URL="postgresql://postgres:<TARGET_PGPASSWORD>@<TARGET_HOST>:<TARGET_PORT>/railway" \
+  pnpm --filter @jdm/db exec prisma migrate status
+# Expect: "Database schema is up to date!"
+```
+
+Replace placeholders with values from Railway dashboard → Postgres service
+→ Variables (`DATABASE_PUBLIC_URL`, `PGPASSWORD`, `RAILWAY_TCP_PROXY_DOMAIN`,
+`RAILWAY_TCP_PROXY_PORT`). **Never commit these values to git.**
+
+### Row-count verification
+
+Run after any restore to confirm data integrity:
+
+```sql
+SELECT
+  (SELECT COUNT(*) FROM "User")               AS user_count,
+  (SELECT COUNT(*) FROM "Event")              AS event_count,
+  (SELECT COUNT(*) FROM "Order")              AS order_count,
+  (SELECT COUNT(*) FROM "Ticket")             AS ticket_count,
+  (SELECT COUNT(*) FROM "TicketTier")         AS ticket_tier_count,
+  (SELECT COUNT(*) FROM "Car")                AS car_count,
+  (SELECT COUNT(*) FROM "_prisma_migrations") AS migration_count;
+```
+
+Compare against counts taken from the source DB before the restore. For
+schema-only restores (no user data), all data counts will be 0 and
+`migration_count` must equal the number of migration files in
+`packages/db/prisma/migrations/` (currently **10**).
+
+### Rehearsal log
+
+| Date       | Rehearsed by | Source               | Target                   | Result                                           |
+| ---------- | ------------ | -------------------- | ------------------------ | ------------------------------------------------ |
+| 2026-05-01 | Atlas        | Railway prod (empty) | Docker postgres:18 local | ✓ 10/10 migrations, all tables, row counts match |
+
+**Quarterly rehearsal schedule:** repeat this procedure every quarter
+(target: Feb, May, Aug, Nov) using a non-prod Postgres. Record results in
+the table above. Raise a CTO-escalation if the RTO target is missed.
+
+### Backup & Restore Troubleshooting
+
+| Symptom                               | Likely cause                                | Fix                                                             |
+| ------------------------------------- | ------------------------------------------- | --------------------------------------------------------------- |
+| `pg_dump: server version mismatch`    | Local pg_dump older than Railway Postgres   | Use `docker run postgres:18 pg_dump …` instead of local binary  |
+| `pg_restore: role "postgres" missing` | Target DB has different owner               | Add `--no-owner --no-acl` flags to pg_restore                   |
+| `prisma migrate status` shows drift   | Partial restore or missing migration files  | Run `prisma migrate resolve --applied <name>` or re-run restore |
+| Row counts lower than expected        | Dump taken mid-transaction or mid-migration | Re-dump from a quiesced source; verify dump file size > 0       |
