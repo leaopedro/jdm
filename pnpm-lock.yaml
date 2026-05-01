@@ -312,6 +312,9 @@ importers:
       '@jdm/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
       prisma:
         specifier: ^6.1.0
         version: 6.19.3(typescript@5.9.3)
