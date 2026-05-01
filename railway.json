@@ -6,7 +6,7 @@
   },
   "deploy": {
     "preDeployCommand": "node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma",
-    "startCommand": "node apps/api/dist/server.js",
+    "startCommand": "echo SHELL_BEFORE_NODE pwd=$(pwd) node=$(node -v 2>&1) ls=$(ls apps/api/dist/server.js 2>&1) && node apps/api/dist/server.js; EXIT=$?; echo SHELL_AFTER_NODE exit=$EXIT",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
