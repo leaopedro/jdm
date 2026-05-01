@@ -1,5 +1,32 @@
 # Contributing
 
+The repository is hosted at https://github.com/leaopedro/jdm. The default
+branch is `main` (we follow the modern Git convention; older docs that say
+"master" mean `main`).
+
+## Workflow (required for every change)
+
+Every change — code, docs, config — lands on `main` through a Pull Request.
+Direct pushes to `main` are not allowed.
+
+```
+issue assigned
+  → branch off main (`feat/<slug>`, `fix/<slug>`, `chore/<slug>`)
+  → commit logically and push the branch to origin
+  → open a PR to `main` and link the Paperclip issue
+  → reviewer (CTO today; peer engineer once the bench is hired) reviews
+  → fix, re-request review until approved
+  → merge to `main` (squash if commits are noisy)
+  → deploy (Railway / Vercel / EAS) as part of the merge, not a follow-up
+  → flip the matching `plans/roadmap.md` checkbox `[~]` → `[x]` in the same PR
+  → close the Paperclip issue with the PR link and verification evidence
+```
+
+The full lifecycle (planning, code review responsibilities, manual smoke
+test handoff, rollback plans) lives in [`docs/engineering-workflow.md`](docs/engineering-workflow.md)
+and [`docs/code-review.md`](docs/code-review.md). Read both before opening
+your first PR.
+
 ## Branching
 
 - Branch off `main`. Use Conventional Commit prefixes for branch names too:
