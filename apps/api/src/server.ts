@@ -1,3 +1,12 @@
+// Force sync stdout/stderr so log writes flush before crash. Pipe-mode stdout
+// is async by default; a crash during ESM resolution can lose buffered output.
+const stdoutHandle = (process.stdout as { _handle?: { setBlocking?: (b: boolean) => void } })
+  ._handle;
+const stderrHandle = (process.stderr as { _handle?: { setBlocking?: (b: boolean) => void } })
+  ._handle;
+stdoutHandle?.setBlocking?.(true);
+stderrHandle?.setBlocking?.(true);
+
 process.stdout.write(
   `[boot] node starting (pid=${process.pid}, node=${process.version}, cwd=${process.cwd()})\n`,
 );
