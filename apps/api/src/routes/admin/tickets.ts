@@ -3,7 +3,11 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { sendTransactionalPush } from '../../services/push/transactional.js';
-import { DuplicateTicketError, grantCompTicket } from '../../services/tickets/grant.js';
+import {
+  DuplicateTicketError,
+  GrantInputError,
+  grantCompTicket,
+} from '../../services/tickets/grant.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminTicketRoutes: FastifyPluginAsync = async (app) => {
@@ -44,6 +48,9 @@ export const adminTicketRoutes: FastifyPluginAsync = async (app) => {
     } catch (err) {
       if (err instanceof DuplicateTicketError) {
         return reply.status(409).send({ error: 'DuplicateTicket', message: err.message });
+      }
+      if (err instanceof GrantInputError) {
+        return reply.status(422).send({ error: 'InvalidInput', message: err.message });
       }
       throw err;
     }

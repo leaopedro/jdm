@@ -168,7 +168,7 @@ describe('POST /admin/tickets/grant', () => {
     expect(items[0]!.extraId).toBe(extra.id);
   });
 
-  it('writes ticket.grant_comp audit row', async () => {
+  it('writes ticket.grant_comp audit row with userId and note', async () => {
     const { holder, event, tier } = await seedGrantFixture();
     const { user: actor } = await createUser({
       email: 'c@jdm.test',
@@ -188,7 +188,90 @@ describe('POST /admin/tickets/grant', () => {
     expect(rows[0]!.actorId).toBe(actor.id);
     expect(rows[0]!.entityType).toBe('ticket');
     expect(rows[0]!.entityId).toBe(ticketId);
-    expect((rows[0]!.metadata as Record<string, unknown>)['note']).toBe('VIP guest');
+    const meta = rows[0]!.metadata as Record<string, unknown>;
+    expect(meta['note']).toBe('VIP guest');
+    expect(meta['userId']).toBe(holder.id);
+    expect(meta['eventId']).toBe(event.id);
+  });
+
+  it('increments quantitySold after comp grant', async () => {
+    const { holder, event, tier } = await seedGrantFixture();
+    const { user: actor } = await createUser({
+      email: 'e@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: { authorization: bearer(env, actor.id, 'admin') },
+      payload: { userId: holder.id, eventId: event.id, tierId: tier.id },
+    });
+    expect(res.statusCode).toBe(201);
+    const updated = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(updated.quantitySold).toBe(1);
+  });
+
+  it('422 when tierId does not belong to eventId', async () => {
+    const { holder, event } = await seedGrantFixture();
+    // Create a tier belonging to a different event
+    const otherEvent = await prisma.event.create({
+      data: {
+        slug: `oe-${Math.random().toString(36).slice(2, 8)}`,
+        title: 'Other Event',
+        description: 'd',
+        startsAt: new Date(Date.now() + 3600_000),
+        endsAt: new Date(Date.now() + 7200_000),
+        venueName: 'V',
+        venueAddress: 'A',
+        city: 'SP',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'published',
+        publishedAt: new Date(),
+        capacity: 5,
+      },
+    });
+    const otherTier = await prisma.ticketTier.create({
+      data: {
+        eventId: otherEvent.id,
+        name: 'Other Tier',
+        priceCents: 0,
+        quantityTotal: 5,
+        quantitySold: 0,
+        sortOrder: 0,
+      },
+    });
+    const { user: actor } = await createUser({
+      email: 'f@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: { authorization: bearer(env, actor.id, 'admin') },
+      payload: { userId: holder.id, eventId: event.id, tierId: otherTier.id },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: string }>().error).toBe('InvalidInput');
+  });
+
+  it('422 when userId does not exist', async () => {
+    const { event, tier } = await seedGrantFixture();
+    const { user: actor } = await createUser({
+      email: 'g@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: { authorization: bearer(env, actor.id, 'admin') },
+      payload: { userId: 'nonexistent-user-id', eventId: event.id, tierId: tier.id },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: string }>().error).toBe('InvalidInput');
   });
 
   it('409 when user already has a valid ticket for the event', async () => {

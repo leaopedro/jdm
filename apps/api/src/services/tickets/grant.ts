@@ -35,37 +35,60 @@ export class DuplicateTicketError extends Error {
   }
 }
 
+export class GrantInputError extends Error {
+  readonly code = 'GRANT_INPUT_ERROR' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'GrantInputError';
+  }
+}
+
 export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise<GrantResult> => {
   const { actorId, userId, eventId, tierId, extras = [], carId, licensePlate, note } = input;
 
   return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new GrantInputError(`user ${userId} not found`);
+
+    const tier = await tx.ticketTier.findFirst({
+      where: { id: tierId, eventId },
+      select: { id: true },
+    });
+    if (!tier) throw new GrantInputError(`tier ${tierId} not found for event ${eventId}`);
+
+    for (const extraId of extras) {
+      const extra = await tx.ticketExtra.findFirst({
+        where: { id: extraId, eventId },
+        select: { id: true },
+      });
+      if (!extra) throw new GrantInputError(`extra ${extraId} not found for event ${eventId}`);
+    }
+
     const conflict = await tx.ticket.findFirst({
       where: { userId, eventId, status: 'valid' },
     });
     if (conflict) throw new DuplicateTicketError(userId, eventId);
 
-    let order;
-    try {
-      order = await tx.order.create({
-        data: {
-          userId,
-          eventId,
-          tierId,
-          amountCents: 0,
-          currency: 'BRL',
-          method: 'card',
-          provider: 'stripe',
-          providerRef: null,
-          status: 'paid',
-          paidAt: new Date(),
-        },
-      });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new DuplicateTicketError(userId, eventId);
-      }
-      throw err;
-    }
+    const order = await tx.order.create({
+      data: {
+        userId,
+        eventId,
+        tierId,
+        amountCents: 0,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        providerRef: null,
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+
+    // Comp grants are uncapped but quantitySold must reflect reality for dashboards.
+    await tx.ticketTier.update({
+      where: { id: tierId },
+      data: { quantitySold: { increment: 1 } },
+    });
 
     let ticket;
     try {
@@ -99,7 +122,7 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
       extraResults.push({ extraId, code: item.code });
     }
 
-    const metadata: Record<string, unknown> = { eventId };
+    const metadata: Record<string, unknown> = { eventId, userId };
     if (carId) metadata['carId'] = carId;
     if (licensePlate) metadata['licensePlate'] = licensePlate;
     if (note) metadata['note'] = note;
