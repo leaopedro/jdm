@@ -30,6 +30,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
         salesOpenAt: input.salesOpenAt ? new Date(input.salesOpenAt) : null,
         salesCloseAt: input.salesCloseAt ? new Date(input.salesCloseAt) : null,
         sortOrder: nextSort,
+        requiresCar: input.requiresCar ?? false,
       },
     });
 
@@ -61,6 +62,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
     if (input.salesCloseAt !== undefined)
       data.salesCloseAt = input.salesCloseAt ? new Date(input.salesCloseAt) : null;
     if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
+    if (input.requiresCar !== undefined) data.requiresCar = input.requiresCar;
 
     const updated = await prisma.ticketTier.update({ where: { id: tierId }, data });
     await recordAudit({

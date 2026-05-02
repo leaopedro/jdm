@@ -53,6 +53,44 @@ describe('PATCH /admin/events/:eventId/tiers/:tierId', () => {
     expect(row.priceCents).toBe(7500);
   });
 
+  it('updates requiresCar to true', async () => {
+    const { event, tier } = await seed();
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}/tiers/${tier.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { requiresCar: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(row.requiresCar).toBe(true);
+  });
+
+  it('updates requiresCar back to false', async () => {
+    const { event } = await seed();
+    const tierWithCar = await prisma.ticketTier.create({
+      data: {
+        eventId: event.id,
+        name: 'Piloto',
+        priceCents: 10000,
+        quantityTotal: 10,
+        sortOrder: 1,
+        requiresCar: true,
+      },
+    });
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}/tiers/${tierWithCar.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { requiresCar: false },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tierWithCar.id } });
+    expect(row.requiresCar).toBe(false);
+  });
+
   it('404 when tier belongs to a different event', async () => {
     const { tier } = await seed();
     const other = await prisma.event.create({

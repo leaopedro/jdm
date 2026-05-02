@@ -24,6 +24,7 @@ export const ticketTierSchema = z.object({
   salesOpenAt: z.string().datetime().nullable(),
   salesCloseAt: z.string().datetime().nullable(),
   sortOrder: z.number().int(),
+  requiresCar: z.boolean(),
 });
 export type TicketTier = z.infer<typeof ticketTierSchema>;
 
