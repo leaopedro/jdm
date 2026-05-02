@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 import { addCarPhotoSchema, carInputSchema, carSchema, carUpdateSchema } from '@jdm/shared/cars';
+import { Prisma } from '@prisma/client';
 import type { Car as DbCar, CarPhoto as DbPhoto } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -8,8 +9,16 @@ import type { Uploads } from '../services/uploads/index.js';
 
 type CarWithPhotos = DbCar & { photos: DbPhoto[] };
 
-const serializeCar = (car: CarWithPhotos, uploads: Uploads) =>
-  carSchema.parse({
+const serializePhoto = (p: DbPhoto, uploads: Uploads) => ({
+  id: p.id,
+  url: uploads.buildPublicUrl(p.objectKey),
+  width: p.width,
+  height: p.height,
+});
+
+const serializeCar = (car: CarWithPhotos, uploads: Uploads) => {
+  const sorted = car.photos.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  return carSchema.parse({
     id: car.id,
     make: car.make,
     model: car.model,
@@ -17,17 +26,10 @@ const serializeCar = (car: CarWithPhotos, uploads: Uploads) =>
     nickname: car.nickname,
     createdAt: car.createdAt.toISOString(),
     updatedAt: car.updatedAt.toISOString(),
-    photos: car.photos
-      .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((p) => ({
-        id: p.id,
-        url: uploads.buildPublicUrl(p.objectKey),
-        width: p.width,
-        height: p.height,
-        sortOrder: p.sortOrder,
-      })),
+    photo: sorted[0] ? serializePhoto(sorted[0], uploads) : null,
+    photos: sorted.map((p) => serializePhoto(p, uploads)),
   });
+};
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const carRoutes: FastifyPluginAsync = async (app) => {
@@ -96,19 +98,32 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
     if (!app.uploads.isOwnedKey(objectKey, sub, 'car_photo')) {
       return reply.status(400).send({ error: 'BadRequest', message: 'object key not owned' });
     }
-    const car = await prisma.car.findFirst({ where: { id, userId: sub } });
+    const car = await prisma.car.findFirst({
+      where: { id, userId: sub },
+      include: { photos: { select: { id: true }, take: 1 } },
+    });
     if (!car) return reply.status(404).send({ error: 'NotFound' });
 
-    const count = await prisma.carPhoto.count({ where: { carId: id } });
-    await prisma.carPhoto.create({
-      data: {
-        carId: id,
-        objectKey,
-        width: width ?? null,
-        height: height ?? null,
-        sortOrder: count,
-      },
-    });
+    if (car.photos.length > 0) {
+      return reply.status(409).send({ error: 'Conflict', message: 'car_photo_limit_reached' });
+    }
+
+    try {
+      await prisma.carPhoto.create({
+        data: {
+          carId: id,
+          objectKey,
+          width: width ?? null,
+          height: height ?? null,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return reply.status(409).send({ error: 'Conflict', message: 'car_photo_limit_reached' });
+      }
+      throw e;
+    }
+
     const updated = await prisma.car.findUniqueOrThrow({
       where: { id },
       include: { photos: true },
@@ -124,8 +139,10 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       const { id, photoId } = request.params as { id: string; photoId: string };
       const car = await prisma.car.findFirst({ where: { id, userId: sub } });
       if (!car) return reply.status(404).send({ error: 'NotFound' });
-      const { count } = await prisma.carPhoto.deleteMany({ where: { id: photoId, carId: id } });
-      if (count === 0) return reply.status(404).send({ error: 'NotFound' });
+      const photo = await prisma.carPhoto.findFirst({ where: { id: photoId, carId: id } });
+      if (!photo) return reply.status(404).send({ error: 'NotFound' });
+      await prisma.carPhoto.delete({ where: { id: photoId } });
+      await app.uploads.deleteObject(photo.objectKey);
       return reply.status(204).send();
     },
   );

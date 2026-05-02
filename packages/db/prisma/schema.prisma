@@ -134,6 +134,7 @@ model CarPhoto {
 
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
 
+  @@unique([carId])
   @@index([carId, sortOrder])
 }
 

@@ -33,4 +33,8 @@ export class DevUploads implements Uploads {
   ): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }
+
+  async deleteObject(_objectKey: string): Promise<void> {
+    // no-op in dev
+  }
 }

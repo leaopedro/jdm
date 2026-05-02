@@ -21,6 +21,7 @@ export interface Uploads {
     userId: string,
     kind: 'avatar' | 'car_photo' | 'event_cover',
   ): boolean;
+  deleteObject(objectKey: string): Promise<void>;
 }
 
 export const EXT_FOR_MIME: Record<string, string> = {
