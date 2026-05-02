@@ -4,6 +4,7 @@ import { BRAZIL_STATE_CODES } from '@jdm/shared/profile';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { CoverUploader } from '~/components/cover-uploader';
 import { DateTimeField } from '~/components/date-time-field';
 import { createEventAction, type EventFormState } from '~/lib/event-actions';
 
@@ -137,7 +138,9 @@ export default function NewEventPage() {
           required
           defaultValue={v.capacity ?? ''}
         />
-        <input type="hidden" name="coverObjectKey" value="" />
+        <div className="col-span-2">
+          <CoverUploader initialKey={null} initialUrl={null} />
+        </div>
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">
           <Submit />
