@@ -8,6 +8,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono';
+import { DarkTheme, ThemeProvider, type Theme } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
@@ -19,6 +20,24 @@ import { View } from 'react-native';
 import { AuthProvider, useAuth } from '~/auth/context';
 import { initSentry } from '~/lib/sentry';
 import { theme } from '~/theme';
+
+// Override @react-navigation default light bg ('rgb(242,242,242)') so the
+// Stack/Tabs/SafeAreaView containers paint #0A0A0A on web — without this
+// the unfilled portion of every screen below the form bleeds the light
+// default theme through the mobile shell on the web export.
+const jdmNavTheme: Theme = {
+  ...DarkTheme,
+  dark: true,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#0a0a0a',
+    card: '#0a0a0a',
+    text: '#f5f5f5',
+    primary: '#e10600',
+    border: '#2a2a2a',
+    notification: '#e10600',
+  },
+};
 
 const Gate = () => {
   const auth = useAuth();
@@ -75,11 +94,16 @@ export default function RootLayout() {
     return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
   }
   return (
-    <StripeProvider publishableKey={stripeKey} merchantIdentifier="merchant.com.jdmexperience.app">
-      <AuthProvider>
-        <StatusBar style="light" />
-        <Gate />
-      </AuthProvider>
-    </StripeProvider>
+    <ThemeProvider value={jdmNavTheme}>
+      <StripeProvider
+        publishableKey={stripeKey}
+        merchantIdentifier="merchant.com.jdmexperience.app"
+      >
+        <AuthProvider>
+          <StatusBar style="light" />
+          <Gate />
+        </AuthProvider>
+      </StripeProvider>
+    </ThemeProvider>
   );
 }
