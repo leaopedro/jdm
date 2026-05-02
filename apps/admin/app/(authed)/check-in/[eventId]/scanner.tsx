@@ -1,6 +1,6 @@
 'use client';
 
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { useEffect, useRef, useState } from 'react';
 
 import { submitCheckIn, type CheckInActionResult } from '~/lib/check-in-actions';
@@ -12,17 +12,34 @@ type ScanState =
 
 const RESCAN_COOLDOWN_MS = 5000;
 
+function mapCameraError(err: unknown): string {
+  if (err instanceof Error) {
+    switch (err.name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Permissão de câmera negada. Habilite o acesso nas configurações do navegador e recarregue a página.';
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return 'Nenhuma câmera compatível detectada neste dispositivo.';
+      case 'NotReadableError':
+        return 'Câmera está em uso por outro aplicativo. Feche-o e tente novamente.';
+      default:
+        return err.message || 'Falha ao iniciar câmera.';
+    }
+  }
+  return 'Falha ao iniciar câmera.';
+}
+
 export function Scanner({ eventId }: { eventId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
   const lastScanRef = useRef<{ code: string; at: number } | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
     let stopped = false;
+    let controls: IScannerControls | null = null;
+    const reader = new BrowserMultiFormatReader();
 
     const handleScan = async (code: string) => {
       setState({ kind: 'pending' });
@@ -31,24 +48,35 @@ export function Scanner({ eventId }: { eventId: string }) {
     };
 
     const start = async () => {
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        setCameraError(
+          typeof window !== 'undefined' && !window.isSecureContext
+            ? 'Câmera requer conexão segura (HTTPS). Acesse pela URL https://.'
+            : 'Este navegador não suporta acesso à câmera.',
+        );
+        return;
+      }
       try {
-        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-        const deviceId = devices[0]?.deviceId;
-        if (!deviceId) {
-          setCameraError('Nenhuma câmera detectada.');
+        const next = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
+          videoRef.current!,
+          (res) => {
+            if (stopped || !res) return;
+            const code = res.getText();
+            const now = Date.now();
+            const last = lastScanRef.current;
+            if (last && last.code === code && now - last.at < RESCAN_COOLDOWN_MS) return;
+            lastScanRef.current = { code, at: now };
+            void handleScan(code);
+          },
+        );
+        if (stopped) {
+          next.stop();
           return;
         }
-        await reader.decodeFromVideoDevice(deviceId, videoRef.current!, (res) => {
-          if (stopped || !res) return;
-          const code = res.getText();
-          const now = Date.now();
-          const last = lastScanRef.current;
-          if (last && last.code === code && now - last.at < RESCAN_COOLDOWN_MS) return;
-          lastScanRef.current = { code, at: now };
-          void handleScan(code);
-        });
+        controls = next;
       } catch (err) {
-        setCameraError(err instanceof Error ? err.message : 'erro câmera');
+        setCameraError(mapCameraError(err));
       }
     };
 
@@ -56,9 +84,7 @@ export function Scanner({ eventId }: { eventId: string }) {
 
     return () => {
       stopped = true;
-      // @zxing 0.1.x exposes stopStreams via the prototype:
-      (reader as unknown as { stopContinuousDecode?: () => void }).stopContinuousDecode?.();
-      (reader as unknown as { reset?: () => void }).reset?.();
+      controls?.stop();
     };
   }, [eventId]);
 
