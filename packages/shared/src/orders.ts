@@ -9,6 +9,7 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export const createOrderRequestSchema = z.object({
   eventId: z.string().min(1),
   tierId: z.string().min(1),
+  quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
 });
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;

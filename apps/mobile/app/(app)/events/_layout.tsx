@@ -5,6 +5,7 @@ export default function EventsLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[slug]" />
+      <Stack.Screen name="buy/[eventSlug]" />
     </Stack>
   );
 }
