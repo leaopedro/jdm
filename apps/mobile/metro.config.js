@@ -1,4 +1,5 @@
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
+const { withNativeWind } = require('nativewind/metro');
 const path = require('node:path');
 
 const projectRoot = __dirname;
@@ -41,4 +42,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     : context.resolveRequest(context, moduleName, platform);
 };
 
-module.exports = config;
+module.exports = withNativeWind(config, {
+  input: './global.css',
+  configPath: './tailwind.config.js',
+});

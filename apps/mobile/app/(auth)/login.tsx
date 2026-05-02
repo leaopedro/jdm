@@ -1,16 +1,23 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@jdm/shared/auth';
 import type { LoginInput } from '@jdm/shared/auth';
-import { Link, useRouter } from 'expo-router';
+import { Button, Text } from '@jdm/ui';
+import { useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  View,
+} from 'react-native';
 
 import { ApiError } from '~/api/client';
 import { useAuth } from '~/auth/context';
-import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
-import { theme } from '~/theme';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -47,69 +54,112 @@ export default function LoginScreen() {
   });
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{authCopy.login.title}</Text>
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, value } }) => (
-          <TextField
-            label={authCopy.login.email}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            value={value}
-            onChangeText={onChange}
-            error={errors.email?.message}
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, value } }) => (
-          <TextField
-            label={authCopy.login.password}
-            secureTextEntry
-            autoComplete="password"
-            value={value}
-            onChangeText={onChange}
-            error={errors.password?.message}
-          />
-        )}
-      />
-      <Button
-        label={isSubmitting ? authCopy.common.loading : authCopy.login.submit}
-        onPress={() => void onSubmit()}
-      />
-      <Link
-        style={styles.link}
-        href="/forgot"
-        accessibilityRole="link"
-        accessibilityLabel={authCopy.login.forgot}
+    <SafeAreaView className="flex-1 bg-bg">
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {authCopy.login.forgot}
-      </Link>
-      <Link
-        style={styles.link}
-        href="/signup"
-        accessibilityRole="link"
-        accessibilityLabel={authCopy.login.noAccount}
-      >
-        {authCopy.login.noAccount}
-      </Link>
-    </View>
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-5 pb-10"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ height: 64 }} />
+
+          <View className="items-center">
+            <Image
+              // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+              source={require('@jdm/design/assets/logo-wordmark.webp')}
+              accessibilityLabel={authCopy.common.appName}
+              style={{ width: 220, height: 88, resizeMode: 'contain' }}
+            />
+          </View>
+
+          <View style={{ height: 12 }} />
+
+          <Text variant="eyebrow" tone="muted" className="text-center">
+            {authCopy.login.tagline}
+          </Text>
+
+          <View style={{ height: 40 }} />
+
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, value } }) => (
+              <TextField
+                label={authCopy.login.email}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                value={value}
+                onChangeText={onChange}
+                error={errors.email?.message}
+              />
+            )}
+          />
+
+          <View style={{ height: 16 }} />
+
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, value } }) => (
+              <TextField
+                label={authCopy.login.password}
+                secureTextEntry
+                autoComplete="password"
+                value={value}
+                onChangeText={onChange}
+                error={errors.password?.message}
+              />
+            )}
+          />
+
+          <View style={{ height: 8 }} />
+
+          <View className="flex-row justify-end">
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={authCopy.login.forgot}
+              onPress={() => router.push('/forgot')}
+              hitSlop={8}
+            >
+              <Text tone="muted" variant="bodySm">
+                {authCopy.login.forgot}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{ height: 24 }} />
+
+          <Button
+            label={authCopy.login.submit}
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            onPress={() => void onSubmit()}
+          />
+
+          <View style={{ height: 32 }} />
+
+          <View className="flex-row items-center justify-center">
+            <Text tone="muted">{authCopy.login.noAccountPrefix}</Text>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={authCopy.login.createAccount}
+              onPress={() => router.push('/signup')}
+              hitSlop={8}
+            >
+              <Text tone="brand" weight="semibold">
+                {authCopy.login.createAccount}
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
-    padding: theme.spacing.xl,
-    gap: theme.spacing.md,
-    justifyContent: 'center',
-  },
-  title: { color: theme.colors.fg, fontSize: theme.font.size.xxl, fontWeight: '700' },
-  link: { color: theme.colors.fg, fontSize: theme.font.size.md, textDecorationLine: 'underline' },
-});

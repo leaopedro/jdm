@@ -1,5 +1,16 @@
+import '../global.css';
+
+import { Anton_400Regular } from '@expo-google-fonts/anton';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
+import { useFonts } from 'expo-font';
 import { Redirect, Slot, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -44,6 +55,14 @@ export default function RootLayout() {
   useEffect(() => {
     initSentry();
   }, []);
+  const [fontsLoaded] = useFonts({
+    Anton_400Regular,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    JetBrainsMono_400Regular,
+  });
   const stripeKey =
     (Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined)
       ?.stripePublishableKey ?? '';
@@ -51,6 +70,9 @@ export default function RootLayout() {
     // Not thrown: dev builds without Stripe configured should still run
     // screens unrelated to payment. StripeProvider just becomes a no-op.
     console.warn('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set — payments will fail.');
+  }
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
   }
   return (
     <StripeProvider publishableKey={stripeKey} merchantIdentifier="merchant.com.jdmexperience.app">
