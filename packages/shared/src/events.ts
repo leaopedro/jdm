@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { eventExtraPublicSchema } from './extras.js';
 import { stateCodeSchema } from './profile.js';
 
 export const eventTypeSchema = z.enum(['meeting', 'drift', 'other']);
@@ -41,12 +42,13 @@ export const eventSummarySchema = z.object({
 });
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
-// Detail: full payload with tiers + venue.
+// Detail: full payload with tiers, extras + venue.
 export const eventDetailSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
   tiers: z.array(ticketTierSchema),
+  extras: z.array(eventExtraPublicSchema),
 });
 export type EventDetail = z.infer<typeof eventDetailSchema>;
 
