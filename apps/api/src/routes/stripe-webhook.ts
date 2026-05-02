@@ -5,6 +5,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
   issueTicketForPaidOrder,
+  OrderNotPendingError,
   TicketAlreadyExistsForEventError,
 } from '../services/tickets/issue.js';
 
@@ -94,6 +95,23 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
             'stripe webhook: duplicate ticket, refunded',
           );
           return reply.status(200).send({ ok: true, refunded: true });
+        }
+        // Order expired between POST /orders and webhook delivery.
+        // Customer paid but capacity was already released — refund immediately.
+        if (err instanceof OrderNotPendingError) {
+          const staleOrder = await prisma.order.findUnique({
+            where: { id: orderId },
+            select: { status: true },
+          });
+          if (staleOrder?.status === 'expired') {
+            await app.stripe.refund(intent.id, 'order-expired');
+            await markProcessed(event.id, event);
+            request.log.warn(
+              { orderId, paymentIntentId: intent.id },
+              'stripe webhook: order expired at payment, refunded',
+            );
+            return reply.status(200).send({ ok: true, refunded: true, reason: 'expired' });
+          }
         }
         throw err;
       }
