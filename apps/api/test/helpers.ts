@@ -20,8 +20,11 @@ export const makeAppWithFakeStripe = async (): Promise<{
 export const resetDatabase = async (): Promise<void> => {
   await prisma.notification.deleteMany();
   await prisma.deviceToken.deleteMany();
+  await prisma.ticketExtraItem.deleteMany();
   await prisma.ticket.deleteMany();
+  await prisma.orderExtra.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.ticketExtra.deleteMany();
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.adminAudit.deleteMany();
   await prisma.ticketTier.deleteMany();

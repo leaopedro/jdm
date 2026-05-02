@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { adminCheckInRoutes } from './check-in.js';
 import { adminEventRoutes } from './events.js';
+import { adminTicketRoutes } from './tickets.js';
 import { adminTierRoutes } from './tiers.js';
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
@@ -13,10 +14,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminCheckInRoutes);
   });
 
-  // Event + tier management: organizer/admin only. Staff are rejected here.
+  // Event + tier management + comp grants: organizer/admin only. Staff are rejected here.
   await app.register(async (scope) => {
     scope.addHook('preHandler', scope.requireRole('organizer', 'admin'));
     await scope.register(adminEventRoutes);
     await scope.register(adminTierRoutes);
+    await scope.register(adminTicketRoutes);
   });
 };
