@@ -25,8 +25,10 @@ export const profileCopy = {
     delete: 'Excluir',
     deleteConfirm: 'Remover este carro?',
     addPhoto: 'Adicionar foto',
+    replacePhoto: 'Trocar',
     photoUploading: 'Enviando foto…',
     removePhoto: 'Remover',
+    removePhotoConfirm: 'Remover foto deste carro?',
   },
   errors: {
     network: 'Sem conexão. Tente novamente.',
