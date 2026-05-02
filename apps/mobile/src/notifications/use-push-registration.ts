@@ -13,6 +13,9 @@ export const usePushRegistration = ({ isAuthenticated }: UsePushRegistrationDeps
   const lastSent = useRef<string | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      return undefined;
+    }
     if (!isAuthenticated) {
       lastSent.current = null;
       return undefined;

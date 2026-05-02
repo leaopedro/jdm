@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @jdm/shared build && pnpm --filter @jdm/mobile build:web",
+  "installCommand": "echo 'install handled by buildCommand'",
+  "outputDirectory": "dist",
+  "framework": null
+}

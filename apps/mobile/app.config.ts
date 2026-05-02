@@ -63,6 +63,11 @@ const config: ExpoConfig = {
       },
     ],
   ],
+  web: {
+    bundler: 'metro',
+    output: 'single',
+    favicon: './assets/icon.png',
+  },
   experiments: { typedRoutes: true },
   extra: {
     variant,
