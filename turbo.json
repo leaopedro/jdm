@@ -4,7 +4,18 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": [
+        "APP_VARIANT",
+        "EXPO_PUBLIC_API_BASE_URL",
+        "EXPO_PUBLIC_SENTRY_DSN",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_API_BASE_URL",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT_ADMIN",
+        "SENTRY_PROJECT_MOBILE"
+      ]
     },
     "dev": {
       "cache": false,
