@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 import { Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { sendTransactionalPush } from '../services/push/transactional.js';
@@ -41,13 +42,23 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.post('/stripe/webhook', async (request, reply) => {
     const signature = request.headers['stripe-signature'];
     if (typeof signature !== 'string' || signature.length === 0) {
+      Sentry.captureMessage('stripe webhook: missing signature header', {
+        level: 'warning',
+        tags: { kind: 'payment-webhook-signature', provider: 'stripe' },
+      });
       return reply.status(400).send({ error: 'BadRequest', message: 'missing signature' });
     }
     const raw = request.body as Buffer;
     let event;
     try {
       event = app.stripe.constructWebhookEvent(raw, signature);
-    } catch {
+    } catch (sigErr) {
+      Sentry.withScope((scope) => {
+        scope.setTag('kind', 'payment-webhook-signature');
+        scope.setTag('provider', 'stripe');
+        scope.setLevel('warning');
+        Sentry.captureException(sigErr);
+      });
       return reply.status(400).send({ error: 'BadRequest', message: 'invalid signature' });
     }
 
@@ -79,6 +90,13 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
             { err: pushErr, orderId },
             'stripe webhook: ticket-confirmed push failed',
           );
+          Sentry.withScope((scope) => {
+            scope.setTag('kind', 'push-send-failure');
+            scope.setTag('push_kind', 'ticket.confirmed');
+            scope.setLevel('warning');
+            scope.setExtras({ orderId });
+            Sentry.captureException(pushErr);
+          });
         }
         return reply.status(200).send({ ok: true, deduped: !firstTime });
       } catch (err) {
