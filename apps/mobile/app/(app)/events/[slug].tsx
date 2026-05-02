@@ -1,6 +1,7 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -109,11 +110,22 @@ export default function EventDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {event.coverUrl ? (
-        <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
-      ) : (
-        <View style={[styles.cover, styles.coverPlaceholder]} />
-      )}
+      <View>
+        {event.coverUrl ? (
+          <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
+        ) : (
+          <View style={[styles.cover, styles.coverPlaceholder]} />
+        )}
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+          hitSlop={8}
+          style={styles.backButton}
+        >
+          <ArrowLeft color="#F5F5F5" size={22} strokeWidth={2} />
+        </Pressable>
+      </View>
       <View style={styles.section}>
         <Text style={styles.title}>{event.title}</Text>
         <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
@@ -202,9 +214,25 @@ const styles = StyleSheet.create({
   },
   cover: { width: '100%', height: 220 },
   coverPlaceholder: { backgroundColor: theme.colors.border },
+  backButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(10, 10, 10, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   section: { padding: theme.spacing.lg, gap: theme.spacing.xs },
   title: { color: theme.colors.fg, fontSize: theme.font.size.lg, fontWeight: '700' },
-  h2: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
+  h2: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+    fontWeight: '600',
+    marginBottom: theme.spacing.md,
+  },
   body: { color: theme.colors.fg, fontSize: theme.font.size.md },
   sub: { color: theme.colors.muted },
   error: { color: theme.colors.muted },
