@@ -64,6 +64,8 @@ The admin app runs on Vercel and calls the Railway API from the browser. All `NE
 
 Note: The Railway API must configure `CORS_ORIGINS` to include the admin domain (Vercel preview URL + production domain) so browser requests succeed.
 
+Note: R2 buckets enforce their own CORS policy, separate from the API's `CORS_ORIGINS`. Browser PUTs to presigned URLs require the bucket's CORS rules to include the requesting origin. See `docs/r2.md` for the canonical spec (`infra/r2-cors.json`) and runbook.
+
 ## Change log
 
 - (append entries: `YYYY-MM-DD · secret · rotated by`)
