@@ -8,7 +8,7 @@ export interface TicketValidationResult {
   /** Compact tickets array packed into Stripe PI metadata */
   ticketsMetadata: { e: string[]; c?: string; p?: string }[];
   /** For CAS reservation inside transaction — one entry per unique extraId with total count */
-  extraStock: { id: string; quantityTotal: number; count: number }[];
+  extraStock: { id: string; quantityTotal: number | null; count: number }[];
 }
 
 type Tx = Prisma.TransactionClient;
@@ -82,7 +82,7 @@ export async function validateTickets(
       });
     }
     const count = extraCounts.get(extraId) ?? 1;
-    if (extra.quantityTotal - extra.quantitySold < count) {
+    if (extra.quantityTotal !== null && extra.quantityTotal - extra.quantitySold < count) {
       throw Object.assign(new Error(`extra ${extraId} is sold out`), { code: 'EXTRA_SOLD_OUT' });
     }
   }
@@ -95,7 +95,7 @@ export async function validateTickets(
 
   let totalExtrasCents = 0;
   const extraEntries: { extraId: string; priceCents: number; quantity: number }[] = [];
-  const extraStock: { id: string; quantityTotal: number; count: number }[] = [];
+  const extraStock: { id: string; quantityTotal: number | null; count: number }[] = [];
 
   for (const [extraId, count] of extraCounts) {
     const extra = extrasById.get(extraId)!;
@@ -113,12 +113,16 @@ export async function validateTickets(
  * (race condition) — allowing the caller's transaction to roll back atomically.
  */
 export async function reserveExtras(
-  extraStock: { id: string; quantityTotal: number; count: number }[],
+  extraStock: { id: string; quantityTotal: number | null; count: number }[],
   tx: Tx,
 ): Promise<void> {
   for (const { id, quantityTotal, count } of extraStock) {
     const result = await tx.ticketExtra.updateMany({
-      where: { id, quantitySold: { lte: quantityTotal - count } },
+      where: {
+        id,
+        // null quantityTotal = unlimited; skip CAS stock predicate
+        ...(quantityTotal !== null ? { quantitySold: { lte: quantityTotal - count } } : {}),
+      },
       data: { quantitySold: { increment: count } },
     });
     if (result.count === 0) {
