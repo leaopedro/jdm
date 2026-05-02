@@ -103,17 +103,23 @@ export default function BuyScreen() {
     );
   }
 
-  // --- Pluggable steps: C7 and E3 will register here ---
+  // C7 (extras) and E3 (car/plate) will push steps here
   const pluggableSteps: WizardStepDefinition[] = [];
+
+  const handleOrderCreated = useCallback(
+    (order: { clientSecret: string }) => handlePayment(order.clientSecret),
+    [handlePayment],
+  );
 
   if (phase === 'wizard' && selectedTier) {
     return (
       <WizardProvider
+        key={`${selectedTier.id}-${quantity}`}
         eventId={event.id}
         tier={selectedTier}
         quantity={quantity}
         steps={pluggableSteps}
-        onOrderCreated={(order) => handlePayment(order.clientSecret)}
+        onOrderCreated={handleOrderCreated}
       >
         <PerTicketWizard />
       </WizardProvider>

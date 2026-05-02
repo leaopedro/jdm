@@ -23,7 +23,11 @@ export function StepIndicator({
         <Text style={styles.ticketLabel}>{ticketLabel}</Text>
         <Text style={styles.stepLabel}>{stepLabel}</Text>
       </View>
-      <View style={styles.track}>
+      <View
+        style={styles.track}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: totalSteps, now: currentStep }}
+      >
         <View style={[styles.fill, { width: `${progress * 100}%` }]} />
       </View>
       <Text style={styles.counter}>
