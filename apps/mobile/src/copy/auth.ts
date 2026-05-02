@@ -57,8 +57,17 @@ export const authCopy = {
   },
   forgot: {
     title: 'Recuperar senha',
-    email: 'E-mail cadastrado',
+    subtitle: 'Digita o e-mail da sua conta e a gente manda um link pra você redefinir a senha.',
+    email: 'E-mail',
+    emailPlaceholder: 'voce@email.com',
     submit: 'Enviar link',
+    back: 'Voltar pro login',
+    successTitle: 'Confira seu e-mail',
+    successBody: (email: string) =>
+      `Mandamos um link pra ${email}. Toque no link pra redefinir sua senha.`,
+    resend: 'Reenviar',
+    resendIn: (seconds: number) => `Reenviar em ${seconds}s`,
+    notFound: 'E-mail não encontrado.',
     sent: 'Se o e-mail existir, enviaremos um link em instantes.',
   },
   reset: {
