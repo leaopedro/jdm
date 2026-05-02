@@ -1,5 +1,7 @@
 # Phase 1 · F7a Admin — Event CRUD (first pass) Implementation Plan
 
+> 2026-05-02 hotfix note (`JDMA-171`): stale-session redirect loop fix shipped on `main` via `f6f8a93` (`/login?reauth=1` loop-break + forced auth-cookie expiry on reauth path + middleware auth-state tightening).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give organizers/admins a first-pass web console to log in, create/edit/publish/cancel events, upload a cover image, and manage ticket tiers. Attendees in the mobile app immediately see any event flipped to `published`. All mutations are role-gated (`organizer | admin`) and audit-logged.
