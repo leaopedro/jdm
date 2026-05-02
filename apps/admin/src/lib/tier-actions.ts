@@ -18,6 +18,7 @@ export const createTierAction = async (
     name: fd.get('name'),
     priceCents: toNumber(fd.get('priceCents')),
     quantityTotal: toNumber(fd.get('quantityTotal')),
+    requiresCar: fd.get('requiresCar') === 'true',
   });
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join('; ') };
@@ -44,6 +45,7 @@ export const updateTierAction = async (
   if (typeof price === 'string' && price !== '') raw.priceCents = Number(price);
   const qty = fd.get('quantityTotal');
   if (typeof qty === 'string' && qty !== '') raw.quantityTotal = Number(qty);
+  raw.requiresCar = fd.get('requiresCar') === 'true';
 
   const parsed = adminTierUpdateSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues.map((i) => i.message).join('; ') };

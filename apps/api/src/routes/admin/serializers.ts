@@ -11,4 +11,5 @@ export const serializeAdminTier = (t: DbTier) => ({
   salesOpenAt: t.salesOpenAt?.toISOString() ?? null,
   salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
   sortOrder: t.sortOrder,
+  requiresCar: t.requiresCar,
 });

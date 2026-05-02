@@ -54,6 +54,15 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
             defaultValue={tier.quantityTotal}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              name="requiresCar"
+              type="checkbox"
+              defaultChecked={tier.requiresCar}
+              value="true"
+            />
+            Associar carro (piloto)
+          </label>
           <Submit label="Salvar" />
           {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}
         </form>
@@ -128,6 +137,10 @@ export const TierList = ({ eventId, tiers }: { eventId: string; tiers: AdminTick
             required
             className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
+        </label>
+        <label className="flex items-center gap-1 self-end pb-1 text-sm">
+          <input name="requiresCar" type="checkbox" value="true" />
+          Associar carro (piloto)
         </label>
         <Submit label="Adicionar" />
         {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}

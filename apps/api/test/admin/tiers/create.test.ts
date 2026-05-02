@@ -74,4 +74,34 @@ describe('POST /admin/events/:eventId/tiers', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('creates tier with requiresCar=true', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/tiers`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { name: 'Piloto', priceCents: 10000, quantityTotal: 20, requiresCar: true },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ requiresCar: boolean }>();
+    expect(body.requiresCar).toBe(true);
+    const tier = await prisma.ticketTier.findFirstOrThrow({ where: { eventId: event.id } });
+    expect(tier.requiresCar).toBe(true);
+  });
+
+  it('creates tier with requiresCar=false by default', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/tiers`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { name: 'Geral', priceCents: 5000, quantityTotal: 100 },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ requiresCar: boolean }>();
+    expect(body.requiresCar).toBe(false);
+  });
 });

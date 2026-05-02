@@ -138,6 +138,7 @@ export const adminTierCreateSchema = z
     salesOpenAt: z.string().datetime().nullable().optional(),
     salesCloseAt: z.string().datetime().nullable().optional(),
     sortOrder: z.number().int().optional(),
+    requiresCar: z.boolean().optional(),
   })
   .refine(
     (v) => !v.salesOpenAt || !v.salesCloseAt || new Date(v.salesCloseAt) > new Date(v.salesOpenAt),
@@ -153,6 +154,7 @@ export const adminTierUpdateSchema = z
     salesOpenAt: z.string().datetime().nullable(),
     salesCloseAt: z.string().datetime().nullable(),
     sortOrder: z.number().int(),
+    requiresCar: z.boolean(),
   })
   .partial()
   .strict();

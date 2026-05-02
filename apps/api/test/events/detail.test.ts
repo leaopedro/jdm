@@ -108,6 +108,51 @@ describe('GET /events/:slug', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('exposes requiresCar on tier in public detail response', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'pilots-only',
+        title: 'Drift Event',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'drift',
+        status: 'published',
+        capacity: 50,
+        publishedAt: new Date(),
+        tiers: {
+          create: [
+            {
+              name: 'Espectador',
+              priceCents: 2000,
+              quantityTotal: 40,
+              sortOrder: 0,
+              requiresCar: false,
+            },
+            {
+              name: 'Piloto',
+              priceCents: 8000,
+              quantityTotal: 10,
+              sortOrder: 1,
+              requiresCar: true,
+            },
+          ],
+        },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/events/pilots-only' });
+    expect(res.statusCode).toBe(200);
+    const body = eventDetailSchema.parse(res.json());
+    const espectador = body.tiers.find((t) => t.name === 'Espectador');
+    const piloto = body.tiers.find((t) => t.name === 'Piloto');
+    expect(espectador?.requiresCar).toBe(false);
+    expect(piloto?.requiresCar).toBe(true);
+  });
+
   it('returns 404 for cancelled event', async () => {
     await prisma.event.create({
       data: {
