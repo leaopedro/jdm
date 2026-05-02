@@ -52,5 +52,25 @@ describe('GET /me/cars', () => {
     expect(body.cars[0]).toMatchObject({ make: 'Honda', model: 'Civic', year: 1999 });
     expect(body.cars[0]?.photos).toHaveLength(1);
     expect(body.cars[0]?.photos[0]?.url).toMatch(/^https?:\/\/.+car_photo\//);
+    expect(body.cars[0]?.photo).toBeTruthy();
+    expect(body.cars[0]?.photo?.url).toMatch(/^https?:\/\/.+car_photo\//);
+  });
+
+  it('returns photo as null when car has no photos', async () => {
+    const { user } = await createUser({ verified: true });
+    await prisma.car.create({
+      data: { userId: user.id, make: 'Honda', model: 'S2000', year: 2004 },
+    });
+
+    const env = loadEnv();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/cars',
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = carListResponseSchema.parse(res.json());
+    expect(body.cars[0]?.photo).toBeNull();
+    expect(body.cars[0]?.photos).toHaveLength(0);
   });
 });

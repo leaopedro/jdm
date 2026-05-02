@@ -32,6 +32,7 @@ export const carSchema = z.object({
   model: z.string(),
   year: z.number().int(),
   nickname: z.string().max(60).nullable(),
+  photo: carPhotoSchema.nullable(),
   photos: z.array(carPhotoSchema),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
