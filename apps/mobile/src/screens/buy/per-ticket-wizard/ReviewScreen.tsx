@@ -20,7 +20,6 @@ export function ReviewScreen() {
   const totalCents = unitPrice * quantity;
 
   const handleSubmit = async () => {
-    // TODO(JDMA-147): remove guard once createOrder accepts tickets[] batch shape
     if (quantity > 1) {
       Alert.alert(buyCopy.review.errorTitle, 'Compra de múltiplos ingressos ainda não disponível.');
       return;
@@ -32,6 +31,7 @@ export function ReviewScreen() {
         tierId: tier.id,
         quantity,
         method: 'card',
+        tickets: [{ extras: [] }],
       });
       await onOrderCreated(order);
     } catch {
