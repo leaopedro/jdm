@@ -6,7 +6,13 @@ import {
   eventSummarySchema,
   ticketTierSchema,
 } from '@jdm/shared/events';
-import type { Event as DbEvent, Prisma, TicketTier as DbTier } from '@prisma/client';
+import { eventExtraPublicSchema } from '@jdm/shared/extras';
+import type {
+  Event as DbEvent,
+  Prisma,
+  TicketExtra as DbExtra,
+  TicketTier as DbTier,
+} from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { Uploads } from '../services/uploads/index.js';
@@ -46,7 +52,19 @@ const serializeTier = (t: DbTier) =>
     sortOrder: t.sortOrder,
   });
 
-const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
+const serializeExtra = (x: DbExtra) =>
+  eventExtraPublicSchema.parse({
+    id: x.id,
+    name: x.name,
+    description: x.description,
+    priceCents: x.priceCents,
+    currency: x.currency,
+    quantityRemaining:
+      x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
+    sortOrder: x.sortOrder,
+  });
+
+const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, uploads: Uploads) =>
   eventDetailSchema.parse({
     id: e.id,
     slug: e.slug,
@@ -65,6 +83,10 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map(serializeTier),
+    extras: e.extras
+      .filter((x) => x.quantityTotal == null || x.quantitySold < x.quantityTotal)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(serializeExtra),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -117,7 +139,10 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     const { slug } = request.params as { slug: string };
     const event = await prisma.event.findFirst({
       where: { slug, status: 'published' },
-      include: { tiers: true },
+      include: {
+        tiers: true,
+        extras: { where: { active: true } },
+      },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializeDetail(event, app.uploads);

@@ -30,6 +30,10 @@
       "types": "./dist/events.d.ts",
       "default": "./dist/events.js"
     },
+    "./extras": {
+      "types": "./dist/extras.d.ts",
+      "default": "./dist/extras.js"
+    },
     "./health": {
       "types": "./dist/health.d.ts",
       "default": "./dist/health.js"

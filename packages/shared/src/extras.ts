@@ -10,13 +10,25 @@ export const ticketExtraSchema = z.object({
   description: z.string().nullable(),
   priceCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
-  quantityTotal: z.number().int().positive(),
+  quantityTotal: z.number().int().positive().nullable(),
   quantitySold: z.number().int().nonnegative(),
+  active: z.boolean(),
   sortOrder: z.number().int(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 export type TicketExtra = z.infer<typeof ticketExtraSchema>;
+
+export const eventExtraPublicSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(140),
+  description: z.string().nullable(),
+  priceCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+  quantityRemaining: z.number().int().nonnegative().nullable(),
+  sortOrder: z.number().int(),
+});
+export type EventExtraPublic = z.infer<typeof eventExtraPublicSchema>;
 
 export const orderExtraSchema = z.object({
   id: z.string().min(1),

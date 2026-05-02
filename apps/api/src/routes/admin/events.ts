@@ -4,7 +4,13 @@ import {
   adminEventDetailSchema,
   adminEventUpdateSchema,
 } from '@jdm/shared/admin';
-import type { Event as DbEvent, TicketTier as DbTier, Prisma } from '@prisma/client';
+import { eventExtraPublicSchema } from '@jdm/shared/extras';
+import type {
+  Event as DbEvent,
+  TicketExtra as DbExtra,
+  TicketTier as DbTier,
+  Prisma,
+} from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
@@ -13,7 +19,19 @@ import type { Uploads } from '../../services/uploads/index.js';
 
 import { serializeAdminTier } from './serializers.js';
 
-const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
+const serializeExtra = (x: DbExtra) =>
+  eventExtraPublicSchema.parse({
+    id: x.id,
+    name: x.name,
+    description: x.description,
+    priceCents: x.priceCents,
+    currency: x.currency,
+    quantityRemaining:
+      x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
+    sortOrder: x.sortOrder,
+  });
+
+const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, uploads: Uploads) =>
   adminEventDetailSchema.parse({
     id: e.id,
     slug: e.slug,
@@ -37,6 +55,10 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[] }, uploads: Uploads) =>
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map(serializeAdminTier),
+    extras: e.extras
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(serializeExtra),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -61,7 +83,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
           capacity: input.capacity,
           status: 'draft',
         },
-        include: { tiers: true },
+        include: { tiers: true, extras: true },
       });
       await recordAudit({
         actorId: sub,
@@ -82,7 +104,10 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/events/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const event = await prisma.event.findUnique({ where: { id }, include: { tiers: true } });
+    const event = await prisma.event.findUnique({
+      where: { id },
+      include: { tiers: true, extras: true },
+    });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializeDetail(event, app.uploads);
   });
@@ -111,7 +136,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     const updated = await prisma.event.update({
       where: { id },
       data,
-      include: { tiers: true },
+      include: { tiers: true, extras: true },
     });
     await recordAudit({
       actorId: sub,
@@ -142,7 +167,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
         status: 'published',
         publishedAt: existing.publishedAt ?? new Date(),
       },
-      include: { tiers: true },
+      include: { tiers: true, extras: true },
     });
     await recordAudit({
       actorId: sub,
@@ -164,7 +189,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     const updated = await prisma.event.update({
       where: { id },
       data: { status: 'cancelled' },
-      include: { tiers: true },
+      include: { tiers: true, extras: true },
     });
     await recordAudit({
       actorId: sub,
