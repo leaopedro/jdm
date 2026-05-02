@@ -7,7 +7,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get('/health', async () => {
     const payload = {
       status: 'ok' as const,
-      sha: process.env.GIT_SHA ?? 'dev',
+      sha: process.env.GIT_SHA || 'dev',
       uptimeSeconds: Math.round(process.uptime()),
     };
     return healthResponseSchema.parse(payload);

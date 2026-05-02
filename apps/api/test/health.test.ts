@@ -18,6 +18,28 @@ describe('GET /health', () => {
     }
   });
 
+  it('coerces empty GIT_SHA to "dev"', async () => {
+    const original = process.env.GIT_SHA;
+    process.env.GIT_SHA = '';
+    try {
+      const app = await buildApp(loadEnv());
+      try {
+        const response = await app.inject({ method: 'GET', url: '/health' });
+        expect(response.statusCode).toBe(200);
+        const parsed = healthResponseSchema.parse(response.json());
+        expect(parsed.sha).toBe('dev');
+      } finally {
+        await app.close();
+      }
+    } finally {
+      if (original === undefined) {
+        delete process.env.GIT_SHA;
+      } else {
+        process.env.GIT_SHA = original;
+      }
+    }
+  });
+
   it('assigns a request id per request', async () => {
     const app = await buildApp(loadEnv());
     try {
