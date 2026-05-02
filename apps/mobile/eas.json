@@ -12,7 +12,10 @@
       "channel": "preview",
       "ios": { "simulator": false },
       "android": { "buildType": "apk" },
-      "env": { "APP_VARIANT": "preview" }
+      "env": {
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_API_BASE_URL": "https://jdm-production.up.railway.app"
+      }
     },
     "production": {
       "channel": "production",
