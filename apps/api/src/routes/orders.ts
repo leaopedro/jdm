@@ -1,8 +1,17 @@
 import { prisma } from '@jdm/db';
-import { createOrderRequestSchema, createOrderResponseSchema } from '@jdm/shared/orders';
+import {
+  createOrderRequestSchema,
+  createOrderResponseSchema,
+  getOrderResponseSchema,
+} from '@jdm/shared/orders';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import {
+  expireSingleOrder,
+  ORDER_EXPIRY_MS,
+  sweepExpiredOrdersForTier,
+} from '../services/orders/expire.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const orderRoutes: FastifyPluginAsync = async (app) => {
@@ -35,15 +44,29 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'Conflict', message: 'already has a valid ticket for this event' });
     }
 
-    const reservation = await prisma.ticketTier.updateMany({
-      where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
-      data: { quantitySold: { increment: 1 } },
+    // Atomically: sweep expired pending orders for this tier, then CAS-reserve a slot.
+    const { expiredProviderRefs, reservation } = await prisma.$transaction(async (tx) => {
+      const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
+      const reservation = await tx.ticketTier.updateMany({
+        where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
+        data: { quantitySold: { increment: 1 } },
+      });
+      return { expiredProviderRefs: sweep.expiredProviderRefs, reservation };
     });
+
     if (reservation.count === 0) {
       return reply.status(409).send({ error: 'Conflict', message: 'sold out' });
     }
 
+    // Cancel Stripe PIs for swept orders (best-effort; webhook handles any late payments).
+    for (const ref of expiredProviderRefs) {
+      app.stripe.cancelPaymentIntent(ref).catch((err) => {
+        request.log.warn({ err, providerRef: ref }, 'orders: stripe PI cancel failed after sweep');
+      });
+    }
+
     try {
+      const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
       const order = await prisma.order.create({
         data: {
           userId: sub,
@@ -54,6 +77,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           method: 'card',
           provider: 'stripe',
           status: 'pending',
+          expiresAt,
         },
       });
 
@@ -90,5 +114,31 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       });
       throw err;
     }
+  });
+
+  app.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+
+    const result = await expireSingleOrder(id, sub);
+    if (!result) return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+
+    const { order, wasExpired } = result;
+
+    if (wasExpired && order.providerRef) {
+      app.stripe.cancelPaymentIntent(order.providerRef).catch((err) => {
+        request.log.warn({ err, orderId: id }, 'orders: stripe PI cancel failed after lazy expiry');
+      });
+    }
+
+    return reply.status(200).send(
+      getOrderResponseSchema.parse({
+        orderId: order.id,
+        status: order.status,
+        expiresAt: order.expiresAt?.toISOString() ?? null,
+        amountCents: order.amountCents,
+        currency: order.currency,
+      }),
+    );
   });
 };
