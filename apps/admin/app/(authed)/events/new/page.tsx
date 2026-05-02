@@ -73,6 +73,9 @@ export default function NewEventPage() {
           defaultValue={v.slug ?? ''}
         />
         <Field label="Título" name="title" required defaultValue={v.title ?? ''} />
+        <div className="col-span-2">
+          <CoverUploader initialKey={v.coverObjectKey ?? null} initialUrl={null} />
+        </div>
         <label className="col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
@@ -138,9 +141,6 @@ export default function NewEventPage() {
           required
           defaultValue={v.capacity ?? ''}
         />
-        <div className="col-span-2">
-          <CoverUploader initialKey={null} initialUrl={null} />
-        </div>
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">
           <Submit />
