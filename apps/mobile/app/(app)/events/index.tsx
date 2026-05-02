@@ -1,28 +1,37 @@
 import type { EventSummary, EventWindow } from '@jdm/shared/events';
 import type { PublicProfile } from '@jdm/shared/profile';
+import { Badge, Button, Text } from '@jdm/ui';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
 
 import { listEvents } from '~/api/events';
 import { getProfile } from '~/api/profile';
 import { eventsCopy } from '~/copy/events';
 import { formatEventDateRange } from '~/lib/format';
-import { theme } from '~/theme';
 
 type TabKey = 'upcoming' | 'past' | 'nearby';
 type StateCode = NonNullable<PublicProfile['stateCode']>;
 
+const TABS: TabKey[] = ['upcoming', 'past', 'nearby'];
+
+const BRAND_RED = '#E10600';
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
 const windowFor = (tab: TabKey): EventWindow => (tab === 'past' ? 'past' : 'upcoming');
+
+const isSoon = (startsAtIso: string): boolean => {
+  const start = new Date(startsAtIso).getTime();
+  const now = Date.now();
+  const delta = start - now;
+  return delta > 0 && delta < SEVEN_DAYS_MS;
+};
+
+const buildLocationLine = (item: EventSummary): string => {
+  const place = [item.city, item.stateCode].filter(Boolean).join('/');
+  return [item.venueName, place].filter(Boolean).join(' · ');
+};
 
 export default function EventsIndex() {
   const router = useRouter();
@@ -80,131 +89,246 @@ export default function EventsIndex() {
     }
   }, [load, tab]);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.tabs}>
-        {(['upcoming', 'past', 'nearby'] as TabKey[]).map((t) => (
-          <Pressable
-            key={t}
-            onPress={() => setTab(t)}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            accessibilityRole="tab"
-            accessibilityLabel={eventsCopy.tabs[t]}
-            accessibilityState={{ selected: tab === t }}
-          >
-            <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
-              {eventsCopy.tabs[t]}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+  const onSelectTab = (next: TabKey) => {
+    if (next === tab) return;
+    setTab(next);
+    setItems(null);
+    setError(null);
+  };
 
-      {items === null ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>{error}</Text>
-          <Pressable
-            onPress={() => void load(tab)}
-            style={styles.retry}
-            accessibilityRole="button"
-            accessibilityLabel={eventsCopy.list.retry}
-          >
-            <Text style={styles.retryLabel}>{eventsCopy.list.retry}</Text>
-          </Pressable>
-        </View>
-      ) : tab === 'nearby' && myState === null ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>{eventsCopy.list.noLocation}</Text>
-        </View>
-      ) : items.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>{eventsCopy.list.empty}</Text>
-        </View>
-      ) : (
+  const showLoading = items === null;
+  const showError = !showLoading && error !== null;
+  const showNoLocation = !showLoading && !showError && tab === 'nearby' && myState === null;
+  const showEmpty = !showLoading && !showError && !showNoLocation && (items?.length ?? 0) === 0;
+  const showList = !showLoading && !showError && !showNoLocation && !showEmpty;
+
+  return (
+    <View className="flex-1 bg-bg">
+      <Header />
+      <Tabs active={tab} onSelect={onSelectTab} />
+
+      {showLoading ? (
+        <LoadingSkeleton />
+      ) : showError ? (
+        <ErrorState onRetry={() => void load(tab)} />
+      ) : showNoLocation ? (
+        <NoLocationState onEditProfile={() => router.push('/profile' as never)} />
+      ) : showEmpty ? (
+        <EmptyState />
+      ) : showList && items ? (
         <FlatList
           data={items}
           keyExtractor={(e) => e.id}
-          contentContainerStyle={styles.list}
+          contentContainerClassName="px-5 pt-2 pb-8 gap-6"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => {
                 void onRefresh();
               }}
+              tintColor={BRAND_RED}
+              colors={[BRAND_RED]}
             />
           }
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => router.push(`/events/${item.slug}` as never)}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.title}, ${formatEventDateRange(item.startsAt, item.endsAt)}`}
-              accessibilityHint="Opens event details"
-            >
-              {item.coverUrl ? (
-                <Image source={{ uri: item.coverUrl }} style={styles.cover} accessible={false} />
-              ) : (
-                <View style={[styles.cover, styles.coverPlaceholder]} />
-              )}
-              <View style={styles.cardText}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.sub}>{formatEventDateRange(item.startsAt, item.endsAt)}</Text>
-                {(() => {
-                  const line = [
-                    item.venueName,
-                    [item.city, item.stateCode].filter(Boolean).join('/'),
-                  ]
-                    .filter(Boolean)
-                    .join(', ');
-                  return line ? <Text style={styles.sub}>{line}</Text> : null;
-                })()}
-              </View>
-            </Pressable>
+            <EventCard item={item} onPress={() => router.push(`/events/${item.slug}` as never)} />
           )}
         />
-      )}
+      ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.bg },
-  tabs: {
-    flexDirection: 'row',
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  tab: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radii.md,
-    backgroundColor: theme.colors.border,
-  },
-  tabActive: { backgroundColor: theme.colors.fg },
-  tabLabel: { color: theme.colors.fg },
-  tabLabelActive: { color: theme.colors.bg, fontWeight: '600' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  empty: { color: theme.colors.muted },
-  list: { gap: theme.spacing.md, padding: theme.spacing.md },
-  card: {
-    backgroundColor: theme.colors.border,
-    borderRadius: theme.radii.md,
-    overflow: 'hidden',
-  },
-  cover: { width: '100%', height: 160 },
-  coverPlaceholder: { backgroundColor: theme.colors.muted },
-  cardText: { padding: theme.spacing.md, gap: theme.spacing.xs },
-  title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
-  sub: { color: theme.colors.muted },
-  retry: {
-    marginTop: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radii.md,
-    backgroundColor: theme.colors.border,
-  },
-  retryLabel: { color: theme.colors.fg, fontWeight: '600' },
-});
+/* ------------------------------------------------------------------ */
+/* Header                                                              */
+/* ------------------------------------------------------------------ */
+
+function Header() {
+  return (
+    <View className="px-5 pt-2 pb-4">
+      <Text variant="eyebrow" tone="brand">
+        {eventsCopy.header.eyebrow}
+      </Text>
+      <Text variant="h1" accessibilityRole="header" className="mt-1">
+        {eventsCopy.header.title}
+      </Text>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabs                                                                */
+/* ------------------------------------------------------------------ */
+
+function Tabs({ active, onSelect }: { active: TabKey; onSelect: (t: TabKey) => void }) {
+  return (
+    <View className="flex-row px-5 gap-6 border-b border-border">
+      {TABS.map((t) => {
+        const isActive = active === t;
+        return (
+          <Pressable
+            key={t}
+            onPress={() => onSelect(t)}
+            className="h-12 justify-center active:opacity-70"
+            accessibilityRole="tab"
+            accessibilityLabel={eventsCopy.tabs[t]}
+            accessibilityState={{ selected: isActive }}
+            hitSlop={8}
+          >
+            <Text
+              variant="bodySm"
+              weight={isActive ? 'bold' : 'medium'}
+              tone={isActive ? 'brand' : 'muted'}
+              className="uppercase tracking-widest"
+            >
+              {eventsCopy.tabs[t]}
+            </Text>
+            {isActive ? (
+              <View className="absolute left-0 right-0 bottom-[-1px] h-[2px] bg-brand" />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Event card                                                          */
+/* ------------------------------------------------------------------ */
+
+function EventCard({ item, onPress }: { item: EventSummary; onPress: () => void }) {
+  const soon = isSoon(item.startsAt);
+  const dateLine = formatEventDateRange(item.startsAt, item.endsAt);
+  const locationLine = buildLocationLine(item);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      className="rounded-xl overflow-hidden bg-surface active:opacity-80"
+      accessibilityRole="button"
+      accessibilityLabel={`${item.title}, ${dateLine}${locationLine ? `, ${locationLine}` : ''}`}
+      accessibilityHint="Abre os detalhes do evento"
+    >
+      <View style={{ width: '100%', aspectRatio: 16 / 9 }} className="bg-surface-alt">
+        {item.coverUrl ? (
+          <Image
+            source={{ uri: item.coverUrl }}
+            style={{ width: '100%', height: '100%' }}
+            accessible={false}
+          />
+        ) : null}
+
+        <LinearGradient
+          colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)']}
+          locations={[0.45, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+          pointerEvents="none"
+        />
+
+        {soon ? (
+          <View className="absolute top-3 left-3">
+            <Badge label={eventsCopy.badges.soon} tone="brand" size="sm" />
+          </View>
+        ) : null}
+
+        <View className="absolute left-4 right-4 bottom-3">
+          <Text
+            variant="h2"
+            weight="bold"
+            numberOfLines={2}
+            className="font-display tracking-tight"
+          >
+            {item.title}
+          </Text>
+        </View>
+      </View>
+
+      <View className="px-4 py-3 gap-1">
+        <Text variant="bodySm" tone="secondary">
+          {dateLine}
+        </Text>
+        {locationLine ? (
+          <Text variant="caption" tone="muted">
+            {locationLine}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* States                                                              */
+/* ------------------------------------------------------------------ */
+
+function LoadingSkeleton() {
+  const opacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 600, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return (
+    <View
+      className="px-5 pt-2 pb-8 gap-6"
+      accessibilityLabel={eventsCopy.list.loading}
+      accessibilityLiveRegion="polite"
+    >
+      {[0, 1, 2].map((i) => (
+        <Animated.View key={i} style={{ opacity }} className="gap-3">
+          <View className="w-full rounded-xl bg-surface-alt" style={{ aspectRatio: 16 / 9 }} />
+          <View className="h-4 w-1/2 rounded-md bg-surface-alt" />
+          <View className="h-3 w-1/3 rounded-md bg-surface-alt" />
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+function EmptyState() {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-2">
+      <Text variant="h3" className="text-center">
+        {eventsCopy.list.empty}
+      </Text>
+      <Text variant="bodySm" tone="muted" className="text-center">
+        {eventsCopy.list.emptyHint}
+      </Text>
+    </View>
+  );
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4">
+      <View className="gap-2">
+        <Text variant="h3" className="text-center">
+          {eventsCopy.list.errorTitle}
+        </Text>
+        <Text variant="bodySm" tone="muted" className="text-center">
+          {eventsCopy.list.errorHint}
+        </Text>
+      </View>
+      <Button variant="secondary" label={eventsCopy.list.retry} onPress={onRetry} />
+    </View>
+  );
+}
+
+function NoLocationState({ onEditProfile }: { onEditProfile: () => void }) {
+  return (
+    <View className="flex-1 items-center justify-center px-8 gap-4">
+      <Text variant="h3" className="text-center">
+        {eventsCopy.list.noLocation}
+      </Text>
+      <Button variant="ghost" label={eventsCopy.list.noLocationCta} onPress={onEditProfile} />
+    </View>
+  );
+}

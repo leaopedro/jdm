@@ -1,4 +1,8 @@
 export const eventsCopy = {
+  header: {
+    eyebrow: 'Calendário',
+    title: 'Eventos',
+  },
   tabs: {
     upcoming: 'Próximos',
     past: 'Anteriores',
@@ -15,10 +19,19 @@ export const eventsCopy = {
     clear: 'Limpar',
   },
   list: {
-    empty: 'Nenhum evento encontrado.',
+    empty: 'Nenhum encontro por aqui ainda.',
+    emptyHint: 'Volte em breve. O cenário não para.',
     refreshing: 'Atualizando…',
-    noLocation: 'Defina seu estado no perfil para ver eventos perto de você.',
-    retry: 'Tentar novamente',
+    noLocation: 'Defina seu estado no perfil pra ver o que rola perto.',
+    noLocationCta: 'Editar perfil',
+    errorTitle: 'Não rolou carregar.',
+    errorHint: 'Confere sua conexão e tenta de novo.',
+    retry: 'Tentar de novo',
+    loading: 'Carregando eventos',
+  },
+  badges: {
+    soon: 'EM BREVE',
+    soldOut: 'ESGOTADO',
   },
   detail: {
     venue: 'Local',
