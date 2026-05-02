@@ -9,3 +9,4 @@ export * from './orders.js';
 export * from './tickets.js';
 export * from './check-in.js';
 export * from './push.js';
+export * from './extras.js';

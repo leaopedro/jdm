@@ -18,6 +18,7 @@ export const adminAuditActionSchema = z.enum([
   'tier.update',
   'tier.delete',
   'ticket.check_in',
+  'ticket.grant_comp',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -156,3 +157,26 @@ export const adminTierUpdateSchema = z
   .partial()
   .strict();
 export type AdminTierUpdate = z.infer<typeof adminTierUpdateSchema>;
+
+export const adminGrantTicketSchema = z.object({
+  userId: z.string().min(1),
+  eventId: z.string().min(1),
+  tierId: z.string().min(1),
+  extras: z.array(z.string().min(1)).optional(),
+  carId: z.string().min(1).optional(),
+  licensePlate: z.string().trim().min(1).max(20).optional(),
+  note: z.string().trim().min(1).max(500).optional(),
+});
+export type AdminGrantTicket = z.infer<typeof adminGrantTicketSchema>;
+
+export const adminGrantTicketResponseSchema = z.object({
+  ticketId: z.string().min(1),
+  code: z.string().min(1),
+  extraItems: z.array(
+    z.object({
+      extraId: z.string().min(1),
+      code: z.string().min(1),
+    }),
+  ),
+});
+export type AdminGrantTicketResponse = z.infer<typeof adminGrantTicketResponseSchema>;

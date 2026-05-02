@@ -171,6 +171,7 @@ model Event {
   tiers   TicketTier[]
   orders  Order[]
   tickets Ticket[]
+  extras  TicketExtra[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -262,6 +263,7 @@ model Order {
   event  Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier   TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
   ticket Ticket?
+  orderExtras OrderExtra[]
 
   @@unique([provider, providerRef])
   @@index([userId, createdAt])
@@ -286,6 +288,7 @@ model Ticket {
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   event Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier  TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  extraItems TicketExtraItem[]
 
   @@index([userId, createdAt])
   @@index([eventId])
@@ -337,4 +340,61 @@ model Notification {
 
   @@unique([userId, kind, dedupeKey])
   @@index([userId, createdAt])
+}
+
+enum TicketExtraItemStatus {
+  valid
+  used
+  revoked
+}
+
+model TicketExtra {
+  id            String   @id @default(cuid())
+  eventId       String
+  name          String   @db.VarChar(140)
+  description   String?  @db.Text
+  priceCents    Int
+  currency      String   @default("BRL") @db.VarChar(3)
+  quantityTotal Int
+  quantitySold  Int      @default(0)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderExtras OrderExtra[]
+  extraItems  TicketExtraItem[]
+
+  @@index([eventId, sortOrder])
+}
+
+model OrderExtra {
+  id        String   @id @default(cuid())
+  orderId   String
+  extraId   String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  extra TicketExtra @relation(fields: [extraId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, extraId])
+  @@index([orderId])
+}
+
+model TicketExtraItem {
+  id       String                @id @default(cuid())
+  ticketId String
+  extraId  String
+  code     String                @unique @db.VarChar(300)
+  status   TicketExtraItemStatus @default(valid)
+  usedAt   DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  ticket Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  extra  TicketExtra @relation(fields: [extraId], references: [id], onDelete: Restrict)
+
+  @@unique([ticketId, extraId])
+  @@index([ticketId])
 }

@@ -57,6 +57,10 @@
     "./uploads": {
       "types": "./dist/uploads.d.ts",
       "default": "./dist/uploads.js"
+    },
+    "./extras": {
+      "types": "./dist/extras.d.ts",
+      "default": "./dist/extras.js"
     }
   },
   "scripts": {
