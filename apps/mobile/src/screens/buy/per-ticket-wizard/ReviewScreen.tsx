@@ -11,8 +11,9 @@ import { formatBRL } from '~/lib/format';
 import { theme } from '~/theme';
 
 export function ReviewScreen() {
-  const { state, dispatch, onOrderCreated } = useWizard();
+  const { state, dispatch, onOrderCreated, onExitWizard } = useWizard();
   const { tier, quantity, tickets, eventId } = state;
+  const canGoBack = state.steps.length > 0;
   const [submitting, setSubmitting] = useState(false);
 
   const unitPrice = tier.priceCents;
@@ -44,7 +45,7 @@ export function ReviewScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => dispatch({ type: 'BACK' })}
+          onPress={canGoBack ? () => dispatch({ type: 'BACK' }) : onExitWizard}
           accessibilityRole="button"
           accessibilityLabel="Voltar"
           hitSlop={8}

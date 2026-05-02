@@ -52,6 +52,11 @@ export default function BuyScreen() {
 
   const handleStart = () => {
     if (!selectedTier) return;
+    // TODO(JDMA-147): remove guard once batch tickets[] API lands
+    if (quantity > 1) {
+      Alert.alert(buyCopy.review.errorTitle, 'Compra de múltiplos ingressos ainda não disponível.');
+      return;
+    }
     setPhase('wizard');
   };
 
@@ -113,6 +118,8 @@ export default function BuyScreen() {
     [handlePayment],
   );
 
+  const handleExitWizard = useCallback(() => setPhase('select'), []);
+
   if (phase === 'wizard' && selectedTier) {
     return (
       // key resets wizard state when tier/quantity changes — intentional fresh start
@@ -123,6 +130,7 @@ export default function BuyScreen() {
         quantity={quantity}
         steps={pluggableSteps}
         onOrderCreated={handleOrderCreated}
+        onExitWizard={handleExitWizard}
       >
         <PerTicketWizard />
       </WizardProvider>

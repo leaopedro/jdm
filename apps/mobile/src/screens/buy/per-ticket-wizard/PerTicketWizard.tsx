@@ -8,7 +8,8 @@ import { buyCopy } from '~/copy/buy';
 import { theme } from '~/theme';
 
 export function PerTicketWizard() {
-  const { state, dispatch, totalStepCount, currentGlobalStep } = useWizard();
+  const { state, dispatch, totalStepCount, currentGlobalStep, isFirstStep, onExitWizard } =
+    useWizard();
   const { position, steps, tickets, tier, reviewing } = state;
 
   if (reviewing) {
@@ -37,7 +38,7 @@ export function PerTicketWizard() {
             tier={tier}
             data={tickets[position.ticketIndex] ?? {}}
             onNext={(stepData) => dispatch({ type: 'NEXT', stepData })}
-            onBack={() => dispatch({ type: 'BACK' })}
+            onBack={isFirstStep ? onExitWizard : () => dispatch({ type: 'BACK' })}
           />
         </View>
       </View>

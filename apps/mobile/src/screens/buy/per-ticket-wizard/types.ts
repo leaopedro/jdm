@@ -78,7 +78,12 @@ export type WizardAction =
   | { type: 'GO_TO_REVIEW' }
   | { type: 'RESET' };
 
-/** Callback when the order is successfully created from the review screen. */
+/**
+ * Callback invoked after the review screen successfully calls `createOrder`.
+ * Receives the API response fields needed to initiate Stripe payment.
+ * The wizard does NOT pass ticket extras here — those are sent to the API
+ * in the order payload. This callback only drives the payment sheet.
+ */
 export type OnOrderCreated = (order: {
   orderId: string;
   clientSecret: string;
