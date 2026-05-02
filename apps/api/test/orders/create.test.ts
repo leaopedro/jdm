@@ -8,11 +8,12 @@ const errorResponseSchema = z.object({ error: z.string(), message: z.string().op
 
 import { loadEnv } from '../../src/env.js';
 import type { FakeStripe } from '../../src/services/stripe/fake.js';
+import type { CreatePaymentIntentInput } from '../../src/services/stripe/index.js';
 import { bearer, createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js';
 
 const env = loadEnv();
 
-const seedPublishedEvent = async (quantityTotal = 10) => {
+const seedPublishedEvent = async (quantityTotal = 10, opts?: { requiresCar?: boolean }) => {
   const event = await prisma.event.create({
     data: {
       slug: `e-${Math.random().toString(36).slice(2, 8)}`,
@@ -37,9 +38,27 @@ const seedPublishedEvent = async (quantityTotal = 10) => {
       priceCents: 5000,
       quantityTotal,
       sortOrder: 0,
+      requiresCar: opts?.requiresCar ?? false,
     },
   });
   return { event, tier };
+};
+
+const seedExtra = async (
+  eventId: string,
+  opts?: { quantitySold?: number; quantityTotal?: number },
+) => {
+  return prisma.ticketExtra.create({
+    data: {
+      eventId,
+      name: 'Camiseta',
+      priceCents: 2000,
+      currency: 'BRL',
+      quantityTotal: opts?.quantityTotal ?? 10,
+      quantitySold: opts?.quantitySold ?? 0,
+      sortOrder: 0,
+    },
+  });
 };
 
 describe('POST /orders', () => {
@@ -63,7 +82,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
     expect(res.statusCode).toBe(201);
@@ -83,6 +102,158 @@ describe('POST /orders', () => {
     expect(stripe.calls[0]!.kind).toBe('createPaymentIntent');
   });
 
+  it('creates order with extras: computes total and stores OrderExtra rows', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    // 5000 (tier) + 2000 (extra) = 7000
+    expect(body.amountCents).toBe(7000);
+
+    const orderExtra = await prisma.orderExtra.findFirst({ where: { orderId: body.orderId } });
+    expect(orderExtra).not.toBeNull();
+    expect(orderExtra?.extraId).toBe(extra.id);
+
+    const reloadedExtra = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+    expect(reloadedExtra.quantitySold).toBe(1);
+
+    // Stripe PI metadata should carry tickets JSON
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    const piPayload = piCall!.payload as CreatePaymentIntentInput;
+    expect(piPayload.metadata?.tickets).toBeDefined();
+    const tickets = JSON.parse(piPayload.metadata.tickets as string) as unknown[];
+    expect(tickets).toHaveLength(1);
+    expect((tickets[0] as { e: string[] }).e).toContain(extra.id);
+  });
+
+  it('returns 422 when the same extra appears twice in one ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id, extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('returns 409 when an extra is sold out', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id, { quantityTotal: 1, quantitySold: 1 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('Conflict');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('returns 404 when an extra does not belong to the event', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const { event: otherEvent } = await seedPublishedEvent();
+    const foreignExtra = await seedExtra(otherEvent.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [foreignExtra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('returns 422 when tier requiresCar but carId is missing', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { requiresCar: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('succeeds when tier requiresCar and carId is provided', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { requiresCar: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ carId: 'car_123', licensePlate: 'ABC-1234' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // Stripe metadata should carry carId
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    const piPayload2 = piCall!.payload as CreatePaymentIntentInput;
+    const tickets = JSON.parse(piPayload2.metadata.tickets as string) as unknown[];
+    expect((tickets[0] as { c: string }).c).toBe('car_123');
+  });
+
   it('returns 409 when the tier is sold out', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent(1);
@@ -95,7 +266,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
     expect(res.statusCode).toBe(409);
@@ -115,7 +286,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
     expect(res.statusCode).toBe(409);
@@ -131,7 +302,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -145,7 +316,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: otherEvent.tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: otherEvent.tier.id, method: 'card', tickets: [{}] },
     });
     expect(res.statusCode).toBe(404);
   });
@@ -155,7 +326,7 @@ describe('POST /orders', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/orders',
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -167,7 +338,7 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'pix' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'pix', tickets: [{}] },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -175,10 +346,8 @@ describe('POST /orders', () => {
   it('sweeps expired pending orders and reclaims capacity before reserving', async () => {
     const { user } = await createUser({ verified: true });
     const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });
-    // capacity=1 so the expired order holds the only slot
     const { event, tier } = await seedPublishedEvent(1);
 
-    // Seed an expired pending order that occupies the sole slot
     await prisma.order.create({
       data: {
         userId: user.id,
@@ -189,7 +358,7 @@ describe('POST /orders', () => {
         provider: 'stripe',
         providerRef: 'pi_abandoned',
         status: 'pending',
-        expiresAt: new Date(Date.now() - 1000), // expired 1s ago
+        expiresAt: new Date(Date.now() - 1000),
       },
     });
     await prisma.ticketTier.update({
@@ -197,12 +366,11 @@ describe('POST /orders', () => {
       data: { quantitySold: 1 },
     });
 
-    // user2 should succeed: expired order is swept, slot freed, then reserved for user2
     const res = await app.inject({
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user2.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
     expect(res.statusCode).toBe(201);
@@ -212,11 +380,9 @@ describe('POST /orders', () => {
     });
     expect(abandoned?.status).toBe('expired');
 
-    // after sweep (-1) and new reservation (+1), quantitySold = 1
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloadedTier.quantitySold).toBe(1);
 
-    // Stripe cancel called for the swept PI
     const cancelCalls = stripe.calls.filter((c) => c.kind === 'cancelPaymentIntent');
     expect(cancelCalls).toHaveLength(1);
     expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_abandoned' });

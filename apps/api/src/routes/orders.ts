@@ -12,6 +12,7 @@ import {
   ORDER_EXPIRY_MS,
   sweepExpiredOrdersForTier,
 } from '../services/orders/expire.js';
+import { reserveExtras, validateTickets } from '../services/orders/validate-tickets.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const orderRoutes: FastifyPluginAsync = async (app) => {
@@ -44,26 +45,67 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'Conflict', message: 'already has a valid ticket for this event' });
     }
 
-    // Atomically: sweep expired pending orders for this tier, then CAS-reserve a slot.
-    const { expiredProviderRefs, reservation } = await prisma.$transaction(async (tx) => {
-      const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
-      const reservation = await tx.ticketTier.updateMany({
-        where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
-        data: { quantitySold: { increment: 1 } },
-      });
-      return { expiredProviderRefs: sweep.expiredProviderRefs, reservation };
-    });
+    // Validate per-ticket inputs and fetch extras data inside transaction.
+    // Atomically: validate + reserve extras, sweep expired orders, CAS-reserve tier slot.
+    let validationResult: Awaited<ReturnType<typeof validateTickets>>;
+    let expiredProviderRefs: string[];
+    let reserved = false;
 
-    if (reservation.count === 0) {
-      return reply.status(409).send({ error: 'Conflict', message: 'sold out' });
+    try {
+      const txResult = await prisma.$transaction(async (tx) => {
+        const validation = await validateTickets(input.tickets, tier, event.id, tx);
+        const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
+        const reservation = await tx.ticketTier.updateMany({
+          where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
+          data: { quantitySold: { increment: 1 } },
+        });
+        if (reservation.count === 0) {
+          return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
+        }
+        const extrasReserved = await reserveExtras(validation.extraStock, tx);
+        return {
+          soldOut: false,
+          extrasReserved,
+          validation,
+          expiredProviderRefs: sweep.expiredProviderRefs,
+        };
+      });
+
+      if (txResult.soldOut) {
+        return reply.status(409).send({ error: 'Conflict', message: 'sold out' });
+      }
+      if (!txResult.extrasReserved) {
+        return reply.status(409).send({ error: 'Conflict', message: 'extra sold out' });
+      }
+
+      validationResult = txResult.validation;
+      expiredProviderRefs = txResult.expiredProviderRefs;
+      reserved = true;
+    } catch (err) {
+      const coded = err as Error & { code?: string };
+      if (coded.code === 'MISSING_CAR_ID' || coded.code === 'DUPLICATE_EXTRA') {
+        return reply.status(422).send({ error: 'UnprocessableEntity', message: coded.message });
+      }
+      if (coded.code === 'EXTRA_NOT_FOUND') {
+        return reply.status(404).send({ error: 'NotFound', message: coded.message });
+      }
+      if (coded.code === 'EXTRA_SOLD_OUT') {
+        return reply.status(409).send({ error: 'Conflict', message: coded.message });
+      }
+      throw err;
     }
 
     // Cancel Stripe PIs for swept orders (best-effort; webhook handles any late payments).
     for (const ref of expiredProviderRefs) {
-      app.stripe.cancelPaymentIntent(ref).catch((err) => {
-        request.log.warn({ err, providerRef: ref }, 'orders: stripe PI cancel failed after sweep');
+      app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
+        request.log.warn(
+          { err: cancelErr, providerRef: ref },
+          'orders: stripe PI cancel failed after sweep',
+        );
       });
     }
+
+    const amountCents = tier.priceCents * input.tickets.length + validationResult.totalExtrasCents;
 
     try {
       const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
@@ -72,7 +114,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           userId: sub,
           eventId: event.id,
           tierId: tier.id,
-          amountCents: tier.priceCents,
+          amountCents,
           currency: tier.currency,
           method: 'card',
           provider: 'stripe',
@@ -81,8 +123,19 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
+      // Create OrderExtra rows for each per-ticket extra
+      if (validationResult.extraEntries.length > 0) {
+        await prisma.orderExtra.createMany({
+          data: validationResult.extraEntries.map(({ extraId }) => ({
+            orderId: order.id,
+            extraId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       const intent = await app.stripe.createPaymentIntent({
-        amountCents: tier.priceCents,
+        amountCents,
         currency: tier.currency,
         idempotencyKey: order.id,
         metadata: {
@@ -90,6 +143,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           userId: sub,
           eventId: event.id,
           tierId: tier.id,
+          tickets: JSON.stringify(validationResult.ticketsMetadata),
         },
       });
 
@@ -103,15 +157,17 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           orderId: order.id,
           status: 'pending',
           clientSecret: intent.clientSecret,
-          amountCents: tier.priceCents,
+          amountCents,
           currency: tier.currency,
         }),
       );
     } catch (err) {
-      await prisma.ticketTier.updateMany({
-        where: { id: tier.id, quantitySold: { gt: 0 } },
-        data: { quantitySold: { decrement: 1 } },
-      });
+      if (reserved) {
+        await prisma.ticketTier.updateMany({
+          where: { id: tier.id, quantitySold: { gt: 0 } },
+          data: { quantitySold: { decrement: 1 } },
+        });
+      }
       throw err;
     }
   });
@@ -126,8 +182,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     const { order, wasExpired } = result;
 
     if (wasExpired && order.providerRef) {
-      app.stripe.cancelPaymentIntent(order.providerRef).catch((err) => {
-        request.log.warn({ err, orderId: id }, 'orders: stripe PI cancel failed after lazy expiry');
+      app.stripe.cancelPaymentIntent(order.providerRef).catch((cancelErr) => {
+        request.log.warn(
+          { err: cancelErr, orderId: id },
+          'orders: stripe PI cancel failed after lazy expiry',
+        );
       });
     }
 
