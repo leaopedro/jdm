@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { writeSession } from '~/lib/auth-session';
 
-const base = process.env.API_URL ?? 'http://localhost:3001';
+const base = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
 
 export async function POST() {
   const jar = await cookies();
