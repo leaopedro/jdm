@@ -25,14 +25,18 @@ const screenOptions = {
     backgroundColor: '#0a0a0a',
     borderTopColor: '#2A2A2A',
     borderTopWidth: 1,
-    height: 64,
-    paddingTop: 8,
-    paddingBottom: 8,
+    height: 84,
+    paddingTop: 10,
+    paddingBottom: 18,
   },
   tabBarLabelStyle: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     letterSpacing: 0.4,
+    marginTop: 4,
+  },
+  tabBarIconStyle: {
+    marginBottom: 2,
   },
 } as const;
 
