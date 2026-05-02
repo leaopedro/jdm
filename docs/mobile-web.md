@@ -33,10 +33,11 @@ config lives in `apps/mobile/vercel.json`.
    - **Root directory:** `apps/mobile` (Vercel scopes all paths relative to
      this directory).
    - **Framework preset:** Other (not Next.js).
-   - **Build & Output Settings:** leave overrides empty —
-     `apps/mobile/vercel.json` already sets `buildCommand`,
-     `installCommand`, and `outputDirectory: dist`. Vercel picks this up
-     automatically.
+   - **Build & Output Settings:** leave overrides empty. Vercel detects the
+     repo's Turbo monorepo and runs `turbo build --filter=@jdm/mobile`,
+     which invokes `apps/mobile`'s `build` script (`expo export --platform web`).
+     `apps/mobile/vercel.json` sets `outputDirectory: dist` so Vercel knows
+     where Expo wrote the static export.
 
 2. **Environment variables.** Set the following in Project → Settings →
    Environment Variables. Create a value per scope (`Production`,
