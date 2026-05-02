@@ -7,6 +7,7 @@ import {
   ticketTierSchema,
 } from './events.js';
 import { stateCodeSchema } from './profile.js';
+import { ticketSourceSchema, ticketStatusSchema } from './tickets.js';
 
 // Actions recorded in AdminAudit.action — literal union, no free-form strings.
 export const adminAuditActionSchema = z.enum([
@@ -180,3 +181,55 @@ export const adminGrantTicketResponseSchema = z.object({
   ),
 });
 export type AdminGrantTicketResponse = z.infer<typeof adminGrantTicketResponseSchema>;
+
+// ── Admin tickets list ──────────────────────────────────────────────
+
+export const adminTicketsListQuerySchema = z.object({
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  tier: z.string().min(1).optional(),
+  status: ticketStatusSchema.optional(),
+  source: ticketSourceSchema.optional(),
+  extra: z.string().min(1).optional(),
+  q: z.string().min(1).max(200).optional(),
+});
+export type AdminTicketsListQuery = z.infer<typeof adminTicketsListQuerySchema>;
+
+export const adminTicketHolderSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  email: z.string().email(),
+  avatarUrl: z.string().nullable(),
+});
+
+export const adminTicketTierSummarySchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+});
+
+export const adminTicketExtraSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  status: z.string(),
+  usedAt: z.string().datetime().nullable(),
+});
+
+export const adminTicketRowSchema = z.object({
+  id: z.string().min(1),
+  holder: adminTicketHolderSchema,
+  tier: adminTicketTierSummarySchema,
+  extras: z.array(adminTicketExtraSchema),
+  status: ticketStatusSchema,
+  source: ticketSourceSchema,
+  code: z.string().min(1),
+  usedAt: z.string().datetime().nullable(),
+  car: z.string().nullable(),
+  licensePlate: z.string().nullable(),
+});
+export type AdminTicketRow = z.infer<typeof adminTicketRowSchema>;
+
+export const adminTicketsListResponseSchema = z.object({
+  items: z.array(adminTicketRowSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminTicketsListResponse = z.infer<typeof adminTicketsListResponseSchema>;
