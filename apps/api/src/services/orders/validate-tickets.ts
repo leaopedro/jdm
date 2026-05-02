@@ -81,7 +81,8 @@ export async function validateTickets(
         code: 'EXTRA_NOT_FOUND',
       });
     }
-    if (extra.quantitySold >= extra.quantityTotal) {
+    const count = extraCounts.get(extraId) ?? 1;
+    if (extra.quantityTotal - extra.quantitySold < count) {
       throw Object.assign(new Error(`extra ${extraId} is sold out`), { code: 'EXTRA_SOLD_OUT' });
     }
   }
