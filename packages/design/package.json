@@ -20,7 +20,7 @@
   "files": [
     "dist",
     "tailwind-preset.cjs",
-    "assets",
+    "assets/*.webp",
     "brand.md"
   ],
   "scripts": {

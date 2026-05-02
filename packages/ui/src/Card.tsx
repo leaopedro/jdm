@@ -2,7 +2,7 @@ import { View, type ViewProps } from 'react-native';
 
 const cn = (...parts: Array<string | false | undefined>) => parts.filter(Boolean).join(' ');
 
-interface CardProps extends ViewProps {
+export interface CardProps extends ViewProps {
   variant?: 'flat' | 'raised' | 'outlined';
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }

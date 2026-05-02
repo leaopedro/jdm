@@ -42,13 +42,6 @@ const byTone: Record<TextTone, string> = {
   danger: 'text-danger',
 };
 
-const byWeight: Record<NonNullable<TextProps['weight']>, string> = {
-  regular: 'font-sans',
-  medium: 'font-sans',
-  semibold: 'font-sans',
-  bold: 'font-sans',
-};
-
 const fontFamilyByWeight: Record<NonNullable<TextProps['weight']>, string> = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',
@@ -74,12 +67,7 @@ export function Text({
       : undefined;
   return (
     <RNText
-      className={cn(
-        byVariant[variant],
-        byTone[tone],
-        weight ? byWeight[weight] : undefined,
-        className,
-      )}
+      className={cn(byVariant[variant], byTone[tone], className)}
       style={[weightStyle, style]}
       {...rest}
     />
