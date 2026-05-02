@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 import { addCarPhotoSchema, carInputSchema, carSchema, carUpdateSchema } from '@jdm/shared/cars';
+import { Prisma } from '@prisma/client';
 import type { Car as DbCar, CarPhoto as DbPhoto } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -13,7 +14,6 @@ const serializePhoto = (p: DbPhoto, uploads: Uploads) => ({
   url: uploads.buildPublicUrl(p.objectKey),
   width: p.width,
   height: p.height,
-  sortOrder: p.sortOrder,
 });
 
 const serializeCar = (car: CarWithPhotos, uploads: Uploads) => {
@@ -108,14 +108,22 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(409).send({ error: 'Conflict', message: 'car_photo_limit_reached' });
     }
 
-    await prisma.carPhoto.create({
-      data: {
-        carId: id,
-        objectKey,
-        width: width ?? null,
-        height: height ?? null,
-      },
-    });
+    try {
+      await prisma.carPhoto.create({
+        data: {
+          carId: id,
+          objectKey,
+          width: width ?? null,
+          height: height ?? null,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return reply.status(409).send({ error: 'Conflict', message: 'car_photo_limit_reached' });
+      }
+      throw e;
+    }
+
     const updated = await prisma.car.findUniqueOrThrow({
       where: { id },
       include: { photos: true },
@@ -131,8 +139,10 @@ export const carRoutes: FastifyPluginAsync = async (app) => {
       const { id, photoId } = request.params as { id: string; photoId: string };
       const car = await prisma.car.findFirst({ where: { id, userId: sub } });
       if (!car) return reply.status(404).send({ error: 'NotFound' });
-      const { count } = await prisma.carPhoto.deleteMany({ where: { id: photoId, carId: id } });
-      if (count === 0) return reply.status(404).send({ error: 'NotFound' });
+      const photo = await prisma.carPhoto.findFirst({ where: { id: photoId, carId: id } });
+      if (!photo) return reply.status(404).send({ error: 'NotFound' });
+      await prisma.carPhoto.delete({ where: { id: photoId } });
+      await app.uploads.deleteObject(photo.objectKey);
       return reply.status(204).send();
     },
   );

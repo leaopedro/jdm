@@ -22,7 +22,6 @@ export const carPhotoSchema = z.object({
   url: z.string().url(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
-  sortOrder: z.number().int(),
 });
 export type CarPhoto = z.infer<typeof carPhotoSchema>;
 

@@ -38,6 +38,25 @@ describe('car photos', () => {
     expect(body.photos[0]?.url).toContain(objectKey);
   });
 
+  it('rejects concurrent photo uploads via unique constraint', async () => {
+    const { user } = await createUser({ verified: true });
+    const car = await prisma.car.create({
+      data: { userId: user.id, make: 'Mazda', model: 'RX7', year: 1993 },
+    });
+    const env = loadEnv();
+    const post = (key: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/me/cars/${car.id}/photos`,
+        headers: { authorization: bearer(env, user.id) },
+        payload: { objectKey: `car_photo/${user.id}/${key}` },
+      });
+    const [a, b] = await Promise.all([post('a.jpg'), post('b.jpg')]);
+    const codes = [a.statusCode, b.statusCode].sort();
+    expect(codes).toEqual([201, 409]);
+    expect(await prisma.carPhoto.count({ where: { carId: car.id } })).toBe(1);
+  });
+
   it('rejects an objectKey not owned by caller', async () => {
     const { user: me } = await createUser({ email: 'me@jdm.test', verified: true });
     const { user: other } = await createUser({ email: 'o@jdm.test', verified: true });
