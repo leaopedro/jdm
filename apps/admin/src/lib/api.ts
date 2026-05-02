@@ -1,5 +1,6 @@
 import { healthResponseSchema, type HealthResponse } from '@jdm/shared/health';
 import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type { ZodType } from 'zod';
 
 const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
@@ -56,6 +57,10 @@ export const apiFetch = async <T>(
     if (fresh) {
       h.set('authorization', `Bearer ${fresh}`);
       res = await fetch(`${base}${path}`, { ...rest, headers: h, cache: 'no-store' });
+    } else {
+      // Stale session: refresh failed. Send the user to login instead of crashing
+      // the Server Component with an unhandled 401.
+      redirect('/login');
     }
   }
   if (!res.ok) {
