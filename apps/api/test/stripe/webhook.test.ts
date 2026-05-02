@@ -249,4 +249,46 @@ describe('POST /stripe/webhook', () => {
     });
     expect(dedupRow).toBeNull();
   });
+
+  it('refunds and marks processed when payment_intent.succeeded arrives for an expired order', async () => {
+    const { user } = await createUser({ verified: true });
+    const { tier, order } = await seedEventTierOrder(user.id);
+
+    // Simulate the order having been expired (e.g. via GET /orders/:id lazy expiry)
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'expired', expiresAt: new Date(Date.now() - 1000) },
+    });
+    await prisma.ticketTier.update({ where: { id: tier.id }, data: { quantitySold: 0 } });
+
+    stripe.nextEvent = {
+      id: 'evt_expired_order',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ refunded: true, reason: 'expired' });
+
+    const refundCalls = stripe.calls.filter((c) => c.kind === 'refund');
+    expect(refundCalls).toHaveLength(1);
+    expect(refundCalls[0]?.payload).toMatchObject({ paymentIntentId: order.providerRef });
+
+    // No ticket issued
+    const ticket = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    expect(ticket).toBeNull();
+
+    // Dedup row written so Stripe retries short-circuit
+    const dedupRow = await prisma.paymentWebhookEvent.findFirst({
+      where: { eventId: 'evt_expired_order' },
+    });
+    expect(dedupRow).not.toBeNull();
+  });
 });
