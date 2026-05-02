@@ -26,14 +26,32 @@ export const sweepExpiredOrdersForTier = async (
 
   if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
 
+  const expiredIds = expired.map((o) => o.id);
+
   await tx.order.updateMany({
-    where: { id: { in: expired.map((o) => o.id) } },
+    where: { id: { in: expiredIds } },
     data: { status: 'expired' },
   });
   await tx.ticketTier.updateMany({
     where: { id: tierId, quantitySold: { gte: expired.length } },
     data: { quantitySold: { decrement: expired.length } },
   });
+
+  // Release extras stock for all swept orders
+  const orderExtras = await tx.orderExtra.findMany({
+    where: { orderId: { in: expiredIds } },
+    select: { extraId: true, quantity: true },
+  });
+  const extraCounts = new Map<string, number>();
+  for (const { extraId, quantity } of orderExtras) {
+    extraCounts.set(extraId, (extraCounts.get(extraId) ?? 0) + quantity);
+  }
+  for (const [extraId, count] of extraCounts) {
+    await tx.ticketExtra.updateMany({
+      where: { id: extraId, quantitySold: { gte: count } },
+      data: { quantitySold: { decrement: count } },
+    });
+  }
 
   Sentry.addBreadcrumb({
     category: 'orders.sweep',
@@ -100,6 +118,18 @@ export const expireSingleOrder = async (
       where: { id: order.tierId, quantitySold: { gt: 0 } },
       data: { quantitySold: { decrement: 1 } },
     });
+
+    // Release extras stock
+    const orderExtras = await tx.orderExtra.findMany({
+      where: { orderId },
+      select: { extraId: true, quantity: true },
+    });
+    for (const { extraId, quantity } of orderExtras) {
+      await tx.ticketExtra.updateMany({
+        where: { id: extraId, quantitySold: { gte: quantity } },
+        data: { quantitySold: { decrement: quantity } },
+      });
+    }
 
     return { wasExpired: true, order: { ...order, status: 'expired' } };
   });

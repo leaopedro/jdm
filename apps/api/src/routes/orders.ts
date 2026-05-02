@@ -62,20 +62,13 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         if (reservation.count === 0) {
           return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
         }
-        const extrasReserved = await reserveExtras(validation.extraStock, tx);
-        return {
-          soldOut: false,
-          extrasReserved,
-          validation,
-          expiredProviderRefs: sweep.expiredProviderRefs,
-        };
+        // Throws EXTRA_SOLD_OUT if race condition detected — rolls back tier increment atomically
+        await reserveExtras(validation.extraStock, tx);
+        return { soldOut: false, validation, expiredProviderRefs: sweep.expiredProviderRefs };
       });
 
       if (txResult.soldOut) {
         return reply.status(409).send({ error: 'Conflict', message: 'sold out' });
-      }
-      if (!txResult.extrasReserved) {
-        return reply.status(409).send({ error: 'Conflict', message: 'extra sold out' });
       }
 
       validationResult = txResult.validation;
@@ -126,9 +119,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       // Create OrderExtra rows for each per-ticket extra
       if (validationResult.extraEntries.length > 0) {
         await prisma.orderExtra.createMany({
-          data: validationResult.extraEntries.map(({ extraId }) => ({
+          data: validationResult.extraEntries.map(({ extraId, quantity }) => ({
             orderId: order.id,
             extraId,
+            quantity,
           })),
           skipDuplicates: true,
         });

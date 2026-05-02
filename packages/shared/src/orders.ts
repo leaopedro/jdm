@@ -18,7 +18,8 @@ export const createOrderRequestSchema = z.object({
   tierId: z.string().min(1),
   quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
-  tickets: z.array(ticketInputSchema).min(1),
+  // One ticket per order until maxTicketsPerUser is enforced server-side (JDMA-142)
+  tickets: z.array(ticketInputSchema).min(1).max(1),
 });
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 

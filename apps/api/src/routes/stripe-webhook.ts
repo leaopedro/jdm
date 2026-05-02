@@ -152,6 +152,17 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
             where: { id: order.tierId, quantitySold: { gt: 0 } },
             data: { quantitySold: { decrement: 1 } },
           });
+          // Release extras stock
+          const orderExtras = await tx.orderExtra.findMany({
+            where: { orderId },
+            select: { extraId: true, quantity: true },
+          });
+          for (const { extraId, quantity } of orderExtras) {
+            await tx.ticketExtra.updateMany({
+              where: { id: extraId, quantitySold: { gte: quantity } },
+              data: { quantitySold: { decrement: quantity } },
+            });
+          }
         }
       });
       const firstTime = await markProcessed(event.id, event);

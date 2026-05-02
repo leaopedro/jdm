@@ -3,12 +3,12 @@ import type { TicketInput } from '@jdm/shared/orders';
 
 export interface TicketValidationResult {
   totalExtrasCents: number;
-  /** One entry per ticket-extra pair, for OrderExtra row creation */
-  extraEntries: { extraId: string; priceCents: number }[];
+  /** One entry per unique extra with aggregated quantity, for OrderExtra row creation */
+  extraEntries: { extraId: string; priceCents: number; quantity: number }[];
   /** Compact tickets array packed into Stripe PI metadata */
   ticketsMetadata: { e: string[]; c?: string; p?: string }[];
-  /** For CAS reservation inside transaction */
-  extraStock: { id: string; quantityTotal: number }[];
+  /** For CAS reservation inside transaction — one entry per unique extraId with total count */
+  extraStock: { id: string; quantityTotal: number; count: number }[];
 }
 
 type Tx = Prisma.TransactionClient;
@@ -59,6 +59,14 @@ export async function validateTickets(
     };
   }
 
+  // Count total occurrences per extraId across all tickets (same extra in two tickets = 2)
+  const extraCounts = new Map<string, number>();
+  for (const ticket of tickets) {
+    for (const extraId of ticket.extras ?? []) {
+      extraCounts.set(extraId, (extraCounts.get(extraId) ?? 0) + 1);
+    }
+  }
+
   const extras = await tx.ticketExtra.findMany({
     where: { id: { in: [...allExtraIds] } },
     select: { id: true, eventId: true, priceCents: true, quantityTotal: true, quantitySold: true },
@@ -78,43 +86,42 @@ export async function validateTickets(
     }
   }
 
+  const ticketsMetadata = tickets.map((ticket) => ({
+    e: ticket.extras ?? [],
+    ...(ticket.carId ? { c: ticket.carId } : {}),
+    ...(ticket.licensePlate ? { p: ticket.licensePlate } : {}),
+  }));
+
   let totalExtrasCents = 0;
-  const extraEntries: { extraId: string; priceCents: number }[] = [];
+  const extraEntries: { extraId: string; priceCents: number; quantity: number }[] = [];
+  const extraStock: { id: string; quantityTotal: number; count: number }[] = [];
 
-  const ticketsMetadata = tickets.map((ticket) => {
-    const extraIds = ticket.extras ?? [];
-    for (const extraId of extraIds) {
-      const extra = extrasById.get(extraId)!;
-      totalExtrasCents += extra.priceCents;
-      extraEntries.push({ extraId, priceCents: extra.priceCents });
-    }
-    return {
-      e: extraIds,
-      ...(ticket.carId ? { c: ticket.carId } : {}),
-      ...(ticket.licensePlate ? { p: ticket.licensePlate } : {}),
-    };
-  });
-
-  const extraStock = extras.map((e) => ({ id: e.id, quantityTotal: e.quantityTotal }));
+  for (const [extraId, count] of extraCounts) {
+    const extra = extrasById.get(extraId)!;
+    totalExtrasCents += extra.priceCents * count;
+    extraEntries.push({ extraId, priceCents: extra.priceCents, quantity: count });
+    extraStock.push({ id: extra.id, quantityTotal: extra.quantityTotal, count });
+  }
 
   return { totalExtrasCents, extraEntries, ticketsMetadata, extraStock };
 }
 
 /**
- * CAS-increments quantitySold for each unique extra.
- * Returns false if any extra was sold out between validation and reservation (race condition).
+ * CAS-increments quantitySold for each extra by the requested count.
+ * Throws EXTRA_SOLD_OUT if any extra was sold out between validation and reservation
+ * (race condition) — allowing the caller's transaction to roll back atomically.
  */
 export async function reserveExtras(
-  extraStock: { id: string; quantityTotal: number }[],
+  extraStock: { id: string; quantityTotal: number; count: number }[],
   tx: Tx,
-): Promise<boolean> {
-  if (extraStock.length === 0) return true;
-  for (const { id, quantityTotal } of extraStock) {
+): Promise<void> {
+  for (const { id, quantityTotal, count } of extraStock) {
     const result = await tx.ticketExtra.updateMany({
-      where: { id, quantitySold: { lt: quantityTotal } },
-      data: { quantitySold: { increment: 1 } },
+      where: { id, quantitySold: { lte: quantityTotal - count } },
+      data: { quantitySold: { increment: count } },
     });
-    if (result.count === 0) return false;
+    if (result.count === 0) {
+      throw Object.assign(new Error(`extra ${id} is sold out`), { code: 'EXTRA_SOLD_OUT' });
+    }
   }
-  return true;
 }
