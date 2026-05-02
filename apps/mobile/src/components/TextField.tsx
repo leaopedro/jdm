@@ -27,7 +27,7 @@ export const TextField = ({ label, error, style, onFocus, onBlur, editable, ...r
 
   return (
     <View>
-      <Text variant="eyebrow" tone="secondary" className="mb-2">
+      <Text variant="caption" tone="secondary" className="mb-1">
         {label}
       </Text>
       <View

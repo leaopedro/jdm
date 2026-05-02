@@ -54,98 +54,91 @@ export default function LoginScreen() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-bg">
+    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-5 pb-10"
+          contentContainerClassName="px-5 pb-8 flex-grow"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ height: 64 }} />
-
-          <View className="items-center">
+          <View className="items-center pt-16 pb-3">
             <Image
               // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
               source={require('@jdm/design/assets/logo-wordmark.webp')}
               accessibilityLabel={authCopy.common.appName}
-              style={{ width: 220, height: 88, resizeMode: 'contain' }}
+              style={{ width: 180, height: 72, resizeMode: 'contain' }}
             />
+            <View style={{ height: 8 }} />
+            <Text variant="bodyLg" tone="secondary" className="text-center">
+              {authCopy.login.tagline}
+            </Text>
           </View>
 
-          <View style={{ height: 12 }} />
+          <View className="pt-6 gap-4">
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, value } }) => (
+                <TextField
+                  label={authCopy.login.email}
+                  placeholder={authCopy.login.emailPlaceholder}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  value={value}
+                  onChangeText={onChange}
+                  error={errors.email?.message}
+                />
+              )}
+            />
 
-          <Text variant="eyebrow" tone="muted" className="text-center">
-            {authCopy.login.tagline}
-          </Text>
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, value } }) => (
+                <TextField
+                  label={authCopy.login.password}
+                  secureTextEntry
+                  autoComplete="password"
+                  value={value}
+                  onChangeText={onChange}
+                  error={errors.password?.message}
+                />
+              )}
+            />
 
-          <View style={{ height: 40 }} />
+            <View className="flex-row justify-end -mt-1">
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={authCopy.login.forgot}
+                onPress={() => router.push('/forgot')}
+                hitSlop={8}
+              >
+                <Text tone="muted" variant="bodySm">
+                  {authCopy.login.forgot}
+                </Text>
+              </Pressable>
+            </View>
 
-          <Controller
-            control={control}
-            name="email"
-            render={({ field: { onChange, value } }) => (
-              <TextField
-                label={authCopy.login.email}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                value={value}
-                onChangeText={onChange}
-                error={errors.email?.message}
+            <View className="pt-4">
+              <Button
+                label={authCopy.login.submit}
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={isSubmitting}
+                onPress={() => void onSubmit()}
               />
-            )}
-          />
-
-          <View style={{ height: 16 }} />
-
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { onChange, value } }) => (
-              <TextField
-                label={authCopy.login.password}
-                secureTextEntry
-                autoComplete="password"
-                value={value}
-                onChangeText={onChange}
-                error={errors.password?.message}
-              />
-            )}
-          />
-
-          <View style={{ height: 8 }} />
-
-          <View className="flex-row justify-end">
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={authCopy.login.forgot}
-              onPress={() => router.push('/forgot')}
-              hitSlop={8}
-            >
-              <Text tone="muted" variant="bodySm">
-                {authCopy.login.forgot}
-              </Text>
-            </Pressable>
+            </View>
           </View>
 
-          <View style={{ height: 24 }} />
+          <View className="flex-1" />
 
-          <Button
-            label={authCopy.login.submit}
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={isSubmitting}
-            onPress={() => void onSubmit()}
-          />
-
-          <View style={{ height: 32 }} />
-
-          <View className="flex-row items-center justify-center">
+          <View className="flex-row items-center justify-center pt-6">
             <Text tone="muted">{authCopy.login.noAccountPrefix}</Text>
             <Pressable
               accessibilityRole="link"

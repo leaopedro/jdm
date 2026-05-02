@@ -1,6 +1,8 @@
 import type { EventSummary } from '@jdm/shared/events';
 import { Badge, Button, Card, Text } from '@jdm/ui';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Bell, User } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, View } from 'react-native';
 
@@ -9,20 +11,17 @@ import { useAuth } from '~/auth/context';
 import { formatEventDateRange } from '~/lib/format';
 
 const copy = {
-  heroEyebrow: 'PRÓXIMO ROLÊ',
-  heroCta: 'Ver evento',
-  secondaryEyebrow: 'TAMBÉM NA CENA',
-  quickActionsEyebrow: 'ATALHOS',
-  quickEventos: 'Eventos',
-  quickIngressos: 'Ingressos',
-  quickGaragem: 'Garagem',
-  brandAffirmation: 'BEM-VINDO À CENA.',
+  greeting: (name: string) => `OLÁ, ${name.toUpperCase()}`,
+  hero: 'Bem-vindo à cena.',
+  nextEyebrow: 'Próximo rolê',
+  ctaSeeEvent: 'Ver evento',
+  secondaryEyebrow: 'Também na cena',
+  secondaryCta: 'Ver todos',
   emptyTitle: 'Nenhum encontro agendado.',
   emptySub: 'Volte logo. A cena não para.',
   errorLine: 'Não rolou carregar. Tenta de novo.',
   errorRetry: 'Tentar novamente',
-  ticketBadge: 'INGRESSO GARANTIDO',
-  premiumBadge: 'PREMIUM',
+  badgeSoon: 'EM BREVE',
 } as const;
 
 const eventTypeLabel: Record<EventSummary['type'], string> = {
@@ -31,7 +30,13 @@ const eventTypeLabel: Record<EventSummary['type'], string> = {
   other: 'EVENTO',
 };
 
-const venueLine = (e: EventSummary): string =>
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const isSoon = (iso: string) => {
+  const t = new Date(iso).getTime() - Date.now();
+  return t > 0 && t < SEVEN_DAYS_MS;
+};
+
+const venueLine = (e: EventSummary) =>
   [e.venueName, [e.city, e.stateCode].filter(Boolean).join('/')].filter(Boolean).join(' · ');
 
 export default function Welcome() {
@@ -61,39 +66,62 @@ export default function Welcome() {
   const hero = items && items.length > 0 ? items[0] : null;
   const secondary = items && items.length > 1 ? items.slice(1, 4) : [];
 
-  // Premium / active-ticket presence is not on PublicUser today and the
-  // brief forbids new API calls here. Both flags stay false until the
-  // auth context exposes them.
-  const hasActiveTicket = false;
-  const isPremium = false;
-
   return (
-    <SafeAreaView className="flex-1 bg-bg">
+    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="px-5 pt-4 pb-10 gap-8"
+        contentContainerClassName="pb-10"
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
           <Image
             // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
             source={require('@jdm/design/assets/logo-wordmark.webp')}
             accessibilityLabel="JDM Experience"
-            style={{ width: 132, height: 36, resizeMode: 'contain' }}
+            style={{ width: 84, height: 28, resizeMode: 'contain' }}
           />
-          <View className="flex-row items-center gap-2">
-            {isPremium ? <Badge tone="brand" label={copy.premiumBadge} size="sm" /> : null}
-            {firstName ? (
-              <Text variant="eyebrow" tone="muted">{`OLÁ, ${firstName.toUpperCase()}`}</Text>
-            ) : null}
+          <View className="flex-row items-center gap-3">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Notificações"
+              hitSlop={8}
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
+            >
+              <Bell color="#F5F5F5" size={22} strokeWidth={1.75} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Perfil"
+              hitSlop={8}
+              onPress={() => router.push('/profile')}
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
+            >
+              <User color="#F5F5F5" size={22} strokeWidth={1.75} />
+            </Pressable>
           </View>
         </View>
 
-        <View className="gap-3" accessibilityLiveRegion="polite">
-          <Text variant="eyebrow" tone="muted" accessibilityRole="header">
-            {copy.heroEyebrow}
+        <View className="px-5 pt-2 pb-6 gap-1">
+          <Text variant="caption" tone="muted">
+            {firstName ? copy.greeting(firstName) : 'OLÁ'}
           </Text>
+          <Text
+            variant="h1"
+            weight="bold"
+            className="font-display tracking-tight"
+            accessibilityRole="header"
+          >
+            {copy.hero}
+          </Text>
+        </View>
 
+        <View className="px-5 pb-3">
+          <Text variant="bodyLg" tone="secondary">
+            {copy.nextEyebrow}
+          </Text>
+        </View>
+
+        <View className="px-5">
           {items === null ? (
             <HeroSkeleton />
           ) : error ? (
@@ -101,23 +129,26 @@ export default function Welcome() {
           ) : !hero ? (
             <HeroEmpty />
           ) : (
-            <HeroCard
-              event={hero}
-              hasActiveTicket={hasActiveTicket}
-              onPress={() => router.push(`/events/${hero.slug}`)}
-            />
+            <HeroCard event={hero} onPress={() => router.push(`/events/${hero.slug}`)} />
           )}
         </View>
 
         {secondary.length > 0 ? (
-          <View className="gap-3">
-            <Text variant="eyebrow" tone="muted" accessibilityRole="header">
-              {copy.secondaryEyebrow}
-            </Text>
+          <View className="pt-8">
+            <View className="flex-row items-center justify-between px-5 pb-3">
+              <Text variant="bodyLg" tone="secondary">
+                {copy.secondaryEyebrow}
+              </Text>
+              <Pressable onPress={() => router.push('/events')} accessibilityRole="link">
+                <Text variant="bodySm" tone="brand" weight="semibold">
+                  {copy.secondaryCta}
+                </Text>
+              </Pressable>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerClassName="gap-3 pr-5"
+              contentContainerClassName="gap-3 px-5"
             >
               {secondary.map((e) => (
                 <SecondaryCard
@@ -129,99 +160,81 @@ export default function Welcome() {
             </ScrollView>
           </View>
         ) : null}
-
-        <View className="gap-3">
-          <Text variant="eyebrow" tone="muted" accessibilityRole="header">
-            {copy.quickActionsEyebrow}
-          </Text>
-          <View className="flex-row gap-3">
-            <QuickChip label={copy.quickEventos} onPress={() => router.push('/events')} />
-            <QuickChip label={copy.quickIngressos} onPress={() => router.push('/tickets')} />
-            <QuickChip label={copy.quickGaragem} onPress={() => router.push('/garage')} />
-          </View>
-        </View>
-
-        <View className="pt-2 pb-4">
-          <Text variant="display" tone="primary" className="text-center">
-            {copy.brandAffirmation}
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-interface HeroCardProps {
-  event: EventSummary;
-  hasActiveTicket: boolean;
-  onPress: () => void;
-}
-
-function HeroCard({ event, hasActiveTicket, onPress }: HeroCardProps) {
+function HeroCard({ event, onPress }: { event: EventSummary; onPress: () => void }) {
+  const soon = isSoon(event.startsAt);
   return (
-    <Card variant="raised" padding="none">
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${event.title}, ${formatEventDateRange(event.startsAt, event.endsAt)}`}
-        accessibilityHint="Abre os detalhes do evento"
-      >
-        <View className="relative">
-          {event.coverUrl ? (
-            <Image
-              source={{ uri: event.coverUrl }}
-              accessible={false}
-              style={{ width: '100%', aspectRatio: 16 / 9 }}
-            />
-          ) : (
-            <View className="bg-surface-alt" style={{ width: '100%', aspectRatio: 16 / 9 }} />
-          )}
-          {hasActiveTicket ? (
-            <View className="absolute top-3 right-3">
-              <Badge tone="success" label={copy.ticketBadge} size="sm" />
-            </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.title}, ${formatEventDateRange(event.startsAt, event.endsAt)}`}
+      className="rounded-xl overflow-hidden bg-surface active:opacity-90"
+    >
+      <View className="relative">
+        {event.coverUrl ? (
+          <Image
+            source={{ uri: event.coverUrl }}
+            accessible={false}
+            style={{ width: '100%', aspectRatio: 16 / 9 }}
+          />
+        ) : (
+          <View className="bg-surface-alt" style={{ width: '100%', aspectRatio: 16 / 9 }} />
+        )}
+        <LinearGradient
+          colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)']}
+          locations={[0.4, 1]}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          pointerEvents="none"
+        />
+        {soon ? (
+          <View className="absolute top-3 left-3">
+            <Badge tone="brand" label={copy.badgeSoon} size="sm" />
+          </View>
+        ) : null}
+      </View>
+      <View className="p-4 gap-3">
+        <Text variant="eyebrow" tone="brand">
+          {eventTypeLabel[event.type]}
+        </Text>
+        <Text variant="h1" weight="bold" className="font-display tracking-tight" numberOfLines={2}>
+          {event.title}
+        </Text>
+        <View className="gap-1">
+          <Text variant="body" tone="secondary">
+            {formatEventDateRange(event.startsAt, event.endsAt)}
+          </Text>
+          {venueLine(event) ? (
+            <Text variant="bodySm" tone="muted">
+              {venueLine(event)}
+            </Text>
           ) : null}
         </View>
-        <View className="p-5 gap-3">
-          <Text variant="eyebrow" tone="brand">
-            {eventTypeLabel[event.type]}
-          </Text>
-          <Text variant="h1" numberOfLines={2}>
-            {event.title}
-          </Text>
-          <View className="gap-1">
-            <Text variant="bodySm" tone="secondary">
-              {formatEventDateRange(event.startsAt, event.endsAt)}
-            </Text>
-            {venueLine(event) ? (
-              <Text variant="bodySm" tone="muted">
-                {venueLine(event)}
-              </Text>
-            ) : null}
-          </View>
+        <View className="pt-2">
+          <Button
+            label={copy.ctaSeeEvent}
+            variant="primary"
+            size="lg"
+            fullWidth
+            onPress={onPress}
+          />
         </View>
-      </Pressable>
-      <View className="px-5 pb-5">
-        <Button label={copy.heroCta} variant="primary" size="lg" fullWidth onPress={onPress} />
       </View>
-    </Card>
+    </Pressable>
   );
 }
 
-interface SecondaryCardProps {
-  event: EventSummary;
-  onPress: () => void;
-}
-
-function SecondaryCard({ event, onPress }: SecondaryCardProps) {
+function SecondaryCard({ event, onPress }: { event: EventSummary; onPress: () => void }) {
   const meta = [event.city, event.stateCode].filter(Boolean).join('/');
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${event.title}, ${formatEventDateRange(event.startsAt, event.endsAt)}`}
-      accessibilityHint="Abre os detalhes do evento"
-      style={{ width: 256 }}
+      style={{ width: 240 }}
     >
       <Card variant="raised" padding="none">
         {event.coverUrl ? (
@@ -251,26 +264,6 @@ function SecondaryCard({ event, onPress }: SecondaryCardProps) {
   );
 }
 
-interface QuickChipProps {
-  label: string;
-  onPress: () => void;
-}
-
-function QuickChip({ label, onPress }: QuickChipProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="flex-1 h-12 items-center justify-center rounded-xl bg-surface border border-border active:opacity-80"
-    >
-      <Text variant="bodySm" weight="semibold">
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function HeroSkeleton() {
   return (
     <Card variant="raised" padding="none">
@@ -285,11 +278,7 @@ function HeroSkeleton() {
   );
 }
 
-interface HeroErrorProps {
-  onRetry: () => void;
-}
-
-function HeroError({ onRetry }: HeroErrorProps) {
+function HeroError({ onRetry }: { onRetry: () => void }) {
   return (
     <Card variant="raised" padding="lg">
       <View className="gap-4 items-start">

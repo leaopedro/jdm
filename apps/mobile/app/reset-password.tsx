@@ -1,12 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resetPasswordSchema } from '@jdm/shared/auth';
-import { Button, Card, Text } from '@jdm/ui';
+import { Button, Text } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { ArrowLeft } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  View,
+} from 'react-native';
 import { z } from 'zod';
 
 import { resetPasswordRequest } from '~/api/auth';
@@ -15,7 +21,7 @@ import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
 
 const formSchema = resetPasswordSchema
-  .extend({ confirm: z.string() })
+  .extend({ confirm: z.string().min(1) })
   .refine((d) => d.password === d.confirm, {
     path: ['confirm'],
     message: authCopy.reset.mismatch,
@@ -23,291 +29,221 @@ const formSchema = resetPasswordSchema
 
 type FormValues = z.infer<typeof formSchema>;
 
-type StrengthTier = 0 | 1 | 2 | 3;
-
-const computeStrength = (pw: string): StrengthTier => {
-  if (pw.length === 0) return 0;
-  const hasNumber = /\d/.test(pw);
+const passwordTier = (pw: string): 0 | 1 | 2 | 3 => {
+  const hasNum = /\d/.test(pw);
   const hasUpper = /[A-Z]/.test(pw);
   const hasLower = /[a-z]/.test(pw);
-  const hasSymbol = /[^A-Za-z0-9]/.test(pw);
-  if (pw.length >= 12 && hasNumber && hasUpper && hasLower && hasSymbol) return 3;
-  if (pw.length >= 8 && hasNumber && hasUpper && hasLower) return 2;
-  if (pw.length >= 8 && hasNumber) return 1;
-  return 0;
-};
-
-const strengthLabel = (tier: StrengthTier): string => {
-  if (tier === 3) return authCopy.reset.strengthStrong;
-  if (tier === 2) return authCopy.reset.strengthMedium;
-  if (tier === 1) return authCopy.reset.strengthWeak;
-  return '';
-};
-
-const strengthTone = (tier: StrengthTier): 'muted' | 'secondary' | 'brand' => {
-  if (tier === 3) return 'brand';
-  if (tier === 2) return 'secondary';
-  return 'muted';
+  const hasSym = /[^A-Za-z0-9]/.test(pw);
+  if (pw.length < 8 || !hasNum) return 0;
+  let tier: 0 | 1 | 2 | 3 = 1;
+  if (hasUpper && hasLower) tier = 2;
+  if (tier === 2 && hasSym && pw.length >= 12) tier = 3;
+  return tier;
 };
 
 export default function ResetPasswordScreen() {
+  const { token } = useLocalSearchParams<{ token?: string }>();
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string }>();
-  const token = (params.token ?? '').trim();
-  const hasToken = token.length > 0;
-
-  const [tokenInvalid, setTokenInvalid] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [done, setDone] = useState(false);
+  const [invalidToken, setInvalidToken] = useState(false);
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     control,
     handleSubmit,
-    setError,
     watch,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { token, password: '', confirm: '' },
+    defaultValues: { token: token ?? '', password: '', confirm: '' },
   });
 
-  const passwordValue = watch('password');
-  const tier = useMemo<StrengthTier>(() => computeStrength(passwordValue ?? ''), [passwordValue]);
+  const pw = watch('password') ?? '';
+  const tier = passwordTier(pw);
 
-  const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/login');
-  }, [router]);
+  useEffect(
+    () => () => {
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+    },
+    [],
+  );
 
-  const goToForgot = useCallback(() => router.replace('/forgot'), [router]);
-
-  const onSubmit = handleSubmit(async ({ password }) => {
+  const onSubmit = handleSubmit(async (values) => {
     try {
-      await resetPasswordRequest({ token, password });
-      router.replace('/login');
+      await resetPasswordRequest({ token: values.token, password: values.password });
+      setDone(true);
+      redirectTimer.current = setTimeout(() => {
+        redirectTimer.current = null;
+        router.replace('/login');
+      }, 1500);
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 400) {
-          setTokenInvalid(true);
-          setError('password', { message: authCopy.reset.invalidLinkTitle });
-        } else if (err.status === 422) {
-          setError('password', { message: authCopy.errors.weakPassword });
-        } else if (err.status === 429) {
-          setError('password', { message: authCopy.errors.rateLimited });
-        } else {
-          setError('password', { message: authCopy.errors.unknown });
-        }
+      if (err instanceof ApiError && err.status === 400) {
+        setInvalidToken(true);
+      } else if (err instanceof ApiError && err.status === 422) {
+        setError('password', { message: authCopy.errors.weakPassword });
+      } else if (err instanceof ApiError && err.status === 429) {
+        setError('password', { message: authCopy.errors.rateLimited });
+      } else if (err instanceof ApiError) {
+        setError('password', { message: authCopy.errors.unknown });
       } else {
         setError('password', { message: authCopy.errors.network });
       }
     }
   });
 
+  if (!token || invalidToken) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
+        <View className="flex-1 px-5 pt-4 pb-8">
+          <View className="flex-row items-center pb-2 gap-3">
+            <Pressable
+              onPress={() => router.replace('/forgot')}
+              accessibilityRole="button"
+              accessibilityLabel={authCopy.common.back}
+              hitSlop={8}
+              className="h-11 w-11 items-center justify-center -ml-2 active:opacity-70"
+            >
+              <ArrowLeft color="#F5F5F5" size={24} strokeWidth={1.75} />
+            </Pressable>
+          </View>
+          <View className="flex-1 items-center justify-center gap-4">
+            <Text variant="h2" weight="bold" className="text-center">
+              {authCopy.reset.invalidLinkTitle}
+            </Text>
+            <Text variant="body" tone="secondary" className="text-center">
+              {authCopy.reset.invalidLinkBody}
+            </Text>
+            <View className="pt-4 w-full">
+              <Button
+                label={authCopy.reset.requestNewLink}
+                variant="primary"
+                size="lg"
+                fullWidth
+                onPress={() => router.replace('/forgot')}
+              />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={['top', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           className="flex-1"
-          contentContainerClassName="px-5 pb-10"
+          contentContainerClassName="px-5 pb-8 flex-grow"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View className="flex-row items-center gap-3 h-14 mt-3">
+          <View className="flex-row items-center pt-4 pb-2 gap-3">
             <Pressable
-              accessibilityRole="link"
+              onPress={() => router.back()}
+              accessibilityRole="button"
               accessibilityLabel={authCopy.common.back}
-              onPress={goBack}
-              hitSlop={12}
-              className="w-11 h-11 -ml-2 items-center justify-center active:opacity-60"
+              hitSlop={8}
+              className="h-11 w-11 items-center justify-center -ml-2 active:opacity-70"
             >
-              <ArrowLeft size={24} color="#F5F5F5" strokeWidth={1.75} />
+              <ArrowLeft color="#F5F5F5" size={24} strokeWidth={1.75} />
             </Pressable>
-            <Text variant="h2" weight="semibold" accessibilityRole="header">
+            <Text variant="h2" weight="bold">
               {authCopy.reset.title}
             </Text>
           </View>
 
-          <View style={{ height: 24 }} />
-
-          {!hasToken ? (
-            <NoTokenBlock onRequest={goToForgot} />
-          ) : (
-            <View accessibilityLiveRegion="polite">
-              <Text variant="body" tone="secondary">
-                {authCopy.reset.subtitle}
+          {done ? (
+            <View className="pt-8 items-center" accessibilityLiveRegion="polite">
+              <Text variant="h2" weight="bold" className="text-center pb-2">
+                {authCopy.reset.done}
               </Text>
+              <Text variant="body" tone="secondary" className="text-center">
+                Redirecionando…
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View className="pt-4 pb-6">
+                <Text variant="body" tone="secondary">
+                  {authCopy.reset.subtitle}
+                </Text>
+              </View>
 
-              <View style={{ height: 24 }} />
+              <View className="gap-4">
+                <View>
+                  <Controller
+                    control={control}
+                    name="password"
+                    render={({ field: { onChange, value } }) => (
+                      <TextField
+                        label={authCopy.reset.password}
+                        secureTextEntry
+                        value={value}
+                        onChangeText={onChange}
+                        error={errors.password?.message}
+                      />
+                    )}
+                  />
+                  {pw.length > 0 ? (
+                    <View className="pt-2">
+                      <View className="flex-row gap-1">
+                        {[1, 2, 3].map((i) => (
+                          <View
+                            key={i}
+                            className={
+                              'flex-1 h-1 rounded-full ' +
+                              (i <= tier ? 'bg-brand' : 'bg-surface-alt')
+                            }
+                          />
+                        ))}
+                      </View>
+                      <Text variant="caption" tone="muted" className="pt-1">
+                        {authCopy.reset.strengthLabel}:{' '}
+                        {tier === 0
+                          ? authCopy.reset.strengthWeak
+                          : tier === 1
+                            ? authCopy.reset.strengthWeak
+                            : tier === 2
+                              ? authCopy.reset.strengthMedium
+                              : authCopy.reset.strengthStrong}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
 
-              <Controller
-                control={control}
-                name="password"
-                render={({ field: { onChange, value } }) => (
-                  <View>
-                    <TextField
-                      label={authCopy.reset.password}
-                      secureTextEntry={!showPassword}
-                      autoCapitalize="none"
-                      autoComplete="password-new"
-                      textContentType="newPassword"
-                      value={value}
-                      onChangeText={onChange}
-                      error={errors.password?.message}
-                    />
-                    <VisibilityToggle
-                      visible={showPassword}
-                      onPress={() => setShowPassword((v) => !v)}
-                    />
-                  </View>
-                )}
-              />
-
-              <StrengthMeter tier={tier} />
-
-              <View style={{ height: 20 }} />
-
-              <Controller
-                control={control}
-                name="confirm"
-                render={({ field: { onChange, value } }) => (
-                  <View>
+                <Controller
+                  control={control}
+                  name="confirm"
+                  render={({ field: { onChange, value } }) => (
                     <TextField
                       label={authCopy.reset.confirm}
-                      secureTextEntry={!showConfirm}
-                      autoCapitalize="none"
-                      autoComplete="password-new"
-                      textContentType="newPassword"
+                      secureTextEntry
                       value={value}
                       onChangeText={onChange}
                       error={errors.confirm?.message}
-                      onSubmitEditing={() => void onSubmit()}
-                      returnKeyType="send"
                     />
-                    <VisibilityToggle
-                      visible={showConfirm}
-                      onPress={() => setShowConfirm((v) => !v)}
-                    />
-                  </View>
-                )}
-              />
+                  )}
+                />
+              </View>
 
-              <View style={{ height: 24 }} />
-
-              <Button
-                label={authCopy.reset.submit}
-                variant="primary"
-                size="lg"
-                fullWidth
-                loading={isSubmitting}
-                onPress={() => void onSubmit()}
-              />
-
-              {tokenInvalid ? (
-                <>
-                  <View style={{ height: 12 }} />
-                  <Button
-                    label={authCopy.reset.requestNewLink}
-                    variant="ghost"
-                    size="md"
-                    fullWidth
-                    onPress={goToForgot}
-                  />
-                </>
-              ) : null}
-            </View>
+              <View className="pt-6">
+                <Button
+                  label={authCopy.reset.submit}
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={isSubmitting}
+                  onPress={() => void onSubmit()}
+                />
+              </View>
+            </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-interface VisibilityToggleProps {
-  visible: boolean;
-  onPress: () => void;
-}
-
-function VisibilityToggle({ visible, onPress }: VisibilityToggleProps) {
-  // Toggle sits over the right edge of the input row. Label is rendered
-  // above the input by TextField (≈26pt), input row is 48pt tall — so
-  // the 44pt toggle pinned at top:28pt vertically centers inside it.
-  const Icon = visible ? EyeOff : Eye;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={visible ? authCopy.reset.hidePassword : authCopy.reset.showPassword}
-      accessibilityState={{ selected: visible }}
-      onPress={onPress}
-      hitSlop={12}
-      className="absolute right-2 w-11 h-11 items-center justify-center active:opacity-60"
-      style={{ top: 28 }}
-    >
-      <Icon size={20} color="#C9C9CD" strokeWidth={1.75} />
-    </Pressable>
-  );
-}
-
-interface StrengthMeterProps {
-  tier: StrengthTier;
-}
-
-function StrengthMeter({ tier }: StrengthMeterProps) {
-  const segments: (0 | 1)[] = [tier >= 1 ? 1 : 0, tier >= 2 ? 1 : 0, tier >= 3 ? 1 : 0];
-  const label = strengthLabel(tier);
-  const tone = strengthTone(tier);
-  return (
-    <View
-      className="mt-2"
-      accessibilityRole="progressbar"
-      accessibilityLabel={authCopy.reset.strengthLabel}
-      accessibilityValue={{ min: 0, max: 3, now: tier }}
-    >
-      <View className="flex-row gap-1">
-        {segments.map((on, i) => (
-          <View
-            key={i}
-            className={`h-1 flex-1 rounded-full ${on ? 'bg-brand' : 'bg-surface-alt'}`}
-          />
-        ))}
-      </View>
-      {label ? (
-        <Text variant="caption" tone={tone} className="mt-1">
-          {label}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-interface NoTokenBlockProps {
-  onRequest: () => void;
-}
-
-function NoTokenBlock({ onRequest }: NoTokenBlockProps) {
-  return (
-    <View accessibilityLiveRegion="polite">
-      <Card variant="outlined" padding="lg">
-        <Text variant="h3" accessibilityRole="header">
-          {authCopy.reset.invalidLinkTitle}
-        </Text>
-        <View style={{ height: 8 }} />
-        <Text variant="body" tone="secondary">
-          {authCopy.reset.invalidLinkBody}
-        </Text>
-      </Card>
-
-      <View style={{ height: 24 }} />
-
-      <Button
-        label={authCopy.reset.requestNewLink}
-        variant="primary"
-        size="lg"
-        fullWidth
-        onPress={onRequest}
-      />
-    </View>
   );
 }
