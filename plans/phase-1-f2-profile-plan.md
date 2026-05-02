@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let an authenticated user edit their profile (name, bio, city, state, avatar), manage a garage of cars, and attach photos to each car — backed by Cloudflare R2 via pre-signed PUT uploads.
+**Goal:** Let an authenticated user edit their profile (name, bio, city, state, avatar), manage a garage of cars, and attach a single photo to each car — backed by Cloudflare R2 via pre-signed PUT uploads.
 
-**Architecture:** Extend the existing Prisma `User` with profile columns and add `Car` + `CarPhoto` tables. Media lives in R2 — the API only issues pre-signed PUT URLs and stores object keys, never proxying bytes. All mutations require auth (`app.authenticate`) and use `findFirst({ where: { id, userId } })` as the ownership guard. Mobile replaces `/welcome` scaffolding with real profile and garage screens wired to a typed API client, using `expo-image-picker` + pre-signed uploads for avatars and car photos.
+**Architecture:** Extend the existing Prisma `User` with profile columns and add `Car` + `CarPhoto` tables. `CarPhoto` has a `@@unique([carId])` constraint enforcing one photo per car. Media lives in R2 — the API only issues pre-signed PUT URLs and stores object keys, never proxying bytes. All mutations require auth (`app.authenticate`) and use `findFirst({ where: { id, userId } })` as the ownership guard. Mobile replaces `/welcome` scaffolding with real profile and garage screens wired to a typed API client, using `expo-image-picker` + pre-signed uploads for avatars and car photos.
 
 **Tech Stack:** Prisma, Fastify, Zod, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`, Expo Router, `expo-image-picker`, `react-hook-form` + `@hookform/resolvers/zod`.
 
@@ -14,7 +14,7 @@
 
 ## File structure
 
-**`packages/db/prisma/schema.prisma`** — extend `User` (adds `avatarObjectKey`, not a URL); add `Car`, `CarPhoto` (stores `objectKey`, not `url`).
+**`packages/db/prisma/schema.prisma`** — extend `User` (adds `avatarObjectKey`, not a URL); add `Car`, `CarPhoto` (stores `objectKey`, not `url`; `@@unique([carId])` — one photo per car).
 
 **`packages/shared/src/profile.ts`** (new) — `updateProfileSchema`, `publicProfileSchema`.
 **`packages/shared/src/cars.ts`** (new) — `carInputSchema`, `carSchema`, `carPhotoSchema`, `carListResponseSchema`.
@@ -120,17 +120,14 @@ model Car {
 
 model CarPhoto {
   id        String   @id @default(cuid())
-  carId     String
+  carId     String   @unique   // one photo per car
   objectKey String   @db.VarChar(300)
   width     Int?
   height    Int?
-  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
-
-  @@index([carId, sortOrder])
 }
 ```
 
@@ -338,7 +335,8 @@ export const carSchema = z.object({
   model: z.string(),
   year: z.number().int(),
   nickname: z.string().nullable(),
-  photos: z.array(carPhotoSchema),
+  photo: carPhotoSchema.nullable(), // single photo (DB unique constraint)
+  photos: z.array(carPhotoSchema), // legacy array kept for one release
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -1365,7 +1363,7 @@ git commit -m "feat(api): update + delete own cars"
 
 ---
 
-## Task 8: API — add + remove car photos
+## Task 8: API — set + remove car photo (single-image cap)
 
 **Files:**
 
@@ -1478,14 +1476,16 @@ app.post('/me/cars/:id/photos', { preHandler: [app.authenticate] }, async (reque
   const car = await prisma.car.findFirst({ where: { id, userId: sub } });
   if (!car) return reply.status(404).send({ error: 'NotFound' });
 
-  const count = await prisma.carPhoto.count({ where: { carId: id } });
+  const existing = await prisma.carPhoto.findUnique({ where: { carId: id } });
+  if (existing) {
+    return reply.status(409).send({ error: 'Conflict', code: 'car_photo_limit_reached' });
+  }
   await prisma.carPhoto.create({
     data: {
       carId: id,
       objectKey: parsed.data.objectKey,
       width: parsed.data.width ?? null,
       height: parsed.data.height ?? null,
-      sortOrder: count,
     },
   });
   const updated = await prisma.car.findUniqueOrThrow({
@@ -2249,7 +2249,7 @@ git commit -m "feat(mobile): garage list and new-car screens"
 
 ---
 
-## Task 13: Mobile — car detail (edit + photos + delete)
+## Task 13: Mobile — car detail (edit + single photo + delete)
 
 **Files:**
 
@@ -2267,7 +2267,6 @@ import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -2318,10 +2317,13 @@ export default function CarDetail() {
     setCar(updated);
   });
 
-  const onAddPhoto = async () => {
+  const onSetPhoto = async () => {
     if (!car) return;
     setUploading(true);
     try {
+      if (car.photo) {
+        await removeCarPhoto(car.id, car.photo.id);
+      }
       const up = await pickAndUpload('car_photo');
       if (!up) return;
       const updated = await addCarPhoto(car.id, {
@@ -2335,10 +2337,10 @@ export default function CarDetail() {
     }
   };
 
-  const onRemovePhoto = async (photoId: string) => {
-    if (!car) return;
-    await removeCarPhoto(car.id, photoId);
-    setCar({ ...car, photos: car.photos.filter((p) => p.id !== photoId) });
+  const onRemovePhoto = async () => {
+    if (!car?.photo) return;
+    await removeCarPhoto(car.id, car.photo.id);
+    setCar({ ...car, photo: null, photos: [] });
   };
 
   const onDelete = () => {
@@ -2366,24 +2368,19 @@ export default function CarDetail() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <FlatList
-        horizontal
-        data={car.photos}
-        keyExtractor={(p) => p.id}
-        contentContainerStyle={styles.photoRow}
-        renderItem={({ item }) => (
-          <Pressable onLongPress={() => void onRemovePhoto(item.id)}>
-            <Image source={{ uri: item.url }} style={styles.photo} />
+      <View style={styles.photoRow}>
+        {car.photo ? (
+          <Pressable onLongPress={() => void onRemovePhoto()}>
+            <Image source={{ uri: car.photo.url }} style={styles.photo} />
           </Pressable>
-        )}
-        ListFooterComponent={
-          <Pressable style={[styles.photo, styles.photoAdd]} onPress={() => void onAddPhoto()}>
+        ) : (
+          <Pressable style={[styles.photo, styles.photoAdd]} onPress={() => void onSetPhoto()}>
             <Text style={styles.photoAddLabel}>
               {uploading ? profileCopy.garage.photoUploading : profileCopy.garage.addPhoto}
             </Text>
           </Pressable>
-        }
-      />
+        )}
+      </View>
 
       <Controller
         control={form.control}
@@ -2476,7 +2473,7 @@ Run: `pnpm --filter @jdm/mobile dev --web` and verify `/profile`, `/garage`, `/g
 - Profile save persists after reload.
 - Car create/edit/delete all work.
 - Avatar upload attaches to profile.
-- Car photo upload attaches to the car.
+- Car photo upload attaches to the car (one photo max; second upload returns 409).
 
 - [ ] **Step 4: Commit**
 
