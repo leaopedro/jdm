@@ -113,7 +113,7 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    // TODO(JDMA-138): create TicketExtraItem rows from order's OrderExtra records here
+    // TODO(JDMA-155): create TicketExtraItem rows from order's OrderExtra records here
 
     return {
       ticketId: ticket.id,
