@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Web-only base styles. NativeWind ignores raw CSS on iOS/Android. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0a0a0a;
+  color: #f5f5f5;
+  min-height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root,
+#__expo-root {
+  min-height: 100vh;
+  background-color: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Center the mobile shell on wider viewports so the app reads as a phone preview. */
+@media (min-width: 480px) {
+  body {
+    background-color: #060606;
+    display: flex;
+    justify-content: center;
+  }
+  #root,
+  #__expo-root {
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 0 0 1px #1f1f1f;
+  }
+}
