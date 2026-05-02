@@ -171,4 +171,54 @@ describe('POST /orders', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('sweeps expired pending orders and reclaims capacity before reserving', async () => {
+    const { user } = await createUser({ verified: true });
+    const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });
+    // capacity=1 so the expired order holds the only slot
+    const { event, tier } = await seedPublishedEvent(1);
+
+    // Seed an expired pending order that occupies the sole slot
+    await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_abandoned',
+        status: 'pending',
+        expiresAt: new Date(Date.now() - 1000), // expired 1s ago
+      },
+    });
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    // user2 should succeed: expired order is swept, slot freed, then reserved for user2
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user2.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card' },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    const abandoned = await prisma.order.findFirst({
+      where: { userId: user.id, eventId: event.id },
+    });
+    expect(abandoned?.status).toBe('expired');
+
+    // after sweep (-1) and new reservation (+1), quantitySold = 1
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(1);
+
+    // Stripe cancel called for the swept PI
+    const cancelCalls = stripe.calls.filter((c) => c.kind === 'cancelPaymentIntent');
+    expect(cancelCalls).toHaveLength(1);
+    expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_abandoned' });
+  });
 });

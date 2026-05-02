@@ -24,3 +24,12 @@ export const createOrderResponseSchema = z.object({
   currency: z.string().length(3),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
+
+export const getOrderResponseSchema = z.object({
+  orderId: z.string().min(1),
+  status: orderStatusSchema,
+  expiresAt: z.string().datetime().nullable(),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+});
+export type GetOrderResponse = z.infer<typeof getOrderResponseSchema>;
