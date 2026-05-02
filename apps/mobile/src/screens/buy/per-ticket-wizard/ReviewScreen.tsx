@@ -19,11 +19,17 @@ export function ReviewScreen() {
   const totalCents = unitPrice * quantity;
 
   const handleSubmit = async () => {
+    // TODO(JDMA-147): remove guard once createOrder accepts tickets[] batch shape
+    if (quantity > 1) {
+      Alert.alert(buyCopy.review.errorTitle, 'Compra de múltiplos ingressos ainda não disponível.');
+      return;
+    }
     setSubmitting(true);
     try {
       const order = await createOrder({
         eventId,
         tierId: tier.id,
+        quantity,
         method: 'card',
       });
       await onOrderCreated(order);
@@ -57,6 +63,7 @@ export function ReviewScreen() {
               <Text style={styles.lineLabel}>{tier.name}</Text>
               <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
             </View>
+            {/* C7 (extras) and E3 (car/plate) steps populate ticketData with structured line items */}
             {Object.entries(ticketData).map(([key, value]) => (
               <View key={key} style={styles.lineItem}>
                 <Text style={styles.lineLabel}>{key}</Text>

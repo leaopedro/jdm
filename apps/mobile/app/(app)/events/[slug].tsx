@@ -54,7 +54,12 @@ export default function EventDetailScreen() {
     if (!event) return;
     setPaying(true);
     try {
-      const order = await createOrder({ eventId: event.id, tierId: tier.id, method: 'card' });
+      const order = await createOrder({
+        eventId: event.id,
+        tierId: tier.id,
+        quantity: 1,
+        method: 'card',
+      });
 
       const init = await initPaymentSheet({
         merchantDisplayName: 'JDM Experience',

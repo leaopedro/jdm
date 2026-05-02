@@ -46,7 +46,9 @@ export default function BuyScreen() {
     })();
   }, [eventSlug]);
 
-  const maxPerTier = selectedTier ? Math.min(selectedTier.remainingCapacity, 10) : 1;
+  // TODO(JDMA-142): replace hardcoded cap with event.maxTicketsPerUser once schema lands
+  // TODO(JDMA-147): raise cap above 1 once createOrder supports tickets[] batch shape
+  const maxPerTier = selectedTier ? Math.min(selectedTier.remainingCapacity, 1) : 1;
 
   const handleStart = () => {
     if (!selectedTier) return;
@@ -113,6 +115,7 @@ export default function BuyScreen() {
 
   if (phase === 'wizard' && selectedTier) {
     return (
+      // key resets wizard state when tier/quantity changes — intentional fresh start
       <WizardProvider
         key={`${selectedTier.id}-${quantity}`}
         eventId={event.id}

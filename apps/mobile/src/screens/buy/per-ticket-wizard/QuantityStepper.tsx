@@ -31,6 +31,7 @@ export function QuantityStepper({ value, min = 1, max, onChange }: QuantityStepp
         style={styles.value}
         accessibilityRole="text"
         accessibilityLabel={`Quantidade: ${value}`}
+        accessibilityHint={`${value} de ${max} ingressos selecionados`}
       >
         {value}
       </Text>
