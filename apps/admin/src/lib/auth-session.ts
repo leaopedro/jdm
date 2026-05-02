@@ -6,6 +6,7 @@ const REFRESH_COOKIE = 'session_refresh';
 const ROLE_COOKIE = 'session_role';
 
 const isProd = process.env.NODE_ENV === 'production';
+const expiredAt = new Date(0);
 
 export const writeSession = async (res: AuthResponse): Promise<void> => {
   const jar = await cookies();
@@ -32,9 +33,18 @@ export const writeSession = async (res: AuthResponse): Promise<void> => {
 
 export const clearSession = async (): Promise<void> => {
   const jar = await cookies();
-  jar.delete(ACCESS_COOKIE);
-  jar.delete(REFRESH_COOKIE);
-  jar.delete(ROLE_COOKIE);
+  jar.set(ACCESS_COOKIE, '', {
+    expires: expiredAt,
+    path: '/',
+  });
+  jar.set(REFRESH_COOKIE, '', {
+    expires: expiredAt,
+    path: '/',
+  });
+  jar.set(ROLE_COOKIE, '', {
+    expires: expiredAt,
+    path: '/',
+  });
 };
 
 export const readRole = async (): Promise<string | null> => {

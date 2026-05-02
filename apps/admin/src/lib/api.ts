@@ -60,7 +60,7 @@ export const apiFetch = async <T>(
     } else {
       // Stale session: refresh failed. Send the user to login instead of crashing
       // the Server Component with an unhandled 401.
-      redirect('/login');
+      redirect('/login?reauth=1');
     }
   }
   if (!res.ok) {
