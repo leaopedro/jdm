@@ -10,5 +10,8 @@ export const initSentry = () => {
     dsn,
     debug: false,
     tracesSampleRate: 0.1,
+    initialScope: {
+      tags: { service: 'mobile' },
+    },
   });
 };

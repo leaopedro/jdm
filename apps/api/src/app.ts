@@ -98,6 +98,9 @@ export const buildApp = async (
     if (app.uploads instanceof DevUploads) {
       await app.register(devUploadRoutes);
     }
+  }
+
+  if (env.NODE_ENV !== 'production' || process.env.SENTRY_DEBUG === '1') {
     app.get('/debug/boom', () => {
       throw new Error('intentional boom for Sentry verification');
     });

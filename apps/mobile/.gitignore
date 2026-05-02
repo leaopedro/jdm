@@ -44,3 +44,5 @@ app-example
 
 # EAS credentials (service account JSON, never commit)
 secrets/
+
+.vercel

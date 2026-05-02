@@ -7,9 +7,10 @@
 | `REFRESH_TOKEN_PEPPER`                                        | api                      | Railway                              | `apps/api/.env`                     | Mixed into SHA-256 refresh-token hash. Rotating forces logout everywhere. |
 | `APP_WEB_BASE_URL`                                            | api                      | Railway + local                      | `apps/api/.env`                     | Used in verify/reset email links. Immutable per env.                      |
 | `MAIL_FROM`                                                   | api                      | Railway + local                      | `apps/api/.env`                     | e.g. `noreply@jdmexperience.com.br`.                                      |
-| `SENTRY_DSN` (api)                                            | api                      | Railway                              | `apps/api/.env`                     | Regenerate in Sentry project → update Railway.                            |
-| `SENTRY_DSN` (admin)                                          | admin                    | Vercel                               | `apps/admin/.env.local`             | Same.                                                                     |
-| `SENTRY_DSN` (mobile)                                         | mobile                   | EAS secrets                          | `apps/mobile/.env`                  | Same. Requires OTA release.                                               |
+| `SENTRY_DSN` (shared)                                         | api, admin (server/edge) | Railway + Vercel                     | `apps/api/.env`, `apps/admin/.env.local` | One DSN reused across all three apps; events tagged by `service` (api/admin/mobile). Regenerate in Sentry project → update everywhere. |
+| `NEXT_PUBLIC_SENTRY_DSN`                                      | admin (browser)          | Vercel                               | `apps/admin/.env.local`             | Same value as `SENTRY_DSN`. Exposed to browser.                           |
+| `EXPO_PUBLIC_SENTRY_DSN`                                      | mobile (native + web)    | EAS secrets + Vercel (mobile-web)    | `apps/mobile/.env`                  | Same value as `SENTRY_DSN`. Bundled at build time.                        |
+| `SENTRY_DEBUG`                                                | api, admin               | Railway + Vercel (optional)          | not in local `.env`                 | Set to `1` to expose `/debug/boom` (api) and `/debug/sentry` (admin) in production for smoke tests. Leave unset otherwise. |
 | `SENTRY_AUTH_TOKEN`                                           | CI (source map upload)   | GitHub Actions secret + Vercel       | N/A                                 | 180 days.                                                                 |
 | `STRIPE_SECRET_KEY`                                           | api                      | Railway                              | `apps/api/.env`                     | Rotate in Stripe dashboard; update Railway; redeploy.                     |
 | `STRIPE_WEBHOOK_SECRET`                                       | api                      | Railway                              | `apps/api/.env`                     | Rotated whenever webhook endpoint URL changes.                            |
@@ -57,7 +58,9 @@ Generate `JWT_ACCESS_SECRET` and `REFRESH_TOKEN_PEPPER` with `openssl rand -base
 The admin app runs on Vercel and calls the Railway API from the browser. All `NEXT_PUBLIC_*` vars are exposed to clients.
 
 - `NEXT_PUBLIC_API_BASE_URL` — Railway API base URL. Local dev: `http://localhost:4000`. Production: e.g. `https://api-production.up.railway.app`. Immutable per environment.
-- `SENTRY_DSN` — Sentry ingest URL for the admin project. Exposed to browser.
+- `SENTRY_DSN` — Sentry ingest URL (shared across api/admin/mobile). Server-side only.
+- `NEXT_PUBLIC_SENTRY_DSN` — Same DSN, exposed to the admin browser bundle.
+- `SENTRY_DEBUG` (optional) — Set to `1` to enable `/debug/sentry` in production (admin). Leave unset normally.
 - `SENTRY_ORG` — Sentry organization slug (used at build time for source map upload).
 - `SENTRY_PROJECT_ADMIN` — Sentry project identifier for admin (used at build time).
 - `SENTRY_AUTH_TOKEN` — Sentry API token for releasing/source map uploads. Build-time only; never sent to browser.

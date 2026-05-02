@@ -7,7 +7,9 @@ export default async function SentryDebugPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (process.env.NODE_ENV === 'production') notFound();
+  if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DEBUG !== '1') {
+    notFound();
+  }
 
   const params = await searchParams;
   if (params['debug'] === 'sentry') {

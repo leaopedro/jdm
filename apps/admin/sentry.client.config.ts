@@ -5,4 +5,7 @@ Sentry.init({
   tracesSampleRate: 0.1,
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,
+  initialScope: {
+    tags: { service: 'admin', runtime: 'client' },
+  },
 });

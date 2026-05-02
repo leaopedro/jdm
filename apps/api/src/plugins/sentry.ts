@@ -15,6 +15,9 @@ export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {
     environment: opts.env.NODE_ENV,
     release: opts.env.GIT_SHA,
     tracesSampleRate: 0.1,
+    initialScope: {
+      tags: { service: 'api' },
+    },
   });
 
   app.addHook('onError', async (request, _reply, error) => {
