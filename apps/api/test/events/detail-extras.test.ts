@@ -159,6 +159,24 @@ describe('GET /events/:slug — extras payload', () => {
     expect(body.extras.map((e) => e.name)).toEqual(['A', 'B', 'C']);
   });
 
+  it('excludes oversold extras and clamps remaining to zero', async () => {
+    const event = await makePublishedEvent('oversold-extras');
+    await prisma.ticketExtra.create({
+      data: {
+        eventId: event.id,
+        name: 'Oversold',
+        priceCents: 1000,
+        quantityTotal: 10,
+        quantitySold: 15,
+        sortOrder: 0,
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/events/${event.slug}` });
+    const body = eventDetailSchema.parse(res.json());
+    expect(body.extras).toHaveLength(0);
+  });
+
   it('returns empty extras array when event has no extras', async () => {
     await makePublishedEvent('no-extras');
 
