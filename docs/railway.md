@@ -99,6 +99,30 @@ If all four checks pass, JDMA-16 done-when is satisfied. Flip
 `[~]` → `[x]` in the same follow-up PR (per `CLAUDE.md`: roadmap edits
 live with the merge, not in a separate commit).
 
+## Metrics dashboards
+
+Railway ships built-in dashboards per service. They are the canonical
+infra view — open these first when triage points at the API or DB.
+
+- **API service.** Railway → `jdm-experience` → `jdm` (API service) →
+  **Metrics** tab. Shows CPU %, memory, network in/out, and HTTP
+  request latency (P50/P95/P99). Pin this tab in the browser sidebar
+  alongside the Sentry api project.
+- **Postgres plugin.** Railway → `jdm-experience` → `Postgres` plugin
+  → **Metrics** tab. Shows CPU %, memory, disk usage, active
+  connections. Watch connections during traffic spikes — the API
+  uses Prisma's default pool (single connection per request) and a
+  flatlined connection count under load means the API is the
+  bottleneck, not the DB.
+- **Logs.** Each service has a **Logs** tab next to Metrics. Filter
+  by deployment to scope to a single release. JSON log lines
+  include `request_id` so you can pivot to Sentry by request id.
+
+Both metrics tabs are alert-bookmarked in
+[`docs/observability.md`](./observability.md#where-to-find-things). If
+Railway adds custom dashboards (Hobby plan → Pro), pin the link there
+so on-call always lands on the same view.
+
 ## Verification (per-deploy)
 
 Every successful deploy should show:
