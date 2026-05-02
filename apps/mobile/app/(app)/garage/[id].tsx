@@ -6,7 +6,6 @@ import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -21,6 +20,8 @@ import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
 import { pickAndUpload } from '~/lib/upload-image';
 import { theme } from '~/theme';
+
+const PHOTO_SIZE = 140;
 
 export default function CarDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,6 +53,8 @@ export default function CarDetail() {
     setCar(updated);
   });
 
+  const photo = car?.photos[0] ?? null;
+
   const onAddPhoto = async () => {
     if (!car) return;
     setUploading(true);
@@ -69,10 +72,39 @@ export default function CarDetail() {
     }
   };
 
-  const onRemovePhoto = async (photoId: string) => {
-    if (!car) return;
-    await removeCarPhoto(car.id, photoId);
-    setCar({ ...car, photos: car.photos.filter((p) => p.id !== photoId) });
+  const onRemovePhoto = () => {
+    if (!car || !photo) return;
+    Alert.alert(profileCopy.garage.removePhotoConfirm, '', [
+      { text: profileCopy.garage.save, style: 'cancel' },
+      {
+        text: profileCopy.garage.removePhoto,
+        style: 'destructive',
+        onPress: () => {
+          void removeCarPhoto(car.id, photo.id).then(() => {
+            setCar({ ...car, photos: [] });
+          });
+        },
+      },
+    ]);
+  };
+
+  const onReplacePhoto = async () => {
+    if (!car || !photo) return;
+    setUploading(true);
+    try {
+      const up = await pickAndUpload('car_photo');
+      if (!up) return;
+      await removeCarPhoto(car.id, photo.id);
+      setCar((prev) => (prev ? { ...prev, photos: [] } : prev));
+      const updated = await addCarPhoto(car.id, {
+        objectKey: up.presign.objectKey,
+        width: up.picked.width,
+        height: up.picked.height,
+      });
+      setCar(updated);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onDelete = () => {
@@ -104,37 +136,47 @@ export default function CarDetail() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Stack.Screen options={{ title }} />
-      <FlatList
-        horizontal
-        data={car.photos}
-        keyExtractor={(p) => p.id}
-        contentContainerStyle={styles.photoRow}
-        renderItem={({ item }) => (
+
+      <View style={styles.avatarSection}>
+        {uploading ? (
+          <View style={[styles.avatarBox, styles.avatarPlaceholder]}>
+            <ActivityIndicator color={theme.colors.fg} />
+          </View>
+        ) : photo ? (
+          <View style={styles.avatarBox}>
+            <Image source={{ uri: photo.url }} style={styles.avatarImage} accessible={false} />
+            <Pressable
+              style={styles.trashBtn}
+              onPress={onRemovePhoto}
+              accessibilityRole="button"
+              accessibilityLabel={profileCopy.garage.removePhoto}
+              hitSlop={8}
+            >
+              <Text style={styles.trashIcon}>✕</Text>
+            </Pressable>
+          </View>
+        ) : (
           <Pressable
-            onLongPress={() => void onRemovePhoto(item.id)}
-            accessibilityRole="imagebutton"
-            accessibilityLabel="Car photo"
-            accessibilityHint="Long press to remove this photo"
-          >
-            <Image source={{ uri: item.url }} style={styles.photo} accessible={false} />
-          </Pressable>
-        )}
-        ListFooterComponent={
-          <Pressable
-            style={[styles.photo, styles.photoAdd]}
+            style={[styles.avatarBox, styles.avatarPlaceholder]}
             onPress={() => void onAddPhoto()}
             accessibilityRole="button"
-            accessibilityLabel={
-              uploading ? profileCopy.garage.photoUploading : profileCopy.garage.addPhoto
-            }
-            accessibilityState={{ busy: uploading }}
+            accessibilityLabel={profileCopy.garage.addPhoto}
           >
-            <Text style={styles.photoAddLabel}>
-              {uploading ? profileCopy.garage.photoUploading : profileCopy.garage.addPhoto}
-            </Text>
+            <Text style={styles.placeholderIcon}>+</Text>
+            <Text style={styles.placeholderLabel}>{profileCopy.garage.addPhoto}</Text>
           </Pressable>
-        }
-      />
+        )}
+
+        <Text style={styles.avatarAction}>
+          {uploading ? (
+            profileCopy.garage.photoUploading
+          ) : photo ? (
+            <Text onPress={() => void onReplacePhoto()} style={styles.link}>
+              {profileCopy.garage.replacePhoto}
+            </Text>
+          ) : null}
+        </Text>
+      </View>
 
       <Controller
         control={form.control}
@@ -204,16 +246,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.bg,
   },
-  photoRow: { gap: theme.spacing.sm, paddingVertical: theme.spacing.sm },
-  photo: { width: 120, height: 120, borderRadius: theme.radii.sm },
-  photoAdd: {
+  avatarSection: {
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  avatarBox: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: theme.radii.lg,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+  },
+  avatarPlaceholder: {
     backgroundColor: theme.colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  photoAddLabel: {
+  placeholderIcon: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.xxl,
+  },
+  placeholderLabel: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    marginTop: theme.spacing.xs,
+  },
+  trashBtn: {
+    position: 'absolute',
+    top: theme.spacing.xs,
+    right: theme.spacing.xs,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trashIcon: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  avatarAction: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    minHeight: theme.font.size.sm + 4,
+  },
+  link: {
     color: theme.colors.fg,
-    textAlign: 'center',
-    paddingHorizontal: theme.spacing.sm,
+    textDecorationLine: 'underline',
   },
 });
