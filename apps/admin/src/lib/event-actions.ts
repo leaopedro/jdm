@@ -46,6 +46,7 @@ export const createEventAction = async (
     stateCode: fd.get('stateCode'),
     type: fd.get('type'),
     capacity: toNumber(fd.get('capacity')),
+    maxTicketsPerUser: toNumber(fd.get('maxTicketsPerUser')),
   });
   if (!parsed.success) {
     return {
@@ -78,7 +79,7 @@ export const updateEventAction = async (
   // stateCode: empty-string -> null so the user can clear a previously set value.
   const stateCode = fd.get('stateCode');
   if (typeof stateCode === 'string') raw.stateCode = stateCode === '' ? null : stateCode;
-  for (const key of ['capacity']) {
+  for (const key of ['capacity', 'maxTicketsPerUser']) {
     const v = fd.get(key);
     if (typeof v === 'string' && v !== '') raw[key] = Number(v);
   }

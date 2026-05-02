@@ -164,7 +164,8 @@ model Event {
   stateCode    String?     @db.VarChar(2)
   type         EventType
   status       EventStatus @default(draft)
-  capacity     Int
+  capacity          Int
+  maxTicketsPerUser Int       @default(1)
   publishedAt  DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -275,6 +276,7 @@ model Order {
   method          PaymentMethod
   provider        PaymentProvider
   providerRef     String?         @db.VarChar(200)
+  quantity        Int             @default(1)
   status          OrderStatus     @default(pending)
   paidAt          DateTime?
   failedAt        DateTime?

@@ -146,6 +146,19 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-[color:var(--color-muted)]">
+            Máx. ingressos por usuário
+          </span>
+          <input
+            name="maxTicketsPerUser"
+            type="number"
+            min={1}
+            max={10}
+            defaultValue={event.maxTicketsPerUser}
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
+          />
+        </label>
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">
           <Submit label="Salvar" />
