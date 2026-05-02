@@ -6,7 +6,7 @@ import type {
 } from './index.js';
 
 type FakeCall = {
-  kind: 'createPaymentIntent' | 'refund';
+  kind: 'createPaymentIntent' | 'refund' | 'cancelPaymentIntent';
   payload: unknown;
 };
 
@@ -40,6 +40,10 @@ export const buildFakeStripe = (): FakeStripe => {
     // eslint-disable-next-line @typescript-eslint/require-await
     refund: async (paymentIntentId, reason) => {
       fake.calls.push({ kind: 'refund', payload: { paymentIntentId, reason } });
+    },
+    // eslint-disable-next-line @typescript-eslint/require-await
+    cancelPaymentIntent: async (paymentIntentId) => {
+      fake.calls.push({ kind: 'cancelPaymentIntent', payload: { paymentIntentId } });
     },
     publishableKey: () => 'pk_test_fake',
   };

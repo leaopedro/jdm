@@ -22,6 +22,7 @@ export type StripeClient = {
   createPaymentIntent: (input: CreatePaymentIntentInput) => Promise<PaymentIntentResult>;
   constructWebhookEvent: (payload: Buffer, signature: string) => WebhookEvent;
   refund: (paymentIntentId: string, reason: string) => Promise<void>;
+  cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
   publishableKey: () => string;
 };
 
@@ -66,6 +67,9 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
         reason: 'requested_by_customer',
         metadata: { reason },
       });
+    },
+    cancelPaymentIntent: async (paymentIntentId) => {
+      await stripe.paymentIntents.cancel(paymentIntentId);
     },
     // Mobile also reads its own EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY; server echo
     // is a convenience. Empty string is acceptable in dev/test; order-creating
