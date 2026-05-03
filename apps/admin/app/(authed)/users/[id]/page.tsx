@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { UserAvatar } from '~/components/user-avatar';
 import { getAdminUser } from '~/lib/admin-api';
 import { ApiError } from '~/lib/api';
 
@@ -37,20 +38,6 @@ const orderStatusLabel: Record<string, string> = {
   expired: 'Expirado',
 };
 
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-  return (
-    <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-border)] text-xl font-semibold">
-      {initials}
-    </span>
-  );
-}
-
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -72,10 +59,21 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
       {/* Header card */}
       <div className="flex items-start gap-4 rounded border border-[color:var(--color-border)] p-4">
-        <Avatar name={user.name} />
+        <UserAvatar name={user.name} size="lg" />
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-bold">{user.name}</h1>
-          <span className="text-sm text-[color:var(--color-muted)]">{user.email}</span>
+          <span className="flex items-center gap-1 text-sm text-[color:var(--color-muted)]">
+            {user.email}
+            {user.emailVerifiedAt ? (
+              <span className="rounded bg-emerald-900 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                Verificado
+              </span>
+            ) : (
+              <span className="rounded bg-yellow-900 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-300">
+                Não verificado
+              </span>
+            )}
+          </span>
           <div className="flex items-center gap-2 text-sm">
             <span className="rounded bg-[color:var(--color-border)] px-2 py-0.5 text-xs font-semibold">
               {roleLabelMap[user.role] ?? user.role}

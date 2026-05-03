@@ -2,23 +2,10 @@ import Link from 'next/link';
 
 import { SearchForm } from './search-form';
 
+import { UserAvatar } from '~/components/user-avatar';
 import { searchAdminUsers } from '~/lib/admin-api';
 
 export const dynamic = 'force-dynamic';
-
-function Avatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-  return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-border)] text-xs font-semibold">
-      {initials}
-    </span>
-  );
-}
 
 export default async function UsersPage({
   searchParams,
@@ -56,7 +43,7 @@ export default async function UsersPage({
             <tr key={u.id} className="border-b border-[color:var(--color-border)]">
               <td className="py-2">
                 <Link href={`/users/${u.id}`} className="flex items-center gap-2 hover:underline">
-                  <Avatar name={u.name} />
+                  <UserAvatar name={u.name} />
                   {u.name}
                 </Link>
               </td>
