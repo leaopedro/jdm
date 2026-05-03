@@ -1,5 +1,4 @@
 import { prisma } from '@jdm/db';
-import { Prisma } from '@prisma/client';
 
 import { signQrCode } from '../../lib/qr.js';
 
@@ -193,26 +192,19 @@ export const issueTicketForPaidOrder = async (
 
     for (let i = 0; i < ticketCount; i++) {
       const meta = ticketsMeta[i];
-      try {
-        const ticket = await tx.ticket.create({
-          data: {
-            orderId: order.id,
-            userId: order.userId,
-            eventId: order.eventId,
-            tierId: order.tierId,
-            source: 'purchase',
-            status: 'valid',
-            ...(meta?.carId ? { carId: meta.carId } : {}),
-            ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
-          },
-        });
-        tickets.push(ticket);
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-          throw new TicketAlreadyExistsForEventError(order.userId, order.eventId);
-        }
-        throw err;
-      }
+      const ticket = await tx.ticket.create({
+        data: {
+          orderId: order.id,
+          userId: order.userId,
+          eventId: order.eventId,
+          tierId: order.tierId,
+          source: 'purchase',
+          status: 'valid',
+          ...(meta?.carId ? { carId: meta.carId } : {}),
+          ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
+        },
+      });
+      tickets.push(ticket);
     }
 
     await tx.order.update({
