@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
+import { verifyQrCode } from '../../src/lib/qr.js';
 import { verifyTicketCode } from '../../src/services/tickets/codes.js';
 import {
   OrderNotPendingError,
@@ -141,5 +142,99 @@ describe('issueTicketForPaidOrder', () => {
 
     const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(reloaded.status).toBe('pending');
+  });
+
+  it('creates TicketExtraItem rows for each extra in the order', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventAndTier();
+    const order = await createPendingOrder(user.id, event.id, tier.id);
+
+    const extra1 = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Camiseta', priceCents: 5000 },
+    });
+    const extra2 = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Sticker Pack', priceCents: 1000 },
+    });
+    await prisma.orderExtra.createMany({
+      data: [
+        { orderId: order.id, extraId: extra1.id, quantity: 1 },
+        { orderId: order.id, extraId: extra2.id, quantity: 1 },
+      ],
+    });
+
+    const result = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
+
+    const items = await prisma.ticketExtraItem.findMany({
+      where: { ticketId: result.ticketId },
+      orderBy: { extraId: 'asc' },
+    });
+    expect(items).toHaveLength(2);
+
+    for (const item of items) {
+      expect(item.status).toBe('valid');
+      const { kind, id } = verifyQrCode(item.code, env);
+      expect(kind).toBe('e');
+      expect(id).toBe(`${result.ticketId}-${item.extraId}`);
+    }
+
+    const extraIds = items.map((i) => i.extraId).sort();
+    expect(extraIds).toEqual([extra1.id, extra2.id].sort());
+  });
+
+  it('is idempotent for extras — redelivery does not create duplicate TicketExtraItem rows', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventAndTier();
+    const order = await createPendingOrder(user.id, event.id, tier.id);
+
+    const extra = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Pôster', priceCents: 2000 },
+    });
+    await prisma.orderExtra.create({ data: { orderId: order.id, extraId: extra.id, quantity: 1 } });
+
+    const first = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
+    const second = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
+
+    expect(first.ticketId).toBe(second.ticketId);
+
+    const items = await prisma.ticketExtraItem.findMany({ where: { ticketId: first.ticketId } });
+    expect(items).toHaveLength(1);
+  });
+
+  it('creates no TicketExtraItem rows when the order has no extras', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventAndTier();
+    const order = await createPendingOrder(user.id, event.id, tier.id);
+
+    const result = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
+
+    const items = await prisma.ticketExtraItem.findMany({ where: { ticketId: result.ticketId } });
+    expect(items).toHaveLength(0);
+  });
+
+  it('extra item codes are unique across two different orders with the same extra', async () => {
+    const { user: u1 } = await createUser({ verified: true, email: 'buyer1@jdm.test' });
+    const { user: u2 } = await createUser({ verified: true, email: 'buyer2@jdm.test' });
+    const { event, tier } = await seedEventAndTier(5);
+    const o1 = await createPendingOrder(u1.id, event.id, tier.id);
+    const o2 = await createPendingOrder(u2.id, event.id, tier.id);
+
+    const extra = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Exclusivo', priceCents: 3000 },
+    });
+    await prisma.orderExtra.create({ data: { orderId: o1.id, extraId: extra.id, quantity: 1 } });
+    await prisma.orderExtra.create({ data: { orderId: o2.id, extraId: extra.id, quantity: 1 } });
+
+    const r1 = await issueTicketForPaidOrder(o1.id, o1.providerRef!, env);
+    const r2 = await issueTicketForPaidOrder(o2.id, o2.providerRef!, env);
+
+    const item1 = await prisma.ticketExtraItem.findFirstOrThrow({
+      where: { ticketId: r1.ticketId },
+    });
+    const item2 = await prisma.ticketExtraItem.findFirstOrThrow({
+      where: { ticketId: r2.ticketId },
+    });
+
+    expect(item1.code).not.toBe(item2.code);
+    expect(item1.ticketId).not.toBe(item2.ticketId);
   });
 });

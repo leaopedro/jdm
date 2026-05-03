@@ -1,6 +1,8 @@
 import { prisma } from '@jdm/db';
 import { Prisma } from '@prisma/client';
 
+import { signQrCode } from '../../lib/qr.js';
+
 import { signTicketCode } from './codes.js';
 
 type IssueEnv = { readonly TICKET_CODE_SECRET: string };
@@ -113,7 +115,23 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    // TODO(JDMA-155): create TicketExtraItem rows from order's OrderExtra records here
+    const orderExtras = await tx.orderExtra.findMany({
+      where: { orderId: order.id },
+      select: { extraId: true },
+    });
+
+    for (const { extraId } of orderExtras) {
+      await tx.ticketExtraItem.upsert({
+        where: { ticketId_extraId: { ticketId: ticket.id, extraId } },
+        create: {
+          ticketId: ticket.id,
+          extraId,
+          code: signQrCode('e', `${ticket.id}-${extraId}`, env),
+          status: 'valid',
+        },
+        update: {},
+      });
+    }
 
     return {
       ticketId: ticket.id,
