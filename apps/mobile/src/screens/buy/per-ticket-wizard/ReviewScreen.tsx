@@ -41,6 +41,8 @@ export function ReviewScreen() {
         method: 'card',
         tickets: tickets.map((t) => ({
           extras: ticketExtras(t).map((e) => e.id),
+          ...(t.carId ? { carId: t.carId as string } : {}),
+          ...(t.licensePlate ? { licensePlate: t.licensePlate as string } : {}),
         })),
       });
       await onOrderCreated(order);
@@ -84,6 +86,12 @@ export function ReviewScreen() {
                   <Text style={styles.lineValue}>{formatBRL(extra.priceCents)}</Text>
                 </View>
               ))}
+              {typeof ticketData.carLabel === 'string' ? (
+                <View style={styles.lineItem}>
+                  <Text style={styles.lineLabel}>{ticketData.carLabel}</Text>
+                  <Text style={styles.lineValue}>{ticketData.licensePlate as string}</Text>
+                </View>
+              ) : null}
             </View>
           );
         })}

@@ -19,6 +19,15 @@ export const buyCopy = {
     skip: 'Pular',
     confirm: 'Confirmar',
   },
+  carPlate: {
+    title: 'Carro',
+    subtitle: 'Selecione o carro para este ingresso',
+    plateLabel: 'Placa',
+    platePlaceholder: 'ABC-1D23',
+    plateError: 'Formato inválido (ex: ABC-1D23)',
+    emptyCta: 'Cadastre um carro para continuar',
+    confirm: 'Confirmar',
+  },
   review: {
     title: 'Resumo do pedido',
     total: 'Total',

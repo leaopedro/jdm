@@ -22,6 +22,7 @@ import {
   PerTicketWizard,
   QuantityStepper,
   WizardProvider,
+  createCarPlateStep,
   createExtrasStep,
 } from '~/screens/buy/per-ticket-wizard';
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
@@ -115,7 +116,10 @@ export default function BuyScreen() {
     );
   }
 
-  const pluggableSteps: WizardStepDefinition[] = [createExtrasStep(event.extras)];
+  const pluggableSteps: WizardStepDefinition[] = [
+    createExtrasStep(event.extras),
+    createCarPlateStep(),
+  ];
 
   const handleOrderCreated = useCallback(
     (order: { clientSecret: string }) => handlePayment(order.clientSecret),
