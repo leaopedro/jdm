@@ -16,7 +16,6 @@ export type TicketInput = z.infer<typeof ticketInputSchema>;
 export const createOrderRequestSchema = z.object({
   eventId: z.string().min(1),
   tierId: z.string().min(1),
-  quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
   tickets: z.array(ticketInputSchema).min(1).max(10),
 });

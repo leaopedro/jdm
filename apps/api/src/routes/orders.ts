@@ -135,6 +135,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      const ticketsJson = JSON.stringify(validationResult.ticketsMetadata);
       const intent = await app.stripe.createPaymentIntent({
         amountCents,
         currency: tier.currency,
@@ -144,7 +145,8 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           userId: sub,
           eventId: event.id,
           tierId: tier.id,
-          tickets: JSON.stringify(validationResult.ticketsMetadata),
+          // Stripe caps metadata values at 500 chars; omit rather than truncate invalid JSON
+          ...(ticketsJson.length <= 500 ? { tickets: ticketsJson } : {}),
         },
       });
 

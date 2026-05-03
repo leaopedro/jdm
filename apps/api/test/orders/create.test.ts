@@ -526,6 +526,34 @@ describe('POST /orders', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('omits tickets metadata key when serialized JSON would exceed the 500-char Stripe limit', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(20, { maxTicketsPerUser: 10 });
+    // 2 extras × 10 tickets → tickets JSON ≈ 621 chars, exceeds Stripe's 500-char per-key limit
+    const [extra1, extra2] = await Promise.all([
+      seedExtra(event.id, { quantityTotal: 10 }),
+      seedExtra(event.id, { quantityTotal: 10 }),
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: Array.from({ length: 10 }, () => ({ extras: [extra1.id, extra2.id] })),
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    const piPayload = piCall!.payload as CreatePaymentIntentInput;
+    // tickets JSON exceeds 500 chars — must be omitted rather than sending oversized metadata
+    expect(piPayload.metadata?.tickets).toBeUndefined();
+  });
+
   it('sweeps expired pending orders and reclaims capacity before reserving', async () => {
     const { user } = await createUser({ verified: true });
     const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });
