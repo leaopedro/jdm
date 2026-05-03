@@ -6,11 +6,20 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 export const orderStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded', 'expired']);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
+export const ticketInputSchema = z.object({
+  extras: z.array(z.string().min(1)).default([]),
+  carId: z.string().min(1).optional(),
+  licensePlate: z.string().min(1).max(20).optional(),
+});
+export type TicketInput = z.infer<typeof ticketInputSchema>;
+
 export const createOrderRequestSchema = z.object({
   eventId: z.string().min(1),
   tierId: z.string().min(1),
   quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
+  // One ticket per order until maxTicketsPerUser is enforced server-side (JDMA-142)
+  tickets: z.array(ticketInputSchema).min(1).max(1),
 });
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 

@@ -57,8 +57,9 @@ export default function EventDetailScreen() {
       const order = await createOrder({
         eventId: event.id,
         tierId: tier.id,
-        quantity: 1,
         method: 'card',
+        quantity: 1,
+        tickets: [{ extras: [] }],
       });
 
       const init = await initPaymentSheet({
