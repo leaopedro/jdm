@@ -387,4 +387,184 @@ describe('POST /stripe/webhook', () => {
     });
     expect(dedupRow).not.toBeNull();
   });
+
+  it('handles checkout.session.completed: marks order paid and issues ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+
+    stripe.nextEvent = {
+      id: 'evt_cs_completed_1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_1',
+          payment_intent: order.providerRef,
+          payment_status: 'paid',
+          metadata: { orderId: order.id },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    const ticket = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    expect(ticket).not.toBeNull();
+  });
+
+  it('checkout.session.completed is idempotent with payment_intent.succeeded', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+
+    // First: payment_intent.succeeded settles the order
+    stripe.nextEvent = {
+      id: 'evt_pi_before_cs',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+    await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    // Second: checkout.session.completed arrives (Stripe sends both)
+    stripe.nextEvent = {
+      id: 'evt_cs_after_pi',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_idem',
+          payment_intent: order.providerRef,
+          payment_status: 'paid',
+          metadata: { orderId: order.id },
+        },
+      },
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(1);
+  });
+
+  it('checkout.session.completed ignores unpaid sessions', async () => {
+    stripe.nextEvent = {
+      id: 'evt_cs_unpaid',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_unpaid',
+          payment_intent: null,
+          payment_status: 'unpaid',
+          metadata: { orderId: 'some-order' },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, ignored: true });
+  });
+
+  it('handles checkout.session.expired: marks order failed and releases reservation', async () => {
+    const { user } = await createUser({ verified: true });
+    const { tier, order } = await seedEventTierOrder(user.id);
+
+    stripe.nextEvent = {
+      id: 'evt_cs_expired_1',
+      type: 'checkout.session.expired',
+      data: {
+        object: {
+          id: 'cs_test_expired',
+          payment_intent: order.providerRef,
+          payment_status: 'unpaid',
+          metadata: { orderId: order.id },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('failed');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(0);
+
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(0);
+  });
+
+  it('checkout.session.expired no-ops when order already settled', async () => {
+    const { user } = await createUser({ verified: true });
+    const { tier, order } = await seedEventTierOrder(user.id);
+
+    // Settle order first via payment_intent.succeeded
+    stripe.nextEvent = {
+      id: 'evt_pi_before_expire',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+    await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    // Session expired event arrives late
+    stripe.nextEvent = {
+      id: 'evt_cs_expired_late',
+      type: 'checkout.session.expired',
+      data: {
+        object: {
+          id: 'cs_test_expired_late',
+          payment_intent: order.providerRef,
+          payment_status: 'unpaid',
+          metadata: { orderId: order.id },
+        },
+      },
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Order stays paid, not flipped to failed
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    // Tier reservation not released (already consumed by ticket)
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(1);
+  });
 });

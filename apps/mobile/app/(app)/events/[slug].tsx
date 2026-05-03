@@ -23,6 +23,7 @@ import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
 import { useMyTicketForEvent } from '~/hooks/useMyTicketForEvent';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
+import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
@@ -57,14 +58,21 @@ export default function EventDetailScreen() {
     if (!event) return;
     setPaying(true);
     try {
-      const order = await createOrder({
+      const orderPayload = {
         eventId: event.id,
         tierId: tier.id,
-        method: 'card',
+        method: 'card' as const,
         quantity: 1,
         extrasOnly: false,
-        tickets: [{ extras: [] }],
-      });
+        tickets: [{ extras: [] as string[] }],
+      };
+
+      if (isWeb) {
+        await startWebCheckout(orderPayload);
+        return;
+      }
+
+      const order = await createOrder(orderPayload);
 
       const init = await initPaymentSheet({
         merchantDisplayName: 'JDM Experience',
