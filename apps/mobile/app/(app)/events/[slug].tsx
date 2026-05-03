@@ -18,8 +18,10 @@ import {
 import { getEvent } from '~/api/events';
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
+import { buyCopy } from '~/copy/buy';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
+import { useMyTicketForEvent } from '~/hooks/useMyTicketForEvent';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
 
@@ -31,6 +33,7 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const { ticket: existingTicket, ownedExtraIds } = useMyTicketForEvent(event?.id);
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -165,47 +168,61 @@ export default function EventDetailScreen() {
         <Text style={styles.body}>{event.description}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
-        {event.tiers.map((t) => {
-          const soldOut = t.remainingCapacity === 0;
-          const isSelected = selectedTierId === t.id;
-          return (
-            <Pressable
-              key={t.id}
-              onPress={() => !soldOut && setSelectedTierId(t.id)}
-              disabled={soldOut}
-              style={[
-                styles.tier,
-                isSelected && styles.tierSelected,
-                soldOut && styles.tierDisabled,
-              ]}
-              accessibilityRole="radio"
-              accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
-              accessibilityState={{ selected: isSelected, disabled: soldOut }}
-              accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
-            >
-              <View style={styles.tierTop}>
-                <Text style={styles.tierName}>{t.name}</Text>
-                <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
-              </View>
-              <Text style={styles.sub}>
-                {soldOut
-                  ? ticketsCopy.purchase.soldOut
-                  : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {existingTicket ? (
+        <View style={styles.section}>
+          <Text style={styles.body}>{ticketsCopy.purchase.alreadyHas}</Text>
+          {event.extras.length > 0 && ownedExtraIds.size < event.extras.length ? (
+            <Button
+              label={buyCopy.extrasOnly.cta}
+              onPress={() => router.push(`/events/buy/${event.slug}` as never)}
+            />
+          ) : null}
+        </View>
+      ) : (
+        <>
+          <View style={styles.section}>
+            <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
+            {event.tiers.map((t) => {
+              const soldOut = t.remainingCapacity === 0;
+              const isSelected = selectedTierId === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => !soldOut && setSelectedTierId(t.id)}
+                  disabled={soldOut}
+                  style={[
+                    styles.tier,
+                    isSelected && styles.tierSelected,
+                    soldOut && styles.tierDisabled,
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
+                  accessibilityState={{ selected: isSelected, disabled: soldOut }}
+                  accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
+                >
+                  <View style={styles.tierTop}>
+                    <Text style={styles.tierName}>{t.name}</Text>
+                    <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
+                  </View>
+                  <Text style={styles.sub}>
+                    {soldOut
+                      ? ticketsCopy.purchase.soldOut
+                      : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-      <View style={styles.section}>
-        <Button
-          label={paying ? ticketsCopy.purchase.paying : ticketsCopy.purchase.confirm}
-          onPress={() => selectedTier && void buy(selectedTier)}
-          disabled={!selectedTier || paying}
-        />
-      </View>
+          <View style={styles.section}>
+            <Button
+              label={paying ? ticketsCopy.purchase.paying : ticketsCopy.purchase.confirm}
+              onPress={() => selectedTier && void buy(selectedTier)}
+              disabled={!selectedTier || paying}
+            />
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 }

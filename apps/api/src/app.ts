@@ -10,6 +10,7 @@ import { authPlugin } from './plugins/auth.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 import { sentryPlugin } from './plugins/sentry.js';
+import { abacatepayWebhookRoutes } from './routes/abacatepay-webhook.js';
 import { adminRoutes } from './routes/admin/index.js';
 import { authRoutes } from './routes/auth/index.js';
 import { carRoutes } from './routes/cars.js';
@@ -22,6 +23,7 @@ import { meRoutes } from './routes/me.js';
 import { orderRoutes } from './routes/orders.js';
 import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
 import { uploadRoutes } from './routes/uploads.js';
+import { buildAbacatePay, type AbacatePayClient } from './services/abacatepay/index.js';
 import { buildMailer, type Mailer } from './services/mailer/index.js';
 import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
@@ -35,12 +37,14 @@ declare module 'fastify' {
     env: Env;
     uploads: Uploads;
     stripe: StripeClient;
+    abacatepay: AbacatePayClient | null;
     push: PushSender;
   }
 }
 
 export type BuildAppOverrides = {
   stripe?: StripeClient;
+  abacatepay?: AbacatePayClient | null;
   push?: PushSender;
 };
 
@@ -60,6 +64,16 @@ export const buildApp = async (
   app.decorate('env', env);
   app.decorate('uploads', buildUploads(env));
   app.decorate('stripe', overrides.stripe ?? buildStripe(env));
+  const abacatepay =
+    overrides.abacatepay !== undefined
+      ? overrides.abacatepay
+      : env.ABACATEPAY_API_KEY && env.ABACATEPAY_WEBHOOK_SECRET
+        ? buildAbacatePay({
+            ABACATEPAY_API_KEY: env.ABACATEPAY_API_KEY,
+            ABACATEPAY_WEBHOOK_SECRET: env.ABACATEPAY_WEBHOOK_SECRET,
+          })
+        : null;
+  app.decorate('abacatepay', abacatepay);
   app.decorate('push', overrides.push ?? buildPushSender(env));
   process.stdout.write('[app] services ready, registering plugins\n');
 
@@ -81,6 +95,7 @@ export const buildApp = async (
   await app.register(eventRoutes);
   await app.register(orderRoutes);
   await app.register(stripeWebhookRoutes);
+  await app.register(abacatepayWebhookRoutes);
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(authRoutes, { prefix: '/auth' });
   process.stdout.write('[app] routes registered\n');

@@ -51,6 +51,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
         },
         extras: t.extraItems.map((ei) => ({
           id: ei.id,
+          extraId: ei.extraId,
           extraName: ei.extra.name,
           code: ei.code,
           status: ei.status,

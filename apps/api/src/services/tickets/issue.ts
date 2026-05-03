@@ -1,5 +1,4 @@
 import { prisma } from '@jdm/db';
-import { Prisma } from '@prisma/client';
 
 import { signQrCode } from '../../lib/qr.js';
 
@@ -67,29 +66,41 @@ export class TicketRevokedForExtrasOnlyError extends Error {
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
-// Upsert one TicketExtraItem per OrderExtra for the given ticket.
-// Safe to call on redelivery — update: {} is a no-op when the row exists.
-// Throws if any OrderExtra has quantity > 1, which requires multi-ticket
-// issuance support (not yet built) to issue the correct number of codes.
-const upsertExtraItems = async (
-  orderId: string,
+type TicketMeta = {
+  extras: string[];
+  carId?: string | undefined;
+  licensePlate?: string | undefined;
+};
+
+function parseTicketsMeta(metadata: Record<string, string> | undefined): TicketMeta[] {
+  const raw = metadata?.tickets;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry: unknown) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return { extras: [] };
+      }
+      const obj = entry as Record<string, unknown>;
+      return {
+        extras: Array.isArray(obj.e) ? (obj.e as string[]) : [],
+        carId: typeof obj.c === 'string' ? obj.c : undefined,
+        licensePlate: typeof obj.p === 'string' ? obj.p : undefined,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+const upsertExtraItemsFromMeta = async (
   ticketId: string,
+  extraIds: string[],
   env: IssueEnv,
   tx: Tx,
 ): Promise<void> => {
-  const orderExtras = await tx.orderExtra.findMany({
-    where: { orderId },
-    select: { extraId: true, quantity: true },
-  });
-
-  for (const { extraId, quantity } of orderExtras) {
-    if (quantity !== 1) {
-      // Multi-ticket extra quantities require per-ticket code issuance, which
-      // is not yet implemented. Fail loudly rather than issuing too few codes.
-      throw new Error(
-        `issueTicketForPaidOrder: OrderExtra quantity=${quantity} not supported (orderId=${orderId}, extraId=${extraId})`,
-      );
-    }
+  for (const extraId of extraIds) {
     await tx.ticketExtraItem.upsert({
       where: { ticketId_extraId: { ticketId, extraId } },
       create: {
@@ -103,23 +114,24 @@ const upsertExtraItems = async (
   }
 };
 
-type TicketMeta = { c?: string; p?: string };
-
-// Reads index 0 only — safe because createOrderRequestSchema enforces max(1) ticket per order.
-// Update this when JDMA-142 lifts that constraint to support multi-ticket orders.
-function extractFirstTicketMeta(metadata: Record<string, string> | undefined): TicketMeta {
-  const raw = metadata?.tickets;
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return (parsed[0] as TicketMeta) ?? {};
-    }
-  } catch {
-    // malformed metadata — proceed without car fields
-  }
-  return {};
-}
+// Fallback for single-ticket orders without metadata: read extras from OrderExtra rows.
+const upsertExtraItemsFromOrder = async (
+  orderId: string,
+  ticketId: string,
+  env: IssueEnv,
+  tx: Tx,
+): Promise<void> => {
+  const orderExtras = await tx.orderExtra.findMany({
+    where: { orderId },
+    select: { extraId: true },
+  });
+  await upsertExtraItemsFromMeta(
+    ticketId,
+    orderExtras.map((oe) => oe.extraId),
+    env,
+    tx,
+  );
+};
 
 export const issueTicketForPaidOrder = async (
   orderId: string,
@@ -127,7 +139,7 @@ export const issueTicketForPaidOrder = async (
   env: IssueEnv,
   intentMetadata?: Record<string, string>,
 ): Promise<IssueResult> => {
-  const ticketMeta = extractFirstTicketMeta(intentMetadata);
+  const ticketsMeta = parseTicketsMeta(intentMetadata);
 
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
@@ -141,14 +153,25 @@ export const issueTicketForPaidOrder = async (
     }
 
     if (order.status === 'paid') {
-      const existing = await tx.ticket.findUnique({ where: { orderId } });
-      if (!existing) throw new OrderPaidWithoutTicketError(orderId);
-      await upsertExtraItems(orderId, existing.id, env, tx);
+      const existing = await tx.ticket.findMany({
+        where: { orderId },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (existing.length === 0) throw new OrderPaidWithoutTicketError(orderId);
+      for (let i = 0; i < existing.length; i++) {
+        const meta = ticketsMeta[i];
+        if (meta && meta.extras.length > 0) {
+          await upsertExtraItemsFromMeta(existing[i]!.id, meta.extras, env, tx);
+        } else if (existing.length === 1 && ticketsMeta.length === 0) {
+          await upsertExtraItemsFromOrder(orderId, existing[0]!.id, env, tx);
+        }
+      }
+      const first = existing[0]!;
       return {
-        ticketId: existing.id,
-        code: signTicketCode(existing.id, env),
-        userId: existing.userId,
-        eventId: existing.eventId,
+        ticketId: first.id,
+        code: signTicketCode(first.id, env),
+        userId: first.userId,
+        eventId: first.eventId,
         eventTitle: order.event.title,
       };
     }
@@ -157,6 +180,14 @@ export const issueTicketForPaidOrder = async (
       throw new OrderNotPendingError(orderId, order.status);
     }
 
+    // Serialize ticket creation for same (userId, eventId) — prevents TOCTOU race
+    // when concurrent webhooks process different orders for the same user+event.
+    await tx.$executeRawUnsafe(
+      `SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+      order.userId,
+      order.eventId,
+    );
+
     const conflict = await tx.ticket.findFirst({
       where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
     });
@@ -164,9 +195,12 @@ export const issueTicketForPaidOrder = async (
       throw new TicketAlreadyExistsForEventError(order.userId, order.eventId);
     }
 
-    let ticket;
-    try {
-      ticket = await tx.ticket.create({
+    const ticketCount = order.quantity;
+    const tickets: { id: string }[] = [];
+
+    for (let i = 0; i < ticketCount; i++) {
+      const meta = ticketsMeta[i];
+      const ticket = await tx.ticket.create({
         data: {
           orderId: order.id,
           userId: order.userId,
@@ -174,15 +208,11 @@ export const issueTicketForPaidOrder = async (
           tierId: order.tierId,
           source: 'purchase',
           status: 'valid',
-          ...(ticketMeta.c ? { carId: ticketMeta.c } : {}),
-          ...(ticketMeta.p ? { licensePlate: ticketMeta.p } : {}),
+          ...(meta?.carId ? { carId: meta.carId } : {}),
+          ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
         },
       });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new TicketAlreadyExistsForEventError(order.userId, order.eventId);
-      }
-      throw err;
+      tickets.push(ticket);
     }
 
     await tx.order.update({
@@ -190,11 +220,19 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    await upsertExtraItems(orderId, ticket.id, env, tx);
+    for (let i = 0; i < tickets.length; i++) {
+      const meta = ticketsMeta[i];
+      if (meta && meta.extras.length > 0) {
+        await upsertExtraItemsFromMeta(tickets[i]!.id, meta.extras, env, tx);
+      } else if (ticketCount === 1 && ticketsMeta.length === 0) {
+        await upsertExtraItemsFromOrder(orderId, tickets[0]!.id, env, tx);
+      }
+    }
 
+    const first = tickets[0]!;
     return {
-      ticketId: ticket.id,
-      code: signTicketCode(ticket.id, env),
+      ticketId: first.id,
+      code: signTicketCode(first.id, env),
       userId: order.userId,
       eventId: order.eventId,
       eventTitle: order.event.title,
@@ -216,7 +254,7 @@ const issueExtrasOnly = async (
   }
 
   if (order.status === 'paid') {
-    await upsertExtraItems(order.id, ticket.id, env, tx);
+    await upsertExtraItemsFromOrder(order.id, ticket.id, env, tx);
     return {
       ticketId: ticket.id,
       code: signTicketCode(ticket.id, env),
@@ -235,7 +273,7 @@ const issueExtrasOnly = async (
     data: { status: 'paid', paidAt: new Date(), providerRef },
   });
 
-  await upsertExtraItems(order.id, ticket.id, env, tx);
+  await upsertExtraItemsFromOrder(order.id, ticket.id, env, tx);
 
   return {
     ticketId: ticket.id,

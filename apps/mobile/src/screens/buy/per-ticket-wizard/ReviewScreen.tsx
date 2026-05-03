@@ -1,6 +1,14 @@
 import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
@@ -10,6 +18,7 @@ import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
+import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
 import { theme } from '~/theme';
 
 const ticketExtras = (t: TicketData): SelectedExtra[] =>
@@ -17,15 +26,29 @@ const ticketExtras = (t: TicketData): SelectedExtra[] =>
 
 export function ReviewScreen() {
   const { state, dispatch, onOrderCreated, onExitWizard } = useWizard();
-  const { tier, quantity, tickets, eventId } = state;
+  const { tier, quantity, tickets, eventId, extrasOnly } = state;
   const canGoBack = state.steps.length > 0;
   const [submitting, setSubmitting] = useState(false);
 
-  const unitPrice = tier.priceCents;
+  const unitPrice = extrasOnly ? 0 : tier.priceCents;
   const extrasCents = tickets.reduce((sum, t) => {
     return sum + ticketExtras(t).reduce((s, e) => s + e.priceCents, 0);
   }, 0);
   const totalCents = unitPrice * quantity + extrasCents;
+
+  const [redirecting, setRedirecting] = useState(false);
+
+  const orderPayload = () => ({
+    eventId,
+    tierId: tier.id,
+    quantity,
+    method: 'card' as const,
+    tickets: tickets.map((t) => ({
+      extras: ticketExtras(t).map((e) => e.id),
+      ...(t.carId ? { carId: t.carId as string } : {}),
+      ...(t.licensePlate ? { licensePlate: t.licensePlate as string } : {}),
+    })),
+  });
 
   const handleSubmit = async () => {
     if (quantity > 1) {
@@ -34,19 +57,15 @@ export function ReviewScreen() {
     }
     setSubmitting(true);
     try {
-      const order = await createOrder({
-        eventId,
-        tierId: tier.id,
-        quantity,
-        method: 'card',
-        tickets: tickets.map((t) => ({
-          extras: ticketExtras(t).map((e) => e.id),
-          ...(t.carId ? { carId: t.carId as string } : {}),
-          ...(t.licensePlate ? { licensePlate: t.licensePlate as string } : {}),
-        })),
-      });
+      if (isWeb) {
+        setRedirecting(true);
+        await startWebCheckout(orderPayload());
+        return;
+      }
+      const order = await createOrder(orderPayload());
       await onOrderCreated(order);
     } catch {
+      setRedirecting(false);
       Alert.alert(buyCopy.review.errorTitle, buyCopy.review.errorBody);
     } finally {
       setSubmitting(false);
@@ -74,12 +93,16 @@ export function ReviewScreen() {
           return (
             <View key={idx} style={styles.ticketCard}>
               <Text style={styles.ticketTitle}>
-                {buyCopy.wizard.ticketLabel(idx + 1, quantity)}
+                {extrasOnly
+                  ? buyCopy.extrasOnly.subtitle
+                  : buyCopy.wizard.ticketLabel(idx + 1, quantity)}
               </Text>
-              <View style={styles.lineItem}>
-                <Text style={styles.lineLabel}>{tier.name}</Text>
-                <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
-              </View>
+              {!extrasOnly && (
+                <View style={styles.lineItem}>
+                  <Text style={styles.lineLabel}>{tier.name}</Text>
+                  <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
+                </View>
+              )}
               {extras.map((extra) => (
                 <View key={extra.id} style={styles.lineItem}>
                   <Text style={styles.lineLabel}>{extra.name}</Text>
@@ -103,11 +126,18 @@ export function ReviewScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button
-          label={submitting ? buyCopy.review.submitting : buyCopy.review.confirm}
-          onPress={() => void handleSubmit()}
-          disabled={submitting}
-        />
+        {redirecting ? (
+          <View style={styles.redirecting}>
+            <ActivityIndicator color={theme.colors.accent} />
+            <Text style={styles.redirectingText}>{buyCopy.webCheckout.redirecting}</Text>
+          </View>
+        ) : (
+          <Button
+            label={submitting ? buyCopy.review.submitting : buyCopy.review.confirm}
+            onPress={() => void handleSubmit()}
+            disabled={submitting}
+          />
+        )}
       </View>
     </View>
   );
@@ -173,5 +203,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+  },
+  redirecting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  redirectingText: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
   },
 });

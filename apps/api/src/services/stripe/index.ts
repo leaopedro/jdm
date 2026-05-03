@@ -12,6 +12,23 @@ export type CreatePaymentIntentInput = {
   idempotencyKey: string;
 };
 
+export type CheckoutSessionResult = {
+  id: string;
+  url: string;
+  paymentIntentId: string | null;
+};
+
+export type CreateCheckoutSessionInput = {
+  amountCents: number;
+  currency: string;
+  productName: string;
+  metadata: Record<string, string>;
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey: string;
+  expiresAt?: number;
+};
+
 export type WebhookEvent = {
   id: string;
   type: string;
@@ -20,6 +37,7 @@ export type WebhookEvent = {
 
 export type StripeClient = {
   createPaymentIntent: (input: CreatePaymentIntentInput) => Promise<PaymentIntentResult>;
+  createCheckoutSession: (input: CreateCheckoutSessionInput) => Promise<CheckoutSessionResult>;
   constructWebhookEvent: (payload: Buffer, signature: string) => WebhookEvent;
   refund: (paymentIntentId: string, reason: string) => Promise<void>;
   cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
@@ -50,6 +68,42 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
       );
       if (!pi.client_secret) throw new Error('stripe paymentIntent missing client_secret');
       return { id: pi.id, clientSecret: pi.client_secret };
+    },
+    createCheckoutSession: async ({
+      amountCents,
+      currency,
+      productName,
+      metadata,
+      successUrl,
+      cancelUrl,
+      idempotencyKey,
+      expiresAt,
+    }) => {
+      const params: Stripe.Checkout.SessionCreateParams = {
+        mode: 'payment',
+        payment_intent_data: { metadata },
+        line_items: [
+          {
+            price_data: {
+              currency: currency.toLowerCase(),
+              unit_amount: amountCents,
+              product_data: { name: productName },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: { orderId: metadata.orderId ?? '' },
+      };
+      if (expiresAt) params.expires_at = expiresAt;
+      const session = await stripe.checkout.sessions.create(params, { idempotencyKey });
+      if (!session.url) throw new Error('stripe checkout session missing url');
+      const piId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : (session.payment_intent?.id ?? null);
+      return { id: session.id, url: session.url, paymentIntentId: piId };
     },
     constructWebhookEvent: (payload, signature) => {
       const event = stripe.webhooks.constructEvent(payload, signature, env.STRIPE_WEBHOOK_SECRET);

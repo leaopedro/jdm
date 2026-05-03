@@ -1,16 +1,27 @@
 'use client';
 
+import type { CheckInExtraItem } from '@jdm/shared/check-in';
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { useEffect, useRef, useState } from 'react';
 
-import { submitCheckIn, type CheckInActionResult } from '~/lib/check-in-actions';
+import {
+  submitCheckIn,
+  submitExtraClaim,
+  type CheckInActionResult,
+  type ExtraClaimActionResult,
+} from '~/lib/check-in-actions';
 
 type ScanState =
   | { kind: 'idle' }
   | { kind: 'pending' }
-  | { kind: 'result'; data: CheckInActionResult; code: string };
+  | { kind: 'ticket-result'; data: CheckInActionResult; code: string }
+  | { kind: 'extra-result'; data: ExtraClaimActionResult; code: string };
 
 const RESCAN_COOLDOWN_MS = 5000;
+
+function isExtraCode(code: string): boolean {
+  return code.startsWith('e.');
+}
 
 function mapCameraError(err: unknown): string {
   if (err instanceof Error) {
@@ -43,8 +54,13 @@ export function Scanner({ eventId }: { eventId: string }) {
 
     const handleScan = async (code: string) => {
       setState({ kind: 'pending' });
-      const data = await submitCheckIn(code, eventId);
-      setState({ kind: 'result', data, code });
+      if (isExtraCode(code)) {
+        const data = await submitExtraClaim(code, eventId);
+        setState({ kind: 'extra-result', data, code });
+      } else {
+        const data = await submitCheckIn(code, eventId);
+        setState({ kind: 'ticket-result', data, code });
+      }
     };
 
     const start = async () => {
@@ -101,19 +117,29 @@ export function Scanner({ eventId }: { eventId: string }) {
         muted
         playsInline
       />
-      <ResultCard state={state} onDismiss={dismiss} />
+      {state.kind === 'idle' && (
+        <p className="opacity-80">Aponte para o QR code do ingresso ou extra.</p>
+      )}
+      {state.kind === 'pending' && <p className="opacity-80">Validando…</p>}
+      {state.kind === 'ticket-result' && (
+        <TicketResultCard data={state.data} eventId={eventId} onDismiss={dismiss} />
+      )}
+      {state.kind === 'extra-result' && <ExtraResultCard data={state.data} onDismiss={dismiss} />}
     </div>
   );
 }
 
-function ResultCard({ state, onDismiss }: { state: ScanState; onDismiss: () => void }) {
-  if (state.kind === 'idle') {
-    return <p className="opacity-80">Aponte para o QR code do ingresso.</p>;
-  }
-  if (state.kind === 'pending') {
-    return <p className="opacity-80">Validando…</p>;
-  }
-  const { data } = state;
+function TicketResultCard({
+  data,
+  eventId,
+  onDismiss,
+}: {
+  data: CheckInActionResult;
+  eventId: string;
+  onDismiss: () => void;
+}) {
+  const [extras, setExtras] = useState<CheckInExtraItem[]>(data.ok ? data.extras : []);
+
   if (!data.ok) {
     const human = friendlyError(data.error);
     return (
@@ -130,7 +156,25 @@ function ResultCard({ state, onDismiss }: { state: ScanState; onDismiss: () => v
       </div>
     );
   }
+
   const admitted = data.result === 'admitted';
+
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  const handleClaim = async (extra: CheckInExtraItem) => {
+    setClaimError(null);
+    const result = await submitExtraClaim(extra.code, eventId);
+    if (result.ok) {
+      setExtras((prev) =>
+        prev.map((e) =>
+          e.id === extra.id ? { ...e, status: 'used' as const, usedAt: result.usedAt } : e,
+        ),
+      );
+    } else {
+      setClaimError(`${extra.name}: ${result.message}`);
+    }
+  };
+
   return (
     <div
       className={
@@ -152,6 +196,139 @@ function ResultCard({ state, onDismiss }: { state: ScanState; onDismiss: () => v
       {!admitted ? (
         <p className="text-sm opacity-80">
           Utilizado em {new Date(data.checkedInAt).toLocaleString('pt-BR')}
+        </p>
+      ) : null}
+
+      {claimError && (
+        <p className="mt-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
+          {claimError}
+        </p>
+      )}
+
+      {extras.length > 0 && <ExtrasPanel extras={extras} onClaim={handleClaim} />}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm"
+        >
+          Escanear próximo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ExtrasPanel({
+  extras,
+  onClaim,
+}: {
+  extras: CheckInExtraItem[];
+  onClaim: (extra: CheckInExtraItem) => Promise<void>;
+}) {
+  return (
+    <div className="mt-3 border-t border-[color:var(--color-border)] pt-3">
+      <p className="mb-2 text-sm font-semibold">Extras</p>
+      <ul className="flex flex-col gap-2">
+        {extras.map((extra) => (
+          <ExtraRow key={extra.id} extra={extra} onClaim={onClaim} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ExtraRow({
+  extra,
+  onClaim,
+}: {
+  extra: CheckInExtraItem;
+  onClaim: (extra: CheckInExtraItem) => Promise<void>;
+}) {
+  const [claiming, setClaiming] = useState(false);
+  const used = extra.status === 'used';
+  const revoked = extra.status === 'revoked';
+
+  const handleClick = () => {
+    setClaiming(true);
+    void onClaim(extra).finally(() => setClaiming(false));
+  };
+
+  return (
+    <li
+      className={`flex items-center justify-between rounded border px-3 py-2 text-sm ${
+        used
+          ? 'border-gray-400/30 bg-gray-400/10 opacity-60'
+          : revoked
+            ? 'border-red-400/30 bg-red-400/10 opacity-60'
+            : 'border-[color:var(--color-border)]'
+      }`}
+    >
+      <div>
+        <span className="font-medium">{extra.name}</span>
+        {used && extra.usedAt ? (
+          <span className="ml-2 text-xs opacity-70">
+            entregue {new Date(extra.usedAt).toLocaleString('pt-BR')}
+          </span>
+        ) : null}
+        {revoked ? <span className="ml-2 text-xs opacity-70">revogado</span> : null}
+      </div>
+      {!used && !revoked && (
+        <button
+          type="button"
+          disabled={claiming}
+          onClick={handleClick}
+          className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {claiming ? '…' : 'Marcar entregue'}
+        </button>
+      )}
+    </li>
+  );
+}
+
+function ExtraResultCard({
+  data,
+  onDismiss,
+}: {
+  data: ExtraClaimActionResult;
+  onDismiss: () => void;
+}) {
+  if (!data.ok) {
+    const human = friendlyExtraError(data.error);
+    return (
+      <div className="rounded border border-red-500/40 bg-red-500/10 p-4">
+        <p className="text-lg font-semibold">{human.title}</p>
+        <p className="text-sm opacity-80">{human.subtitle ?? data.message}</p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-3 rounded border border-[color:var(--color-border)] px-3 py-1 text-sm"
+        >
+          Escanear próximo
+        </button>
+      </div>
+    );
+  }
+
+  const claimed = data.result === 'claimed';
+  return (
+    <div
+      className={
+        claimed
+          ? 'rounded border border-green-500/40 bg-green-500/10 p-4'
+          : 'rounded border border-amber-500/40 bg-amber-500/10 p-4'
+      }
+    >
+      <p className="text-lg font-semibold">{claimed ? 'Extra entregue' : 'Extra já entregue'}</p>
+      <p>
+        {data.name} · {data.holder}
+      </p>
+      <p className="text-sm opacity-80">{data.tier}</p>
+      {!claimed && data.usedAt ? (
+        <p className="text-sm opacity-80">
+          Entregue em {new Date(data.usedAt).toLocaleString('pt-BR')}
         </p>
       ) : null}
       <div className="mt-3 flex gap-2">
@@ -180,6 +357,24 @@ function friendlyError(code: string): { title: string; subtitle?: string } {
       };
     case 'TicketRevoked':
       return { title: 'Ingresso revogado' };
+    default:
+      return { title: 'Erro', subtitle: code };
+  }
+}
+
+function friendlyExtraError(code: string): { title: string; subtitle?: string } {
+  switch (code) {
+    case 'InvalidExtraCode':
+      return { title: 'QR inválido', subtitle: 'Este código não é um extra válido.' };
+    case 'ExtraItemNotFound':
+      return { title: 'Extra não encontrado' };
+    case 'ExtraWrongEvent':
+      return {
+        title: 'Evento errado',
+        subtitle: 'Este extra é de outro evento.',
+      };
+    case 'ExtraItemRevoked':
+      return { title: 'Extra revogado' };
     default:
       return { title: 'Erro', subtitle: code };
   }

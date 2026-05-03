@@ -1,4 +1,5 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
+import type { MyTicket } from '@jdm/shared/tickets';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -14,10 +15,12 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
+import { getMyTicketForEvent } from '~/api/tickets';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL } from '~/lib/format';
+import { ExtrasOnlyCheckout } from '~/screens/buy/ExtrasOnlyCheckout';
 import {
   PerTicketWizard,
   QuantityStepper,
@@ -28,24 +31,35 @@ import {
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
 
-type Phase = 'select' | 'wizard';
+type Phase = 'loading' | 'select' | 'wizard' | 'extras_only';
 
 export default function BuyScreen() {
-  const { eventSlug } = useLocalSearchParams<{ eventSlug: string }>();
+  const { eventSlug } = useLocalSearchParams<{
+    eventSlug: string;
+  }>();
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [event, setEvent] = useState<EventDetail | null>(null);
+  const [existingTicket, setExistingTicket] = useState<MyTicket | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [phase, setPhase] = useState<Phase>('select');
+  const [phase, setPhase] = useState<Phase>('loading');
 
   useEffect(() => {
     if (!eventSlug || typeof eventSlug !== 'string') return;
     void (async () => {
       try {
-        setEvent(await getEvent(eventSlug));
+        const ev = await getEvent(eventSlug);
+        setEvent(ev);
+        const ticket = await getMyTicketForEvent(ev.id);
+        if (ticket) {
+          setExistingTicket(ticket);
+          setPhase('extras_only');
+        } else {
+          setPhase('select');
+        }
       } catch {
         setError('Evento não encontrado.');
       }
@@ -108,11 +122,22 @@ export default function BuyScreen() {
     );
   }
 
-  if (!event) {
+  if (!event || phase === 'loading') {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
       </View>
+    );
+  }
+
+  if (phase === 'extras_only' && existingTicket) {
+    return (
+      <ExtrasOnlyCheckout
+        event={event}
+        existingTicket={existingTicket}
+        onPayment={(clientSecret) => void handlePayment(clientSecret)}
+        onBack={() => router.back()}
+      />
     );
   }
 
@@ -126,7 +151,9 @@ export default function BuyScreen() {
     [handlePayment],
   );
 
-  const handleExitWizard = useCallback(() => setPhase('select'), []);
+  const handleExitWizard = useCallback(() => {
+    setPhase('select');
+  }, []);
 
   if (phase === 'wizard' && selectedTier) {
     return (

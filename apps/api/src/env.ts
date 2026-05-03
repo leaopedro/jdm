@@ -30,6 +30,8 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(32),
   TICKET_CODE_SECRET: z.string().min(32),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  ABACATEPAY_API_KEY: z.string().min(1).optional(),
+  ABACATEPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),

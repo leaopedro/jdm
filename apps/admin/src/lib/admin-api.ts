@@ -16,8 +16,12 @@ import {
 } from '@jdm/shared/admin';
 import {
   checkInEventsResponseSchema,
+  extraClaimRequestSchema,
+  extraClaimResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
+  type ExtraClaimRequest,
+  type ExtraClaimResponse,
   type TicketCheckInRequest,
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
@@ -110,6 +114,13 @@ export const checkInTicket = (input: TicketCheckInRequest): Promise<TicketCheckI
     method: 'POST',
     body: JSON.stringify(ticketCheckInRequestSchema.parse(input)),
     schema: ticketCheckInResponseSchema,
+  });
+
+export const claimExtraItem = (input: ExtraClaimRequest): Promise<ExtraClaimResponse> =>
+  apiFetch('/admin/extras/claim', {
+    method: 'POST',
+    body: JSON.stringify(extraClaimRequestSchema.parse(input)),
+    schema: extraClaimResponseSchema,
   });
 
 // ── Admin users ────────────────────────────────────────────────────
