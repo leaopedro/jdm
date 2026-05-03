@@ -143,6 +143,12 @@ function ResultCard({ state, onDismiss }: { state: ScanState; onDismiss: () => v
       <p>
         {data.holder} · {data.tier}
       </p>
+      {data.car ? (
+        <p className="text-sm">
+          Carro: {data.car.make} {data.car.model} {data.car.year}
+          {data.licensePlate ? ` — placa ${data.licensePlate}` : ''}
+        </p>
+      ) : null}
       {!admitted ? (
         <p className="text-sm opacity-80">
           Utilizado em {new Date(data.checkedInAt).toLocaleString('pt-BR')}
