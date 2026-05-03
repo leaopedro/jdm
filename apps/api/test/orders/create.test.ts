@@ -278,7 +278,7 @@ describe('POST /orders', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
-  it('returns 409 when the user already has a valid ticket for the event', async () => {
+  it('returns 422 when user has existing ticket but sends no extras', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
     await prisma.ticket.create({
@@ -292,7 +292,7 @@ describe('POST /orders', () => {
       payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(422);
     expect(stripe.calls).toHaveLength(0);
   });
 
