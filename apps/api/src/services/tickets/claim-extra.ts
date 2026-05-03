@@ -71,10 +71,7 @@ export const claimExtra = async (
     include: itemInclude,
   });
   if (!item) throw new ExtraItemNotFoundError();
-
-  if (item.extra.eventId !== input.eventId) {
-    throw new ExtraWrongEventError();
-  }
+  if (item.extra.eventId !== input.eventId) throw new ExtraWrongEventError();
   if (item.status === 'revoked') throw new ExtraItemRevokedError();
 
   if (item.status === 'used') {
@@ -92,22 +89,42 @@ export const claimExtra = async (
     };
   }
 
+  // Atomic claim: only one concurrent caller gets count=1
   const now = new Date();
-  await prisma.ticketExtraItem.update({
-    where: { id: item.id },
+  const result = await prisma.ticketExtraItem.updateMany({
+    where: { id: item.id, status: 'valid' },
     data: { status: 'used', usedAt: now },
   });
 
+  if (result.count === 1) {
+    return {
+      kind: 'claimed',
+      item: {
+        id: item.id,
+        extraId: item.extraId,
+        extraName: item.extra.name,
+        status: 'used',
+        usedAt: now,
+        ticket: item.ticket,
+      },
+      claimedAt: now,
+    };
+  }
+
+  // Lost the race — another caller claimed it between our read and update
+  const refreshed = await prisma.ticketExtraItem.findUniqueOrThrow({
+    where: { id: item.id },
+  });
   return {
-    kind: 'claimed',
+    kind: 'already_used',
     item: {
       id: item.id,
       extraId: item.extraId,
       extraName: item.extra.name,
-      status: 'used',
-      usedAt: now,
+      status: refreshed.status,
+      usedAt: refreshed.usedAt,
       ticket: item.ticket,
     },
-    claimedAt: now,
+    originalUsedAt: refreshed.usedAt ?? now,
   };
 };
