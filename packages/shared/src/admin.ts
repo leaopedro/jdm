@@ -22,6 +22,9 @@ export const adminAuditActionSchema = z.enum([
   'tier.delete',
   'ticket.check_in',
   'ticket.grant_comp',
+  'extra.create',
+  'extra.update',
+  'extra.delete',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -300,3 +303,45 @@ export const adminUserDetailSchema = z.object({
   recentOrders: z.array(adminUserDetailOrderSchema),
 });
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
+
+// ── Extras ──────────────────────────────────────────────────────────────
+
+export const adminExtraSchema = z.object({
+  id: z.string().min(1),
+  eventId: z.string().min(1),
+  name: z.string(),
+  description: z.string().nullable(),
+  priceCents: z.number().int().nonnegative(),
+  currency: z.string(),
+  quantityTotal: z.number().int().nonnegative().nullable(),
+  quantitySold: z.number().int().nonnegative(),
+  active: z.boolean(),
+  sortOrder: z.number().int(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminExtra = z.infer<typeof adminExtraSchema>;
+
+export const adminExtraCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: optionalText(2000).optional(),
+  priceCents: z.number().int().nonnegative(),
+  currency: z.string().length(3).default('BRL'),
+  quantityTotal: z.number().int().nonnegative().nullable().optional(),
+  active: z.boolean().default(true),
+  sortOrder: z.number().int().optional(),
+});
+export type AdminExtraCreate = z.infer<typeof adminExtraCreateSchema>;
+
+export const adminExtraUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    description: optionalText(2000),
+    priceCents: z.number().int().nonnegative(),
+    quantityTotal: z.number().int().nonnegative().nullable(),
+    active: z.boolean(),
+    sortOrder: z.number().int(),
+  })
+  .partial()
+  .strict();
+export type AdminExtraUpdate = z.infer<typeof adminExtraUpdateSchema>;

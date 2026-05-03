@@ -27,7 +27,6 @@ export const resetDatabase = async (): Promise<void> => {
   await prisma.ticketExtra.deleteMany();
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.adminAudit.deleteMany();
-  await prisma.ticketExtra.deleteMany();
   await prisma.ticketTier.deleteMany();
   await prisma.event.deleteMany();
   await prisma.carPhoto.deleteMany();
