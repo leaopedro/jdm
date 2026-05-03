@@ -1,4 +1,6 @@
 import type {
+  CheckoutSessionResult,
+  CreateCheckoutSessionInput,
   CreatePaymentIntentInput,
   PaymentIntentResult,
   StripeClient,
@@ -6,13 +8,14 @@ import type {
 } from './index.js';
 
 type FakeCall = {
-  kind: 'createPaymentIntent' | 'refund' | 'cancelPaymentIntent';
+  kind: 'createPaymentIntent' | 'createCheckoutSession' | 'refund' | 'cancelPaymentIntent';
   payload: unknown;
 };
 
 export type FakeStripe = StripeClient & {
   calls: FakeCall[];
   nextPaymentIntent: { id: string; clientSecret: string };
+  nextCheckoutSession: CheckoutSessionResult;
   nextSignatureValid: boolean;
   nextEvent: WebhookEvent | null;
 };
@@ -21,12 +24,24 @@ export const buildFakeStripe = (): FakeStripe => {
   const fake: FakeStripe = {
     calls: [],
     nextPaymentIntent: { id: 'pi_test_1', clientSecret: 'pi_test_1_secret_abc' },
+    nextCheckoutSession: {
+      id: 'cs_test_1',
+      url: 'https://checkout.stripe.com/cs_test_1',
+      paymentIntentId: 'pi_test_cs_1',
+    },
     nextSignatureValid: true,
     nextEvent: null,
     // eslint-disable-next-line @typescript-eslint/require-await
     createPaymentIntent: async (input: CreatePaymentIntentInput): Promise<PaymentIntentResult> => {
       fake.calls.push({ kind: 'createPaymentIntent', payload: input });
       return fake.nextPaymentIntent;
+    },
+    // eslint-disable-next-line @typescript-eslint/require-await
+    createCheckoutSession: async (
+      input: CreateCheckoutSessionInput,
+    ): Promise<CheckoutSessionResult> => {
+      fake.calls.push({ kind: 'createCheckoutSession', payload: input });
+      return fake.nextCheckoutSession;
     },
     constructWebhookEvent: (_payload, _signature) => {
       if (!fake.nextSignatureValid) {
