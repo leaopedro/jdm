@@ -143,6 +143,44 @@ describe('GET /admin/users', () => {
     expect(new Set(allIds).size).toBe(6);
   });
 
+  it('cursor + search combined returns only matching users across pages', async () => {
+    const { user: org } = await createUser({
+      email: 'o@test.com',
+      verified: true,
+      role: 'organizer',
+    });
+    await Promise.all(
+      Array.from({ length: 4 }, (_, i) =>
+        createUser({ email: `alice${i}@test.com`, name: `Alice ${i}`, verified: true }),
+      ),
+    );
+    await createUser({ email: 'bob@test.com', name: 'Bob', verified: true });
+
+    const res1 = await app.inject({
+      method: 'GET',
+      url: '/admin/users?q=alice&limit=2',
+      headers: { authorization: bearer(env(), org.id, 'organizer') },
+    });
+    expect(res1.statusCode).toBe(200);
+    const body1 = json(res1);
+    expect(body1.items).toHaveLength(2);
+    expect(body1.nextCursor).toBeTruthy();
+    expect(body1.items.every((u) => u.name.startsWith('Alice'))).toBe(true);
+
+    const res2 = await app.inject({
+      method: 'GET',
+      url: `/admin/users?q=alice&limit=2&cursor=${body1.nextCursor}`,
+      headers: { authorization: bearer(env(), org.id, 'organizer') },
+    });
+    expect(res2.statusCode).toBe(200);
+    const body2 = json(res2);
+    expect(body2.items).toHaveLength(2);
+    expect(body2.items.every((u) => u.name.startsWith('Alice'))).toBe(true);
+
+    const allIds = [...body1.items.map((i) => i.id), ...body2.items.map((i) => i.id)];
+    expect(new Set(allIds).size).toBe(4);
+  });
+
   it('400 on invalid cursor', async () => {
     const { user: org } = await createUser({
       email: 'o@test.com',
