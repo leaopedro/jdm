@@ -1,6 +1,8 @@
 import { prisma } from '@jdm/db';
 import {
   checkInEventsResponseSchema,
+  extraClaimRequestSchema,
+  extraClaimResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
 } from '@jdm/shared/check-in';
@@ -15,6 +17,13 @@ import {
   TicketRevokedError,
   TicketWrongEventError,
 } from '../../services/tickets/check-in.js';
+import {
+  claimExtra,
+  ExtraItemNotFoundError,
+  ExtraItemRevokedError,
+  ExtraWrongEventError,
+  InvalidExtraCodeError,
+} from '../../services/tickets/claim-extra.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
@@ -40,6 +49,12 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
           ? outcome.checkedInAt.toISOString()
           : outcome.originalUsedAt.toISOString();
 
+      const extraItems = await prisma.ticketExtraItem.findMany({
+        where: { ticketId: outcome.ticket.id },
+        include: { extra: { select: { name: true } } },
+        orderBy: { extra: { sortOrder: 'asc' } },
+      });
+
       const { car } = outcome.ticket;
       return reply.send(
         ticketCheckInResponseSchema.parse({
@@ -58,6 +73,14 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
             },
             car: car ? { make: car.make, model: car.model, year: car.year } : null,
             licensePlate: outcome.ticket.licensePlate,
+            extras: extraItems.map((ei) => ({
+              id: ei.id,
+              extraId: ei.extraId,
+              name: ei.extra.name,
+              code: ei.code,
+              status: ei.status,
+              usedAt: ei.usedAt?.toISOString() ?? null,
+            })),
           },
         }),
       );
@@ -73,6 +96,59 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
       }
       if (err instanceof TicketRevokedError) {
         return reply.status(409).send({ error: 'TicketRevoked', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post('/extras/claim', async (request, reply) => {
+    const { sub: actorId } = requireUser(request);
+    const input = extraClaimRequestSchema.parse(request.body);
+
+    try {
+      const outcome = await claimExtra(input, app.env);
+
+      if (outcome.kind === 'claimed') {
+        await recordAudit({
+          actorId,
+          action: 'extra.claim',
+          entityType: 'ticket_extra_item',
+          entityId: outcome.item.id,
+          metadata: { eventId: input.eventId, extraId: outcome.item.extraId },
+        });
+      }
+
+      const usedAt =
+        outcome.kind === 'claimed'
+          ? outcome.claimedAt.toISOString()
+          : outcome.originalUsedAt.toISOString();
+
+      return reply.send(
+        extraClaimResponseSchema.parse({
+          result: outcome.kind,
+          item: {
+            id: outcome.item.id,
+            extraId: outcome.item.extraId,
+            name: outcome.item.extraName,
+            status: outcome.item.status,
+            usedAt,
+            holder: outcome.item.ticket.user,
+            tier: outcome.item.ticket.tier,
+          },
+        }),
+      );
+    } catch (err) {
+      if (err instanceof InvalidExtraCodeError) {
+        return reply.status(400).send({ error: 'InvalidExtraCode', message: err.message });
+      }
+      if (err instanceof ExtraItemNotFoundError) {
+        return reply.status(404).send({ error: 'ExtraItemNotFound', message: err.message });
+      }
+      if (err instanceof ExtraWrongEventError) {
+        return reply.status(409).send({ error: 'ExtraWrongEvent', message: err.message });
+      }
+      if (err instanceof ExtraItemRevokedError) {
+        return reply.status(409).send({ error: 'ExtraItemRevoked', message: err.message });
       }
       throw err;
     }
