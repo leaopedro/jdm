@@ -15,7 +15,7 @@ export type CreatePaymentIntentInput = {
 export type CheckoutSessionResult = {
   id: string;
   url: string;
-  paymentIntentId: string;
+  paymentIntentId: string | null;
 };
 
 export type CreateCheckoutSessionInput = {
@@ -102,8 +102,7 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
       const piId =
         typeof session.payment_intent === 'string'
           ? session.payment_intent
-          : session.payment_intent?.id;
-      if (!piId) throw new Error('stripe checkout session missing payment_intent');
+          : (session.payment_intent?.id ?? null);
       return { id: session.id, url: session.url, paymentIntentId: piId };
     },
     constructWebhookEvent: (payload, signature) => {

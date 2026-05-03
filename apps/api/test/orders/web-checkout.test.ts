@@ -301,4 +301,37 @@ describe('POST /orders/checkout', () => {
     expect(csPayload.expiresAt!).toBeGreaterThan(nowSec + 1780);
     expect(csPayload.expiresAt!).toBeLessThanOrEqual(nowSec + 1820);
   });
+
+  it('succeeds when Stripe returns null payment_intent on session', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+
+    stripe.nextCheckoutSession = {
+      id: 'cs_test_null_pi',
+      url: 'https://checkout.stripe.com/cs_test_null_pi',
+      paymentIntentId: null,
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/checkout',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}],
+        successUrl: 'https://app.jdm.com/success',
+        cancelUrl: 'https://app.jdm.com/cancel',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createWebCheckoutResponseSchema.parse(res.json());
+    expect(body.checkoutUrl).toBe('https://checkout.stripe.com/cs_test_null_pi');
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
+    expect(order.status).toBe('pending');
+    expect(order.providerRef).toBeNull();
+  });
 });

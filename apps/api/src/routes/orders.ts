@@ -325,10 +325,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         expiresAt: expiresAtUnix,
       });
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { providerRef: session.paymentIntentId },
-      });
+      if (session.paymentIntentId) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { providerRef: session.paymentIntentId },
+        });
+      }
 
       return reply.status(201).send(
         createWebCheckoutResponseSchema.parse({
