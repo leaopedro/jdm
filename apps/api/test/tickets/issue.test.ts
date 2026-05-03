@@ -214,6 +214,111 @@ describe('issueTicketForPaidOrder', () => {
     expect(items).toHaveLength(0);
   });
 
+  it('extras-only: issueExtrasOnly with ticketId in metadata targets correct ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventAndTier(5);
+
+    // Two valid tickets for same user+event
+    const ticketA = await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+    const ticketB = await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'extras_only',
+        amountCents: 2000,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_multi_ticket_target',
+        status: 'pending',
+      },
+    });
+    const extra = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Targeted Extra', priceCents: 2000 },
+    });
+    await prisma.orderExtra.create({
+      data: { orderId: order.id, extraId: extra.id, quantity: 1 },
+    });
+
+    // Pass ticketId in metadata — should target ticketB, not ticketA
+    const result = await issueTicketForPaidOrder(order.id, 'pi_multi_ticket_target', env, {
+      orderId: order.id,
+      ticketId: ticketB.id,
+    });
+
+    expect(result.ticketId).toBe(ticketB.id);
+
+    const items = await prisma.ticketExtraItem.findMany({ where: { ticketId: ticketB.id } });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.extraId).toBe(extra.id);
+
+    // ticketA should have no extras
+    const itemsA = await prisma.ticketExtraItem.findMany({ where: { ticketId: ticketA.id } });
+    expect(itemsA).toHaveLength(0);
+  });
+
+  it('extras-only: falls back to findFirst when metadata has no ticketId', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventAndTier(5);
+
+    const ticket = await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'extras_only',
+        amountCents: 2000,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_no_ticketid',
+        status: 'pending',
+      },
+    });
+    const extra = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Backward Compat Extra', priceCents: 2000 },
+    });
+    await prisma.orderExtra.create({
+      data: { orderId: order.id, extraId: extra.id, quantity: 1 },
+    });
+
+    // No ticketId in metadata — backward compat path
+    const result = await issueTicketForPaidOrder(order.id, 'pi_no_ticketid', env, {
+      orderId: order.id,
+    });
+
+    expect(result.ticketId).toBe(ticket.id);
+    const items = await prisma.ticketExtraItem.findMany({ where: { ticketId: ticket.id } });
+    expect(items).toHaveLength(1);
+  });
+
   it('extra item codes are unique across two different orders with the same extra', async () => {
     const { user: u1 } = await createUser({ verified: true, email: 'buyer1@jdm.test' });
     const { user: u2 } = await createUser({ verified: true, email: 'buyer2@jdm.test' });

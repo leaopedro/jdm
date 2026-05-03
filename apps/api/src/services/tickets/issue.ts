@@ -149,7 +149,7 @@ export const issueTicketForPaidOrder = async (
     if (!order) throw new OrderNotFoundError(orderId);
 
     if (order.kind === 'extras_only') {
-      return issueExtrasOnly(order, providerRef, env, tx);
+      return issueExtrasOnly(order, providerRef, env, tx, intentMetadata?.ticketId);
     }
 
     if (order.status === 'paid') {
@@ -237,10 +237,24 @@ const issueExtrasOnly = async (
   providerRef: string,
   env: IssueEnv,
   tx: Tx,
+  targetTicketId?: string,
 ): Promise<IssueResult> => {
-  const ticket = await tx.ticket.findFirst({
-    where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
-  });
+  let ticket;
+  if (targetTicketId) {
+    ticket = await tx.ticket.findUnique({ where: { id: targetTicketId } });
+    if (
+      !ticket ||
+      ticket.userId !== order.userId ||
+      ticket.eventId !== order.eventId ||
+      ticket.status !== 'valid'
+    ) {
+      throw new TicketRevokedForExtrasOnlyError(order.id, order.userId, order.eventId);
+    }
+  } else {
+    ticket = await tx.ticket.findFirst({
+      where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
+    });
+  }
   if (!ticket) {
     throw new TicketRevokedForExtrasOnlyError(order.id, order.userId, order.eventId);
   }

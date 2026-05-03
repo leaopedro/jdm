@@ -347,6 +347,153 @@ describe('POST /orders — extras-only flow', () => {
     expect(body.amountCents).toBe(1500);
   });
 
+  it('creates extras-only order targeting specific ticket via ticketId', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    await seedExistingTicket(user.id, event.id, tier.id);
+    const ticketB = await seedExistingTicket(user.id, event.id, tier.id);
+    const extra = await seedExtra(event.id, { priceCents: 2500 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        ticketId: ticketB.id,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    expect(body.amountCents).toBe(2500);
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
+    expect(order.kind).toBe('extras_only');
+
+    // Stripe metadata must include ticketId for deterministic webhook resolution
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    expect(piCall).toBeTruthy();
+    const piPayload = (piCall as { payload: { metadata: Record<string, string> } }).payload;
+    expect(piPayload.metadata.ticketId).toBe(ticketB.id);
+  });
+
+  it('rejects extras-only order with ticketId belonging to different user (422)', async () => {
+    const { user: buyer } = await createUser({ verified: true, email: 'buyer@jdm.test' });
+    const { user: other } = await createUser({ verified: true, email: 'other@jdm.test' });
+    const { event, tier } = await seedPublishedEvent();
+    await seedExistingTicket(buyer.id, event.id, tier.id);
+    const otherTicket = await seedExistingTicket(other.id, event.id, tier.id);
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, buyer.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        ticketId: otherTicket.id,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+  });
+
+  it('rejects extras-only order with ticketId for different event (422)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event: eventA, tier: tierA } = await seedPublishedEvent();
+    const { event: eventB } = await seedPublishedEvent();
+    await seedExistingTicket(user.id, eventA.id, tierA.id);
+    const ticketB = await seedExistingTicket(user.id, eventB.id, tierA.id);
+    const extra = await seedExtra(eventA.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: eventA.id,
+        tierId: tierA.id,
+        method: 'card',
+        ticketId: ticketB.id,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+  });
+
+  it('rejects extras-only order with ticketId for revoked ticket (422)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const ticket = await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'revoked',
+      },
+    });
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        ticketId: ticket.id,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+  });
+
+  it('multi-ticket: duplicate-extra check uses specified ticketId, not first ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const ticketA = await seedExistingTicket(user.id, event.id, tier.id);
+    const ticketB = await seedExistingTicket(user.id, event.id, tier.id);
+    const extra = await seedExtra(event.id);
+
+    // Extra already attached to ticket A
+    await prisma.ticketExtraItem.create({
+      data: { ticketId: ticketA.id, extraId: extra.id, code: 'existing_code_a', status: 'valid' },
+    });
+
+    // Buying for ticket B should succeed — extra is not on ticket B
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        ticketId: ticketB.id,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+  });
+
   it('expiry: extras-only order does not decrement tier quantitySold', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();

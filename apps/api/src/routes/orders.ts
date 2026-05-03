@@ -22,6 +22,7 @@ type PreparedOrder = {
   event: { id: string; title: string };
   tier: { id: string; priceCents: number; currency: string; quantityTotal: number };
   isExtrasOnly: boolean;
+  targetTicketId?: string | undefined;
   validationResult: Awaited<ReturnType<typeof validateTickets>>;
   expiredProviderRefs: string[];
   reserved: boolean;
@@ -31,7 +32,13 @@ type PreparedOrder = {
 
 async function prepareOrder(
   sub: string,
-  input: { eventId: string; tierId: string; method: string; tickets: TicketInput[] },
+  input: {
+    eventId: string;
+    tierId: string;
+    method: string;
+    tickets: TicketInput[];
+    ticketId?: string | undefined;
+  },
 ): Promise<
   | { ok: true; data: PreparedOrder }
   | { ok: false; status: number; body: { error: string; message: string } }
@@ -56,9 +63,28 @@ async function prepareOrder(
   if (!tier)
     return { ok: false, status: 404, body: { error: 'NotFound', message: 'tier not found' } };
 
-  const existingTicket = await prisma.ticket.findFirst({
-    where: { userId: sub, eventId: event.id, status: 'valid' },
-  });
+  let existingTicket: { id: string } | null = null;
+
+  if (input.ticketId) {
+    const target = await prisma.ticket.findUnique({ where: { id: input.ticketId } });
+    if (
+      !target ||
+      target.userId !== sub ||
+      target.eventId !== event.id ||
+      target.status !== 'valid'
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        body: { error: 'UnprocessableEntity', message: 'ticketId invalid or not owned by user' },
+      };
+    }
+    existingTicket = target;
+  } else {
+    existingTicket = await prisma.ticket.findFirst({
+      where: { userId: sub, eventId: event.id, status: 'valid' },
+    });
+  }
 
   const isExtrasOnly = !!existingTicket;
 
@@ -85,7 +111,7 @@ async function prepareOrder(
       if (isExtrasOnly) {
         const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
         const existingItems = await tx.ticketExtraItem.findMany({
-          where: { ticketId: existingTicket.id, extraId: { in: allExtras } },
+          where: { ticketId: existingTicket!.id, extraId: { in: allExtras } },
           select: { extraId: true },
         });
         if (existingItems.length > 0) {
@@ -162,6 +188,7 @@ async function prepareOrder(
         quantityTotal: tier.quantityTotal,
       },
       isExtrasOnly,
+      targetTicketId: existingTicket?.id,
       validationResult,
       expiredProviderRefs,
       reserved,
@@ -252,6 +279,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           eventId: data.event.id,
           tierId: data.tier.id,
           tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+          ...(data.targetTicketId ? { ticketId: data.targetTicketId } : {}),
         },
       });
 
@@ -319,6 +347,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           eventId: data.event.id,
           tierId: data.tier.id,
           tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+          ...(data.targetTicketId ? { ticketId: data.targetTicketId } : {}),
         },
         successUrl: input.successUrl,
         cancelUrl: input.cancelUrl,

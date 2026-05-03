@@ -80,6 +80,7 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
         tierId,
         quantity: 1,
         method: 'card' as const,
+        ticketId: existingTicket.id,
         tickets: [{ extras: Array.from(selected.keys()) }],
       };
       if (isWeb) {
