@@ -104,7 +104,7 @@ STRIPE_PUBLISHABLE_KEY=pk_test_... # optional
 Edit `apps/mobile/.env.local` (create if missing):
 
 ```env
-EXPO_PUBLIC_API_URL=http://localhost:4000
+EXPO_PUBLIC_API_BASE_URL=http://localhost:4000
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
@@ -198,6 +198,74 @@ Expected: webhook returns `200 refunded:true`; `stripe listen` shows a refund ev
 | `webhook signature verification failed`                  | `STRIPE_WEBHOOK_SECRET` doesn't match `stripe listen` output. Re-copy and restart API.     |
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set` in Metro | `.env.local` missing or Metro cache stale — run `pnpm --filter @jdm/mobile expo start -c`. |
 | "Merchant identifier is invalid" on Apple Pay            | Expected on simulator without provisioning profile; card path still works.                 |
+
+### 3.2 Stripe web checkout (Vercel preview/prod smoke)
+
+Covers hosted-checkout redirect + webhook settlement + ticket visibility on Expo web.
+
+**Prerequisites**
+
+- Stripe web flow merged (`[JDMA-197](/JDMA/issues/JDMA-197)` + `[JDMA-199](/JDMA/issues/JDMA-199)`).
+- API deployed with valid `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`.
+- Mobile web deployed on Vercel (`jdm-mobile-web`), using `EXPO_PUBLIC_API_BASE_URL` pointing to the same API.
+- At least one published event/tier with capacity > 0.
+
+**Step 1 — Open web preview and authenticate**
+
+1. Open the target Vercel URL (Preview or Production) in a clean browser session.
+2. Log in with a verified attendee account.
+3. Open `/events` and pick a published event with available tier.
+
+Expected:
+
+- Event details render with tier selector and purchase CTA.
+
+**Step 2 — Happy path: hosted Stripe checkout**
+
+1. Start purchase on web.
+2. Confirm browser redirect to `checkout.stripe.com`.
+3. Pay with test card `4242 4242 4242 4242`.
+4. Confirm Stripe redirects back to `/events/buy/checkout-return`.
+5. Wait for polling to show success and open **Meus ingressos**.
+
+Expected:
+
+- Return screen reaches success state (`Pagamento confirmado` style message).
+- `GET /orders/:id` transitions `pending` → `paid`.
+- Ticket is visible on `/tickets` for the logged user.
+- API logs include a successful verified webhook (`payment_intent.succeeded`) and no signature errors.
+
+**Step 3 — Failure path: declined card**
+
+1. Start a new purchase for another user or another event/tier with stock.
+2. On Stripe hosted checkout, use `4000 0000 0000 9995`.
+3. Complete and return to `/events/buy/checkout-return`.
+
+Expected:
+
+- Return screen reaches failed/cancelled state and shows retry CTA.
+- Order ends in `failed` (or `expired` if left pending until TTL).
+- Reserved capacity is released (tier and extras return to pre-attempt counts).
+- No new `Ticket` row is issued.
+
+**Step 4 — Webhook idempotency check**
+
+1. Replay the same success event from Stripe dashboard/CLI (`stripe events resend <evt_id>`).
+
+Expected:
+
+- Webhook endpoint responds `200` with dedupe path.
+- No duplicate ticket, no duplicate push/notification rows for the same dedupe key.
+
+**Evidence to attach in issue thread**
+
+- Screenshot of hosted checkout page (masked card details).
+- Screenshot of checkout-return success and failure states.
+- API log excerpt for `payment_intent.succeeded` and `payment_intent.payment_failed`.
+- DB query result snippets:
+  - `SELECT id,status,provider_ref FROM "Order" WHERE id='<orderId>';`
+  - `SELECT id,user_id,event_id,status FROM "Ticket" WHERE order_id='<orderId>';`
+  - `SELECT quantity_sold FROM "TicketTier" WHERE id='<tierId>';`
 
 ## 4. Roles
 
