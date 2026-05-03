@@ -346,3 +346,72 @@ export const adminExtraUpdateSchema = z
   .partial()
   .strict();
 export type AdminExtraUpdate = z.infer<typeof adminExtraUpdateSchema>;
+
+// ── Admin finance ─────────────────────────────────────────────────────
+
+export const adminFinanceQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  eventIds: z.array(z.string().min(1)).optional(),
+  search: z.string().min(1).max(200).optional(),
+  city: z.string().min(1).max(100).optional(),
+  stateCode: stateCodeSchema.optional(),
+  provider: z.enum(['stripe', 'abacatepay']).optional(),
+  method: z.enum(['card', 'pix']).optional(),
+  statuses: z.array(orderStatusSchema).min(1).optional(),
+});
+export type AdminFinanceQuery = z.infer<typeof adminFinanceQuerySchema>;
+
+export const adminFinanceSummarySchema = z.object({
+  totalRevenueCents: z.number().int(),
+  orderCount: z.number().int().nonnegative(),
+  avgOrderCents: z.number().int().nonnegative(),
+  ticketCount: z.number().int().nonnegative(),
+  refundedCents: z.number().int(),
+  refundedCount: z.number().int().nonnegative(),
+});
+export type AdminFinanceSummary = z.infer<typeof adminFinanceSummarySchema>;
+
+export const adminFinanceEventRowSchema = z.object({
+  eventId: z.string().min(1),
+  eventTitle: z.string(),
+  startsAt: z.string().datetime(),
+  city: z.string().nullable(),
+  stateCode: z.string().nullable(),
+  revenueCents: z.number().int(),
+  orderCount: z.number().int().nonnegative(),
+  ticketCount: z.number().int().nonnegative(),
+  refundedCents: z.number().int(),
+});
+export type AdminFinanceEventRow = z.infer<typeof adminFinanceEventRowSchema>;
+
+export const adminFinanceByEventResponseSchema = z.object({
+  items: z.array(adminFinanceEventRowSchema),
+});
+export type AdminFinanceByEventResponse = z.infer<typeof adminFinanceByEventResponseSchema>;
+
+export const adminFinanceTrendPointSchema = z.object({
+  date: z.string(),
+  revenueCents: z.number().int(),
+  orderCount: z.number().int().nonnegative(),
+});
+export type AdminFinanceTrendPoint = z.infer<typeof adminFinanceTrendPointSchema>;
+
+export const adminFinanceTrendResponseSchema = z.object({
+  points: z.array(adminFinanceTrendPointSchema),
+});
+export type AdminFinanceTrendResponse = z.infer<typeof adminFinanceTrendResponseSchema>;
+
+export const adminFinancePaymentMixItemSchema = z.object({
+  provider: z.string(),
+  method: z.string(),
+  revenueCents: z.number().int(),
+  orderCount: z.number().int().nonnegative(),
+  percentage: z.number(),
+});
+export type AdminFinancePaymentMixItem = z.infer<typeof adminFinancePaymentMixItemSchema>;
+
+export const adminFinancePaymentMixResponseSchema = z.object({
+  items: z.array(adminFinancePaymentMixItemSchema),
+});
+export type AdminFinancePaymentMixResponse = z.infer<typeof adminFinancePaymentMixResponseSchema>;
