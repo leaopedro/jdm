@@ -159,7 +159,10 @@ function TicketResultCard({
 
   const admitted = data.result === 'admitted';
 
+  const [claimError, setClaimError] = useState<string | null>(null);
+
   const handleClaim = async (extra: CheckInExtraItem) => {
+    setClaimError(null);
     const result = await submitExtraClaim(extra.code, eventId);
     if (result.ok) {
       setExtras((prev) =>
@@ -167,6 +170,8 @@ function TicketResultCard({
           e.id === extra.id ? { ...e, status: 'used' as const, usedAt: result.usedAt } : e,
         ),
       );
+    } else {
+      setClaimError(`${extra.name}: ${result.message}`);
     }
   };
 
@@ -193,6 +198,12 @@ function TicketResultCard({
           Utilizado em {new Date(data.checkedInAt).toLocaleString('pt-BR')}
         </p>
       ) : null}
+
+      {claimError && (
+        <p className="mt-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
+          {claimError}
+        </p>
+      )}
 
       {extras.length > 0 && <ExtrasPanel extras={extras} onClaim={handleClaim} />}
 
