@@ -4,12 +4,16 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
+import type { TicketData } from './types';
 
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
 import { theme } from '~/theme';
+
+const ticketExtras = (t: TicketData): SelectedExtra[] =>
+  (t.extras as SelectedExtra[] | undefined) ?? [];
 
 export function ReviewScreen() {
   const { state, dispatch, onOrderCreated, onExitWizard } = useWizard();
@@ -19,8 +23,7 @@ export function ReviewScreen() {
 
   const unitPrice = tier.priceCents;
   const extrasCents = tickets.reduce((sum, t) => {
-    const extras = (t.extras as SelectedExtra[] | undefined) ?? [];
-    return sum + extras.reduce((s, e) => s + e.priceCents, 0);
+    return sum + ticketExtras(t).reduce((s, e) => s + e.priceCents, 0);
   }, 0);
   const totalCents = unitPrice * quantity + extrasCents;
 
@@ -37,7 +40,7 @@ export function ReviewScreen() {
         quantity,
         method: 'card',
         tickets: tickets.map((t) => ({
-          extras: ((t.extras as SelectedExtra[] | undefined) ?? []).map((e) => e.id),
+          extras: ticketExtras(t).map((e) => e.id),
         })),
       });
       await onOrderCreated(order);
@@ -65,7 +68,7 @@ export function ReviewScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {tickets.map((ticketData, idx) => {
-          const extras = (ticketData.extras as SelectedExtra[] | undefined) ?? [];
+          const extras = ticketExtras(ticketData);
           return (
             <View key={idx} style={styles.ticketCard}>
               <Text style={styles.ticketTitle}>
