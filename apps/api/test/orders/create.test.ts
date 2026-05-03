@@ -102,6 +102,38 @@ describe('POST /orders', () => {
     expect(stripe.calls[0]!.kind).toBe('createPaymentIntent');
   });
 
+  it('allows repurchase: user with existing ticket creates new ticket order', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+
+    await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    expect(body.amountCents).toBe(5000);
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
+    expect(order.kind).toBe('ticket');
+
+    const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloaded.quantitySold).toBe(1);
+  });
+
   it('creates order with extras: computes total and stores OrderExtra rows', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
@@ -278,7 +310,7 @@ describe('POST /orders', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
-  it('returns 422 when user has existing ticket but sends no extras', async () => {
+  it('returns 422 when extrasOnly is true but no extras provided', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
     await prisma.ticket.create({
@@ -289,7 +321,13 @@ describe('POST /orders', () => {
       method: 'POST',
       url: '/orders',
       headers: { authorization: bearer(env, user.id) },
-      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        extrasOnly: true,
+        tickets: [{}],
+      },
     });
 
     expect(res.statusCode).toBe(422);

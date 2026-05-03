@@ -43,6 +43,7 @@ export function ReviewScreen() {
     tierId: tier.id,
     quantity,
     method: 'card' as const,
+    extrasOnly: false as const,
     tickets: tickets.map((t) => ({
       extras: ticketExtras(t).map((e) => e.id),
       ...(t.carId ? { carId: t.carId as string } : {}),

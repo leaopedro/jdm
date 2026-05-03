@@ -229,6 +229,7 @@ describe('POST /orders/checkout', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [extra.id] }],
         successUrl: 'https://app.jdm.com/success',
         cancelUrl: 'https://app.jdm.com/cancel',
