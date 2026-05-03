@@ -4,7 +4,9 @@
 
 **Goal:** An authenticated attendee can buy a ticket for a published event via Stripe (card + Apple Pay), receive a server-signed QR-coded `Ticket`, and view it in the mobile "Meus ingressos" tab. Covers roadmap 4.1–4.7. Pix (4.8–4.12) and check-in (F5) are separate plans.
 
-**Architecture:** Reserve-on-create: `POST /orders` atomically increments `TicketTier.quantitySold` inside a transaction gated by remaining capacity, creates a `pending` Order, and creates a Stripe PaymentIntent returning `clientSecret`. Stripe confirms the payment client-side via the RN Payment Sheet. A verified webhook (`payment_intent.succeeded`) marks the Order `paid` and issues a `Ticket` with an HMAC-signed code; `payment_intent.payment_failed` decrements the reservation and marks the Order `failed`. Every webhook is idempotent via a `PaymentWebhookEvent` dedup table and signature-verified. One-ticket-per-(user,event) enforced by a DB unique constraint.
+**Architecture:** Reserve-on-create: `POST /orders` atomically increments `TicketTier.quantitySold` inside a transaction gated by remaining capacity, creates a `pending` Order, and creates a Stripe PaymentIntent returning `clientSecret`. Stripe confirms the payment client-side via the RN Payment Sheet. A verified webhook (`payment_intent.succeeded`) marks the Order `paid` and issues HMAC-signed `Ticket` rows; `payment_intent.payment_failed` decrements the reservation and marks the Order `failed`. Every webhook is idempotent via a `PaymentWebhookEvent` dedup table and signature-verified.
+
+> note: superseded in JDMA-156 — purchase orders can issue multiple tickets per user/event, and webhook issuance must create exactly `Order.quantity` tickets atomically.
 
 **Tech Stack:** Prisma, Fastify, Zod, `stripe` SDK (Node), `@stripe/stripe-react-native` (mobile), Expo Router, HMAC-SHA256 via `node:crypto`, Vitest + Testcontainers.
 
@@ -77,7 +79,7 @@
 - **Commits:** one per task. Conventional prefixes (`feat:`, `fix:`, `test:`, `chore:`, `docs:`).
 - **Money:** integer cents, currency `"BRL"`. Never use floats for money.
 - **Reservation model:** `TicketTier.quantitySold` is incremented at **order creation** (not at payment). Released on `payment_intent.payment_failed` or on order abandonment (abandonment cleanup is deferred; tracked in handoff).
-- **One-ticket-per-(user,event):** enforced by `@@unique([userId, eventId])` on `Ticket`. `POST /orders` also pre-checks to fail fast with 409 before creating a Stripe PaymentIntent.
+- **Ticket multiplicity:** superseded in JDMA-156. Purchase orders may issue multiple valid tickets per `(user,event)`; webhook issuance is constrained by `Order.quantity` and Stripe event idempotency.
 - **Webhook discipline:**
   - Signature verification is **mandatory** on `/stripe/webhook`. Missing or bad signature → 400.
   - Dedup via `PaymentWebhookEvent` table, `@@unique([provider, eventId])`. Duplicate delivery is a 200 no-op after insert conflict.

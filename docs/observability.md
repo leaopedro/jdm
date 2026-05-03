@@ -151,9 +151,9 @@ exception thrown from `POST /stripe/webhook`.
 
 1. Open the Sentry issue. The exception name + stack tells you the
    layer:
-   - `TicketAlreadyExistsForEventError` → already handled by the
-     refund branch; this should not raise. If it does, investigate
-     a logic regression in `stripe-webhook.ts`.
+   - `OrderPaidTicketCountMismatchError` → webhook/order integrity
+     mismatch (paid order has wrong number of ticket rows). Treat as
+     data-integrity incident and investigate `issue.ts` + prior retries.
    - `Prisma*Error` → DB issue. Check Railway Postgres metrics
      (CPU, connections) and the Railway logs for the API service.
    - Anything else → a new failure mode; treat as a P1 bug.

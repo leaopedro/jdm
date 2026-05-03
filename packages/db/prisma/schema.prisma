@@ -294,7 +294,7 @@ model Order {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier        TicketTier   @relation(fields: [tierId], references: [id], onDelete: Restrict)
-  ticket      Ticket?
+  tickets     Ticket[]
   orderExtras OrderExtra[]
 
   @@unique([provider, providerRef])
@@ -320,7 +320,7 @@ model OrderExtra {
 
 model Ticket {
   id           String       @id @default(cuid())
-  orderId      String?      @unique
+  orderId      String?
   userId       String
   eventId      String
   tierId       String
@@ -342,6 +342,7 @@ model Ticket {
   @@index([userId, createdAt])
   @@index([eventId])
   @@index([carId])
+  @@index([orderId])
 }
 
 enum TicketExtraItemStatus {
@@ -414,4 +415,3 @@ model Notification {
   @@unique([userId, kind, dedupeKey])
   @@index([userId, createdAt])
 }
-

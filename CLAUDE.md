@@ -65,7 +65,7 @@ Load-bearing invariants (enforce in code, not comments):
 
 - Orders only flip to `paid` from verified provider webhooks — never from client calls.
 - Webhooks are idempotent: dedupe by provider event id, upsert by `provider_ref`, verify signature on every handler.
-- One valid `Ticket` per `(user, event)` regardless of source (`purchase | premium_grant | comp`).
+- A paid purchase order issues exactly `Order.quantity` tickets atomically; multiple valid tickets per `(user, event)` are allowed.
 - Premium `Vote` weight is 2 (configurable); one-vote-per-category enforced by a DB `UNIQUE(category_id, user_id)` constraint, not app code.
 - On Membership activation, backfill `Ticket` rows (`source=premium_grant`) for all currently-published future events; on each new event publish, grant to every active member; on cancel-at-period-end, stop granting but leave existing tickets valid.
 

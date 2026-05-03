@@ -495,7 +495,7 @@ Staff logs in via admin web app for now, in the future we can have a separate ap
 
 #### 4.8 AbacatePay setup
 
-- [ ] **Scope:** Register webhook, handle signature verification, dedupe.
+- [x] **Scope:** Register webhook, handle signature verification, dedupe.
 - **Done when:** bad signature → 400; duplicate events ignored.
 
 #### 4.9 API: create Pix order

@@ -18,7 +18,7 @@ const seedEventTierOrder = async (userId: string, opts?: { quantity?: number }) 
       endsAt: new Date(Date.now() + 90000_000),
       venueName: 'v',
       venueAddress: 'a',
-      city: 'São Paulo',
+      city: 'Sao Paulo',
       stateCode: 'SP',
       type: 'meeting',
       status: 'published',
@@ -111,14 +111,83 @@ describe('POST /stripe/webhook', () => {
     expect(ticket).not.toBeNull();
   });
 
-  it('is idempotent: redelivery of the same event does not re-issue a ticket', async () => {
+  it('issues N tickets + per-ticket extras/cars atomically from webhook metadata', async () => {
     const { user } = await createUser({ verified: true });
-    const { order } = await seedEventTierOrder(user.id);
+    const { event, tier: _tier, order } = await seedEventTierOrder(user.id, { quantity: 3 });
+    const [car1, car2] = await Promise.all([
+      prisma.car.create({ data: { userId: user.id, make: 'Honda', model: 'Civic', year: 2020 } }),
+      prisma.car.create({ data: { userId: user.id, make: 'Toyota', model: 'Supra', year: 1994 } }),
+    ]);
+    const extra1 = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Camiseta', priceCents: 2000 },
+    });
+    const extra2 = await prisma.ticketExtra.create({
+      data: { eventId: event.id, name: 'Adesivo', priceCents: 1000 },
+    });
+    await prisma.orderExtra.createMany({
+      data: [
+        { orderId: order.id, extraId: extra1.id, quantity: 2 },
+        { orderId: order.id, extraId: extra2.id, quantity: 1 },
+      ],
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_success_multi_1',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: order.providerRef,
+          metadata: {
+            orderId: order.id,
+            tickets: JSON.stringify([
+              { c: car1.id, p: 'ABC-1234', e: [extra1.id, extra2.id] },
+              { c: car2.id, p: 'DEF-5678', e: [] },
+              { e: [extra1.id] },
+            ]),
+          },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const tickets = await prisma.ticket.findMany({
+      where: { orderId: order.id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    expect(tickets).toHaveLength(3);
+    expect(tickets[0]?.carId).toBe(car1.id);
+    expect(tickets[0]?.licensePlate).toBe('ABC-1234');
+    expect(tickets[1]?.carId).toBe(car2.id);
+    expect(tickets[1]?.licensePlate).toBe('DEF-5678');
+
+    const itemsByTicket = await Promise.all(
+      tickets.map((t) =>
+        prisma.ticketExtraItem.findMany({
+          where: { ticketId: t.id },
+          orderBy: { extraId: 'asc' },
+        }),
+      ),
+    );
+    expect(itemsByTicket[0]).toHaveLength(2);
+    expect(itemsByTicket[1]).toHaveLength(0);
+    expect(itemsByTicket[2]).toHaveLength(1);
+  });
+
+  it('is idempotent: redelivery of the same event does not re-issue tickets', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id, { quantity: 3 });
 
     stripe.nextEvent = {
       id: 'evt_success_dup',
       type: 'payment_intent.succeeded',
-      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id, tickets: '[]' } } },
     };
 
     const first = await app.inject({
@@ -136,9 +205,47 @@ describe('POST /stripe/webhook', () => {
       payload: rawJson(stripe.nextEvent),
     });
     expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ deduped: true });
 
     const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
-    expect(tickets).toHaveLength(1);
+    expect(tickets).toHaveLength(3);
+  });
+
+  it('dedupes concurrent webhook deliveries for the same Stripe event id', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id, { quantity: 3 });
+
+    stripe.nextEvent = {
+      id: 'evt_success_concurrent',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id, tickets: '[]' } } },
+    };
+
+    const [a, b] = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      }),
+    ]);
+
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+
+    const dedupRows = await prisma.paymentWebhookEvent.findMany({
+      where: { provider: 'stripe', eventId: 'evt_success_concurrent' },
+    });
+    expect(dedupRows).toHaveLength(1);
+
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(3);
   });
 
   it('handles payment_intent.payment_failed: marks order failed + releases reservation', async () => {
@@ -207,52 +314,6 @@ describe('POST /stripe/webhook', () => {
       payload: rawJson(stripe.nextEvent),
     });
     expect(res.statusCode).toBe(200);
-  });
-
-  it('refunds and dedups when issuance fails with TicketAlreadyExistsForEventError', async () => {
-    const { user } = await createUser({ verified: true });
-    const { event, tier, order } = await seedEventTierOrder(user.id);
-
-    // Pre-seed a conflicting valid ticket (e.g. comp grant) so
-    // issueTicketForPaidOrder throws TicketAlreadyExistsForEventError.
-    await prisma.ticket.create({
-      data: {
-        userId: user.id,
-        eventId: event.id,
-        tierId: tier.id,
-        source: 'comp',
-        status: 'valid',
-      },
-    });
-
-    stripe.nextEvent = {
-      id: 'evt_dup_refund',
-      type: 'payment_intent.succeeded',
-      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
-    };
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/stripe/webhook',
-      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
-      payload: rawJson(stripe.nextEvent),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ refunded: true });
-
-    const refundCalls = stripe.calls.filter((c) => c.kind === 'refund');
-    expect(refundCalls).toHaveLength(1);
-    expect(refundCalls[0]?.payload).toMatchObject({ paymentIntentId: order.providerRef });
-
-    // No ticket issued for this paid order (the comp ticket is the single valid one).
-    const issued = await prisma.ticket.findFirst({ where: { orderId: order.id } });
-    expect(issued).toBeNull();
-
-    // Dedup row written so Stripe retries short-circuit.
-    const dedupRow = await prisma.paymentWebhookEvent.findFirst({
-      where: { eventId: 'evt_dup_refund' },
-    });
-    expect(dedupRow).not.toBeNull();
   });
 
   it('does not mark event processed when dispatch fails with a non-duplicate error', async () => {

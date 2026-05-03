@@ -7,7 +7,6 @@ import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
   issueTicketForPaidOrder,
   OrderNotPendingError,
-  TicketAlreadyExistsForEventError,
   TicketRevokedForExtrasOnlyError,
 } from '../services/tickets/issue.js';
 
@@ -83,7 +82,12 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
               dedupeKey: orderId,
               title: 'Ingresso confirmado',
               body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
-              data: { orderId, ticketId: issued.ticketId, eventId: issued.eventId },
+              data: {
+                orderId,
+                ticketId: issued.ticketId,
+                ticketIds: issued.ticketIds,
+                eventId: issued.eventId,
+              },
             },
             { sender: app.push },
           );
@@ -102,19 +106,6 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         }
         return reply.status(200).send({ ok: true, deduped: !firstTime });
       } catch (err) {
-        // Customer paid but we can't issue a ticket (usually because an
-        // unrelated valid ticket exists: comp or premium_grant landed between
-        // POST /orders and webhook delivery). Refund so Stripe stops retrying
-        // and the customer isn't charged for nothing.
-        if (err instanceof TicketAlreadyExistsForEventError) {
-          await app.stripe.refund(intent.id, 'duplicate-ticket');
-          await markProcessed(event.id, event);
-          request.log.warn(
-            { orderId, paymentIntentId: intent.id },
-            'stripe webhook: duplicate ticket, refunded',
-          );
-          return reply.status(200).send({ ok: true, refunded: true });
-        }
         if (err instanceof TicketRevokedForExtrasOnlyError) {
           await app.stripe.refund(intent.id, 'ticket-revoked');
           await markProcessed(event.id, event);

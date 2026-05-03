@@ -104,7 +104,8 @@ a CEO-escalation event:
   client call.
 - Webhooks are idempotent: dedupe by provider event id, upsert by
   `provider_ref`, verify signature on every handler.
-- One valid `Ticket` per `(user, event)` regardless of source.
+- Purchase webhooks must issue exactly `Order.quantity` tickets atomically.
+  Multiple valid tickets per `(user, event)` are allowed.
 - Premium `Vote` weight is 2 (configurable); one-vote-per-category is
   enforced by `UNIQUE(category_id, user_id)` at the DB level.
 - Ticket QR codes are HMAC-signed server-side. The signing key is one-way.

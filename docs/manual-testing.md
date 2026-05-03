@@ -155,7 +155,7 @@ Expected:
 - Payment Sheet closes; "Ingresso confirmado!" alert shows.
 - Terminal A prints `payment_intent.succeeded forwarded → [200 OK]`.
 - Tap "Ver ingresso" → Ingressos tab → tap card → QR renders, screen stays awake.
-- DB: `SELECT status FROM "Order" WHERE user_id = ...` is `paid`; one `Ticket` row with `status='valid'`.
+- DB: `SELECT status FROM "Order" WHERE user_id = ...` is `paid`; `Ticket` row count for that `orderId` equals `Order.quantity` (currently `1` in mobile flow), all `status='valid'`.
 
 **Step 7 — Failure path: declined card releases reservation**
 

@@ -91,8 +91,9 @@ reviewers MUST check these explicitly:
 - Orders flip to `paid` only inside a verified provider-webhook handler.
 - Webhooks verify signature, dedupe by provider event id, upsert by
   `provider_ref`. New handlers must show all three.
-- One valid `Ticket` per `(user, event)`. Premium grants and direct
-  purchases enforce this jointly.
+- Purchase webhook issuance must create exactly `Order.quantity` tickets,
+  atomically and idempotently. Multiple valid tickets per `(user, event)`
+  are expected.
 - Premium `Vote` weight = 2 (configurable); one-vote-per-category enforced
   by `UNIQUE(category_id, user_id)`. App code must not "also enforce" it
   with a SELECT-then-INSERT — the DB is the truth.
