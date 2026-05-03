@@ -21,20 +21,21 @@ export const sweepExpiredOrdersForTier = async (
   const now = new Date();
   const expired = await tx.order.findMany({
     where: { tierId, status: 'pending', expiresAt: { not: null, lt: now } },
-    select: { id: true, providerRef: true },
+    select: { id: true, providerRef: true, quantity: true },
   });
 
   if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
 
   const expiredIds = expired.map((o) => o.id);
+  const totalQuantity = expired.reduce((sum, o) => sum + o.quantity, 0);
 
   await tx.order.updateMany({
     where: { id: { in: expiredIds } },
     data: { status: 'expired' },
   });
   await tx.ticketTier.updateMany({
-    where: { id: tierId, quantitySold: { gte: expired.length } },
-    data: { quantitySold: { decrement: expired.length } },
+    where: { id: tierId, quantitySold: { gte: totalQuantity } },
+    data: { quantitySold: { decrement: totalQuantity } },
   });
 
   // Release extras stock for all swept orders
@@ -101,6 +102,7 @@ export const expireSingleOrder = async (
         amountCents: true,
         currency: true,
         providerRef: true,
+        quantity: true,
       },
     });
     if (!order || order.userId !== ownerId) return null;
@@ -115,8 +117,8 @@ export const expireSingleOrder = async (
       data: { status: 'expired' },
     });
     await tx.ticketTier.updateMany({
-      where: { id: order.tierId, quantitySold: { gt: 0 } },
-      data: { quantitySold: { decrement: 1 } },
+      where: { id: order.tierId, quantitySold: { gte: order.quantity } },
+      data: { quantitySold: { decrement: order.quantity } },
     });
 
     // Release extras stock

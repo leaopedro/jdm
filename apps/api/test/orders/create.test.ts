@@ -13,7 +13,10 @@ import { bearer, createUser, makeAppWithFakeStripe, resetDatabase } from '../hel
 
 const env = loadEnv();
 
-const seedPublishedEvent = async (quantityTotal = 10, opts?: { requiresCar?: boolean }) => {
+const seedPublishedEvent = async (
+  quantityTotal = 10,
+  opts?: { requiresCar?: boolean; maxTicketsPerUser?: number },
+) => {
   const event = await prisma.event.create({
     data: {
       slug: `e-${Math.random().toString(36).slice(2, 8)}`,
@@ -28,6 +31,7 @@ const seedPublishedEvent = async (quantityTotal = 10, opts?: { requiresCar?: boo
       type: 'meeting',
       status: 'published',
       capacity: quantityTotal,
+      maxTicketsPerUser: opts?.maxTicketsPerUser ?? 1,
       publishedAt: new Date(),
     },
   });
@@ -275,9 +279,135 @@ describe('POST /orders', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
-  it('returns 409 when the user already has a valid ticket for the event', async () => {
+  it('returns 422 when purchase count already reaches maxTicketsPerUser', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
+    // source defaults to 'purchase' — counts against the cap
+    await prisma.ticket.create({
+      data: { userId: user.id, eventId: event.id, tierId: tier.id },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('allows buying multiple tickets up to maxTicketsPerUser', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 3 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}, {}, {}],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    // 3 tickets × 5000 = 15000
+    expect(body.amountCents).toBe(15000);
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
+    expect(order.quantity).toBe(3);
+
+    const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloaded.quantitySold).toBe(3);
+  });
+
+  it('rejects when ticket count exceeds event maxTicketsPerUser', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 2 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}, {}, {}],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('counts existing purchase tickets against the per-user cap', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 2 });
+    // user already has 1 purchase ticket — only 1 slot remaining
+    await prisma.ticket.create({
+      data: { userId: user.id, eventId: event.id, tierId: tier.id },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}, {}] },
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('allows remaining purchase slots when user has some existing purchase tickets', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 2 });
+    // user has 1 purchase ticket — 1 slot remaining
+    await prisma.ticket.create({
+      data: { userId: user.id, eventId: event.id, tierId: tier.id },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+    });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('premium_grant tickets do not count against the purchase cap', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 1 });
+    // premium_grant does NOT count toward purchase limit
+    await prisma.ticket.create({
+      data: { userId: user.id, eventId: event.id, tierId: tier.id, source: 'premium_grant' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+    });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('comp tickets do not count against the purchase cap', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 1 });
     await prisma.ticket.create({
       data: { userId: user.id, eventId: event.id, tierId: tier.id, source: 'comp' },
     });
@@ -289,8 +419,61 @@ describe('POST /orders', () => {
       payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(stripe.calls).toHaveLength(0);
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('computes correct amountCents for multi-ticket order with per-ticket extras', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 3 });
+    const extra1 = await seedExtra(event.id); // priceCents: 2000
+    const extra2 = await seedExtra(event.id); // priceCents: 2000
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [
+          { extras: [extra1.id] }, // 5000 + 2000
+          { extras: [extra2.id] }, // 5000 + 2000
+          {}, // 5000
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    // 3 × 5000 + 2 × 2000 = 15000 + 4000 = 19000
+    expect(body.amountCents).toBe(19000);
+  });
+
+  it('Stripe metadata tickets array has one entry per ticket in a multi-ticket order', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { maxTicketsPerUser: 3 });
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id] }, {}, {}],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    const piPayload = piCall!.payload as CreatePaymentIntentInput;
+    const tickets = JSON.parse(piPayload.metadata.tickets as string) as unknown[];
+    expect(tickets).toHaveLength(3);
+    expect((tickets[0] as { e: string[] }).e).toContain(extra.id);
+    expect((tickets[1] as { e: string[] }).e).toHaveLength(0);
   });
 
   it('returns 404 when the event is not published', async () => {

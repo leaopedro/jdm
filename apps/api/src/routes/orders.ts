@@ -36,13 +36,15 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!tier) return reply.status(404).send({ error: 'NotFound', message: 'tier not found' });
 
-    const existingTicket = await prisma.ticket.findFirst({
-      where: { userId: sub, eventId: event.id, status: 'valid' },
+    const existingPurchaseCount = await prisma.ticket.count({
+      where: { userId: sub, eventId: event.id, status: 'valid', source: 'purchase' },
     });
-    if (existingTicket) {
-      return reply
-        .status(409)
-        .send({ error: 'Conflict', message: 'already has a valid ticket for this event' });
+    const slotsAvailable = event.maxTicketsPerUser - existingPurchaseCount;
+    if (input.tickets.length > slotsAvailable) {
+      return reply.status(422).send({
+        error: 'UnprocessableEntity',
+        message: `ticket count exceeds per-user limit (${event.maxTicketsPerUser})`,
+      });
     }
 
     // Validate per-ticket inputs and fetch extras data inside transaction.
@@ -55,9 +57,13 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       const txResult = await prisma.$transaction(async (tx) => {
         const validation = await validateTickets(input.tickets, tier, event.id, tx);
         const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
+        const qty = input.tickets.length;
         const reservation = await tx.ticketTier.updateMany({
-          where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
-          data: { quantitySold: { increment: 1 } },
+          where: {
+            id: tier.id,
+            quantitySold: { lte: tier.quantityTotal - qty },
+          },
+          data: { quantitySold: { increment: qty } },
         });
         if (reservation.count === 0) {
           return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
@@ -112,6 +118,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           method: 'card',
           provider: 'stripe',
           status: 'pending',
+          quantity: input.tickets.length,
           expiresAt,
         },
       });
@@ -157,9 +164,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       );
     } catch (err) {
       if (reserved) {
+        const rollbackQty = input.tickets.length;
         await prisma.ticketTier.updateMany({
-          where: { id: tier.id, quantitySold: { gt: 0 } },
-          data: { quantitySold: { decrement: 1 } },
+          where: { id: tier.id, quantitySold: { gte: rollbackQty } },
+          data: { quantitySold: { decrement: rollbackQty } },
         });
       }
       throw err;
