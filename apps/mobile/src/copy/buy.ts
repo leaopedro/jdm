@@ -36,4 +36,16 @@ export const buyCopy = {
     errorTitle: 'Erro',
     errorBody: 'Não conseguimos criar seu pedido. Tente novamente.',
   },
+  extrasOnly: {
+    banner: 'Você já tem um ingresso para este evento.',
+    bannerSub: (tierName: string) => `Ingresso: ${tierName}`,
+    title: 'Comprar extras',
+    emptyExtras: 'Nenhum extra disponível para este evento.',
+    confirm: 'Revisar pedido',
+    pay: 'Pagar extras',
+    selectAtLeast: 'Selecione ao menos um extra.',
+    errorSoldOut: 'Este extra está esgotado.',
+    errorAlreadyOwned: 'Você já possui este extra.',
+    errorGeneric: 'Não conseguimos criar seu pedido. Tente novamente.',
+  },
 };
