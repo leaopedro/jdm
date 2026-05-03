@@ -70,6 +70,8 @@ export interface WizardState {
   tickets: TicketData[];
   /** True when on the final review screen. */
   reviewing: boolean;
+  /** True when purchasing extras only (user already has ticket). */
+  extrasOnly: boolean;
 }
 
 export type WizardAction =

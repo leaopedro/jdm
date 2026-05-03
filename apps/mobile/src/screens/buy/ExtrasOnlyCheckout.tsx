@@ -97,7 +97,7 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
     }
   };
 
-  const ownedExtraIds = new Set(existingTicket.extras.map((e) => e.extraName));
+  const ownedExtraIds = new Set(existingTicket.extras.map((e) => e.extraId));
 
   return (
     <View style={styles.container}>
@@ -128,7 +128,7 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {event.extras.map((extra) => {
             const soldOut = extra.quantityRemaining === 0;
-            const alreadyOwned = ownedExtraIds.has(extra.name);
+            const alreadyOwned = ownedExtraIds.has(extra.id);
             const disabled = soldOut || alreadyOwned;
             const isSelected = selected.has(extra.id);
 

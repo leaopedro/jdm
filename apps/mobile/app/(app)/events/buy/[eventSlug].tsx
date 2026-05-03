@@ -31,10 +31,12 @@ import {
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
 
-type Phase = 'select' | 'wizard' | 'extras_only';
+type Phase = 'loading' | 'select' | 'wizard' | 'extras_only';
 
 export default function BuyScreen() {
-  const { eventSlug } = useLocalSearchParams<{ eventSlug: string }>();
+  const { eventSlug } = useLocalSearchParams<{
+    eventSlug: string;
+  }>();
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
@@ -43,7 +45,7 @@ export default function BuyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [phase, setPhase] = useState<Phase>('select');
+  const [phase, setPhase] = useState<Phase>('loading');
 
   useEffect(() => {
     if (!eventSlug || typeof eventSlug !== 'string') return;
@@ -55,6 +57,8 @@ export default function BuyScreen() {
         if (ticket) {
           setExistingTicket(ticket);
           setPhase('extras_only');
+        } else {
+          setPhase('select');
         }
       } catch {
         setError('Evento não encontrado.');
@@ -118,7 +122,7 @@ export default function BuyScreen() {
     );
   }
 
-  if (!event) {
+  if (!event || phase === 'loading') {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
@@ -147,7 +151,9 @@ export default function BuyScreen() {
     [handlePayment],
   );
 
-  const handleExitWizard = useCallback(() => setPhase('select'), []);
+  const handleExitWizard = useCallback(() => {
+    setPhase('select');
+  }, []);
 
   if (phase === 'wizard' && selectedTier) {
     return (

@@ -14,6 +14,7 @@ import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
 import type { TicketData } from './types';
 
+import { ApiError } from '~/api/client';
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
@@ -26,11 +27,11 @@ const ticketExtras = (t: TicketData): SelectedExtra[] =>
 
 export function ReviewScreen() {
   const { state, dispatch, onOrderCreated, onExitWizard } = useWizard();
-  const { tier, quantity, tickets, eventId } = state;
+  const { tier, quantity, tickets, eventId, extrasOnly } = state;
   const canGoBack = state.steps.length > 0;
   const [submitting, setSubmitting] = useState(false);
 
-  const unitPrice = tier.priceCents;
+  const unitPrice = extrasOnly ? 0 : tier.priceCents;
   const extrasCents = tickets.reduce((sum, t) => {
     return sum + ticketExtras(t).reduce((s, e) => s + e.priceCents, 0);
   }, 0);
@@ -93,12 +94,16 @@ export function ReviewScreen() {
           return (
             <View key={idx} style={styles.ticketCard}>
               <Text style={styles.ticketTitle}>
-                {buyCopy.wizard.ticketLabel(idx + 1, quantity)}
+                {extrasOnly
+                  ? buyCopy.extrasOnly.subtitle
+                  : buyCopy.wizard.ticketLabel(idx + 1, quantity)}
               </Text>
-              <View style={styles.lineItem}>
-                <Text style={styles.lineLabel}>{tier.name}</Text>
-                <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
-              </View>
+              {!extrasOnly && (
+                <View style={styles.lineItem}>
+                  <Text style={styles.lineLabel}>{tier.name}</Text>
+                  <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
+                </View>
+              )}
               {extras.map((extra) => (
                 <View key={extra.id} style={styles.lineItem}>
                   <Text style={styles.lineLabel}>{extra.name}</Text>
