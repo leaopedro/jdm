@@ -50,27 +50,29 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           message: 'extras required when ticket already exists',
         });
       }
-
-      const existingItems = await prisma.ticketExtraItem.findMany({
-        where: { ticketId: existingTicket.id, extraId: { in: allExtras } },
-        select: { extraId: true },
-      });
-      if (existingItems.length > 0) {
-        return reply.status(409).send({
-          error: 'Conflict',
-          message: `extra already purchased for this ticket: ${existingItems[0]!.extraId}`,
-        });
-      }
     }
 
-    // Validate per-ticket inputs and fetch extras data inside transaction.
-    // Atomically: validate + reserve extras, sweep expired orders, CAS-reserve tier slot.
     let validationResult: Awaited<ReturnType<typeof validateTickets>>;
     let expiredProviderRefs: string[];
     let reserved = false;
 
     try {
       const txResult = await prisma.$transaction(async (tx) => {
+        if (isExtrasOnly) {
+          const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
+          const existingItems = await tx.ticketExtraItem.findMany({
+            where: { ticketId: existingTicket.id, extraId: { in: allExtras } },
+            select: { extraId: true },
+          });
+          if (existingItems.length > 0) {
+            const err = new Error(
+              `extra already purchased for this ticket: ${existingItems[0]!.extraId}`,
+            );
+            (err as Error & { code: string }).code = 'DUPLICATE_EXTRA_ON_TICKET';
+            throw err;
+          }
+        }
+
         const validation = await validateTickets(input.tickets, tier, event.id, tx, sub);
         const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
 
@@ -108,7 +110,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       if (coded.code === 'EXTRA_NOT_FOUND') {
         return reply.status(404).send({ error: 'NotFound', message: coded.message });
       }
-      if (coded.code === 'EXTRA_SOLD_OUT') {
+      if (coded.code === 'EXTRA_SOLD_OUT' || coded.code === 'DUPLICATE_EXTRA_ON_TICKET') {
         return reply.status(409).send({ error: 'Conflict', message: coded.message });
       }
       throw err;

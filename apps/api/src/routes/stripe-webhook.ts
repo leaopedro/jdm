@@ -8,6 +8,7 @@ import {
   issueTicketForPaidOrder,
   OrderNotPendingError,
   TicketAlreadyExistsForEventError,
+  TicketRevokedForExtrasOnlyError,
 } from '../services/tickets/issue.js';
 
 // Record the event as seen AFTER dispatch succeeds. If we did it first, a
@@ -113,6 +114,15 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
             'stripe webhook: duplicate ticket, refunded',
           );
           return reply.status(200).send({ ok: true, refunded: true });
+        }
+        if (err instanceof TicketRevokedForExtrasOnlyError) {
+          await app.stripe.refund(intent.id, 'ticket-revoked');
+          await markProcessed(event.id, event);
+          request.log.warn(
+            { orderId, paymentIntentId: intent.id },
+            'stripe webhook: extras-only ticket revoked, refunded',
+          );
+          return reply.status(200).send({ ok: true, refunded: true, reason: 'ticket-revoked' });
         }
         // Order expired between POST /orders and webhook delivery.
         // Customer paid but capacity was already released — refund immediately.

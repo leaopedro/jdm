@@ -75,6 +75,7 @@ export type ExpiredOrderResult = {
     id: string;
     userId: string;
     tierId: string;
+    kind: string;
     status: string;
     expiresAt: Date | null;
     amountCents: number;

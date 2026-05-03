@@ -53,6 +53,18 @@ export class OrderPaidWithoutTicketError extends Error {
   }
 }
 
+export class TicketRevokedForExtrasOnlyError extends Error {
+  readonly code = 'TICKET_REVOKED_FOR_EXTRAS_ONLY' as const;
+  constructor(
+    public readonly orderId: string,
+    public readonly userId: string,
+    public readonly eventId: string,
+  ) {
+    super(`extras_only order ${orderId} but no valid ticket for user ${userId} event ${eventId}`);
+    this.name = 'TicketRevokedForExtrasOnlyError';
+  }
+}
+
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 // Upsert one TicketExtraItem per OrderExtra for the given ticket.
@@ -200,9 +212,7 @@ const issueExtrasOnly = async (
     where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
   });
   if (!ticket) {
-    throw new Error(
-      `extras_only order ${order.id} but no valid ticket for user ${order.userId} event ${order.eventId}`,
-    );
+    throw new TicketRevokedForExtrasOnlyError(order.id, order.userId, order.eventId);
   }
 
   if (order.status === 'paid') {
