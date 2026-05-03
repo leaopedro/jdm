@@ -13,6 +13,7 @@ export const ticketsCopy = {
     revoked: 'Cancelado',
     valid: 'Válido',
     notFound: 'Ingresso não encontrado.',
+    extrasTitle: 'Extras',
   },
   purchase: {
     pickTier: 'Escolha um ingresso',

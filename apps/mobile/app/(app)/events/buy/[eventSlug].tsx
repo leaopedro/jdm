@@ -18,7 +18,12 @@ import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL } from '~/lib/format';
-import { PerTicketWizard, QuantityStepper, WizardProvider } from '~/screens/buy/per-ticket-wizard';
+import {
+  PerTicketWizard,
+  QuantityStepper,
+  WizardProvider,
+  createExtrasStep,
+} from '~/screens/buy/per-ticket-wizard';
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
 
@@ -110,8 +115,7 @@ export default function BuyScreen() {
     );
   }
 
-  // C7 (extras) and E3 (car/plate) will push steps here
-  const pluggableSteps: WizardStepDefinition[] = [];
+  const pluggableSteps: WizardStepDefinition[] = [createExtrasStep(event.extras)];
 
   const handleOrderCreated = useCallback(
     (order: { clientSecret: string }) => handlePayment(order.clientSecret),

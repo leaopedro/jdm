@@ -11,7 +11,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
     const { sub } = requireUser(request);
     const tickets = await prisma.ticket.findMany({
       where: { userId: sub },
-      include: { event: true, tier: true },
+      include: { event: true, tier: true, extraItems: { include: { extra: true } } },
     });
 
     const now = Date.now();
@@ -49,6 +49,13 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
           stateCode: t.event.stateCode,
           type: t.event.type,
         },
+        extras: t.extraItems.map((ei) => ({
+          id: ei.id,
+          extraName: ei.extra.name,
+          code: ei.code,
+          status: ei.status,
+          usedAt: ei.usedAt?.toISOString() ?? null,
+        })),
       })),
     });
   });
