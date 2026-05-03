@@ -1,4 +1,5 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
+import type { MyTicket } from '@jdm/shared/tickets';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -14,10 +15,12 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
+import { getMyTicketForEvent } from '~/api/tickets';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL } from '~/lib/format';
+import { ExtrasOnlyCheckout } from '~/screens/buy/ExtrasOnlyCheckout';
 import {
   PerTicketWizard,
   QuantityStepper,
@@ -28,7 +31,7 @@ import {
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
 
-type Phase = 'select' | 'wizard';
+type Phase = 'select' | 'wizard' | 'extras_only';
 
 export default function BuyScreen() {
   const { eventSlug } = useLocalSearchParams<{ eventSlug: string }>();
@@ -36,6 +39,7 @@ export default function BuyScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [event, setEvent] = useState<EventDetail | null>(null);
+  const [existingTicket, setExistingTicket] = useState<MyTicket | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -45,7 +49,13 @@ export default function BuyScreen() {
     if (!eventSlug || typeof eventSlug !== 'string') return;
     void (async () => {
       try {
-        setEvent(await getEvent(eventSlug));
+        const ev = await getEvent(eventSlug);
+        setEvent(ev);
+        const ticket = await getMyTicketForEvent(ev.id);
+        if (ticket) {
+          setExistingTicket(ticket);
+          setPhase('extras_only');
+        }
       } catch {
         setError('Evento não encontrado.');
       }
@@ -113,6 +123,17 @@ export default function BuyScreen() {
       <View style={styles.center}>
         <ActivityIndicator />
       </View>
+    );
+  }
+
+  if (phase === 'extras_only' && existingTicket) {
+    return (
+      <ExtrasOnlyCheckout
+        event={event}
+        existingTicket={existingTicket}
+        onPayment={(clientSecret) => void handlePayment(clientSecret)}
+        onBack={() => router.back()}
+      />
     );
   }
 
