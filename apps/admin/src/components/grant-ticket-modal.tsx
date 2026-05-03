@@ -2,7 +2,14 @@
 
 import type { AdminEventRow } from '@jdm/shared/admin';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition, type MutableRefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type MutableRefObject,
+} from 'react';
 
 import {
   grantTicketAction,
@@ -20,6 +27,13 @@ const inputCls =
 
 const toastBaseCls =
   'pointer-events-none fixed right-4 top-4 z-[60] rounded border px-3 py-2 text-sm shadow-lg';
+
+const clearTimer = (ref: MutableRefObject<ReturnType<typeof setTimeout> | null>) => {
+  if (ref.current) {
+    clearTimeout(ref.current);
+    ref.current = null;
+  }
+};
 
 export function GrantTicketModal({ userId, events }: Props) {
   const router = useRouter();
@@ -46,14 +60,7 @@ export function GrantTicketModal({ userId, events }: Props) {
     ? events.filter((ev) => ev.title.toLowerCase().includes(eventQuery.trim().toLowerCase()))
     : events;
 
-  const clearTimer = (ref: MutableRefObject<ReturnType<typeof setTimeout> | null>) => {
-    if (ref.current) {
-      clearTimeout(ref.current);
-      ref.current = null;
-    }
-  };
-
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setSelectedEventId('');
     setEventQuery('');
     setShowEventSuggestions(false);
@@ -64,13 +71,13 @@ export function GrantTicketModal({ userId, events }: Props) {
     setNote('');
     setError(null);
     setSuccess(false);
-  };
+  }, []);
 
-  const close = () => {
+  const close = useCallback(() => {
     clearTimer(closeTimerRef);
     setOpen(false);
     resetForm();
-  };
+  }, [resetForm]);
 
   const selectEvent = (eventId: string, eventTitle: string) => {
     setSelectedEventId(eventId);
@@ -120,6 +127,20 @@ export function GrantTicketModal({ userId, events }: Props) {
       clearTimer(closeTimerRef);
     };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, close]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -7,7 +7,8 @@ import { createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js'
 
 const rawJson = (v: unknown) => Buffer.from(JSON.stringify(v));
 
-const seedEventTierOrder = async (userId: string) => {
+const seedEventTierOrder = async (userId: string, opts?: { quantity?: number }) => {
+  const quantity = opts?.quantity ?? 1;
   const event = await prisma.event.create({
     data: {
       slug: `e-${Math.random().toString(36).slice(2, 8)}`,
@@ -31,7 +32,7 @@ const seedEventTierOrder = async (userId: string) => {
       name: 'Geral',
       priceCents: 5000,
       quantityTotal: 5,
-      quantitySold: 1,
+      quantitySold: quantity,
       sortOrder: 0,
     },
   });
@@ -40,7 +41,8 @@ const seedEventTierOrder = async (userId: string) => {
       userId,
       eventId: event.id,
       tierId: tier.id,
-      amountCents: 5000,
+      amountCents: 5000 * quantity,
+      quantity,
       method: 'card',
       provider: 'stripe',
       providerRef: 'pi_test_abc',
@@ -165,6 +167,31 @@ describe('POST /stripe/webhook', () => {
 
     const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
     expect(tickets).toHaveLength(0);
+  });
+
+  it('releases full tier reservation when payment_failed order quantity is greater than 1', async () => {
+    const { user } = await createUser({ verified: true });
+    const { tier, order } = await seedEventTierOrder(user.id, { quantity: 3 });
+
+    stripe.nextEvent = {
+      id: 'evt_fail_qty_3',
+      type: 'payment_intent.payment_failed',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('failed');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(0);
   });
 
   it('no-ops on unknown event type', async () => {
