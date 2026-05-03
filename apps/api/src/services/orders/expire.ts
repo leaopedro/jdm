@@ -21,7 +21,7 @@ export const sweepExpiredOrdersForTier = async (
   const now = new Date();
   const expired = await tx.order.findMany({
     where: { tierId, status: 'pending', expiresAt: { not: null, lt: now } },
-    select: { id: true, providerRef: true },
+    select: { id: true, providerRef: true, kind: true },
   });
 
   if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
@@ -32,10 +32,13 @@ export const sweepExpiredOrdersForTier = async (
     where: { id: { in: expiredIds } },
     data: { status: 'expired' },
   });
-  await tx.ticketTier.updateMany({
-    where: { id: tierId, quantitySold: { gte: expired.length } },
-    data: { quantitySold: { decrement: expired.length } },
-  });
+  const ticketOrderCount = expired.filter((o) => o.kind !== 'extras_only').length;
+  if (ticketOrderCount > 0) {
+    await tx.ticketTier.updateMany({
+      where: { id: tierId, quantitySold: { gte: ticketOrderCount } },
+      data: { quantitySold: { decrement: ticketOrderCount } },
+    });
+  }
 
   // Release extras stock for all swept orders
   const orderExtras = await tx.orderExtra.findMany({
@@ -72,6 +75,7 @@ export type ExpiredOrderResult = {
     id: string;
     userId: string;
     tierId: string;
+    kind: string;
     status: string;
     expiresAt: Date | null;
     amountCents: number;
@@ -96,6 +100,7 @@ export const expireSingleOrder = async (
         id: true,
         userId: true,
         tierId: true,
+        kind: true,
         status: true,
         expiresAt: true,
         amountCents: true,
@@ -114,10 +119,12 @@ export const expireSingleOrder = async (
       where: { id: orderId, status: 'pending' },
       data: { status: 'expired' },
     });
-    await tx.ticketTier.updateMany({
-      where: { id: order.tierId, quantitySold: { gt: 0 } },
-      data: { quantitySold: { decrement: 1 } },
-    });
+    if (order.kind !== 'extras_only') {
+      await tx.ticketTier.updateMany({
+        where: { id: order.tierId, quantitySold: { gt: 0 } },
+        data: { quantitySold: { decrement: 1 } },
+      });
+    }
 
     // Release extras stock
     const orderExtras = await tx.orderExtra.findMany({

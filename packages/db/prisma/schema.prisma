@@ -247,6 +247,11 @@ enum PaymentProvider {
   abacatepay
 }
 
+enum OrderKind {
+  ticket
+  extras_only
+}
+
 enum OrderStatus {
   pending
   paid
@@ -272,6 +277,7 @@ model Order {
   userId          String
   eventId         String
   tierId          String
+  kind            OrderKind       @default(ticket)
   amountCents     Int
   currency        String          @default("BRL") @db.VarChar(3)
   method          PaymentMethod

@@ -39,30 +39,55 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     const existingTicket = await prisma.ticket.findFirst({
       where: { userId: sub, eventId: event.id, status: 'valid' },
     });
-    if (existingTicket) {
-      return reply
-        .status(409)
-        .send({ error: 'Conflict', message: 'already has a valid ticket for this event' });
+
+    const isExtrasOnly = !!existingTicket;
+
+    if (isExtrasOnly) {
+      const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
+      if (allExtras.length === 0) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          message: 'extras required when ticket already exists',
+        });
+      }
     }
 
-    // Validate per-ticket inputs and fetch extras data inside transaction.
-    // Atomically: validate + reserve extras, sweep expired orders, CAS-reserve tier slot.
     let validationResult: Awaited<ReturnType<typeof validateTickets>>;
     let expiredProviderRefs: string[];
     let reserved = false;
 
     try {
       const txResult = await prisma.$transaction(async (tx) => {
-        const validation = await validateTickets(input.tickets, tier, event.id, tx, sub);
-        const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
-        const reservation = await tx.ticketTier.updateMany({
-          where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
-          data: { quantitySold: { increment: 1 } },
-        });
-        if (reservation.count === 0) {
-          return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
+        if (isExtrasOnly) {
+          const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
+          const existingItems = await tx.ticketExtraItem.findMany({
+            where: { ticketId: existingTicket.id, extraId: { in: allExtras } },
+            select: { extraId: true },
+          });
+          if (existingItems.length > 0) {
+            const err = new Error(
+              `extra already purchased for this ticket: ${existingItems[0]!.extraId}`,
+            );
+            (err as Error & { code: string }).code = 'DUPLICATE_EXTRA_ON_TICKET';
+            throw err;
+          }
         }
-        // Throws EXTRA_SOLD_OUT if race condition detected — rolls back tier increment atomically
+
+        const validation = await validateTickets(input.tickets, tier, event.id, tx, sub, {
+          skipCarValidation: isExtrasOnly,
+        });
+        const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
+
+        if (!isExtrasOnly) {
+          const reservation = await tx.ticketTier.updateMany({
+            where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
+            data: { quantitySold: { increment: 1 } },
+          });
+          if (reservation.count === 0) {
+            return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
+          }
+        }
+
         await reserveExtras(validation.extraStock, tx);
         return { soldOut: false, validation, expiredProviderRefs: sweep.expiredProviderRefs };
       });
@@ -73,7 +98,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
       validationResult = txResult.validation;
       expiredProviderRefs = txResult.expiredProviderRefs;
-      reserved = true;
+      reserved = !isExtrasOnly;
     } catch (err) {
       const coded = err as Error & { code?: string };
       if (
@@ -87,7 +112,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       if (coded.code === 'EXTRA_NOT_FOUND') {
         return reply.status(404).send({ error: 'NotFound', message: coded.message });
       }
-      if (coded.code === 'EXTRA_SOLD_OUT') {
+      if (coded.code === 'EXTRA_SOLD_OUT' || coded.code === 'DUPLICATE_EXTRA_ON_TICKET') {
         return reply.status(409).send({ error: 'Conflict', message: coded.message });
       }
       throw err;
@@ -103,7 +128,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const amountCents = tier.priceCents * input.tickets.length + validationResult.totalExtrasCents;
+    const amountCents = isExtrasOnly
+      ? validationResult.totalExtrasCents
+      : tier.priceCents * input.tickets.length + validationResult.totalExtrasCents;
 
     try {
       const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
@@ -112,6 +139,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           userId: sub,
           eventId: event.id,
           tierId: tier.id,
+          kind: isExtrasOnly ? 'extras_only' : 'ticket',
           amountCents,
           currency: tier.currency,
           method: 'card',
@@ -121,7 +149,6 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
-      // Create OrderExtra rows for each per-ticket extra
       if (validationResult.extraEntries.length > 0) {
         await prisma.orderExtra.createMany({
           data: validationResult.extraEntries.map(({ extraId, quantity }) => ({
@@ -165,6 +192,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         await prisma.ticketTier.updateMany({
           where: { id: tier.id, quantitySold: { gt: 0 } },
           data: { quantitySold: { decrement: 1 } },
+        });
+      }
+      for (const { id, count } of validationResult.extraStock) {
+        await prisma.ticketExtra.updateMany({
+          where: { id, quantitySold: { gte: count } },
+          data: { quantitySold: { decrement: count } },
         });
       }
       throw err;

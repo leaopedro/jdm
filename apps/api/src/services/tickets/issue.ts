@@ -53,6 +53,18 @@ export class OrderPaidWithoutTicketError extends Error {
   }
 }
 
+export class TicketRevokedForExtrasOnlyError extends Error {
+  readonly code = 'TICKET_REVOKED_FOR_EXTRAS_ONLY' as const;
+  constructor(
+    public readonly orderId: string,
+    public readonly userId: string,
+    public readonly eventId: string,
+  ) {
+    super(`extras_only order ${orderId} but no valid ticket for user ${userId} event ${eventId}`);
+    this.name = 'TicketRevokedForExtrasOnlyError';
+  }
+}
+
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 // Upsert one TicketExtraItem per OrderExtra for the given ticket.
@@ -124,11 +136,13 @@ export const issueTicketForPaidOrder = async (
     });
     if (!order) throw new OrderNotFoundError(orderId);
 
+    if (order.kind === 'extras_only') {
+      return issueExtrasOnly(order, providerRef, env, tx);
+    }
+
     if (order.status === 'paid') {
       const existing = await tx.ticket.findUnique({ where: { orderId } });
       if (!existing) throw new OrderPaidWithoutTicketError(orderId);
-      // Re-run upserts so a process crash between tx commit and markProcessed
-      // (outside this tx) does not leave the redelivery without extra items.
       await upsertExtraItems(orderId, existing.id, env, tx);
       return {
         ticketId: existing.id,
@@ -165,9 +179,6 @@ export const issueTicketForPaidOrder = async (
         },
       });
     } catch (err) {
-      // Partial unique index on (userId, eventId) WHERE status='valid' fires
-      // when a concurrent delivery inserted the sibling ticket between our
-      // findFirst and create. Collapse to the same refund-needed signal.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new TicketAlreadyExistsForEventError(order.userId, order.eventId);
       }
@@ -189,4 +200,48 @@ export const issueTicketForPaidOrder = async (
       eventTitle: order.event.title,
     };
   });
+};
+
+const issueExtrasOnly = async (
+  order: { id: string; userId: string; eventId: string; status: string; event: { title: string } },
+  providerRef: string,
+  env: IssueEnv,
+  tx: Tx,
+): Promise<IssueResult> => {
+  const ticket = await tx.ticket.findFirst({
+    where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
+  });
+  if (!ticket) {
+    throw new TicketRevokedForExtrasOnlyError(order.id, order.userId, order.eventId);
+  }
+
+  if (order.status === 'paid') {
+    await upsertExtraItems(order.id, ticket.id, env, tx);
+    return {
+      ticketId: ticket.id,
+      code: signTicketCode(ticket.id, env),
+      userId: order.userId,
+      eventId: order.eventId,
+      eventTitle: order.event.title,
+    };
+  }
+
+  if (order.status !== 'pending') {
+    throw new OrderNotPendingError(order.id, order.status);
+  }
+
+  await tx.order.update({
+    where: { id: order.id },
+    data: { status: 'paid', paidAt: new Date(), providerRef },
+  });
+
+  await upsertExtraItems(order.id, ticket.id, env, tx);
+
+  return {
+    ticketId: ticket.id,
+    code: signTicketCode(ticket.id, env),
+    userId: order.userId,
+    eventId: order.eventId,
+    eventTitle: order.event.title,
+  };
 };
