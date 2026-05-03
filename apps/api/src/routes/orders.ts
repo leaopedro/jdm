@@ -192,6 +192,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           data: { quantitySold: { decrement: 1 } },
         });
       }
+      for (const { id, count } of validationResult.extraStock) {
+        await prisma.ticketExtra.updateMany({
+          where: { id, quantitySold: { gte: count } },
+          data: { quantitySold: { decrement: count } },
+        });
+      }
       throw err;
     }
   });
