@@ -8,17 +8,16 @@ config lives in `apps/mobile/vercel.json`.
 
 - Authentication (OTP login, session via cookie/localStorage — `src/auth/storage.web.ts`).
 - Browsing events, event detail, ticket viewing.
+- Stripe hosted checkout redirect flow (`POST /orders/checkout` → `checkout.stripe.com` → `/events/buy/checkout-return` polling).
 - Check-in QR (rendered via `react-native-qrcode-svg` under `react-native-web`).
 - Sentry error reporting.
 
 ## What does not work on web (intentionally stubbed or no-op)
 
-- **Card / Apple Pay payments (Stripe).** `@stripe/stripe-react-native` is
-  native-only and aliased to a web stub at
-  `apps/mobile/src/stripe/web-stub.tsx` via `metro.config.js`. The buy
-  button surfaces "Pagamento só disponível no app". See
-  `plans/brainstorm.md` for the planned web purchase paths (Stripe Checkout
-  / Payment Element).
+- **Native PaymentSheet UI (`@stripe/stripe-react-native`) is still stubbed.**
+  The SDK is native-only and aliased to
+  `apps/mobile/src/stripe/web-stub.tsx` via `metro.config.js`, but web purchases
+  now use Stripe Hosted Checkout instead of PaymentSheet.
 - **Pix (AbacatePay).** Will work on web automatically once F4 ships
   (REST-only flow, no native deps).
 - **Push notifications.** `usePushRegistration` early-returns when
@@ -88,17 +87,56 @@ Open the Vercel preview URL from a PR and verify:
 - [ ] `/login` loads, OTP request fires, code accepted (auth → cookie session).
 - [ ] `/events` lists events fetched from Railway prod API.
 - [ ] Event detail page renders (image, copy, ticket button).
-- [ ] Ticket purchase button on web shows graceful "Pagamento só disponível no app" message (Stripe stub).
+- [ ] Ticket purchase redirects to `checkout.stripe.com` and returns to `/events/buy/checkout-return`.
+- [ ] Return page reaches success on paid webhook and ticket appears in `/tickets`.
+- [ ] Declined card path reaches failed/cancelled state and offers retry CTA.
 - [ ] No console errors from `react-native-web`, Expo Router, or Sentry init.
 - [ ] Sentry receives a session.
 
+## Stripe web checkout rollout checklist (prod)
+
+Run this list before and after promoting web checkout changes:
+
+- [ ] Railway API has valid `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`.
+- [ ] Vercel web has `EXPO_PUBLIC_API_BASE_URL` targeting the same Railway env.
+- [ ] Railway `CORS_ORIGINS` contains the exact Vercel production and preview origins.
+- [ ] Stripe Dashboard webhook endpoint points to `https://<api-host>/stripe/webhook` with `payment_intent.succeeded` and `payment_intent.payment_failed`.
+- [ ] Happy-path purchase verified with test card `4242 4242 4242 4242`.
+- [ ] Decline-path purchase verified with `4000 0000 0000 9995`.
+- [ ] Ticket visibility confirmed on `/tickets` after success.
+- [ ] Idempotency replay verified (`stripe events resend <evt_id>` does not duplicate ticket).
+
+## Rollback sequence (web Stripe flow)
+
+Use this exact order to minimize partial-state risk:
+
+1. **Freeze web checkout entrypoint** (fast mitigation):
+   - If needed, redeploy web from the last known-good commit where web purchase is disabled.
+2. **Revert app/UI change** (`[JDMA-199](/JDMA/issues/JDMA-199)`):
+   - Revert commit `de07c5f66cfdc961df4dca0deb1d9a1d60b9a152` (or the PR #78 merge) and deploy Vercel.
+3. **Revert API checkout endpoint** (`[JDMA-197](/JDMA/issues/JDMA-197)`) only if backend behavior is faulty:
+   - Revert PR #77 (commit chain ending at `91f8ea8`) and deploy Railway.
+4. **Validate post-rollback safety:**
+   - `POST /orders` (native) still creates PaymentIntent.
+   - `/stripe/webhook` still settles native orders to `paid`.
+   - No new web checkout sessions are created from web UI.
+
+No schema migration rollback is required for this path (route-level/application-level changes only).
+
+## Risk notes
+
+- `Order.expiresAt` is 15 min while Stripe Checkout enforces a 30 min minimum session `expires_at`; stale sessions can remain open after our local order expiration, but webhook handlers and sweeps keep order/ticket state authoritative.
+- `successUrl`/`cancelUrl` are validated to `https://` (or `http://localhost` for dev) to reduce open redirect risk.
+- If webhook delivery fails, checkout-return polling remains `pending` until timeout/error; operators should check Stripe event delivery and Railway logs first.
+
 ## Troubleshooting
 
-| Symptom                                         | Likely cause                                                     | Fix                                                                                           |
-| ----------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Build fails: `Cannot find module '@jdm/shared'` | `installCommand` not running from repo root                      | Ensure `vercel.json` `buildCommand` starts with `cd ../.. && pnpm install --frozen-lockfile`. |
-| `EXPO_PUBLIC_API_BASE_URL` undefined in browser | Env var not set for the deploy scope                             | Add it under the matching scope (Preview/Production) in Vercel → Settings → Env vars.         |
-| API calls return CORS errors                    | `CORS_ORIGINS` not updated in Railway after adding Vercel domain | Update Railway `CORS_ORIGINS` and redeploy.                                                   |
-| Bundle includes `codegenNativeCommands` errors  | Native-only module not aliased on web                            | Add the package to the platform alias map in `apps/mobile/metro.config.js` (see Stripe).      |
-| Push notification UI prompts in browser         | Missing `Platform.OS === 'web'` guard                            | Guard the call site; see `src/notifications/use-push-registration.ts`.                        |
-| Sentry source maps missing                      | `SENTRY_AUTH_TOKEN` not set                                      | Set the token in Vercel env vars.                                                             |
+| Symptom                                         | Likely cause                                                     | Fix                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Build fails: `Cannot find module '@jdm/shared'` | `installCommand` not running from repo root                      | Ensure `vercel.json` `buildCommand` starts with `cd ../.. && pnpm install --frozen-lockfile`.  |
+| `EXPO_PUBLIC_API_BASE_URL` undefined in browser | Env var not set for the deploy scope                             | Add it under the matching scope (Preview/Production) in Vercel → Settings → Env vars.          |
+| API calls return CORS errors                    | `CORS_ORIGINS` not updated in Railway after adding Vercel domain | Update Railway `CORS_ORIGINS` and redeploy.                                                    |
+| Bundle includes `codegenNativeCommands` errors  | Native-only module not aliased on web                            | Add the package to the platform alias map in `apps/mobile/metro.config.js` (see Stripe).       |
+| Push notification UI prompts in browser         | Missing `Platform.OS === 'web'` guard                            | Guard the call site; see `src/notifications/use-push-registration.ts`.                         |
+| Sentry source maps missing                      | `SENTRY_AUTH_TOKEN` not set                                      | Set the token in Vercel env vars.                                                              |
+| `POST /orders/checkout` returns 422 URL error   | Invalid return URL scheme in request                             | Ensure web app sends `https://...` return URLs (only `http://localhost` is allowed for local). |
