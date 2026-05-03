@@ -52,6 +52,8 @@ export const buyCopy = {
     errorPolling: 'Não conseguimos verificar seu pagamento. Tente novamente.',
   },
   extrasOnly: {
+    cta: 'Comprar Extras',
+    subtitle: 'Adicione extras ao seu ingresso existente',
     banner: 'Você já tem um ingresso para este evento.',
     bannerSub: (tierName: string) => `Ingresso: ${tierName}`,
     title: 'Comprar extras',

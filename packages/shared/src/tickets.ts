@@ -11,6 +11,7 @@ export type TicketSource = z.infer<typeof ticketSourceSchema>;
 
 export const myTicketExtraSchema = z.object({
   id: z.string().min(1),
+  extraId: z.string().min(1),
   extraName: z.string().min(1),
   code: z.string().min(1),
   status: ticketExtraItemStatusSchema,
