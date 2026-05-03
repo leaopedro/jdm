@@ -15,9 +15,14 @@ export default async function AuthedLayout({ children }: { children: React.React
             JDM Admin
           </Link>
           {!isStaff ? (
-            <Link href="/events" className="text-sm opacity-80 hover:opacity-100">
-              Eventos
-            </Link>
+            <>
+              <Link href="/events" className="text-sm opacity-80 hover:opacity-100">
+                Eventos
+              </Link>
+              <Link href="/users" className="text-sm opacity-80 hover:opacity-100">
+                Usuários
+              </Link>
+            </>
           ) : null}
           <Link href="/check-in" className="text-sm opacity-80 hover:opacity-100">
             Check-in

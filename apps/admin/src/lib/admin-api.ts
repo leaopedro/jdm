@@ -1,6 +1,8 @@
 import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
+  adminUserDetailSchema,
+  adminUserSearchResponseSchema,
   type AdminEventCreate,
   type AdminEventUpdate,
   type AdminTierCreate,
@@ -78,3 +80,19 @@ export const checkInTicket = (input: TicketCheckInRequest): Promise<TicketCheckI
     body: JSON.stringify(ticketCheckInRequestSchema.parse(input)),
     schema: ticketCheckInResponseSchema,
   });
+
+// ── Admin users ────────────────────────────────────────────────────
+
+export const searchAdminUsers = (params?: { q?: string; cursor?: string; limit?: number }) => {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set('q', params.q);
+  if (params?.cursor) sp.set('cursor', params.cursor);
+  if (params?.limit) sp.set('limit', String(params.limit));
+  const qs = sp.toString();
+  return apiFetch(`/admin/users${qs ? `?${qs}` : ''}`, {
+    schema: adminUserSearchResponseSchema,
+  });
+};
+
+export const getAdminUser = (id: string) =>
+  apiFetch(`/admin/users/${id}`, { schema: adminUserDetailSchema });
