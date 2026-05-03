@@ -253,6 +253,7 @@ const issueExtrasOnly = async (
   } else {
     ticket = await tx.ticket.findFirst({
       where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
+      orderBy: { createdAt: 'asc' },
     });
   }
   if (!ticket) {

@@ -63,6 +63,8 @@ async function prepareOrder(
   if (!tier)
     return { ok: false, status: 404, body: { error: 'NotFound', message: 'tier not found' } };
 
+  // Providing ticketId always implies extras-only mode — the target ticket
+  // must already exist, be valid, and belong to this user + event.
   let existingTicket: { id: string } | null = null;
 
   if (input.ticketId) {
@@ -83,6 +85,7 @@ async function prepareOrder(
   } else {
     existingTicket = await prisma.ticket.findFirst({
       where: { userId: sub, eventId: event.id, status: 'valid' },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
