@@ -15,7 +15,7 @@ issue assigned
   → commit logically and push the branch to origin
   → open a PR to `main` and link the Paperclip issue
   → reviewer (CTO today; peer engineer once the bench is hired) reviews
-  → fix, re-request review until approved
+  → fix, re-request review, and reassign issue to CTO (`in_review`) until approved
   → merge to `main` (squash if commits are noisy)
   → deploy (Railway / Vercel / EAS) as part of the merge, not a follow-up
   → flip the matching `plans/roadmap.md` checkbox `[~]` → `[x]` in the same PR
@@ -63,6 +63,7 @@ Before requesting review:
 - [ ] Any new env var documented in `docs/secrets.md` + `.env.example`
 - [ ] Any new secret registered in Railway / Vercel / EAS as appropriate
 - [ ] Roadmap checkbox **not** ticked (only the merger ticks it post-deploy)
+- [ ] Paperclip issue reassigned to CTO with status `in_review` + comment with PR link and test evidence
 
 ## Code style
 
