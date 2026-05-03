@@ -235,3 +235,64 @@ export const adminTicketsListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 export type AdminTicketsListResponse = z.infer<typeof adminTicketsListResponseSchema>;
+
+// ── Admin users list ───────────────────────────────────────────────
+
+export const adminUsersListQuerySchema = z.object({
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  q: z.string().min(1).max(200).optional(),
+});
+export type AdminUsersListQuery = z.infer<typeof adminUsersListQuerySchema>;
+
+export const adminUserRowSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  email: z.string().email(),
+  avatarUrl: z.string().nullable(),
+});
+export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
+
+export const adminUsersListResponseSchema = z.object({
+  items: z.array(adminUserRowSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminUsersListResponse = z.infer<typeof adminUsersListResponseSchema>;
+
+// ── Admin user detail ──────────────────────────────────────────────
+
+export const adminUserDetailStatsSchema = z.object({
+  totalTickets: z.number().int().nonnegative(),
+  totalOrders: z.number().int().nonnegative(),
+});
+
+export const adminUserRecentTicketSchema = z.object({
+  id: z.string().min(1),
+  eventTitle: z.string(),
+  tierName: z.string(),
+  status: ticketStatusSchema,
+  source: ticketSourceSchema,
+  createdAt: z.string().datetime(),
+});
+
+export const adminUserRecentOrderSchema = z.object({
+  id: z.string().min(1),
+  eventTitle: z.string(),
+  tierName: z.string(),
+  amountCents: z.number().int(),
+  status: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+export const adminUserDetailSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  email: z.string().email(),
+  role: z.string(),
+  avatarUrl: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  stats: adminUserDetailStatsSchema,
+  recentTickets: z.array(adminUserRecentTicketSchema),
+  recentOrders: z.array(adminUserRecentOrderSchema),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
