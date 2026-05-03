@@ -52,8 +52,8 @@ describe('GET /admin/events/:eventId/extras', () => {
     expect(res.statusCode).toBe(200);
     const body = z.object({ items: z.array(adminExtraSchema) }).parse(res.json());
     expect(body.items).toHaveLength(2);
-    expect(body.items[0].name).toBe('A-item');
-    expect(body.items[1].name).toBe('B-item');
+    expect(body.items[0]!.name).toBe('A-item');
+    expect(body.items[1]!.name).toBe('B-item');
   });
 
   it('returns empty list for event with no extras', async () => {
