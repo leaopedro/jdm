@@ -2,12 +2,14 @@ import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
   adminExtraSchema,
+  adminGrantTicketResponseSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
   type AdminEventCreate,
   type AdminEventUpdate,
   type AdminExtraCreate,
   type AdminExtraUpdate,
+  type AdminGrantTicket,
   type AdminTierCreate,
   type AdminTierUpdate,
   adminTicketTierSchema,
@@ -125,3 +127,10 @@ export const searchAdminUsers = (params?: { q?: string; cursor?: string; limit?:
 
 export const getAdminUser = (id: string) =>
   apiFetch(`/admin/users/${id}`, { schema: adminUserDetailSchema });
+
+export const grantTicket = (input: AdminGrantTicket) =>
+  apiFetch('/admin/tickets/grant', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminGrantTicketResponseSchema,
+  });

@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { GrantTicketModal } from '~/components/grant-ticket-modal';
 import { UserAvatar } from '~/components/user-avatar';
-import { getAdminUser } from '~/lib/admin-api';
+import { getAdminUser, listAdminEvents } from '~/lib/admin-api';
 import { ApiError } from '~/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
     throw err;
   }
 
+  const { items: events } = await listAdminEvents();
   const location = [user.city, user.stateCode].filter(Boolean).join('/');
 
   return (
@@ -56,6 +58,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       <Link href="/users" className="text-sm text-[color:var(--color-muted)] hover:underline">
         ← Usuários
       </Link>
+
+      <div className="flex items-start justify-between gap-4">
+        <GrantTicketModal userId={user.id} events={events} />
+      </div>
 
       {/* Header card */}
       <div className="flex items-start gap-4 rounded border border-[color:var(--color-border)] p-4">
