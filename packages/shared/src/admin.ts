@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
+import { userRoleSchema } from './auth.js';
 import {
   eventDetailSchema,
   eventStatusSchema,
   eventTypeSchema,
   ticketTierSchema,
 } from './events.js';
+import { orderStatusSchema } from './orders.js';
 import { stateCodeSchema } from './profile.js';
 import { ticketSourceSchema, ticketStatusSchema } from './tickets.js';
 
@@ -238,3 +240,63 @@ export const adminTicketsListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 export type AdminTicketsListResponse = z.infer<typeof adminTicketsListResponseSchema>;
+
+// ── Admin user search + detail ─────────────────────────────────────
+
+export const adminUserSearchQuerySchema = z.object({
+  q: z.string().min(1).max(200).optional(),
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type AdminUserSearchQuery = z.infer<typeof adminUserSearchQuerySchema>;
+
+export const adminUserRowSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  email: z.string().email(),
+  avatarUrl: z.string().nullable(),
+});
+export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
+
+export const adminUserSearchResponseSchema = z.object({
+  items: z.array(adminUserRowSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminUserSearchResponse = z.infer<typeof adminUserSearchResponseSchema>;
+
+export const adminUserDetailTicketSchema = z.object({
+  id: z.string().min(1),
+  status: ticketStatusSchema,
+  source: ticketSourceSchema,
+  eventTitle: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+export const adminUserDetailOrderSchema = z.object({
+  id: z.string().min(1),
+  status: orderStatusSchema,
+  amountCents: z.number().int(),
+  currency: z.string().length(3),
+  eventTitle: z.string(),
+  createdAt: z.string().datetime(),
+});
+
+export const adminUserDetailSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().email(),
+  name: z.string(),
+  role: userRoleSchema,
+  emailVerifiedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  bio: z.string().nullable(),
+  city: z.string().nullable(),
+  stateCode: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  stats: z.object({
+    totalTickets: z.number().int().nonnegative(),
+    totalOrders: z.number().int().nonnegative(),
+  }),
+  recentTickets: z.array(adminUserDetailTicketSchema),
+  recentOrders: z.array(adminUserDetailOrderSchema),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
