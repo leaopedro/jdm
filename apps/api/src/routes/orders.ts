@@ -182,6 +182,7 @@ async function createPendingOrder(
       tierId: data.tier.id,
       kind: data.isExtrasOnly ? 'extras_only' : 'ticket',
       amountCents: data.amountCents,
+      quantity: data.ticketCount,
       currency: data.tier.currency,
       method: 'card',
       provider: 'stripe',
@@ -301,7 +302,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     try {
       const { order } = await createPendingOrder(data);
 
-      const expiresAtUnix = Math.floor((Date.now() + ORDER_EXPIRY_MS) / 1000);
+      // Stripe requires expires_at >= 30 min from now; order expiry is 15 min.
+      // Use the Stripe minimum so the session is accepted; the order-level sweep
+      // handles early cancellation independently.
+      const STRIPE_MIN_SESSION_MS = 30 * 60 * 1000;
+      const sessionExpiryMs = Math.max(ORDER_EXPIRY_MS, STRIPE_MIN_SESSION_MS);
+      const expiresAtUnix = Math.floor((Date.now() + sessionExpiryMs) / 1000);
       const session = await app.stripe.createCheckoutSession({
         amountCents: data.amountCents,
         currency: data.tier.currency,

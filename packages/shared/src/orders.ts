@@ -40,9 +40,16 @@ export const createOrderResponseSchema = z.object({
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
 
+const httpsUrlSchema = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith('https://') || u.startsWith('http://localhost'), {
+    message: 'URL must use https (or http://localhost for dev)',
+  });
+
 export const createWebCheckoutRequestSchema = createOrderRequestSchema.extend({
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+  successUrl: httpsUrlSchema,
+  cancelUrl: httpsUrlSchema,
 });
 export type CreateWebCheckoutRequest = z.infer<typeof createWebCheckoutRequestSchema>;
 

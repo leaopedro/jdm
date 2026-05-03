@@ -297,7 +297,8 @@ describe('POST /orders/checkout', () => {
     const csPayload = csCall!.payload as CreateCheckoutSessionInput;
     expect(csPayload.expiresAt).toBeDefined();
     const nowSec = Math.floor(Date.now() / 1000);
-    expect(csPayload.expiresAt!).toBeGreaterThan(nowSec + 800);
-    expect(csPayload.expiresAt!).toBeLessThanOrEqual(nowSec + 920);
+    // Stripe minimum is 30 min (1800s); allow small clock drift
+    expect(csPayload.expiresAt!).toBeGreaterThan(nowSec + 1780);
+    expect(csPayload.expiresAt!).toBeLessThanOrEqual(nowSec + 1820);
   });
 });
