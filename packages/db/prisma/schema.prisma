@@ -335,6 +335,7 @@ model Ticket {
 
   @@index([userId, createdAt])
   @@index([eventId])
+  @@index([carId])
 }
 
 enum TicketExtraItemStatus {
