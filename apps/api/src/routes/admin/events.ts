@@ -47,6 +47,7 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, up
     type: e.type,
     description: e.description,
     capacity: e.capacity,
+    maxTicketsPerUser: e.maxTicketsPerUser,
     status: e.status,
     publishedAt: e.publishedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
@@ -81,6 +82,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
           stateCode: input.stateCode,
           type: input.type,
           capacity: input.capacity,
+          maxTicketsPerUser: input.maxTicketsPerUser,
           status: 'draft',
         },
         include: { tiers: true, extras: true },
@@ -132,6 +134,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     if (input.stateCode !== undefined) data.stateCode = input.stateCode;
     if (input.type !== undefined) data.type = input.type;
     if (input.capacity !== undefined) data.capacity = input.capacity;
+    if (input.maxTicketsPerUser !== undefined) data.maxTicketsPerUser = input.maxTicketsPerUser;
 
     const updated = await prisma.event.update({
       where: { id },

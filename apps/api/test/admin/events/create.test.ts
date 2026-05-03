@@ -98,4 +98,43 @@ describe('POST /admin/events', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('stores maxTicketsPerUser and returns it in response', async () => {
+    const { user } = await createUser({ email: 'o2@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/events',
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { ...validBody, slug: 'ev-max-tix', maxTicketsPerUser: 3 },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ maxTicketsPerUser: number }>();
+    expect(body.maxTicketsPerUser).toBe(3);
+    const row = await prisma.event.findUniqueOrThrow({ where: { slug: 'ev-max-tix' } });
+    expect(row.maxTicketsPerUser).toBe(3);
+  });
+
+  it('defaults maxTicketsPerUser to 1 when omitted', async () => {
+    const { user } = await createUser({ email: 'o3@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/events',
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { ...validBody, slug: 'ev-default-max' },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ maxTicketsPerUser: number }>();
+    expect(body.maxTicketsPerUser).toBe(1);
+  });
+
+  it('400 on maxTicketsPerUser > 10', async () => {
+    const { user } = await createUser({ email: 'o4@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/events',
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { ...validBody, slug: 'ev-too-many', maxTicketsPerUser: 11 },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

@@ -120,4 +120,32 @@ describe('PATCH /admin/events/:id', () => {
     const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
     expect(row.coverObjectKey).toBe('event_cover/u/abc.jpg');
   });
+
+  it('updates maxTicketsPerUser and returns new value', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o3@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { maxTicketsPerUser: 4 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ maxTicketsPerUser: number }>();
+    expect(body.maxTicketsPerUser).toBe(4);
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.maxTicketsPerUser).toBe(4);
+  });
+
+  it('400 on maxTicketsPerUser > 10 in PATCH', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o4@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { maxTicketsPerUser: 99 },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

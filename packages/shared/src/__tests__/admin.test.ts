@@ -43,6 +43,24 @@ describe('adminEventCreateSchema', () => {
   it('rejects capacity < 0', () => {
     expect(() => adminEventCreateSchema.parse({ ...base, capacity: -1 })).toThrow();
   });
+
+  it('defaults maxTicketsPerUser to 1 when omitted', () => {
+    const result = adminEventCreateSchema.parse(base);
+    expect(result.maxTicketsPerUser).toBe(1);
+  });
+
+  it('accepts maxTicketsPerUser between 1 and 10', () => {
+    expect(() => adminEventCreateSchema.parse({ ...base, maxTicketsPerUser: 5 })).not.toThrow();
+    expect(() => adminEventCreateSchema.parse({ ...base, maxTicketsPerUser: 10 })).not.toThrow();
+  });
+
+  it('rejects maxTicketsPerUser > 10', () => {
+    expect(() => adminEventCreateSchema.parse({ ...base, maxTicketsPerUser: 11 })).toThrow();
+  });
+
+  it('rejects maxTicketsPerUser < 1', () => {
+    expect(() => adminEventCreateSchema.parse({ ...base, maxTicketsPerUser: 0 })).toThrow();
+  });
 });
 
 describe('adminEventUpdateSchema', () => {
@@ -56,6 +74,14 @@ describe('adminEventUpdateSchema', () => {
 
   it('rejects status — must go through publish/cancel actions', () => {
     expect(() => adminEventUpdateSchema.parse({ status: 'published' })).toThrow();
+  });
+
+  it('accepts maxTicketsPerUser patch', () => {
+    expect(() => adminEventUpdateSchema.parse({ maxTicketsPerUser: 3 })).not.toThrow();
+  });
+
+  it('rejects maxTicketsPerUser > 10 in patch', () => {
+    expect(() => adminEventUpdateSchema.parse({ maxTicketsPerUser: 11 })).toThrow();
   });
 });
 
