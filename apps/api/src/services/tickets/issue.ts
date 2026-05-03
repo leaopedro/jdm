@@ -180,6 +180,14 @@ export const issueTicketForPaidOrder = async (
       throw new OrderNotPendingError(orderId, order.status);
     }
 
+    // Serialize ticket creation for same (userId, eventId) — prevents TOCTOU race
+    // when concurrent webhooks process different orders for the same user+event.
+    await tx.$executeRawUnsafe(
+      `SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+      order.userId,
+      order.eventId,
+    );
+
     const conflict = await tx.ticket.findFirst({
       where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
     });
