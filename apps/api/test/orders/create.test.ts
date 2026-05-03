@@ -230,9 +230,12 @@ describe('POST /orders', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
-  it('succeeds when tier requiresCar and carId is provided', async () => {
+  it('succeeds when tier requiresCar and user owns the car with valid plate', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent(10, { requiresCar: true });
+    const car = await prisma.car.create({
+      data: { userId: user.id, make: 'Honda', model: 'Civic', year: 2020 },
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -242,7 +245,7 @@ describe('POST /orders', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
-        tickets: [{ carId: 'car_123', licensePlate: 'ABC-1234' }],
+        tickets: [{ carId: car.id, licensePlate: 'ABC-1234' }],
       },
     });
 
@@ -251,7 +254,7 @@ describe('POST /orders', () => {
     const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
     const piPayload2 = piCall!.payload as CreatePaymentIntentInput;
     const tickets = JSON.parse(piPayload2.metadata.tickets as string) as unknown[];
-    expect((tickets[0] as { c: string }).c).toBe('car_123');
+    expect((tickets[0] as { c: string }).c).toBe(car.id);
   });
 
   it('returns 409 when the tier is sold out', async () => {

@@ -18,6 +18,8 @@ type Tx = Prisma.TransactionClient;
  *
  * Enforces (throws coded errors for route to map to HTTP status):
  * - `MISSING_CAR_ID`   → 422 when tier.requiresCar and carId absent
+ * - `MISSING_PLATE`    → 422 when tier.requiresCar and licensePlate absent
+ * - `CAR_NOT_OWNED`    → 422 when carId doesn't exist or belongs to a different user
  * - `DUPLICATE_EXTRA`  → 422 when same extraId appears twice in one ticket
  * - `EXTRA_NOT_FOUND`  → 404 when extraId doesn't exist or belongs to another event
  * - `EXTRA_SOLD_OUT`   → 409 when extra has no available stock
@@ -27,12 +29,22 @@ export async function validateTickets(
   tier: { requiresCar: boolean },
   eventId: string,
   tx: Tx,
+  userId: string,
 ): Promise<TicketValidationResult> {
   const allExtraIds = new Set<string>();
+  const allCarIds = new Set<string>();
 
   for (const ticket of tickets) {
     if (tier.requiresCar && !ticket.carId) {
       throw Object.assign(new Error('carId required for this tier'), { code: 'MISSING_CAR_ID' });
+    }
+    if (tier.requiresCar && !ticket.licensePlate) {
+      throw Object.assign(new Error('licensePlate required for this tier'), {
+        code: 'MISSING_PLATE',
+      });
+    }
+    if (ticket.carId) {
+      allCarIds.add(ticket.carId);
     }
     const seen = new Set<string>();
     for (const extraId of ticket.extras ?? []) {
@@ -43,6 +55,21 @@ export async function validateTickets(
       }
       seen.add(extraId);
       allExtraIds.add(extraId);
+    }
+  }
+
+  if (allCarIds.size > 0) {
+    const ownedCars = await tx.car.findMany({
+      where: { id: { in: [...allCarIds] }, userId },
+      select: { id: true },
+    });
+    const ownedIds = new Set(ownedCars.map((c) => c.id));
+    for (const carId of allCarIds) {
+      if (!ownedIds.has(carId)) {
+        throw Object.assign(new Error(`car ${carId} not found or not owned by user`), {
+          code: 'CAR_NOT_OWNED',
+        });
+      }
     }
   }
 

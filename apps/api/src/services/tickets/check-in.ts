@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import type { Ticket, TicketTier, User } from '@prisma/client';
+import type { Car, Ticket, TicketTier, User } from '@prisma/client';
 
 import { verifyTicketCode } from './codes.js';
 
@@ -31,13 +31,15 @@ export class TicketRevokedError extends Error {
   }
 }
 
-type TicketWithRelations = Ticket & { tier: TicketTier; user: User };
+type TicketWithRelations = Ticket & { tier: TicketTier; user: User; car: Car | null };
 
 export type CheckInOutcome =
   | { kind: 'admitted'; ticket: TicketWithRelations; checkedInAt: Date }
   | { kind: 'already_used'; ticket: TicketWithRelations; originalUsedAt: Date };
 
 type CheckInEnv = { readonly TICKET_CODE_SECRET: string };
+
+const ticketInclude = { tier: true, user: true, car: true } as const;
 
 export const checkInTicket = async (
   input: { code: string; eventId: string },
@@ -59,14 +61,14 @@ export const checkInTicket = async (
   if (result.count === 1) {
     const ticket = await prisma.ticket.findUniqueOrThrow({
       where: { id: ticketId },
-      include: { tier: true, user: true },
+      include: ticketInclude,
     });
     return { kind: 'admitted', ticket, checkedInAt: now };
   }
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
-    include: { tier: true, user: true },
+    include: ticketInclude,
   });
   if (!ticket) throw new TicketNotFoundError();
   if (ticket.eventId !== input.eventId) {
