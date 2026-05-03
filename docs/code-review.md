@@ -132,6 +132,10 @@ Use `superpowers:receiving-code-review`. In particular:
   follow-up <issue>." A silent dismissal stalls the review.
 - **Re-request review** after pushing fixes. Do not assume the reviewer is
   watching the PR.
+- **Wake the CTO every fix round.** After each push that addresses review
+  feedback, reassign the Paperclip issue to CTO with status `in_review` and
+  post a comment with the new commit(s), verification evidence, and
+  `Next owner: CTO review`.
 
 ## 7. The author's response, written in the PR
 
