@@ -91,11 +91,30 @@ const upsertExtraItems = async (
   }
 };
 
+type TicketMeta = { c?: string; p?: string };
+
+function extractFirstTicketMeta(metadata: Record<string, string> | undefined): TicketMeta {
+  const raw = metadata?.tickets;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return (parsed[0] as TicketMeta) ?? {};
+    }
+  } catch {
+    // malformed metadata — proceed without car fields
+  }
+  return {};
+}
+
 export const issueTicketForPaidOrder = async (
   orderId: string,
   providerRef: string,
   env: IssueEnv,
+  intentMetadata?: Record<string, string>,
 ): Promise<IssueResult> => {
+  const ticketMeta = extractFirstTicketMeta(intentMetadata);
+
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
@@ -139,6 +158,8 @@ export const issueTicketForPaidOrder = async (
           tierId: order.tierId,
           source: 'purchase',
           status: 'valid',
+          ...(ticketMeta.c ? { carId: ticketMeta.c } : {}),
+          ...(ticketMeta.p ? { licensePlate: ticketMeta.p } : {}),
         },
       });
     } catch (err) {

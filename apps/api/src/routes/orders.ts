@@ -53,7 +53,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const txResult = await prisma.$transaction(async (tx) => {
-        const validation = await validateTickets(input.tickets, tier, event.id, tx);
+        const validation = await validateTickets(input.tickets, tier, event.id, tx, sub);
         const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
         const reservation = await tx.ticketTier.updateMany({
           where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
@@ -76,7 +76,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       reserved = true;
     } catch (err) {
       const coded = err as Error & { code?: string };
-      if (coded.code === 'MISSING_CAR_ID' || coded.code === 'DUPLICATE_EXTRA') {
+      if (
+        coded.code === 'MISSING_CAR_ID' ||
+        coded.code === 'CAR_NOT_OWNED' ||
+        coded.code === 'DUPLICATE_EXTRA'
+      ) {
         return reply.status(422).send({ error: 'UnprocessableEntity', message: coded.message });
       }
       if (coded.code === 'EXTRA_NOT_FOUND') {

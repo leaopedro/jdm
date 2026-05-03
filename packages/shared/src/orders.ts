@@ -6,10 +6,15 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 export const orderStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded', 'expired']);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
+// Brazilian plate: old style ABC-1234 or new Mercosul ABC1D23 (dash optional)
+export const licensePlateSchema = z
+  .string()
+  .regex(/^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/, 'invalid plate format');
+
 export const ticketInputSchema = z.object({
   extras: z.array(z.string().min(1)).default([]),
   carId: z.string().min(1).optional(),
-  licensePlate: z.string().min(1).max(20).optional(),
+  licensePlate: licensePlateSchema.optional(),
 });
 export type TicketInput = z.infer<typeof ticketInputSchema>;
 

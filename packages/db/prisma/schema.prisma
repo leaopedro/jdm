@@ -116,8 +116,9 @@ model Car {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  photos CarPhoto[]
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos  CarPhoto[]
+  tickets Ticket[]
 
   @@index([userId])
 }
@@ -190,7 +191,6 @@ model TicketTier {
   salesOpenAt    DateTime?
   salesCloseAt   DateTime?
   sortOrder      Int      @default(0)
-  requiresCar    Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -312,21 +312,24 @@ model OrderExtra {
 }
 
 model Ticket {
-  id        String       @id @default(cuid())
-  orderId   String?      @unique
-  userId    String
-  eventId   String
-  tierId    String
-  source    TicketSource @default(purchase)
-  status    TicketStatus @default(valid)
-  usedAt    DateTime?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  orderId      String?      @unique
+  userId       String
+  eventId      String
+  tierId       String
+  carId        String?
+  licensePlate String?      @db.VarChar(20)
+  source       TicketSource @default(purchase)
+  status       TicketStatus @default(valid)
+  usedAt       DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   order      Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   event      Event             @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier       TicketTier        @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  car        Car?              @relation(fields: [carId], references: [id], onDelete: SetNull)
   extraItems TicketExtraItem[]
 
   @@index([userId, createdAt])

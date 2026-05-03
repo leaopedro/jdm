@@ -28,6 +28,14 @@ export const ticketCheckInResponseSchema = z.object({
       id: z.string().min(1),
       name: z.string().min(1),
     }),
+    car: z
+      .object({
+        make: z.string().min(1),
+        model: z.string().min(1),
+        year: z.number().int(),
+      })
+      .nullable(),
+    licensePlate: z.string().nullable(),
   }),
 });
 export type TicketCheckInResponse = z.infer<typeof ticketCheckInResponseSchema>;

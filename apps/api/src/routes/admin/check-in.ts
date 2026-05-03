@@ -40,6 +40,7 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
           ? outcome.checkedInAt.toISOString()
           : outcome.originalUsedAt.toISOString();
 
+      const { car } = outcome.ticket;
       return reply.send(
         ticketCheckInResponseSchema.parse({
           result: outcome.kind,
@@ -55,6 +56,8 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
               id: outcome.ticket.user.id,
               name: outcome.ticket.user.name,
             },
+            car: car ? { make: car.make, model: car.model, year: car.year } : null,
+            licensePlate: outcome.ticket.licensePlate,
           },
         }),
       );

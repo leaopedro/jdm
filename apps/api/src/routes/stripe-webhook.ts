@@ -68,7 +68,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
       try {
-        const issued = await issueTicketForPaidOrder(orderId, intent.id, app.env);
+        const issued = await issueTicketForPaidOrder(orderId, intent.id, app.env, intent.metadata);
         const firstTime = await markProcessed(event.id, event);
         request.log.info(
           { orderId, paymentIntentId: intent.id, firstTime },
