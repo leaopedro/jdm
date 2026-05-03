@@ -1,10 +1,13 @@
 import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
+  adminExtraSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
   type AdminEventCreate,
   type AdminEventUpdate,
+  type AdminExtraCreate,
+  type AdminExtraUpdate,
   type AdminTierCreate,
   type AdminTierUpdate,
   adminTicketTierSchema,
@@ -16,6 +19,7 @@ import {
   type TicketCheckInRequest,
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
+import { z } from 'zod';
 
 import { apiFetch } from './api';
 
@@ -69,6 +73,31 @@ export const deleteTier = (eventId: string, tierId: string) =>
   apiFetch(`/admin/events/${eventId}/tiers/${tierId}`, {
     method: 'DELETE',
     schema: adminTicketTierSchema, // returns 204; apiFetch returns undefined
+  });
+
+export const listExtras = (eventId: string) =>
+  apiFetch(`/admin/events/${eventId}/extras`, {
+    schema: z.object({ items: z.array(adminExtraSchema) }),
+  });
+
+export const createExtra = (eventId: string, input: AdminExtraCreate) =>
+  apiFetch(`/admin/events/${eventId}/extras`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminExtraSchema,
+  });
+
+export const updateExtra = (extraId: string, input: AdminExtraUpdate) =>
+  apiFetch(`/admin/extras/${extraId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminExtraSchema,
+  });
+
+export const deleteExtra = (extraId: string) =>
+  apiFetch(`/admin/extras/${extraId}`, {
+    method: 'DELETE',
+    schema: adminExtraSchema,
   });
 
 export const listCheckInEvents = () =>

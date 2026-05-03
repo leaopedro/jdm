@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 export type RecordAuditInput = {
   actorId: string;
   action: AdminAuditAction;
-  entityType: 'event' | 'tier' | 'ticket';
+  entityType: 'event' | 'tier' | 'ticket' | 'extra';
   entityId: string;
   metadata?: Record<string, unknown>;
 };
