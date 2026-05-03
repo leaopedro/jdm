@@ -25,6 +25,7 @@ export const adminAuditActionSchema = z.enum([
   'extra.create',
   'extra.update',
   'extra.delete',
+  'extra.claim',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
