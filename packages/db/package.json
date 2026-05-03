@@ -12,7 +12,9 @@
     }
   },
   "scripts": {
+    "prebuild": "pnpm db:generate",
     "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "pnpm db:generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "db:generate": "prisma generate",
