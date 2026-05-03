@@ -255,6 +255,75 @@ describe('POST /stripe/webhook', () => {
     expect(dedupRow).not.toBeNull();
   });
 
+  it('issues 3 tickets for a multi-ticket order via payment_intent.succeeded', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id, { quantity: 3 });
+
+    const ticketsMeta = [{ e: [] as string[] }, { e: [] as string[] }, { e: [] as string[] }];
+
+    stripe.nextEvent = {
+      id: 'evt_multi_3',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: order.providerRef,
+          metadata: { orderId: order.id, tickets: JSON.stringify(ticketsMeta) },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(3);
+  });
+
+  it('is idempotent for multi-ticket: redelivery does not duplicate tickets', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id, { quantity: 2 });
+
+    const ticketsMeta = [{ e: [] as string[] }, { e: [] as string[] }];
+
+    stripe.nextEvent = {
+      id: 'evt_multi_dup',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: order.providerRef,
+          metadata: { orderId: order.id, tickets: JSON.stringify(ticketsMeta) },
+        },
+      },
+    };
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(second.statusCode).toBe(200);
+
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(2);
+  });
+
   it('does not mark event processed when dispatch fails with a non-duplicate error', async () => {
     stripe.nextEvent = {
       id: 'evt_dispatch_fail',
