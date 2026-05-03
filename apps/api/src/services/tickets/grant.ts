@@ -98,6 +98,8 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
           userId,
           eventId,
           tierId,
+          ...(carId && { carId }),
+          ...(licensePlate && { licensePlate }),
           source: 'comp',
           status: 'valid',
         },

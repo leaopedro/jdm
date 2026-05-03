@@ -149,8 +149,8 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         if (updated.count === 1) {
           const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
           await tx.ticketTier.updateMany({
-            where: { id: order.tierId, quantitySold: { gt: 0 } },
-            data: { quantitySold: { decrement: 1 } },
+            where: { id: order.tierId, quantitySold: { gte: order.quantity } },
+            data: { quantitySold: { decrement: order.quantity } },
           });
           // Release extras stock
           const orderExtras = await tx.orderExtra.findMany({
