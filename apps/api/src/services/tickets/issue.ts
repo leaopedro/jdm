@@ -53,6 +53,44 @@ export class OrderPaidWithoutTicketError extends Error {
   }
 }
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+// Upsert one TicketExtraItem per OrderExtra for the given ticket.
+// Safe to call on redelivery — update: {} is a no-op when the row exists.
+// Throws if any OrderExtra has quantity > 1, which requires multi-ticket
+// issuance support (not yet built) to issue the correct number of codes.
+const upsertExtraItems = async (
+  orderId: string,
+  ticketId: string,
+  env: IssueEnv,
+  tx: Tx,
+): Promise<void> => {
+  const orderExtras = await tx.orderExtra.findMany({
+    where: { orderId },
+    select: { extraId: true, quantity: true },
+  });
+
+  for (const { extraId, quantity } of orderExtras) {
+    if (quantity !== 1) {
+      // Multi-ticket extra quantities require per-ticket code issuance, which
+      // is not yet implemented. Fail loudly rather than issuing too few codes.
+      throw new Error(
+        `issueTicketForPaidOrder: OrderExtra quantity=${quantity} not supported (orderId=${orderId}, extraId=${extraId})`,
+      );
+    }
+    await tx.ticketExtraItem.upsert({
+      where: { ticketId_extraId: { ticketId, extraId } },
+      create: {
+        ticketId,
+        extraId,
+        code: signQrCode('e', `${ticketId}-${extraId}`, env),
+        status: 'valid',
+      },
+      update: {},
+    });
+  }
+};
+
 export const issueTicketForPaidOrder = async (
   orderId: string,
   providerRef: string,
@@ -68,6 +106,9 @@ export const issueTicketForPaidOrder = async (
     if (order.status === 'paid') {
       const existing = await tx.ticket.findUnique({ where: { orderId } });
       if (!existing) throw new OrderPaidWithoutTicketError(orderId);
+      // Re-run upserts so a process crash between tx commit and markProcessed
+      // (outside this tx) does not leave the redelivery without extra items.
+      await upsertExtraItems(orderId, existing.id, env, tx);
       return {
         ticketId: existing.id,
         code: signTicketCode(existing.id, env),
@@ -115,23 +156,7 @@ export const issueTicketForPaidOrder = async (
       data: { status: 'paid', paidAt: new Date(), providerRef },
     });
 
-    const orderExtras = await tx.orderExtra.findMany({
-      where: { orderId: order.id },
-      select: { extraId: true },
-    });
-
-    for (const { extraId } of orderExtras) {
-      await tx.ticketExtraItem.upsert({
-        where: { ticketId_extraId: { ticketId: ticket.id, extraId } },
-        create: {
-          ticketId: ticket.id,
-          extraId,
-          code: signQrCode('e', `${ticket.id}-${extraId}`, env),
-          status: 'valid',
-        },
-        update: {},
-      });
-    }
+    await upsertExtraItems(orderId, ticket.id, env, tx);
 
     return {
       ticketId: ticket.id,

@@ -181,7 +181,7 @@ describe('issueTicketForPaidOrder', () => {
     expect(extraIds).toEqual([extra1.id, extra2.id].sort());
   });
 
-  it('is idempotent for extras — redelivery does not create duplicate TicketExtraItem rows', async () => {
+  it('is idempotent for extras — redelivery via already-paid path does not duplicate TicketExtraItem rows', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedEventAndTier();
     const order = await createPendingOrder(user.id, event.id, tier.id);
@@ -191,11 +191,14 @@ describe('issueTicketForPaidOrder', () => {
     });
     await prisma.orderExtra.create({ data: { orderId: order.id, extraId: extra.id, quantity: 1 } });
 
+    // First call: pending → paid, creates ticket + extra item
     const first = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
+    // Second call: order.status === 'paid' branch (redelivery crash-recovery path)
     const second = await issueTicketForPaidOrder(order.id, order.providerRef!, env);
 
     expect(first.ticketId).toBe(second.ticketId);
 
+    // Upsert in the already-paid path must be a no-op — still exactly one item
     const items = await prisma.ticketExtraItem.findMany({ where: { ticketId: first.ticketId } });
     expect(items).toHaveLength(1);
   });
