@@ -187,6 +187,29 @@ describe('POST /orders — car ownership guard', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
+  it('returns 422 when licensePlate is missing on a requiresCar tier', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEventWithCarTier();
+    const car = await seedCar(user.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ carId: car.id }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
   it('succeeds when user owns the car and plate is valid', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedEventWithCarTier();

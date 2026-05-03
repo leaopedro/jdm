@@ -78,6 +78,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       const coded = err as Error & { code?: string };
       if (
         coded.code === 'MISSING_CAR_ID' ||
+        coded.code === 'MISSING_PLATE' ||
         coded.code === 'CAR_NOT_OWNED' ||
         coded.code === 'DUPLICATE_EXTRA'
       ) {

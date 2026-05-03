@@ -93,6 +93,8 @@ const upsertExtraItems = async (
 
 type TicketMeta = { c?: string; p?: string };
 
+// Reads index 0 only — safe because createOrderRequestSchema enforces max(1) ticket per order.
+// Update this when JDMA-142 lifts that constraint to support multi-ticket orders.
 function extractFirstTicketMeta(metadata: Record<string, string> | undefined): TicketMeta {
   const raw = metadata?.tickets;
   if (!raw) return {};

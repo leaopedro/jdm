@@ -18,6 +18,7 @@ type Tx = Prisma.TransactionClient;
  *
  * Enforces (throws coded errors for route to map to HTTP status):
  * - `MISSING_CAR_ID`   → 422 when tier.requiresCar and carId absent
+ * - `MISSING_PLATE`    → 422 when tier.requiresCar and licensePlate absent
  * - `CAR_NOT_OWNED`    → 422 when carId doesn't exist or belongs to a different user
  * - `DUPLICATE_EXTRA`  → 422 when same extraId appears twice in one ticket
  * - `EXTRA_NOT_FOUND`  → 404 when extraId doesn't exist or belongs to another event
@@ -36,6 +37,11 @@ export async function validateTickets(
   for (const ticket of tickets) {
     if (tier.requiresCar && !ticket.carId) {
       throw Object.assign(new Error('carId required for this tier'), { code: 'MISSING_CAR_ID' });
+    }
+    if (tier.requiresCar && !ticket.licensePlate) {
+      throw Object.assign(new Error('licensePlate required for this tier'), {
+        code: 'MISSING_PLATE',
+      });
     }
     if (ticket.carId) {
       allCarIds.add(ticket.carId);
