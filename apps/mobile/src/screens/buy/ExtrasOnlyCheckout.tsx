@@ -3,13 +3,23 @@ import type { EventExtraPublic } from '@jdm/shared/extras';
 import type { MyTicket } from '@jdm/shared/tickets';
 import { ArrowLeft } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 
 import { ApiError } from '~/api/client';
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
+import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
 import { theme } from '~/theme';
 
 interface SelectedExtra {
@@ -56,6 +66,8 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
     });
   }, []);
 
+  const [redirecting, setRedirecting] = useState(false);
+
   const handleSubmit = async () => {
     if (selected.size === 0) {
       Alert.alert(buyCopy.review.errorTitle, buyCopy.extrasOnly.selectAtLeast);
@@ -63,15 +75,22 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
     }
     setSubmitting(true);
     try {
-      const order = await createOrder({
+      const payload = {
         eventId: event.id,
         tierId,
         quantity: 1,
-        method: 'card',
+        method: 'card' as const,
         tickets: [{ extras: Array.from(selected.keys()) }],
-      });
+      };
+      if (isWeb) {
+        setRedirecting(true);
+        await startWebCheckout(payload);
+        return;
+      }
+      const order = await createOrder(payload);
       onPayment(order.clientSecret);
     } catch (err) {
+      setRedirecting(false);
       Alert.alert(buyCopy.review.errorTitle, resolveConflictMessage(err));
     } finally {
       setSubmitting(false);
@@ -163,11 +182,18 @@ export function ExtrasOnlyCheckout({ event, existingTicket, onPayment, onBack }:
       )}
 
       <View style={styles.footer}>
-        <Button
-          label={submitting ? buyCopy.review.submitting : buyCopy.extrasOnly.pay}
-          onPress={() => void handleSubmit()}
-          disabled={submitting || selected.size === 0}
-        />
+        {redirecting ? (
+          <View style={styles.redirecting}>
+            <ActivityIndicator color={theme.colors.accent} />
+            <Text style={styles.redirectingText}>{buyCopy.webCheckout.redirecting}</Text>
+          </View>
+        ) : (
+          <Button
+            label={submitting ? buyCopy.review.submitting : buyCopy.extrasOnly.pay}
+            onPress={() => void handleSubmit()}
+            disabled={submitting || selected.size === 0}
+          />
+        )}
       </View>
     </View>
   );
@@ -236,5 +262,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+  },
+  redirecting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  redirectingText: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
   },
 });
