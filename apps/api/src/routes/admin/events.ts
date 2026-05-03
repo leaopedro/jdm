@@ -205,7 +205,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/events', async () => {
     const events = await prisma.event.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
         slug: true,
