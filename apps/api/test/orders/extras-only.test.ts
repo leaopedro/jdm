@@ -323,6 +323,30 @@ describe('POST /orders — extras-only flow', () => {
     expect(reloadedExtra.quantitySold).toBe(0);
   });
 
+  it('extras-only order on requiresCar tier succeeds without carId', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    await prisma.ticketTier.update({ where: { id: tier.id }, data: { requiresCar: true } });
+    await seedExistingTicket(user.id, event.id, tier.id);
+    const extra = await seedExtra(event.id, { priceCents: 1500 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    expect(body.amountCents).toBe(1500);
+  });
+
   it('expiry: extras-only order does not decrement tier quantitySold', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();

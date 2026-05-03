@@ -30,15 +30,16 @@ export async function validateTickets(
   eventId: string,
   tx: Tx,
   userId: string,
+  opts?: { skipCarValidation?: boolean },
 ): Promise<TicketValidationResult> {
   const allExtraIds = new Set<string>();
   const allCarIds = new Set<string>();
 
   for (const ticket of tickets) {
-    if (tier.requiresCar && !ticket.carId) {
+    if (!opts?.skipCarValidation && tier.requiresCar && !ticket.carId) {
       throw Object.assign(new Error('carId required for this tier'), { code: 'MISSING_CAR_ID' });
     }
-    if (tier.requiresCar && !ticket.licensePlate) {
+    if (!opts?.skipCarValidation && tier.requiresCar && !ticket.licensePlate) {
       throw Object.assign(new Error('licensePlate required for this tier'), {
         code: 'MISSING_PLATE',
       });

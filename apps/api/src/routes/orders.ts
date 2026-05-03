@@ -73,7 +73,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           }
         }
 
-        const validation = await validateTickets(input.tickets, tier, event.id, tx, sub);
+        const validation = await validateTickets(input.tickets, tier, event.id, tx, sub, {
+          skipCarValidation: isExtrasOnly,
+        });
         const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
 
         if (!isExtrasOnly) {
