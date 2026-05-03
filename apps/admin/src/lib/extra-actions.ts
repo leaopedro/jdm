@@ -22,7 +22,6 @@ export const createExtraAction = async (
     description: fd.get('description') || undefined,
     priceCents: toNumber(fd.get('priceCents')),
     quantityTotal: qtyVal,
-    active: fd.get('active') === 'on' || fd.get('active') === 'true',
   });
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join('; ') };
@@ -50,8 +49,7 @@ export const updateExtraAction = async (
   if (typeof price === 'string' && price !== '') raw.priceCents = Number(price);
   const qtyRaw = fd.get('quantityTotal');
   if (qtyRaw !== null) {
-    raw.quantityTotal =
-      typeof qtyRaw === 'string' && qtyRaw.trim() !== '' ? Number(qtyRaw) : null;
+    raw.quantityTotal = typeof qtyRaw === 'string' && qtyRaw.trim() !== '' ? Number(qtyRaw) : null;
   }
   raw.active = fd.get('active') === 'true';
   const sort = fd.get('sortOrder');
