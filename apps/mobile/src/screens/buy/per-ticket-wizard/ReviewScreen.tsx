@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
 
 import { createOrder } from '~/api/orders';
@@ -17,7 +18,11 @@ export function ReviewScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const unitPrice = tier.priceCents;
-  const totalCents = unitPrice * quantity;
+  const extrasCents = tickets.reduce((sum, t) => {
+    const extras = (t.extras as SelectedExtra[] | undefined) ?? [];
+    return sum + extras.reduce((s, e) => s + e.priceCents, 0);
+  }, 0);
+  const totalCents = unitPrice * quantity + extrasCents;
 
   const handleSubmit = async () => {
     if (quantity > 1) {
@@ -31,7 +36,9 @@ export function ReviewScreen() {
         tierId: tier.id,
         quantity,
         method: 'card',
-        tickets: [{ extras: [] }],
+        tickets: tickets.map((t) => ({
+          extras: ((t.extras as SelectedExtra[] | undefined) ?? []).map((e) => e.id),
+        })),
       });
       await onOrderCreated(order);
     } catch {
@@ -57,24 +64,26 @@ export function ReviewScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {tickets.map((ticketData, idx) => (
-          <View key={idx} style={styles.ticketCard}>
-            <Text style={styles.ticketTitle}>{buyCopy.wizard.ticketLabel(idx + 1, quantity)}</Text>
-            <View style={styles.lineItem}>
-              <Text style={styles.lineLabel}>{tier.name}</Text>
-              <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
-            </View>
-            {/* C7 (extras) and E3 (car/plate) steps populate ticketData with structured line items */}
-            {Object.entries(ticketData).map(([key, value]) => (
-              <View key={key} style={styles.lineItem}>
-                <Text style={styles.lineLabel}>{key}</Text>
-                <Text style={styles.lineValue}>
-                  {typeof value === 'string' ? value : JSON.stringify(value)}
-                </Text>
+        {tickets.map((ticketData, idx) => {
+          const extras = (ticketData.extras as SelectedExtra[] | undefined) ?? [];
+          return (
+            <View key={idx} style={styles.ticketCard}>
+              <Text style={styles.ticketTitle}>
+                {buyCopy.wizard.ticketLabel(idx + 1, quantity)}
+              </Text>
+              <View style={styles.lineItem}>
+                <Text style={styles.lineLabel}>{tier.name}</Text>
+                <Text style={styles.lineValue}>{formatBRL(unitPrice)}</Text>
               </View>
-            ))}
-          </View>
-        ))}
+              {extras.map((extra) => (
+                <View key={extra.id} style={styles.lineItem}>
+                  <Text style={styles.lineLabel}>{extra.name}</Text>
+                  <Text style={styles.lineValue}>{formatBRL(extra.priceCents)}</Text>
+                </View>
+              ))}
+            </View>
+          );
+        })}
 
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>{buyCopy.review.total}</Text>

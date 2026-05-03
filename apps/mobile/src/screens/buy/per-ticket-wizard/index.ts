@@ -1,4 +1,6 @@
 export { WizardProvider, useWizard } from './context';
+export { createExtrasStep } from './ExtrasStep';
+export type { SelectedExtra } from './ExtrasStep';
 export { PerTicketWizard } from './PerTicketWizard';
 export { QuantityStepper } from './QuantityStepper';
 export { ReviewScreen } from './ReviewScreen';

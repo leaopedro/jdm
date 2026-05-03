@@ -89,6 +89,58 @@ describe('GET /me/tickets', () => {
     expect(new Date(body.items[1]!.event.startsAt).getTime()).toBeLessThan(Date.now());
   });
 
+  it('includes extras array with extra items when present', async () => {
+    const { user } = await createUser({ verified: true });
+    const ticket = await seedTicketFor(user.id);
+
+    const extra = await prisma.ticketExtra.create({
+      data: {
+        eventId: ticket.eventId,
+        name: 'Camiseta',
+        priceCents: 2000,
+        quantityTotal: 10,
+        sortOrder: 0,
+      },
+    });
+
+    await prisma.ticketExtraItem.create({
+      data: {
+        ticketId: ticket.id,
+        extraId: extra.id,
+        code: `extra-code-${ticket.id}`,
+        status: 'valid',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/tickets',
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = myTicketsResponseSchema.parse(res.json());
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]!.extras).toHaveLength(1);
+    expect(body.items[0]!.extras[0]!.extraName).toBe('Camiseta');
+    expect(body.items[0]!.extras[0]!.status).toBe('valid');
+    expect(body.items[0]!.extras[0]!.code).toBe(`extra-code-${ticket.id}`);
+  });
+
+  it('returns empty extras array when ticket has no extras', async () => {
+    const { user } = await createUser({ verified: true });
+    await seedTicketFor(user.id);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/tickets',
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = myTicketsResponseSchema.parse(res.json());
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]!.extras).toEqual([]);
+  });
+
   it('rejects unauthenticated requests', async () => {
     const res = await app.inject({ method: 'GET', url: '/me/tickets' });
     expect(res.statusCode).toBe(401);

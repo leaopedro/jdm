@@ -11,6 +11,14 @@ export const buyCopy = {
     available: (n: number) => `${n} disponíveis`,
     max: (n: number) => `Máximo: ${n}`,
   },
+  extras: {
+    title: 'Extras',
+    subtitle: 'Adicione extras ao seu ingresso',
+    soldOut: 'Esgotado',
+    remaining: (n: number) => `${n} restantes`,
+    skip: 'Pular',
+    confirm: 'Confirmar',
+  },
   review: {
     title: 'Resumo do pedido',
     total: 'Total',

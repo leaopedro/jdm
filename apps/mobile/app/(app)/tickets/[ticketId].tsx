@@ -2,7 +2,7 @@ import type { MyTicket } from '@jdm/shared/tickets';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { listMyTickets } from '~/api/tickets';
@@ -53,7 +53,7 @@ export default function TicketDetail() {
         : ticketsCopy.detail.revoked;
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{ticket.event.title}</Text>
       <Text style={styles.sub}>
         {formatEventDateRange(ticket.event.startsAt, ticket.event.endsAt)}
@@ -70,17 +70,49 @@ export default function TicketDetail() {
       </View>
       <Text style={styles.hint}>{ticketsCopy.detail.brightness}</Text>
       <Text style={[styles.status, ticket.status !== 'valid' && styles.statusMuted]}>{label}</Text>
-    </View>
+
+      {ticket.extras.length > 0 && (
+        <View style={styles.extrasSection}>
+          <Text style={styles.extrasTitle}>{ticketsCopy.detail.extrasTitle}</Text>
+          {ticket.extras.map((extra) => {
+            const isUsed = extra.status !== 'valid';
+            const extraLabel =
+              extra.status === 'valid'
+                ? ticketsCopy.detail.valid
+                : extra.status === 'used'
+                  ? ticketsCopy.detail.used
+                  : ticketsCopy.detail.revoked;
+
+            return (
+              <View key={extra.id} style={[styles.extraCard, isUsed && styles.extraCardUsed]}>
+                <Text style={[styles.extraName, isUsed && styles.textMuted]}>
+                  {extra.extraName}
+                </Text>
+                <View
+                  style={styles.extraQrBox}
+                  accessible={true}
+                  accessibilityRole="image"
+                  accessibilityLabel={`QR code for ${extra.extraName}`}
+                >
+                  <QRCode value={extra.code} size={140} />
+                </View>
+                <Text style={[styles.extraStatus, isUsed && styles.textMuted]}>{extraLabel}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     alignItems: 'center',
     padding: theme.spacing.lg,
     gap: theme.spacing.md,
     backgroundColor: theme.colors.bg,
+    minHeight: '100%',
   },
   center: {
     flex: 1,
@@ -104,4 +136,35 @@ const styles = StyleSheet.create({
   hint: { color: theme.colors.muted, textAlign: 'center', fontSize: theme.font.size.sm },
   status: { color: theme.colors.fg, fontWeight: '700' },
   statusMuted: { color: theme.colors.muted },
+  extrasSection: {
+    width: '100%',
+    marginTop: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  extrasTitle: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+    fontWeight: '700',
+  },
+  extraCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  extraCardUsed: { opacity: 0.5 },
+  extraName: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+    fontWeight: '600',
+  },
+  extraQrBox: {
+    padding: theme.spacing.md,
+    backgroundColor: '#fff',
+    borderRadius: theme.radii.sm,
+  },
+  extraStatus: { color: theme.colors.fg, fontWeight: '600', fontSize: theme.font.size.sm },
+  textMuted: { color: theme.colors.muted },
 });
