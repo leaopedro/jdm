@@ -14,7 +14,6 @@ import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
 import type { TicketData } from './types';
 
-import { ApiError } from '~/api/client';
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
