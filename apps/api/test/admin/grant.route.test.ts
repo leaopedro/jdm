@@ -274,6 +274,45 @@ describe('POST /admin/tickets/grant', () => {
     expect(res.json<{ error: string }>().error).toBe('InvalidInput');
   });
 
+  it('persists carId and licensePlate on ticket when provided', async () => {
+    const { holder, event, tier } = await seedGrantFixture();
+    const car = await prisma.car.create({
+      data: {
+        userId: holder.id,
+        make: 'Toyota',
+        model: 'Supra',
+        year: 1994,
+      },
+    });
+    // Make tier require car
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { requiresCar: true },
+    });
+    const { user: actor } = await createUser({
+      email: 'car-grant@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: { authorization: bearer(env, actor.id, 'admin') },
+      payload: {
+        userId: holder.id,
+        eventId: event.id,
+        tierId: tier.id,
+        carId: car.id,
+        licensePlate: 'ABC-1234',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const { ticketId } = res.json<{ ticketId: string }>();
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    expect(ticket.carId).toBe(car.id);
+    expect(ticket.licensePlate).toBe('ABC-1234');
+  });
+
   it('409 when user already has a valid ticket for the event', async () => {
     const { holder, event, tier } = await seedGrantFixture();
     const { user: actor } = await createUser({
