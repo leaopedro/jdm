@@ -186,7 +186,6 @@ model TicketTier {
   currency       String   @default("BRL") @db.VarChar(3)
   quantityTotal  Int
   quantitySold   Int      @default(0)
-  requiresCar    Boolean  @default(false)
   salesOpenAt    DateTime?
   salesCloseAt   DateTime?
   sortOrder      Int      @default(0)
