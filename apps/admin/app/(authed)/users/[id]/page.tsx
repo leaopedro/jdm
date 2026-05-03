@@ -51,6 +51,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
   }
 
   const { items: events } = await listAdminEvents();
+  const publishedEvents = events.filter((ev) => ev.status === 'published');
   const location = [user.city, user.stateCode].filter(Boolean).join('/');
 
   return (
@@ -60,7 +61,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       </Link>
 
       <div className="flex items-start justify-between gap-4">
-        <GrantTicketModal userId={user.id} events={events} />
+        <GrantTicketModal userId={user.id} events={publishedEvents} />
       </div>
 
       {/* Header card */}
