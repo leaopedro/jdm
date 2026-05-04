@@ -16,6 +16,7 @@ export type FakeStripe = StripeClient & {
   calls: FakeCall[];
   nextPaymentIntent: { id: string; clientSecret: string };
   nextCheckoutSession: CheckoutSessionResult;
+  nextCheckoutSessionPaymentIntentId: string | null;
   nextSignatureValid: boolean;
   nextEvent: WebhookEvent | null;
 };
@@ -29,6 +30,7 @@ export const buildFakeStripe = (): FakeStripe => {
       url: 'https://checkout.stripe.com/cs_test_1',
       paymentIntentId: 'pi_test_cs_1',
     },
+    nextCheckoutSessionPaymentIntentId: 'pi_test_cs_1',
     nextSignatureValid: true,
     nextEvent: null,
     // eslint-disable-next-line @typescript-eslint/require-await
@@ -42,6 +44,10 @@ export const buildFakeStripe = (): FakeStripe => {
     ): Promise<CheckoutSessionResult> => {
       fake.calls.push({ kind: 'createCheckoutSession', payload: input });
       return fake.nextCheckoutSession;
+    },
+    // eslint-disable-next-line @typescript-eslint/require-await
+    getCheckoutSessionPaymentIntentId: async (_sessionId) => {
+      return fake.nextCheckoutSessionPaymentIntentId;
     },
     // eslint-disable-next-line @typescript-eslint/require-await
     constructWebhookEvent: async (_payload, _signature) => {
