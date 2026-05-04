@@ -89,6 +89,7 @@ describe('POST /orders — extras-only flow', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [extra.id] }],
       },
     });
@@ -105,6 +106,30 @@ describe('POST /orders — extras-only flow', () => {
     expect(reloadedTier.quantitySold).toBe(0);
   });
 
+  it('rejects extrasOnly when user has no existing ticket (422)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        extrasOnly: true,
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+    expect(stripe.calls).toHaveLength(0);
+  });
+
   it('rejects extras-only order with zero extras (422)', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
@@ -118,6 +143,7 @@ describe('POST /orders — extras-only flow', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [] }],
       },
     });
@@ -146,6 +172,7 @@ describe('POST /orders — extras-only flow', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [extra.id] }],
       },
     });
@@ -170,6 +197,7 @@ describe('POST /orders — extras-only flow', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [extra.id] }],
       },
     });
@@ -338,6 +366,7 @@ describe('POST /orders — extras-only flow', () => {
         eventId: event.id,
         tierId: tier.id,
         method: 'card',
+        extrasOnly: true,
         tickets: [{ extras: [extra.id] }],
       },
     });

@@ -31,7 +31,13 @@ type PreparedOrder = {
 
 async function prepareOrder(
   sub: string,
-  input: { eventId: string; tierId: string; method: string; tickets: TicketInput[] },
+  input: {
+    eventId: string;
+    tierId: string;
+    method: string;
+    tickets: TicketInput[];
+    extrasOnly?: boolean;
+  },
 ): Promise<
   | { ok: true; data: PreparedOrder }
   | { ok: false; status: number; body: { error: string; message: string } }
@@ -56,13 +62,24 @@ async function prepareOrder(
   if (!tier)
     return { ok: false, status: 404, body: { error: 'NotFound', message: 'tier not found' } };
 
-  const existingTicket = await prisma.ticket.findFirst({
-    where: { userId: sub, eventId: event.id, status: 'valid' },
-  });
+  const isExtrasOnly = !!input.extrasOnly;
 
-  const isExtrasOnly = !!existingTicket;
-
+  let existingTicket: { id: string } | null = null;
   if (isExtrasOnly) {
+    existingTicket = await prisma.ticket.findFirst({
+      where: { userId: sub, eventId: event.id, status: 'valid' },
+      select: { id: true },
+    });
+    if (!existingTicket) {
+      return {
+        ok: false,
+        status: 422,
+        body: {
+          error: 'UnprocessableEntity',
+          message: 'extras-only requires an existing valid ticket',
+        },
+      };
+    }
     const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
     if (allExtras.length === 0) {
       return {
@@ -70,7 +87,7 @@ async function prepareOrder(
         status: 422,
         body: {
           error: 'UnprocessableEntity',
-          message: 'extras required when ticket already exists',
+          message: 'extras required for extras-only order',
         },
       };
     }
@@ -85,7 +102,7 @@ async function prepareOrder(
       if (isExtrasOnly) {
         const allExtras = input.tickets.flatMap((t) => t.extras ?? []);
         const existingItems = await tx.ticketExtraItem.findMany({
-          where: { ticketId: existingTicket.id, extraId: { in: allExtras } },
+          where: { ticketId: existingTicket!.id, extraId: { in: allExtras } },
           select: { extraId: true },
         });
         if (existingItems.length > 0) {

@@ -145,6 +145,133 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    const session = event.data.object as {
+      id?: string;
+      metadata?: Record<string, string>;
+      payment_intent?: string;
+      payment_status?: string;
+    };
+
+    if (event.type === 'checkout.session.completed') {
+      const piId = typeof session.payment_intent === 'string' ? session.payment_intent : undefined;
+      if (session.payment_status !== 'paid' || !piId) {
+        return reply.status(200).send({ ok: true, ignored: true });
+      }
+
+      let sessionOrderId = session.metadata?.orderId;
+      if (!sessionOrderId) {
+        const order = await prisma.order.findFirst({
+          where: { provider: 'stripe', providerRef: piId },
+          select: { id: true },
+        });
+        sessionOrderId = order?.id;
+      }
+      if (!sessionOrderId) {
+        request.log.warn(
+          { sessionId: session.id, piId },
+          'stripe webhook: checkout.session.completed missing orderId and no matching order by providerRef',
+        );
+        return reply.status(200).send({ ok: true, ignored: true });
+      }
+      try {
+        const issued = await issueTicketForPaidOrder(
+          sessionOrderId,
+          piId,
+          app.env,
+          session.metadata,
+        );
+        const firstTime = await markProcessed(event.id, event);
+        request.log.info(
+          { orderId: sessionOrderId, sessionId: session.id, firstTime },
+          'stripe webhook: checkout.session.completed settled order',
+        );
+        try {
+          await sendTransactionalPush(
+            {
+              userId: issued.userId,
+              kind: 'ticket.confirmed',
+              dedupeKey: sessionOrderId,
+              title: 'Ingresso confirmado',
+              body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
+              data: {
+                orderId: sessionOrderId,
+                ticketId: issued.ticketId,
+                eventId: issued.eventId,
+              },
+            },
+            { sender: app.push },
+          );
+        } catch (pushErr) {
+          request.log.warn(
+            { err: pushErr, orderId: sessionOrderId },
+            'stripe webhook: ticket-confirmed push failed (checkout.session)',
+          );
+        }
+        return reply.status(200).send({ ok: true, deduped: !firstTime });
+      } catch (err) {
+        if (err instanceof TicketAlreadyExistsForEventError) {
+          await app.stripe.refund(piId, 'duplicate-ticket');
+          await markProcessed(event.id, event);
+          return reply.status(200).send({ ok: true, refunded: true });
+        }
+        if (err instanceof TicketRevokedForExtrasOnlyError) {
+          await app.stripe.refund(piId, 'ticket-revoked');
+          await markProcessed(event.id, event);
+          return reply.status(200).send({ ok: true, refunded: true, reason: 'ticket-revoked' });
+        }
+        if (err instanceof OrderNotPendingError) {
+          const staleOrder = await prisma.order.findUnique({
+            where: { id: sessionOrderId },
+            select: { status: true },
+          });
+          if (staleOrder?.status === 'expired') {
+            await app.stripe.refund(piId, 'order-expired');
+            await markProcessed(event.id, event);
+            return reply.status(200).send({ ok: true, refunded: true, reason: 'expired' });
+          }
+          // Order already paid by payment_intent.succeeded — idempotent
+          if (staleOrder?.status === 'paid') {
+            await markProcessed(event.id, event);
+            return reply.status(200).send({ ok: true, deduped: true });
+          }
+        }
+        throw err;
+      }
+    }
+
+    if (event.type === 'checkout.session.expired') {
+      const sessionOrderId = session.metadata?.orderId;
+      if (sessionOrderId) {
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.order.updateMany({
+            where: { id: sessionOrderId, status: 'pending' },
+            data: { status: 'failed', failedAt: new Date() },
+          });
+          if (updated.count === 1) {
+            const order = await tx.order.findUniqueOrThrow({ where: { id: sessionOrderId } });
+            if (order.kind !== 'extras_only') {
+              await tx.ticketTier.updateMany({
+                where: { id: order.tierId, quantitySold: { gte: order.quantity } },
+                data: { quantitySold: { decrement: order.quantity } },
+              });
+            }
+            const orderExtras = await tx.orderExtra.findMany({
+              where: { orderId: sessionOrderId },
+              select: { extraId: true, quantity: true },
+            });
+            for (const { extraId, quantity } of orderExtras) {
+              await tx.ticketExtra.updateMany({
+                where: { id: extraId, quantitySold: { gte: quantity } },
+                data: { quantitySold: { decrement: quantity } },
+              });
+            }
+          }
+        });
+        const firstTime = await markProcessed(event.id, event);
+        return reply.status(200).send({ ok: true, deduped: !firstTime });
+      }
+    }
+
     if (event.type === 'payment_intent.payment_failed' && orderId) {
       // Atomic: either both the order flip and the capacity release commit,
       // or neither does. Without the transaction, a crash between the two
