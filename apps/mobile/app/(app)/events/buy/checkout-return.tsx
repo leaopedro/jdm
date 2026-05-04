@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getOrder } from '~/api/orders';
@@ -76,8 +76,29 @@ export default function CheckoutReturnScreen() {
     };
   }, [orderId, cancelled]);
 
-  const goTickets = () => router.replace('/tickets' as never);
-  const goEvents = () => router.replace('/events' as never);
+  const hasReachedTerminal = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'polling') {
+      hasReachedTerminal.current = true;
+    }
+  }, [status]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasReachedTerminal.current) {
+        router.dismissAll();
+      }
+    }, [router]),
+  );
+
+  const goTickets = () => {
+    router.dismissAll();
+    router.navigate('/tickets' as never);
+  };
+  const goEvents = () => {
+    router.dismissAll();
+  };
 
   return (
     <View style={styles.container}>
