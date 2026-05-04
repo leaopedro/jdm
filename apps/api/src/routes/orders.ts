@@ -237,10 +237,7 @@ async function rollbackReservation(data: PreparedOrder, tierId: string): Promise
   }
 }
 
-const withReturnParams = (
-  rawUrl: string,
-  params: Record<string, string>,
-): string => {
+const withReturnParams = (rawUrl: string, params: Record<string, string>): string => {
   const url = new URL(rawUrl);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
