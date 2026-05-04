@@ -35,6 +35,35 @@ const markProcessed = async (eventId: string, payload: unknown): Promise<boolean
   }
 };
 
+const markRefundedAndReleaseReservation = async (orderId: string): Promise<void> => {
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.order.updateMany({
+      where: { id: orderId, status: 'pending' },
+      data: { status: 'refunded' },
+    });
+    if (updated.count !== 1) return;
+
+    const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    if (order.kind !== 'extras_only') {
+      await tx.ticketTier.updateMany({
+        where: { id: order.tierId, quantitySold: { gte: order.quantity } },
+        data: { quantitySold: { decrement: order.quantity } },
+      });
+    }
+
+    const orderExtras = await tx.orderExtra.findMany({
+      where: { orderId },
+      select: { extraId: true, quantity: true },
+    });
+    for (const { extraId, quantity } of orderExtras) {
+      await tx.ticketExtra.updateMany({
+        where: { id: extraId, quantitySold: { gte: quantity } },
+        data: { quantitySold: { decrement: quantity } },
+      });
+    }
+  });
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
@@ -110,6 +139,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         // and the customer isn't charged for nothing.
         if (err instanceof TicketAlreadyExistsForEventError) {
           await app.stripe.refund(intent.id, 'duplicate-ticket');
+          await markRefundedAndReleaseReservation(orderId);
           await markProcessed(event.id, event);
           request.log.warn(
             { orderId, paymentIntentId: intent.id },
@@ -119,6 +149,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         }
         if (err instanceof TicketRevokedForExtrasOnlyError) {
           await app.stripe.refund(intent.id, 'ticket-revoked');
+          await markRefundedAndReleaseReservation(orderId);
           await markProcessed(event.id, event);
           request.log.warn(
             { orderId, paymentIntentId: intent.id },
@@ -216,11 +247,13 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       } catch (err) {
         if (err instanceof TicketAlreadyExistsForEventError) {
           await app.stripe.refund(piId, 'duplicate-ticket');
+          await markRefundedAndReleaseReservation(sessionOrderId);
           await markProcessed(event.id, event);
           return reply.status(200).send({ ok: true, refunded: true });
         }
         if (err instanceof TicketRevokedForExtrasOnlyError) {
           await app.stripe.refund(piId, 'ticket-revoked');
+          await markRefundedAndReleaseReservation(sessionOrderId);
           await markProcessed(event.id, event);
           return reply.status(200).send({ ok: true, refunded: true, reason: 'ticket-revoked' });
         }
