@@ -3,6 +3,7 @@ import { prisma } from '@jdm/db';
 import { signQrCode } from '../../lib/qr.js';
 
 import { signTicketCode } from './codes.js';
+import { lockTicketTuple } from './locks.js';
 
 type IssueEnv = { readonly TICKET_CODE_SECRET: string };
 
@@ -152,6 +153,8 @@ export const issueTicketForPaidOrder = async (
     });
     if (!order) throw new OrderNotFoundError(orderId);
 
+    await lockTicketTuple(tx, order.userId, order.eventId);
+
     if (order.kind === 'extras_only') {
       return issueExtrasOnly(order, providerRef, env, tx);
     }
@@ -183,14 +186,6 @@ export const issueTicketForPaidOrder = async (
     if (order.status !== 'pending') {
       throw new OrderNotPendingError(orderId, order.status);
     }
-
-    // Serialize ticket creation for same (userId, eventId) — prevents TOCTOU race
-    // when concurrent webhooks process different orders for the same user+event.
-    await tx.$executeRawUnsafe(
-      `SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
-      order.userId,
-      order.eventId,
-    );
 
     const existingValidCount = await tx.ticket.count({
       where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
