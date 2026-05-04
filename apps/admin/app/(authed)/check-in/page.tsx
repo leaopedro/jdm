@@ -39,7 +39,7 @@ export default async function CheckInIndexPage() {
               <span className="font-semibold">{event.title}</span>
               <span className="text-sm opacity-80">
                 {formatWindow(event.startsAt, event.endsAt)} · {event.venueName ?? '—'} ·{' '}
-                {event.city}/{event.stateCode}
+                {event.city ?? '—'}/{event.stateCode ?? '—'}
               </span>
             </Link>
           </li>
