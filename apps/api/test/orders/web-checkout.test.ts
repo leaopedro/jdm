@@ -138,8 +138,13 @@ describe('POST /orders/checkout', () => {
     expect(csPayload.metadata.userId).toBe(user.id);
     expect(csPayload.metadata.eventId).toBe(event.id);
     expect(csPayload.metadata.tierId).toBe(tier.id);
-    expect(csPayload.successUrl).toBe('https://app.jdm.com/success');
-    expect(csPayload.cancelUrl).toBe('https://app.jdm.com/cancel');
+    const successUrl = new URL(csPayload.successUrl);
+    const cancelUrl = new URL(csPayload.cancelUrl);
+    expect(successUrl.origin + successUrl.pathname).toBe('https://app.jdm.com/success');
+    expect(cancelUrl.origin + cancelUrl.pathname).toBe('https://app.jdm.com/cancel');
+    expect(successUrl.searchParams.get('orderId')).toBe(csPayload.metadata.orderId);
+    expect(cancelUrl.searchParams.get('orderId')).toBe(csPayload.metadata.orderId);
+    expect(cancelUrl.searchParams.get('cancelled')).toBe('true');
     const tickets = JSON.parse(csPayload.metadata.tickets as string) as unknown[];
     expect(tickets).toHaveLength(1);
     expect((tickets[0] as { e: string[] }).e).toContain(extra.id);
