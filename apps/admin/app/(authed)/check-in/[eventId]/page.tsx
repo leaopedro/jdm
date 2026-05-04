@@ -20,7 +20,7 @@ export default async function CheckInScannerPage({
     <section>
       <h1 className="mb-1 text-2xl font-semibold">Check-in · {event.title}</h1>
       <p className="mb-4 opacity-80">
-        {event.venueName ?? '—'} · {event.city}/{event.stateCode}
+        {event.venueName ?? '—'} · {event.city ?? '—'}/{event.stateCode ?? '—'}
       </p>
       <Scanner eventId={event.id} />
     </section>

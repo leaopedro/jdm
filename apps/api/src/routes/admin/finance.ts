@@ -15,8 +15,8 @@ function buildWhere(query: unknown): Prisma.OrderWhereInput {
 
   if (q.from || q.to) {
     where.paidAt = {};
-    if (q.from) where.paidAt.gte = new Date(q.from);
-    if (q.to) where.paidAt.lte = new Date(q.to);
+    if (q.from) where.paidAt.gte = new Date(`${q.from}T00:00:00.000Z`);
+    if (q.to) where.paidAt.lte = new Date(`${q.to}T23:59:59.999Z`);
   }
 
   if (q.provider) where.provider = q.provider;

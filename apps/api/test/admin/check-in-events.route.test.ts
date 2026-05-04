@@ -89,4 +89,36 @@ describe('GET /admin/check-in/events', () => {
     expect(ids).toContain(upcoming.id);
     expect(ids).toContain(justEnded.id);
   });
+
+  it('200 when event has null city and stateCode', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'no-location',
+        title: 'No Location Event',
+        description: 'd',
+        startsAt: new Date(Date.now() + 3600_000),
+        endsAt: new Date(Date.now() + 7200_000),
+        venueName: null,
+        venueAddress: null,
+        city: null,
+        stateCode: null,
+        type: 'meeting',
+        status: 'published',
+        publishedAt: new Date(),
+        capacity: 10,
+      },
+    });
+
+    const { user } = await createUser({ email: 'staff2@jdm.test', verified: true, role: 'staff' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/check-in/events',
+      headers: { authorization: bearer(env, user.id, 'staff') },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<{ city: string | null; stateCode: string | null }> }>();
+    const nullEvent = body.items.find((i) => i.city === null);
+    expect(nullEvent).toBeDefined();
+    expect(nullEvent!.stateCode).toBeNull();
+  });
 });
