@@ -168,7 +168,7 @@ describe('Admin Finance Endpoints', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: '/admin/finance/summary?from=2026-05-01T00:00:00Z&to=2026-05-31T23:59:59Z',
+        url: '/admin/finance/summary?from=2026-05-01&to=2026-05-31',
         headers: { authorization: bearer(env, admin.id, 'admin') },
       });
       expect(res.statusCode).toBe(200);
