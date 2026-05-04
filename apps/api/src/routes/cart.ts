@@ -88,12 +88,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       for (const [extraId, qty] of extraCounts.entries()) {
         const unitPriceCents = priceMap.get(extraId);
         if (unitPriceCents === undefined) {
-          return reply
-            .status(409)
-            .send({
-              error: 'ExtraNotFound',
-              message: `Extra ${extraId} disappeared during pricing`,
-            });
+          return reply.status(409).send({
+            error: 'ExtraNotFound',
+            message: `Extra ${extraId} disappeared during pricing`,
+          });
         }
         extraRows.push({
           extraId,
@@ -214,12 +212,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         for (const [extraId, qty] of extraCounts.entries()) {
           const unitPriceCents = priceMap.get(extraId);
           if (unitPriceCents === undefined) {
-            return reply
-              .status(409)
-              .send({
-                error: 'ExtraNotFound',
-                message: `Extra ${extraId} disappeared during pricing`,
-              });
+            return reply.status(409).send({
+              error: 'ExtraNotFound',
+              message: `Extra ${extraId} disappeared during pricing`,
+            });
           }
           extraRows.push({
             extraId,
