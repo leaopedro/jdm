@@ -262,6 +262,12 @@ describe('POST /stripe/webhook', () => {
     expect(refundCalls).toHaveLength(1);
     expect(refundCalls[0]?.payload).toMatchObject({ paymentIntentId: order.providerRef });
 
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('refunded');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(0);
+
     // No ticket issued for this paid order (the comp ticket is the single valid one).
     const issued = await prisma.ticket.findFirst({ where: { orderId: order.id } });
     expect(issued).toBeNull();
