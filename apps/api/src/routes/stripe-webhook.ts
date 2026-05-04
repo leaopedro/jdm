@@ -155,7 +155,10 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     };
 
     if (event.type === 'checkout.session.completed') {
-      const piId = typeof session.payment_intent === 'string' ? session.payment_intent : undefined;
+      let piId = typeof session.payment_intent === 'string' ? session.payment_intent : undefined;
+      if (!piId && session.id) {
+        piId = (await app.stripe.getCheckoutSessionPaymentIntentId(session.id)) ?? undefined;
+      }
       if (session.payment_status !== 'paid' || !piId) {
         return reply.status(200).send({ ok: true, ignored: true });
       }
