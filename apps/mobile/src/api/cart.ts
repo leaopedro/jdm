@@ -32,14 +32,14 @@ export const updateCartItem = (
   itemId: string,
   item: CartItemInput,
 ): Promise<UpsertCartItemResponse> => {
-  return authedRequest(`/cart/items/${itemId}`, upsertCartItemResponseSchema, {
+  return authedRequest(`/cart/items/${encodeURIComponent(itemId)}`, upsertCartItemResponseSchema, {
     method: 'PATCH',
     body: { item: cartItemInputSchema.parse(item) },
   });
 };
 
 export const removeCartItem = (itemId: string): Promise<ClearCartResponse> => {
-  return authedRequest(`/cart/items/${itemId}`, clearCartResponseSchema, {
+  return authedRequest(`/cart/items/${encodeURIComponent(itemId)}`, clearCartResponseSchema, {
     method: 'DELETE',
   });
 };
