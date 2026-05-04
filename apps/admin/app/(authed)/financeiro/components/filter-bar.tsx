@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 
+import { DatePickerField } from '~/components/date-picker-field';
+
 type Filters = {
   from: string | null;
   to: string | null;
@@ -48,20 +50,16 @@ export function FilterBar({ filters, onFilterChange, onClear, isPending }: Props
 
   const filterContent = (
     <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="date"
-        value={filters.from ?? ''}
-        onChange={(e) => onFilterChange('from', e.target.value || null)}
+      <DatePickerField
+        value={filters.from}
+        onChange={(v) => onFilterChange('from', v)}
         placeholder="De"
-        className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs text-[color:var(--color-fg)]"
       />
       <span className="text-xs text-[color:var(--color-muted)]">a</span>
-      <input
-        type="date"
-        value={filters.to ?? ''}
-        onChange={(e) => onFilterChange('to', e.target.value || null)}
+      <DatePickerField
+        value={filters.to}
+        onChange={(v) => onFilterChange('to', v)}
         placeholder="Até"
-        className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs text-[color:var(--color-fg)]"
       />
 
       <span className="mx-1 h-4 w-px bg-[color:var(--color-border)]" />
