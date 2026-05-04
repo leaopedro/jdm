@@ -22,6 +22,9 @@ export default async function AuthedLayout({ children }: { children: React.React
               <Link href="/users" className="text-sm opacity-80 hover:opacity-100">
                 Usuários
               </Link>
+              <Link href="/financeiro" className="text-sm opacity-80 hover:opacity-100">
+                Financeiro
+              </Link>
             </>
           ) : null}
           <Link href="/check-in" className="text-sm opacity-80 hover:opacity-100">
