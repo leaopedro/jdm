@@ -38,7 +38,7 @@ export type WebhookEvent = {
 export type StripeClient = {
   createPaymentIntent: (input: CreatePaymentIntentInput) => Promise<PaymentIntentResult>;
   createCheckoutSession: (input: CreateCheckoutSessionInput) => Promise<CheckoutSessionResult>;
-  constructWebhookEvent: (payload: Buffer, signature: string) => WebhookEvent;
+  constructWebhookEvent: (payload: Buffer, signature: string) => Promise<WebhookEvent>;
   refund: (paymentIntentId: string, reason: string) => Promise<void>;
   cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
   publishableKey: () => string;
@@ -105,12 +105,60 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
           : (session.payment_intent?.id ?? null);
       return { id: session.id, url: session.url, paymentIntentId: piId };
     },
-    constructWebhookEvent: (payload, signature) => {
-      const event = stripe.webhooks.constructEvent(payload, signature, env.STRIPE_WEBHOOK_SECRET);
+    constructWebhookEvent: async (payload, signature) => {
+      try {
+        const event = stripe.webhooks.constructEvent(payload, signature, env.STRIPE_WEBHOOK_SECRET);
+        return {
+          id: event.id,
+          type: event.type,
+          data: { object: event.data.object as unknown as Record<string, unknown> },
+        };
+      } catch (err) {
+        const needsEventNotificationPath =
+          err instanceof Error &&
+          err.message.includes(
+            'You passed an event notification to stripe.webhooks.constructEvent',
+          );
+        if (!needsEventNotificationPath) throw err;
+      }
+
+      const notification = stripe.parseEventNotification(
+        payload,
+        signature,
+        env.STRIPE_WEBHOOK_SECRET,
+      ) as Stripe.V2.Core.EventNotification | Stripe.V2.Core.Events.UnknownEventNotification;
+
+      const normalizedType = notification.type.startsWith('v1.')
+        ? notification.type.slice(3)
+        : notification.type;
+
+      // Pings and other control-plane notifications don't carry webhook payload data.
+      if (normalizedType === 'v2.core.event_destination.ping') {
+        return {
+          id: notification.id,
+          type: normalizedType,
+          data: { object: notification as unknown as Record<string, unknown> },
+        };
+      }
+
+      const fetched = await notification.fetchEvent();
+      const fetchedData = (fetched as { data?: { object?: unknown } }).data?.object;
+      const relatedObject =
+        'fetchRelatedObject' in notification &&
+        typeof notification.fetchRelatedObject === 'function'
+          ? await notification.fetchRelatedObject()
+          : null;
+      const object =
+        typeof fetchedData === 'object' && fetchedData !== null
+          ? (fetchedData as Record<string, unknown>)
+          : typeof relatedObject === 'object' && relatedObject !== null
+            ? (relatedObject as Record<string, unknown>)
+            : {};
+
       return {
-        id: event.id,
-        type: event.type,
-        data: { object: event.data.object as unknown as Record<string, unknown> },
+        id: fetched.id,
+        type: normalizedType,
+        data: { object },
       };
     },
     // Stripe's refund.reason is a constrained enum; callers pass free-form text
