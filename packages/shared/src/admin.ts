@@ -350,8 +350,8 @@ export type AdminExtraUpdate = z.infer<typeof adminExtraUpdateSchema>;
 // ── Admin finance ─────────────────────────────────────────────────────
 
 export const adminFinanceQuerySchema = z.object({
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
   eventIds: z.array(z.string().min(1)).optional(),
   search: z.string().min(1).max(200).optional(),
   city: z.string().min(1).max(100).optional(),
