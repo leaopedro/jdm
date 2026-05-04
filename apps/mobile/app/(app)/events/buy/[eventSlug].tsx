@@ -56,10 +56,8 @@ export default function BuyScreen() {
         const ticket = await getMyTicketForEvent(ev.id);
         if (ticket) {
           setExistingTicket(ticket);
-          setPhase('extras_only');
-        } else {
-          setPhase('select');
         }
+        setPhase('select');
       } catch {
         setError('Evento não encontrado.');
       }
@@ -188,6 +186,17 @@ export default function BuyScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {existingTicket && event.extras.length > 0 && (
+          <Pressable
+            style={styles.extrasBanner}
+            onPress={() => setPhase('extras_only')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.extrasBannerTitle}>{buyCopy.extrasOnly.cta}</Text>
+            <Text style={styles.extrasBannerSub}>{buyCopy.extrasOnly.subtitle}</Text>
+          </Pressable>
+        )}
+
         <Text style={styles.sectionTitle}>{ticketsCopy.purchase.pickTier}</Text>
 
         {event.tiers.map((tier) => {
@@ -312,4 +321,22 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   error: { color: theme.colors.muted },
+  extrasBanner: {
+    padding: 14,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.accent + '18',
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    marginBottom: 8,
+  },
+  extrasBannerTitle: {
+    color: theme.colors.accent,
+    fontWeight: '600',
+    fontSize: theme.font.size.md,
+  },
+  extrasBannerSub: {
+    color: theme.colors.muted,
+    fontSize: 13,
+    marginTop: 2,
+  },
 });
