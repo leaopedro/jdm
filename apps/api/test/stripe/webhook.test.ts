@@ -438,6 +438,39 @@ describe('POST /stripe/webhook', () => {
     expect(ticket).not.toBeNull();
   });
 
+  it('handles checkout.session.completed when payload omits payment_intent but session lookup returns it', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+
+    stripe.nextCheckoutSessionPaymentIntentId = order.providerRef;
+    stripe.nextEvent = {
+      id: 'evt_cs_completed_missing_pi_1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_missing_pi',
+          payment_intent: null,
+          payment_status: 'paid',
+          metadata: { orderId: order.id },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    const ticket = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    expect(ticket).not.toBeNull();
+  });
+
   it('checkout.session.completed is idempotent with payment_intent.succeeded', async () => {
     const { user } = await createUser({ verified: true });
     const { order } = await seedEventTierOrder(user.id);

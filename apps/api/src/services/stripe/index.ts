@@ -38,6 +38,7 @@ export type WebhookEvent = {
 export type StripeClient = {
   createPaymentIntent: (input: CreatePaymentIntentInput) => Promise<PaymentIntentResult>;
   createCheckoutSession: (input: CreateCheckoutSessionInput) => Promise<CheckoutSessionResult>;
+  getCheckoutSessionPaymentIntentId: (sessionId: string) => Promise<string | null>;
   constructWebhookEvent: (payload: Buffer, signature: string) => Promise<WebhookEvent>;
   refund: (paymentIntentId: string, reason: string) => Promise<void>;
   cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
@@ -104,6 +105,14 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
           ? session.payment_intent
           : (session.payment_intent?.id ?? null);
       return { id: session.id, url: session.url, paymentIntentId: piId };
+    },
+    getCheckoutSessionPaymentIntentId: async (sessionId) => {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const piId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : (session.payment_intent?.id ?? null);
+      return piId;
     },
     constructWebhookEvent: async (payload, signature) => {
       try {

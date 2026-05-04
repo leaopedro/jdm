@@ -34,8 +34,9 @@ import { theme } from '~/theme';
 type Phase = 'loading' | 'select' | 'wizard' | 'extras_only';
 
 export default function BuyScreen() {
-  const { eventSlug } = useLocalSearchParams<{
+  const { eventSlug, tierId: initialTierId } = useLocalSearchParams<{
     eventSlug: string;
+    tierId?: string;
   }>();
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -56,6 +57,12 @@ export default function BuyScreen() {
         const ticket = await getMyTicketForEvent(ev.id);
         if (ticket) {
           setExistingTicket(ticket);
+        }
+        if (initialTierId) {
+          const match = ev.tiers.find((t) => t.id === initialTierId);
+          if (match && match.remainingCapacity > 0) {
+            setSelectedTier(match);
+          }
         }
         setPhase('select');
       } catch {
