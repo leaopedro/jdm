@@ -30,6 +30,24 @@ issue assigned
 Skip nothing. If a step does not apply (e.g. no UI change → no QA step), say
 so explicitly in the issue comment. Silence is not signal.
 
+## 1.1 Git flow (hard rule)
+
+This repository uses one release flow:
+
+1. Engineers open branches from `main`.
+2. Engineers open PRs targeting `main`.
+3. The board manually merges `main` into `production`.
+
+Non-negotiable constraints:
+
+- Never commit directly on `production`.
+- Never push directly to `production`.
+- Never merge feature branches into `production`.
+- Never open PRs targeting `production`.
+
+If `production` is moved accidentally, stop immediately, notify the board on
+the owning issue, and wait for explicit rollback instructions.
+
 ## 2. Picking up an issue
 
 1. The issue is assigned to you. Do not work on unassigned issues. Self-assign
