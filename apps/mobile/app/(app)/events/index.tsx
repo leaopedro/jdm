@@ -3,11 +3,22 @@ import type { PublicProfile } from '@jdm/shared/profile';
 import { Badge, Button, Text } from '@jdm/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, Image, Pressable, RefreshControl, View } from 'react-native';
+import {
+  Animated,
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { listEvents } from '~/api/events';
 import { getProfile } from '~/api/profile';
+import { useCart } from '~/cart/context';
+import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { formatEventDateRange } from '~/lib/format';
 
@@ -144,17 +155,56 @@ export default function EventsIndex() {
 /* ------------------------------------------------------------------ */
 
 function Header() {
+  const { itemCount } = useCart();
+  const router = useRouter();
   return (
-    <View className="px-5 pt-2 pb-4">
-      <Text variant="eyebrow" tone="brand">
-        {eventsCopy.header.eyebrow}
-      </Text>
-      <Text variant="h1" accessibilityRole="header" className="mt-1">
-        {eventsCopy.header.title}
-      </Text>
+    <View className="px-5 pt-2 pb-4 flex-row items-start justify-between">
+      <View className="flex-1">
+        <Text variant="eyebrow" tone="brand">
+          {eventsCopy.header.eyebrow}
+        </Text>
+        <Text variant="h1" accessibilityRole="header" className="mt-1">
+          {eventsCopy.header.title}
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => router.push('/cart' as never)}
+        accessibilityRole="button"
+        accessibilityLabel={`${cartCopy.title}, ${itemCount} itens`}
+        hitSlop={8}
+        style={cartBtnStyles.button}
+      >
+        <ShoppingCart color="#F5F5F5" size={22} strokeWidth={1.75} />
+        {itemCount > 0 && (
+          <View style={cartBtnStyles.badge}>
+            <Text style={cartBtnStyles.badgeText}>{cartCopy.badge(itemCount)}</Text>
+          </View>
+        )}
+      </Pressable>
     </View>
   );
 }
+
+const cartBtnStyles = StyleSheet.create({
+  button: { marginTop: 4, position: 'relative', padding: 4 },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    backgroundColor: '#E10600',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});
 
 /* ------------------------------------------------------------------ */
 /* Tabs                                                                */
