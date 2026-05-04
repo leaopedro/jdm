@@ -112,7 +112,10 @@ export default function BuyScreen() {
       Alert.alert(ticketsCopy.purchase.success, undefined, [
         {
           text: ticketsCopy.purchase.successCta,
-          onPress: () => router.push('/tickets' as never),
+          onPress: () => {
+            router.dismissAll();
+            router.navigate('/tickets' as never);
+          },
         },
       ]);
     },

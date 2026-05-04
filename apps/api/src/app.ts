@@ -14,6 +14,7 @@ import { abacatepayWebhookRoutes } from './routes/abacatepay-webhook.js';
 import { adminRoutes } from './routes/admin/index.js';
 import { authRoutes } from './routes/auth/index.js';
 import { carRoutes } from './routes/cars.js';
+import { cartRoutes } from './routes/cart.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
 import { eventRoutes } from './routes/events.js';
 import { healthRoutes } from './routes/health.js';
@@ -93,6 +94,7 @@ export const buildApp = async (
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
+  await app.register(cartRoutes);
   await app.register(orderRoutes);
   await app.register(stripeWebhookRoutes);
   await app.register(abacatepayWebhookRoutes);

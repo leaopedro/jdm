@@ -46,6 +46,10 @@
       "types": "./dist/orders.d.ts",
       "default": "./dist/orders.js"
     },
+    "./cart": {
+      "types": "./dist/cart.d.ts",
+      "default": "./dist/cart.js"
+    },
     "./profile": {
       "types": "./dist/profile.d.ts",
       "default": "./dist/profile.js"
@@ -61,10 +65,6 @@
     "./uploads": {
       "types": "./dist/uploads.d.ts",
       "default": "./dist/uploads.js"
-    },
-    "./extras": {
-      "types": "./dist/extras.d.ts",
-      "default": "./dist/extras.js"
     }
   },
   "scripts": {
