@@ -53,7 +53,7 @@ type StripeEnv = {
 export const buildStripe = (env: StripeEnv): StripeClient => {
   // apiVersion is a string literal typed against stripe SDK's LatestApiVersion.
   // Bump in lockstep with the `stripe` package version; TS will reject stale values.
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-03-25.dahlia' });
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' });
 
   return {
     createPaymentIntent: async ({ amountCents, currency, metadata, idempotencyKey }) => {

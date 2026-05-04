@@ -32,6 +32,14 @@ Never use em-dashes or replacement hyphens.
 Avoid parenthetical clauses entirely.
 Hyphens map to standard grammar only.
 
+## Git flow (load-bearing)
+
+- Branch from `main`.
+- Open PRs to `main` only.
+- Never commit to `production`.
+- Never push to `production`.
+- `production` is updated only by manual merge from `main` by local-board.
+
 ## Project state
 
 Greenfield. The repo is git-initialized against `git@github.com:leaopedro/jdm.git` but has **no code and no commits yet** — Phase 0 of the roadmap (monorepo scaffold) has not started. Do not invent commands or files; verify with `ls` / `git status` before assuming anything exists.
