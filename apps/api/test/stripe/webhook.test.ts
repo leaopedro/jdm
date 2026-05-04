@@ -486,6 +486,107 @@ describe('POST /stripe/webhook', () => {
     expect(res.json()).toMatchObject({ ok: true, ignored: true });
   });
 
+  it('resolves orderId via providerRef fallback when checkout.session metadata lacks orderId', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+
+    stripe.nextEvent = {
+      id: 'evt_cs_fallback_1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_fallback',
+          metadata: {},
+          payment_intent: order.providerRef,
+          payment_status: 'paid',
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('paid');
+
+    const ticket = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    expect(ticket).not.toBeNull();
+  });
+
+  it('providerRef fallback does not resolve non-stripe orders (cross-provider isolation)', async () => {
+    const { user } = await createUser({ verified: true });
+    const event = await prisma.event.create({
+      data: {
+        slug: `e-${Math.random().toString(36).slice(2, 8)}`,
+        title: 'Evento',
+        description: 'desc',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'published',
+        capacity: 5,
+        publishedAt: new Date(),
+      },
+    });
+    const tier = await prisma.ticketTier.create({
+      data: {
+        eventId: event.id,
+        name: 'Geral',
+        priceCents: 5000,
+        quantityTotal: 5,
+        quantitySold: 1,
+        sortOrder: 0,
+      },
+    });
+    const pixOrder = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        quantity: 1,
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'pi_shared_ref_123',
+        status: 'pending',
+      },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_cs_cross_provider',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_test_cross',
+          metadata: {},
+          payment_intent: 'pi_shared_ref_123',
+          payment_status: 'paid',
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, ignored: true });
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: pixOrder.id } });
+    expect(reloaded.status).toBe('pending');
+  });
+
   it('handles checkout.session.expired: marks order failed and releases reservation', async () => {
     const { user } = await createUser({ verified: true });
     const { tier, order } = await seedEventTierOrder(user.id);

@@ -153,9 +153,24 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     };
 
     if (event.type === 'checkout.session.completed') {
-      const sessionOrderId = session.metadata?.orderId;
       const piId = typeof session.payment_intent === 'string' ? session.payment_intent : undefined;
-      if (!sessionOrderId || session.payment_status !== 'paid' || !piId) {
+      if (session.payment_status !== 'paid' || !piId) {
+        return reply.status(200).send({ ok: true, ignored: true });
+      }
+
+      let sessionOrderId = session.metadata?.orderId;
+      if (!sessionOrderId) {
+        const order = await prisma.order.findFirst({
+          where: { provider: 'stripe', providerRef: piId },
+          select: { id: true },
+        });
+        sessionOrderId = order?.id;
+      }
+      if (!sessionOrderId) {
+        request.log.warn(
+          { sessionId: session.id, piId },
+          'stripe webhook: checkout.session.completed missing orderId and no matching order by providerRef',
+        );
         return reply.status(200).send({ ok: true, ignored: true });
       }
       try {
