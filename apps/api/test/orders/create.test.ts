@@ -262,6 +262,27 @@ describe('POST /orders', () => {
     expect(stripe.calls).toHaveLength(0);
   });
 
+  it('rejects requiresCar tier when extras-only ticket omits car data', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10, { requiresCar: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const body = errorResponseSchema.parse(res.json());
+    expect(body.error).toBe('UnprocessableEntity');
+  });
+
   it('succeeds when tier requiresCar and user owns the car with valid plate', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent(10, { requiresCar: true });

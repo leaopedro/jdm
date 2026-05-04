@@ -223,7 +223,14 @@ export default function EventDetailScreen() {
       <View style={styles.section}>
         <Button
           label={paying ? ticketsCopy.purchase.paying : ticketsCopy.purchase.confirm}
-          onPress={() => selectedTier && void buy(selectedTier)}
+          onPress={() => {
+            if (!selectedTier) return;
+            if (selectedTier.requiresCar) {
+              router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
+              return;
+            }
+            void buy(selectedTier);
+          }}
           disabled={!selectedTier || paying}
         />
       </View>
