@@ -119,6 +119,15 @@ export default function BuyScreen() {
     [initPaymentSheet, presentPaymentSheet, router],
   );
 
+  const handleOrderCreated = useCallback(
+    (order: { clientSecret: string }) => handlePayment(order.clientSecret),
+    [handlePayment],
+  );
+
+  const handleExitWizard = useCallback(() => {
+    setPhase('select');
+  }, []);
+
   if (error) {
     return (
       <View style={styles.center}>
@@ -150,15 +159,6 @@ export default function BuyScreen() {
     createExtrasStep(event.extras),
     createCarPlateStep(),
   ];
-
-  const handleOrderCreated = useCallback(
-    (order: { clientSecret: string }) => handlePayment(order.clientSecret),
-    [handlePayment],
-  );
-
-  const handleExitWizard = useCallback(() => {
-    setPhase('select');
-  }, []);
 
   if (phase === 'wizard' && selectedTier) {
     return (
