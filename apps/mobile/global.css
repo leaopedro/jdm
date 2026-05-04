@@ -9,13 +9,14 @@
     padding: 0;
     background-color: #0a0a0a;
     color: #f5f5f5;
-    min-height: 100%;
+    height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   #root,
   #__expo-root {
-    min-height: 100vh;
+    height: 100%;
+    overflow: hidden;
     background-color: #0a0a0a;
     display: flex;
     flex-direction: column;
