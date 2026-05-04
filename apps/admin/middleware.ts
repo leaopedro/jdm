@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 export const config = {
-  matcher: ['/', '/events/:path*', '/check-in/:path*', '/login'],
+  matcher: ['/', '/events/:path*', '/check-in/:path*', '/financeiro/:path*', '/login'],
 };
 
 type Role = 'organizer' | 'admin' | 'staff';
@@ -43,8 +43,8 @@ export const middleware = (req: NextRequest) => {
     return NextResponse.redirect(new URL(homeFor(authedRole), req.url));
   }
 
-  // Staff cannot touch /events/*.
-  if (authedRole === 'staff' && path.startsWith('/events')) {
+  // Staff cannot touch /events/* or /financeiro/*.
+  if (authedRole === 'staff' && (path.startsWith('/events') || path.startsWith('/financeiro'))) {
     return NextResponse.redirect(new URL('/check-in', req.url));
   }
 
