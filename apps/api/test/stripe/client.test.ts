@@ -7,7 +7,7 @@ const webhookSecret = 'whsec_test_secret_32_chars_minimum_xx';
 
 const signPayload = (payload: string): string => {
   const stripe = new Stripe('sk_test_12345678901234567890123456789012', {
-    apiVersion: '2026-03-25.dahlia',
+    apiVersion: '2026-04-22.dahlia',
   });
   return stripe.webhooks.generateTestHeaderString({ payload, secret: webhookSecret });
 };
