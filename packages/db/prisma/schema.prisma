@@ -47,6 +47,7 @@ model User {
   tickets             Ticket[]
   deviceTokens        DeviceToken[]
   notifications       Notification[]
+  carts               Cart[]
 
   @@index([createdAt])
 }
@@ -171,10 +172,11 @@ model Event {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  tiers   TicketTier[]
-  extras  TicketExtra[]
-  orders  Order[]
-  tickets Ticket[]
+  tiers     TicketTier[]
+  extras    TicketExtra[]
+  orders    Order[]
+  tickets   Ticket[]
+  cartItems CartItem[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -195,9 +197,10 @@ model TicketTier {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  orders  Order[]
-  tickets Ticket[]
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders    Order[]
+  tickets   Ticket[]
+  cartItems CartItem[]
 
   @@index([eventId, sortOrder])
 }
@@ -216,9 +219,10 @@ model TicketExtra {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  orderExtras OrderExtra[]
-  ticketItems TicketExtraItem[]
+  event          Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderExtras    OrderExtra[]
+  ticketItems    TicketExtraItem[]
+  cartItemExtras CartItemExtra[]
 
   @@index([eventId, sortOrder])
 }
@@ -235,6 +239,18 @@ model AdminAudit {
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+enum CartStatus {
+  open
+  checking_out
+  converted
+  abandoned
+}
+
+enum CartItemKind {
+  ticket
+  extras_only
 }
 
 enum PaymentMethod {
@@ -414,5 +430,61 @@ model Notification {
 
   @@unique([userId, kind, dedupeKey])
   @@index([userId, createdAt])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String
+  status    CartStatus @default(open)
+  version   Int        @default(0)
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([userId, status])
+}
+
+model CartItem {
+  id                   String       @id @default(cuid())
+  cartId               String
+  eventId              String
+  tierId               String
+  source               String       @default("purchase") @db.VarChar(20)
+  kind                 CartItemKind @default(ticket)
+  quantity             Int          @default(1)
+  tickets              Json
+  metadata             Json?
+  amountCents          Int          @default(0)
+  currency             String       @default("BRL") @db.VarChar(3)
+  reservationExpiresAt DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  cart   Cart          @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  event  Event         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tier   TicketTier    @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  extras CartItemExtra[]
+
+  @@index([cartId])
+  @@index([eventId])
+}
+
+model CartItemExtra {
+  id             String   @id @default(cuid())
+  cartItemId     String
+  extraId        String
+  quantity       Int      @default(1)
+  unitPriceCents Int
+  subtotalCents  Int
+  createdAt      DateTime @default(now())
+
+  cartItem CartItem    @relation(fields: [cartItemId], references: [id], onDelete: Cascade)
+  extra    TicketExtra @relation(fields: [extraId], references: [id], onDelete: Restrict)
+
+  @@unique([cartItemId, extraId])
+  @@index([cartItemId])
 }
 

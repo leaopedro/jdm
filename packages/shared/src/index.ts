@@ -6,6 +6,7 @@ export * from './uploads.js';
 export * from './events.js';
 export * from './admin.js';
 export * from './orders.js';
+export * from './cart.js';
 export * from './tickets.js';
 export * from './check-in.js';
 export * from './push.js';
