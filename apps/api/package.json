@@ -20,8 +20,8 @@
     "@fastify/sensible": "^6.0.1",
     "@jdm/db": "workspace:*",
     "@jdm/shared": "workspace:*",
-    "@prisma/client": "^6.1.0",
     "@paralleldrive/cuid2": "^3.3.0",
+    "@prisma/client": "^6.1.0",
     "@sentry/node": "^8.42.0",
     "bcrypt": "^6.0.0",
     "expo-server-sdk": "^6.1.0",
@@ -31,7 +31,7 @@
     "node-cron": "^4.2.1",
     "pino": "^9.5.0",
     "resend": "^6.12.0",
-    "stripe": "^22.0.2",
+    "stripe": "^22.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
