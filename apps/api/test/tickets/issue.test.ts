@@ -13,7 +13,7 @@ import { createUser, resetDatabase } from '../helpers.js';
 
 const env = loadEnv();
 
-const seedEventAndTier = async (quantityTotal = 1) => {
+const seedEventAndTier = async (quantityTotal = 1, opts?: { maxTicketsPerUser?: number }) => {
   const event = await prisma.event.create({
     data: {
       slug: `e-${Math.random().toString(36).slice(2, 8)}`,
@@ -28,6 +28,7 @@ const seedEventAndTier = async (quantityTotal = 1) => {
       type: 'meeting',
       status: 'published',
       capacity: quantityTotal,
+      maxTicketsPerUser: opts?.maxTicketsPerUser ?? 1,
       publishedAt: new Date(),
     },
   });
@@ -243,7 +244,7 @@ describe('issueTicketForPaidOrder', () => {
 
   it('issues N tickets atomically for a multi-ticket order with mixed extras and cars', async () => {
     const { user } = await createUser({ verified: true });
-    const { event, tier } = await seedEventAndTier(10);
+    const { event, tier } = await seedEventAndTier(10, { maxTicketsPerUser: 10 });
 
     const car1 = await prisma.car.create({
       data: { userId: user.id, make: 'Toyota', model: 'Supra', year: 1994 },
@@ -349,7 +350,7 @@ describe('issueTicketForPaidOrder', () => {
 
   it('is idempotent for multi-ticket orders — replay returns same tickets', async () => {
     const { user } = await createUser({ verified: true });
-    const { event, tier } = await seedEventAndTier(10);
+    const { event, tier } = await seedEventAndTier(10, { maxTicketsPerUser: 10 });
 
     const extra = await prisma.ticketExtra.create({
       data: { eventId: event.id, name: 'Boné', priceCents: 3000 },
@@ -393,7 +394,7 @@ describe('issueTicketForPaidOrder', () => {
 
   it('refuses multi-ticket order when user already has a valid ticket from another source', async () => {
     const { user } = await createUser({ verified: true });
-    const { event, tier } = await seedEventAndTier(10);
+    const { event, tier } = await seedEventAndTier(10, { maxTicketsPerUser: 2 });
 
     // Pre-existing comp ticket
     await prisma.ticket.create({

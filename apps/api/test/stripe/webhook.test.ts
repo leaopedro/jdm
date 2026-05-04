@@ -7,7 +7,10 @@ import { createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js'
 
 const rawJson = (v: unknown) => Buffer.from(JSON.stringify(v));
 
-const seedEventTierOrder = async (userId: string, opts?: { quantity?: number }) => {
+const seedEventTierOrder = async (
+  userId: string,
+  opts?: { quantity?: number; maxTicketsPerUser?: number },
+) => {
   const quantity = opts?.quantity ?? 1;
   const event = await prisma.event.create({
     data: {
@@ -23,6 +26,7 @@ const seedEventTierOrder = async (userId: string, opts?: { quantity?: number }) 
       type: 'meeting',
       status: 'published',
       capacity: 5,
+      maxTicketsPerUser: opts?.maxTicketsPerUser ?? quantity,
       publishedAt: new Date(),
     },
   });
@@ -229,7 +233,7 @@ describe('POST /stripe/webhook', () => {
 
   it('refunds and dedups when issuance fails with TicketAlreadyExistsForEventError', async () => {
     const { user } = await createUser({ verified: true });
-    const { event, tier, order } = await seedEventTierOrder(user.id);
+    const { event, tier, order } = await seedEventTierOrder(user.id, { maxTicketsPerUser: 1 });
 
     // Pre-seed a conflicting valid ticket (e.g. comp grant) so
     // issueTicketForPaidOrder throws TicketAlreadyExistsForEventError.
@@ -277,6 +281,44 @@ describe('POST /stripe/webhook', () => {
       where: { eventId: 'evt_dup_refund' },
     });
     expect(dedupRow).not.toBeNull();
+  });
+
+  it('allows additional purchase when existing valid tickets are below maxTicketsPerUser', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier, order } = await seedEventTierOrder(user.id, { maxTicketsPerUser: 3 });
+
+    await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_limit_under_cap',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('paid');
+
+    const orderTickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(orderTickets).toHaveLength(1);
+
+    const refundCalls = stripe.calls.filter((c) => c.kind === 'refund');
+    expect(refundCalls).toHaveLength(0);
   });
 
   it('issues 3 tickets for a multi-ticket order via payment_intent.succeeded', async () => {

@@ -38,8 +38,12 @@ export class TicketAlreadyExistsForEventError extends Error {
   constructor(
     public readonly userId: string,
     public readonly eventId: string,
+    public readonly maxTicketsPerUser: number,
+    public readonly existingValidCount: number,
   ) {
-    super(`user ${userId} already has a valid ticket for event ${eventId}`);
+    super(
+      `user ${userId} reached ticket limit (${existingValidCount}/${maxTicketsPerUser}) for event ${eventId}`,
+    );
     this.name = 'TicketAlreadyExistsForEventError';
   }
 }
@@ -144,7 +148,7 @@ export const issueTicketForPaidOrder = async (
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: { event: { select: { title: true } } },
+      include: { event: { select: { title: true, maxTicketsPerUser: true } } },
     });
     if (!order) throw new OrderNotFoundError(orderId);
 
@@ -188,11 +192,16 @@ export const issueTicketForPaidOrder = async (
       order.eventId,
     );
 
-    const conflict = await tx.ticket.findFirst({
+    const existingValidCount = await tx.ticket.count({
       where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
     });
-    if (conflict) {
-      throw new TicketAlreadyExistsForEventError(order.userId, order.eventId);
+    if (existingValidCount + order.quantity > order.event.maxTicketsPerUser) {
+      throw new TicketAlreadyExistsForEventError(
+        order.userId,
+        order.eventId,
+        order.event.maxTicketsPerUser,
+        existingValidCount,
+      );
     }
 
     const ticketCount = order.quantity;
