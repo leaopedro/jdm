@@ -237,6 +237,14 @@ async function rollbackReservation(data: PreparedOrder, tierId: string): Promise
   }
 }
 
+const withReturnParams = (rawUrl: string, params: Record<string, string>): string => {
+  const url = new URL(rawUrl);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -318,6 +326,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const { order } = await createPendingOrder(data);
+      const successUrl = withReturnParams(input.successUrl, { orderId: order.id });
+      const cancelUrl = withReturnParams(input.cancelUrl, {
+        orderId: order.id,
+        cancelled: 'true',
+      });
 
       // Stripe requires expires_at >= 30 min from now; order expiry is 15 min.
       // Use the Stripe minimum so the session is accepted; the order-level sweep
@@ -337,8 +350,8 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           tierId: data.tier.id,
           tickets: JSON.stringify(data.validationResult.ticketsMetadata),
         },
-        successUrl: input.successUrl,
-        cancelUrl: input.cancelUrl,
+        successUrl,
+        cancelUrl,
         expiresAt: expiresAtUnix,
       });
 

@@ -154,7 +154,7 @@ State the evidence in the PR description. "Tests pass" is not evidence —
 "`pnpm --filter @jdm/api test apps/api/test/orders.test.ts` → 12/12 green"
 is evidence.
 
-## 6. Requesting code review
+## 6. Requesting code review (hard handoff)
 
 Use `superpowers:requesting-code-review` to structure the request. Open a PR
 with:
@@ -167,11 +167,23 @@ with:
 - The PR checklist from `CONTRIBUTING.md`.
 
 Reassign the Paperclip issue to the CTO with status `in_review`. Add a
-comment with the PR link.
+comment with the PR link. This handoff is mandatory and is what wakes the
+CTO; if you leave the issue assigned to yourself, review can stall.
+
+Minimum comment content when handing off to CTO:
+
+- PR link.
+- What changed since the last review checkpoint.
+- Verification evidence run on the latest commit(s).
+- Explicit next owner line: `Next owner: CTO review`.
 
 When you receive review feedback, use `superpowers:receiving-code-review`.
 Verify before accepting; push back when feedback is wrong; address
 unambiguous issues without ceremony. Do not silently disagree.
+
+After pushing review fixes, repeat the exact handoff: re-request PR review,
+reassign the Paperclip issue to CTO with `in_review`, and add a fresh comment
+summarizing the fix set. Every fix round needs a new CTO wake signal.
 
 ## 7. QA handoff (when user-facing)
 
