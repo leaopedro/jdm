@@ -1,6 +1,8 @@
 # Phase 1 · F4 Ticketing (Stripe path) — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **> note (2026-05-04, JDMA-225):** product rule is **not** one-ticket-per-user/event. Real invariant is `maxTicketsPerUser` per event; issuance/refund logic must enforce cap as `existingValidCount + order.quantity <= event.maxTicketsPerUser`. Historical text below mentioning one-ticket-per-user should be read as superseded by this note.
 
 **Goal:** An authenticated attendee can buy a ticket for a published event via Stripe (card + Apple Pay), receive a server-signed QR-coded `Ticket`, and view it in the mobile "Meus ingressos" tab. Covers roadmap 4.1–4.7. Pix (4.8–4.12) and check-in (F5) are separate plans.
 
