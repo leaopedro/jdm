@@ -56,8 +56,8 @@ export const checkInEventSummarySchema = z.object({
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   venueName: z.string().nullable(),
-  city: z.string().min(1),
-  stateCode: z.string().length(2),
+  city: z.string().min(1).nullable(),
+  stateCode: z.string().length(2).nullable(),
 });
 export type CheckInEventSummary = z.infer<typeof checkInEventSummarySchema>;
 
