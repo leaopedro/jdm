@@ -2,6 +2,10 @@ import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
   adminExtraSchema,
+  adminFinanceByEventResponseSchema,
+  adminFinancePaymentMixResponseSchema,
+  adminFinanceSummarySchema,
+  adminFinanceTrendResponseSchema,
   adminGrantTicketResponseSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
@@ -9,6 +13,11 @@ import {
   type AdminEventUpdate,
   type AdminExtraCreate,
   type AdminExtraUpdate,
+  type AdminFinanceByEventResponse,
+  type AdminFinancePaymentMixResponse,
+  type AdminFinanceQuery,
+  type AdminFinanceSummary,
+  type AdminFinanceTrendResponse,
   type AdminGrantTicket,
   type AdminTierCreate,
   type AdminTierUpdate,
@@ -145,3 +154,42 @@ export const grantTicket = (input: AdminGrantTicket) =>
     body: JSON.stringify(input),
     schema: adminGrantTicketResponseSchema,
   });
+
+// ── Admin finance ────────────────────────────────────────────────────
+
+export const financeQs = (q?: AdminFinanceQuery) => {
+  if (!q) return '';
+  const sp = new URLSearchParams();
+  if (q.from) sp.set('from', q.from);
+  if (q.to) sp.set('to', q.to);
+  if (q.eventIds) q.eventIds.forEach((id) => sp.append('eventIds', id));
+  if (q.search) sp.set('search', q.search);
+  if (q.city) sp.set('city', q.city);
+  if (q.stateCode) sp.set('stateCode', q.stateCode);
+  if (q.provider) sp.set('provider', q.provider);
+  if (q.method) sp.set('method', q.method);
+  if (q.statuses) q.statuses.forEach((s) => sp.append('statuses', s));
+  const str = sp.toString();
+  return str ? `?${str}` : '';
+};
+
+export const getFinanceSummary = (q?: AdminFinanceQuery): Promise<AdminFinanceSummary> =>
+  apiFetch(`/admin/finance/summary${financeQs(q)}`, { schema: adminFinanceSummarySchema });
+
+export const getFinanceByEvent = (q?: AdminFinanceQuery): Promise<AdminFinanceByEventResponse> =>
+  apiFetch(`/admin/finance/by-event${financeQs(q)}`, {
+    schema: adminFinanceByEventResponseSchema,
+  });
+
+export const getFinanceTrends = (q?: AdminFinanceQuery): Promise<AdminFinanceTrendResponse> =>
+  apiFetch(`/admin/finance/trends${financeQs(q)}`, { schema: adminFinanceTrendResponseSchema });
+
+export const getFinancePaymentMix = (
+  q?: AdminFinanceQuery,
+): Promise<AdminFinancePaymentMixResponse> =>
+  apiFetch(`/admin/finance/payment-mix${financeQs(q)}`, {
+    schema: adminFinancePaymentMixResponseSchema,
+  });
+
+export const getFinanceExportUrl = (q?: AdminFinanceQuery) =>
+  `/admin/finance/export${financeQs(q)}`;
