@@ -98,6 +98,7 @@ export default function CheckoutReturnScreen() {
   };
   const goEvents = () => {
     router.dismissAll();
+    router.navigate('/events' as never);
   };
 
   return (
