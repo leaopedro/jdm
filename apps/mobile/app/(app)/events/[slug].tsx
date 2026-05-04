@@ -1,7 +1,7 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,8 +17,10 @@ import {
 
 import { getEvent } from '~/api/events';
 import { createOrder } from '~/api/orders';
+import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
+import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
 import { useMyTicketForEvent } from '~/hooks/useMyTicketForEvent';
@@ -35,6 +37,8 @@ export default function EventDetailScreen() {
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const { ticket: existingTicket, ownedExtraIds } = useMyTicketForEvent(event?.id);
+  const { addItem, adding } = useCart();
+  const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -106,6 +110,25 @@ export default function EventDetailScreen() {
       Alert.alert(ticketsCopy.purchase.error);
     } finally {
       setPaying(false);
+    }
+  };
+
+  const addToCart = async (tier: TicketTier) => {
+    if (!event) return;
+    const ok = await addItem({
+      eventId: event.id,
+      tierId: tier.id,
+      source: 'purchase',
+      kind: 'ticket',
+      quantity: 1,
+      tickets: [{ extras: [] }],
+      metadata: { source: 'mobile' },
+    });
+    if (ok) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    } else {
+      Alert.alert(cartCopy.errors.add);
     }
   };
 
@@ -234,6 +257,27 @@ export default function EventDetailScreen() {
           disabled={!selectedTier || paying}
         />
       </View>
+
+      {selectedTier && !existingTicket && (
+        <View style={styles.section}>
+          <Pressable
+            onPress={() => void addToCart(selectedTier)}
+            disabled={adding || addedToCart}
+            style={[styles.addToCartBtn, (adding || addedToCart) && styles.addToCartDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={cartCopy.actions.addToCart}
+          >
+            <ShoppingCart color={theme.colors.fg} size={18} strokeWidth={1.75} />
+            <Text style={styles.addToCartText}>
+              {addedToCart
+                ? cartCopy.actions.added
+                : adding
+                  ? cartCopy.actions.adding
+                  : cartCopy.actions.addToCart}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -293,4 +337,16 @@ const styles = StyleSheet.create({
   tierTop: { flexDirection: 'row', justifyContent: 'space-between' },
   tierName: { color: theme.colors.fg, fontWeight: '600' },
   tierPrice: { color: theme.colors.fg },
+  addToCartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  addToCartDisabled: { opacity: 0.5 },
+  addToCartText: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '500' },
 });

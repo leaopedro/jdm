@@ -62,9 +62,9 @@
       "types": "./dist/uploads.d.ts",
       "default": "./dist/uploads.js"
     },
-    "./extras": {
-      "types": "./dist/extras.d.ts",
-      "default": "./dist/extras.js"
+    "./cart": {
+      "types": "./dist/cart.d.ts",
+      "default": "./dist/cart.js"
     }
   },
   "scripts": {

@@ -1,6 +1,9 @@
 import { Tabs } from 'expo-router';
 import { CalendarDays, Car, Ticket, UserRound } from 'lucide-react-native';
 
+import { CartProvider } from '~/cart/context';
+import { cartCopy } from '~/copy/cart';
+
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
 
@@ -42,11 +45,24 @@ const screenOptions = {
 
 export default function AppLayout() {
   return (
-    <Tabs screenOptions={screenOptions}>
-      <Tabs.Screen name="events" options={{ title: 'Eventos', tabBarIcon: EventsIcon }} />
-      <Tabs.Screen name="tickets" options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }} />
-      <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
-      <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
-    </Tabs>
+    <CartProvider>
+      <Tabs screenOptions={screenOptions}>
+        <Tabs.Screen name="events" options={{ title: 'Eventos', tabBarIcon: EventsIcon }} />
+        <Tabs.Screen name="tickets" options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }} />
+        <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
+        <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
+        <Tabs.Screen
+          name="cart"
+          options={{
+            href: null,
+            headerShown: true,
+            headerTitle: cartCopy.title,
+            headerStyle: { backgroundColor: '#0a0a0a' },
+            headerTintColor: '#F5F5F5',
+            headerRight: () => null,
+          }}
+        />
+      </Tabs>
+    </CartProvider>
   );
 }
