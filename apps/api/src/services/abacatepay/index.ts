@@ -2,6 +2,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const BASE_URL = 'https://api.abacatepay.com/v2';
 
+// AbacatePay signs webhooks with this fixed public key (not merchant-specific).
+// https://docs.abacatepay.com/pages/webhooks/security
+const ABACATEPAY_PUBLIC_KEY =
+  't9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9';
+
 export type PixBillingResult = {
   id: string;
   brCode: string;
@@ -84,9 +89,7 @@ export const buildAbacatePay = (env: AbacatePayEnv): AbacatePayClient => {
     },
 
     verifyWebhookSignature: (payload, signature) => {
-      const expected = createHmac('sha256', env.ABACATEPAY_WEBHOOK_SECRET)
-        .update(payload)
-        .digest('base64');
+      const expected = createHmac('sha256', ABACATEPAY_PUBLIC_KEY).update(payload).digest('base64');
       const a = Buffer.from(signature, 'base64');
       const b = Buffer.from(expected, 'base64');
       if (a.length !== b.length || !timingSafeEqual(a, b)) {

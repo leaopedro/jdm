@@ -4,13 +4,17 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../../src/app.js';
-import { loadEnv } from '../../src/env.js';
+import { type Env, loadEnv } from '../../src/env.js';
 import { buildFakeAbacatePay, type FakeAbacatePay } from '../../src/services/abacatepay/fake.js';
 import { DevPushSender } from '../../src/services/push/dev.js';
 import { buildFakeStripe } from '../../src/services/stripe/fake.js';
 import { createUser, resetDatabase } from '../helpers.js';
 
-const env = loadEnv();
+const baseEnv = loadEnv();
+const TEST_WEBHOOK_SECRET = 'test-webhook-secret-abc123';
+const env: Env = { ...baseEnv, ABACATEPAY_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET };
+
+const webhookUrl = `/abacatepay/webhook?webhookSecret=${TEST_WEBHOOK_SECRET}`;
 
 const makePayload = (
   overrides: Partial<{
@@ -23,15 +27,15 @@ const makePayload = (
   JSON.stringify({
     id: overrides.id ?? `evt_${Date.now()}`,
     event: overrides.event ?? 'transparent.completed',
-    devMode: overrides.devMode ?? true,
-    data: overrides.data ?? { billingId: 'pix_123', amount: 5000 },
+    devMode: overrides.devMode ?? false,
+    data: overrides.data ?? { billing: { id: 'pix_123' }, amount: 5000 },
   });
 
-const makeChargePaidPayload = (billingId: string, eventId?: string) =>
+const makeTransparentCompletedPayload = (billingId: string, eventId?: string) =>
   JSON.stringify({
     id: eventId ?? `evt_${Date.now()}`,
-    event: 'charge.paid',
-    devMode: true,
+    event: 'transparent.completed',
+    devMode: false,
     data: { billing: { id: billingId } },
   });
 
@@ -101,12 +105,42 @@ describe('POST /abacatepay/webhook', () => {
     await prisma.$disconnect();
   });
 
-  // --- Existing signature/dedup tests ---
+  // --- URL-secret (C2) ---
+
+  it('rejects missing webhookSecret query param with 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/abacatepay/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload: makePayload(),
+    });
+    expect(res.statusCode).toBe(401);
+    const body: { error: string } = res.json();
+    expect(body.error).toBe('Unauthorized');
+  });
+
+  it('rejects wrong webhookSecret query param with 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/abacatepay/webhook?webhookSecret=wrong-secret',
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload: makePayload(),
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // --- Signature (C1) ---
 
   it('rejects missing signature with 401', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
       headers: { 'content-type': 'application/json' },
       payload: makePayload(),
     });
@@ -119,7 +153,7 @@ describe('POST /abacatepay/webhook', () => {
     abacatepay.nextSignatureValid = false;
     const res = await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
       headers: {
         'content-type': 'application/json',
         'x-webhook-signature': 'bad-sig',
@@ -129,11 +163,74 @@ describe('POST /abacatepay/webhook', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('accepts valid signature and returns 200 for non-charge.paid events', async () => {
-    const payload = makePayload({ id: 'evt_valid_1' });
+  // --- devMode (H1) ---
+
+  it('skips processing for devMode events in production', async () => {
+    const prodEnv: Env = {
+      ...env,
+      NODE_ENV: 'production',
+      RESEND_API_KEY: 'fake-resend-key',
+      SENTRY_DSN: undefined,
+      WORKER_ENABLED: false,
+    };
+    const prodApp = await buildApp(prodEnv, {
+      stripe: buildFakeStripe(),
+      abacatepay: buildFakeAbacatePay(),
+      push: new DevPushSender(),
+    });
+
+    const payload = makePayload({ id: 'evt_devmode_1', devMode: true });
+    const res = await prodApp.inject({
+      method: 'POST',
+      url: webhookUrl,
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Event should NOT be stored — it was rejected
+    const record = await prisma.paymentWebhookEvent.findUnique({
+      where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_devmode_1' } },
+    });
+    expect(record).toBeNull();
+    await prodApp.close();
+  });
+
+  it('allows devMode events in non-production', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+    const payload = JSON.stringify({
+      id: 'evt_devmode_nonprod',
+      event: 'transparent.completed',
+      devMode: true,
+      data: { billing: { id: order.providerRef } },
+    });
+
     const res = await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(updatedOrder.status).toBe('paid');
+  });
+
+  // --- Basic acceptance ---
+
+  it('accepts valid request and returns 200 for non-payment events', async () => {
+    const payload = makePayload({ id: 'evt_valid_1', event: 'transparent.refunded' });
+    const res = await app.inject({
+      method: 'POST',
+      url: webhookUrl,
       headers: {
         'content-type': 'application/json',
         'x-webhook-signature': 'valid-sig',
@@ -145,12 +242,31 @@ describe('POST /abacatepay/webhook', () => {
     expect(body.ok).toBe(true);
   });
 
-  it('deduplicates: second delivery of same event returns deduped=true', async () => {
-    const payload = makePayload({ id: 'evt_dedup_1' });
+  it('returns 200 for unknown event types (L6 allowlist)', async () => {
+    const payload = makePayload({ id: 'evt_unknown_1', event: 'some.unknown.event' });
+    const res = await app.inject({
+      method: 'POST',
+      url: webhookUrl,
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    // Still stored for audit
+    const record = await prisma.paymentWebhookEvent.findUnique({
+      where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_unknown_1' } },
+    });
+    expect(record).not.toBeNull();
+  });
+
+  it('deduplicates: second delivery of same event', async () => {
+    const payload = makePayload({ id: 'evt_dedup_1', event: 'transparent.refunded' });
     const inject = () =>
       app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -160,21 +276,19 @@ describe('POST /abacatepay/webhook', () => {
 
     const first = await inject();
     expect(first.statusCode).toBe(200);
-    const firstBody: { deduped?: boolean } = first.json();
-    expect(firstBody.deduped).toBeUndefined();
 
     const second = await inject();
     expect(second.statusCode).toBe(200);
-    const secondBody: { deduped?: boolean } = second.json();
-    expect(secondBody.deduped).toBe(true);
+    const secondBody: { ok: boolean } = second.json();
+    expect(secondBody.ok).toBe(true);
   });
 
   it('stores webhook event in PaymentWebhookEvent table', async () => {
     const eventId = `evt_store_${Date.now()}`;
-    const payload = makePayload({ id: eventId });
+    const payload = makePayload({ id: eventId, event: 'transparent.refunded' });
     await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
       headers: {
         'content-type': 'application/json',
         'x-webhook-signature': 'valid-sig',
@@ -192,7 +306,7 @@ describe('POST /abacatepay/webhook', () => {
   it('rejects malformed JSON with 400', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
       headers: {
         'content-type': 'application/json',
         'x-webhook-signature': 'valid-sig',
@@ -205,7 +319,7 @@ describe('POST /abacatepay/webhook', () => {
   it('rejects payload missing id field with 400', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/abacatepay/webhook',
+      url: webhookUrl,
       headers: {
         'content-type': 'application/json',
         'x-webhook-signature': 'valid-sig',
@@ -215,17 +329,17 @@ describe('POST /abacatepay/webhook', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  // --- charge.paid handler tests ---
+  // --- transparent.completed handler tests ---
 
-  describe('charge.paid', () => {
+  describe('transparent.completed', () => {
     it('marks order paid and issues ticket', async () => {
       const { user } = await createUser({ verified: true });
       const { order, event } = await seedEventTierOrder(user.id);
-      const payload = makeChargePaidPayload(order.providerRef!, 'evt_paid_1');
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_paid_1');
 
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -234,9 +348,8 @@ describe('POST /abacatepay/webhook', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body: { ok: boolean; deduped: boolean } = res.json();
+      const body: { ok: boolean } = res.json();
       expect(body.ok).toBe(true);
-      expect(body.deduped).toBe(false);
 
       const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updatedOrder.status).toBe('paid');
@@ -258,10 +371,10 @@ describe('POST /abacatepay/webhook', () => {
         data: { userId: user.id, expoPushToken: 'ExponentPushToken[test]', platform: 'ios' },
       });
 
-      const payload = makeChargePaidPayload(order.providerRef!, 'evt_push_1');
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_push_1');
       await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -273,16 +386,16 @@ describe('POST /abacatepay/webhook', () => {
       expect(push.captured[0]!.title).toBe('Pagamento confirmado');
     });
 
-    it('replay returns deduped=true and does not create duplicate ticket', async () => {
+    it('replay does not create duplicate ticket', async () => {
       const { user } = await createUser({ verified: true });
       const { order } = await seedEventTierOrder(user.id);
       const eventId = 'evt_replay_1';
-      const payload = makeChargePaidPayload(order.providerRef!, eventId);
+      const payload = makeTransparentCompletedPayload(order.providerRef!, eventId);
 
       const inject = () =>
         app.inject({
           method: 'POST',
-          url: '/abacatepay/webhook',
+          url: webhookUrl,
           headers: {
             'content-type': 'application/json',
             'x-webhook-signature': 'valid-sig',
@@ -292,23 +405,18 @@ describe('POST /abacatepay/webhook', () => {
 
       const first = await inject();
       expect(first.statusCode).toBe(200);
-      const firstBody: { deduped: boolean } = first.json();
-      expect(firstBody.deduped).toBe(false);
 
       const second = await inject();
       expect(second.statusCode).toBe(200);
-      const secondBody: { deduped: boolean } = second.json();
-      expect(secondBody.deduped).toBe(true);
 
       const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
       expect(tickets).toHaveLength(1);
     });
 
-    it('returns 200 with manualRefund when ticket already exists (duplicate-ticket)', async () => {
+    it('returns 200 when ticket already exists (duplicate-ticket)', async () => {
       const { user } = await createUser({ verified: true });
       const { order, event } = await seedEventTierOrder(user.id);
 
-      // Pre-existing valid ticket (e.g., comp grant) for same user+event
       await prisma.ticket.create({
         data: {
           userId: user.id,
@@ -319,10 +427,10 @@ describe('POST /abacatepay/webhook', () => {
         },
       });
 
-      const payload = makeChargePaidPayload(order.providerRef!, 'evt_conflict_1');
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_conflict_1');
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -331,17 +439,18 @@ describe('POST /abacatepay/webhook', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body: { ok: boolean; manualRefund: boolean; reason: string } = res.json();
+      const body: { ok: boolean } = res.json();
       expect(body.ok).toBe(true);
-      expect(body.manualRefund).toBe(true);
-      expect(body.reason).toBe('duplicate-ticket');
+      // M2: No internal state leaked
+      expect(body).not.toHaveProperty('manualRefund');
+      expect(body).not.toHaveProperty('reason');
     });
 
     it('returns 200 when no matching order found (orphan event)', async () => {
-      const payload = makeChargePaidPayload('pix_no_such_order', 'evt_orphan_1');
+      const payload = makeTransparentCompletedPayload('pix_no_such_order', 'evt_orphan_1');
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -354,14 +463,14 @@ describe('POST /abacatepay/webhook', () => {
       expect(body.ok).toBe(true);
     });
 
-    it('flags manual refund for expired order', async () => {
+    it('handles expired order gracefully', async () => {
       const { user } = await createUser({ verified: true });
       const { order } = await seedEventTierOrder(user.id, { status: 'expired' });
 
-      const payload = makeChargePaidPayload(order.providerRef!, 'evt_expired_1');
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_expired_1');
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -370,17 +479,43 @@ describe('POST /abacatepay/webhook', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body: { ok: boolean; manualRefund: boolean; reason: string } = res.json();
+      const body: { ok: boolean } = res.json();
       expect(body.ok).toBe(true);
-      expect(body.manualRefund).toBe(true);
-      expect(body.reason).toBe('order-expired');
+      // M2: No internal state leaked
+      expect(body).not.toHaveProperty('manualRefund');
+    });
+
+    // H2: Non-pending order fallthrough — failed status should not cause 500
+    it('handles failed order gracefully without 500 (H2)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id, { status: 'failed' });
+
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_failed_1');
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body: { ok: boolean } = res.json();
+      expect(body.ok).toBe(true);
+
+      // Event was marked processed (no infinite retry)
+      const record = await prisma.paymentWebhookEvent.findUnique({
+        where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_failed_1' } },
+      });
+      expect(record).not.toBeNull();
     });
 
     it('succeeds idempotently for already-paid order without creating new ticket', async () => {
       const { user } = await createUser({ verified: true });
       const { order, event } = await seedEventTierOrder(user.id, { status: 'paid' });
 
-      // Already-paid orders need an existing ticket for idempotent path
       await prisma.ticket.create({
         data: {
           orderId: order.id,
@@ -392,10 +527,10 @@ describe('POST /abacatepay/webhook', () => {
         },
       });
 
-      const payload = makeChargePaidPayload(order.providerRef!, 'evt_alreadypaid_1');
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_alreadypaid_1');
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
@@ -407,7 +542,6 @@ describe('POST /abacatepay/webhook', () => {
       const body: { ok: boolean } = res.json();
       expect(body.ok).toBe(true);
 
-      // No new ticket created — still just the one we seeded
       const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
       expect(tickets).toHaveLength(1);
     });
@@ -416,17 +550,16 @@ describe('POST /abacatepay/webhook', () => {
       const { user } = await createUser({ verified: true });
       const { order } = await seedEventTierOrder(user.id);
 
-      // Flat format: data.billingId instead of data.billing.id
       const payload = JSON.stringify({
         id: 'evt_flat_format_1',
-        event: 'charge.paid',
-        devMode: true,
+        event: 'transparent.completed',
+        devMode: false,
         data: { billingId: order.providerRef, amount: 5000 },
       });
 
       const res = await app.inject({
         method: 'POST',
-        url: '/abacatepay/webhook',
+        url: webhookUrl,
         headers: {
           'content-type': 'application/json',
           'x-webhook-signature': 'valid-sig',
