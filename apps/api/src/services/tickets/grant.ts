@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { signQrCode } from '../../lib/qr.js';
 
 import { signTicketCode } from './codes.js';
+import { lockTicketTuple } from './locks.js';
 
 type GrantEnv = { readonly TICKET_CODE_SECRET: string };
 
@@ -63,6 +64,8 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
       });
       if (!extra) throw new GrantInputError(`extra ${extraId} not found for event ${eventId}`);
     }
+
+    await lockTicketTuple(tx, userId, eventId);
 
     const conflict = await tx.ticket.findFirst({
       where: { userId, eventId, status: 'valid' },

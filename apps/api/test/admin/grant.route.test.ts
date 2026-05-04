@@ -338,4 +338,51 @@ describe('POST /admin/tickets/grant', () => {
     expect(second.statusCode).toBe(409);
     expect(second.json<{ error: string }>().error).toBe('DuplicateTicket');
   });
+
+  it('serializes concurrent grant requests for same user/event', async () => {
+    const { holder, event, tier } = await seedGrantFixture();
+    const { user: actor } = await createUser({
+      email: 'race@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const auth = { authorization: bearer(env, actor.id, 'admin') };
+    const payload = { userId: holder.id, eventId: event.id, tierId: tier.id };
+
+    const [a, b] = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: '/admin/tickets/grant',
+        headers: auth,
+        payload,
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/admin/tickets/grant',
+        headers: auth,
+        payload,
+      }),
+    ]);
+
+    const codes = [a.statusCode, b.statusCode].sort((x, y) => x - y);
+    expect(codes).toEqual([201, 409]);
+
+    const validTickets = await prisma.ticket.findMany({
+      where: { userId: holder.id, eventId: event.id, status: 'valid' },
+    });
+    expect(validTickets).toHaveLength(1);
+
+    const paidOrders = await prisma.order.findMany({
+      where: {
+        userId: holder.id,
+        eventId: event.id,
+        status: 'paid',
+        amountCents: 0,
+      },
+    });
+    expect(paidOrders).toHaveLength(1);
+
+    const updatedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(updatedTier.quantitySold).toBe(1);
+  });
 });
