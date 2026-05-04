@@ -66,8 +66,9 @@ export function computeItemAmount(
   tier: { priceCents: number },
   quantity: number,
   extras: { subtotalCents: number }[],
+  kind: 'ticket' | 'extras_only' = 'ticket',
 ): number {
-  const tierTotal = tier.priceCents * quantity;
+  const tierTotal = kind === 'ticket' ? tier.priceCents * quantity : 0;
   const extrasTotal = extras.reduce((sum, e) => sum + e.subtotalCents, 0);
   return tierTotal + extrasTotal;
 }
@@ -248,10 +249,20 @@ export async function validateCartItem(
       quantityTotal: true,
       quantitySold: true,
       requiresCar: true,
+      salesOpenAt: true,
+      salesCloseAt: true,
     },
   });
   if (!tier) {
     throw codedError('Tier not found for this event', 'TIER_NOT_FOUND', 404);
+  }
+
+  const now = new Date();
+  if (tier.salesOpenAt && now < tier.salesOpenAt) {
+    throw codedError('Sales have not opened yet for this tier', 'SALES_NOT_OPEN', 409);
+  }
+  if (tier.salesCloseAt && now > tier.salesCloseAt) {
+    throw codedError('Sales have closed for this tier', 'SALES_CLOSED', 409);
   }
 
   const available = tier.quantityTotal - tier.quantitySold;

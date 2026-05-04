@@ -95,12 +95,13 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       { priceCents: validated.tier.priceCents },
       input.quantity,
       extraRows,
+      input.kind ?? 'ticket',
     );
 
     const cart = await getOrCreateCart(sub);
 
     const updatedCart = await prisma.$transaction(async (tx) => {
-      await tx.cartItem.create({
+      const newItem = await tx.cartItem.create({
         data: {
           cartId: cart.id,
           eventId: input.eventId,
@@ -116,22 +117,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
 
       if (extraRows.length > 0) {
-        const lastItem = await tx.cartItem.findFirst({
-          where: { cartId: cart.id },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true },
+        await tx.cartItemExtra.createMany({
+          data: extraRows.map((r) => ({
+            cartItemId: newItem.id,
+            extraId: r.extraId,
+            quantity: r.quantity,
+            unitPriceCents: r.unitPriceCents,
+            subtotalCents: r.subtotalCents,
+          })),
         });
-        if (lastItem) {
-          await tx.cartItemExtra.createMany({
-            data: extraRows.map((r) => ({
-              cartItemId: lastItem.id,
-              extraId: r.extraId,
-              quantity: r.quantity,
-              unitPriceCents: r.unitPriceCents,
-              subtotalCents: r.subtotalCents,
-            })),
-          });
-        }
       }
 
       return tx.cart.update({

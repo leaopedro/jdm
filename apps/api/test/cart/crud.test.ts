@@ -568,4 +568,51 @@ describe('Cart CRUD', () => {
       expect(carts).toHaveLength(1);
     });
   });
+
+  // ---------- Cross-user isolation ----------
+
+  describe('cross-user isolation', () => {
+    it('users cannot see each other carts', async () => {
+      const { user: alice } = await createUser({ email: 'alice@jdm.test', verified: true });
+      const { user: bob } = await createUser({ email: 'bob@jdm.test', verified: true });
+      const { event, tier } = await seedPublishedEvent();
+
+      await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: bearer(env, alice.id) },
+        payload: { item: { eventId: event.id, tierId: tier.id, quantity: 1, tickets: [{}] } },
+      });
+
+      const bobCart = await app.inject({
+        method: 'GET',
+        url: '/cart',
+        headers: { authorization: bearer(env, bob.id) },
+      });
+      expect(bobCart.statusCode).toBe(200);
+      const body = getCartResponseSchema.parse(bobCart.json());
+      expect(body.cart).toBeNull();
+    });
+
+    it('users cannot delete each other cart items', async () => {
+      const { user: alice } = await createUser({ email: 'alice@jdm.test', verified: true });
+      const { user: bob } = await createUser({ email: 'bob@jdm.test', verified: true });
+      const { event, tier } = await seedPublishedEvent();
+
+      const addRes = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: bearer(env, alice.id) },
+        payload: { item: { eventId: event.id, tierId: tier.id, quantity: 1, tickets: [{}] } },
+      });
+      const itemId = upsertCartItemResponseSchema.parse(addRes.json()).cart.items[0]!.id;
+
+      const delRes = await app.inject({
+        method: 'DELETE',
+        url: `/cart/items/${itemId}`,
+        headers: { authorization: bearer(env, bob.id) },
+      });
+      expect(delRes.statusCode).toBe(404);
+    });
+  });
 });
