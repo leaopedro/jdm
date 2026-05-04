@@ -86,6 +86,24 @@ describe('POST /stripe/webhook', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('accepts webhook-signature header alias', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+    stripe.nextEvent = {
+      id: 'evt_header_alias_1',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'webhook-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it('handles payment_intent.succeeded: marks order paid and issues ticket', async () => {
     const { user } = await createUser({ verified: true });
     const { order } = await seedEventTierOrder(user.id);

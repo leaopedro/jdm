@@ -43,7 +43,8 @@ export const buildFakeStripe = (): FakeStripe => {
       fake.calls.push({ kind: 'createCheckoutSession', payload: input });
       return fake.nextCheckoutSession;
     },
-    constructWebhookEvent: (_payload, _signature) => {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    constructWebhookEvent: async (_payload, _signature) => {
       if (!fake.nextSignatureValid) {
         const err = new Error('signature verification failed');
         err.name = 'StripeSignatureVerificationError';

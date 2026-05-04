@@ -42,7 +42,9 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/stripe/webhook', async (request, reply) => {
-    const signature = request.headers['stripe-signature'];
+    const signatureHeader =
+      request.headers['stripe-signature'] ?? request.headers['webhook-signature'];
+    const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
     if (typeof signature !== 'string' || signature.length === 0) {
       Sentry.captureMessage('stripe webhook: missing signature header', {
         level: 'warning',
@@ -53,7 +55,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     const raw = request.body as Buffer;
     let event;
     try {
-      event = app.stripe.constructWebhookEvent(raw, signature);
+      event = await app.stripe.constructWebhookEvent(raw, signature);
     } catch (sigErr) {
       Sentry.withScope((scope) => {
         scope.setTag('kind', 'payment-webhook-signature');
