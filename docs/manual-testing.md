@@ -69,6 +69,7 @@ Living references; update these as features land.
   Sandbox keys + Stripe CLI `stripe listen`.
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
+- **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
 - **X.6 Accessibility** — Section 10 below.
 
 Future playbooks to author as features land:
@@ -199,6 +200,132 @@ Expected: webhook returns `200 refunded:true`; `stripe listen` shows a refund ev
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set` in Metro | `.env.local` missing or Metro cache stale — run `pnpm --filter @jdm/mobile expo start -c`. |
 | "Merchant identifier is invalid" on Apple Pay            | Expected on simulator without provisioning profile; card path still works.                 |
 
+### 3.2 Finance dashboard (`/financeiro`)
+
+Covers permission gating, filter behavior, KPI/table/trend consistency,
+expandable-row details, CSV export, and responsive layout.
+
+**Prerequisites**
+
+- Local API running (`pnpm --filter @jdm/api dev`) with seeded orders
+  in paid/refunded states across multiple events, providers, and methods.
+- Admin app running (`pnpm --filter @jdm/admin dev`).
+- Three browser sessions: one organizer, one admin, one staff account.
+
+**Step 1 — Permission gating (admin vs staff)**
+
+1. Log in as `staff` role — navigate to `/financeiro`.
+   Expect: redirect to `/check-in`. The page never renders.
+2. Manually visit `/financeiro` by URL while logged in as staff.
+   Expect: redirect to `/check-in` (middleware layer).
+3. Log in as `admin` role — navigate to `/financeiro`.
+   Expect: dashboard loads with KPI tiles, trend chart, revenue table, payment mix.
+4. Log in as `organizer` role — navigate to `/financeiro`.
+   Expect: same as admin; dashboard renders fully.
+
+**Step 2 — Filter combinations + URL deep-link/back behavior**
+
+1. Set a date range (e.g. `from=2026-04-01` to `to=2026-04-30`).
+   Expect: URL updates with `?from=...&to=...`. All sections reload with filtered data.
+2. Add a provider filter (click "Stripe" chip).
+   Expect: `&provider=stripe` appended to URL. Data reflects only Stripe orders.
+3. Add a method filter (click "Pix" chip).
+   Expect: `&method=pix` appended. Data reflects Stripe + Pix intersection.
+4. Copy the full URL, open in a new tab.
+   Expect: same filter state restored from URL params. Same data shown.
+5. Click browser Back.
+   Expect: previous filter state restored.
+6. Click "Limpar filtros".
+   Expect: URL resets to `/financeiro`. All filters cleared. Full dataset shown.
+7. Toggle a chip off by clicking it again.
+   Expect: that param removed from URL. Data updates.
+
+**Step 3 — KPI/table/trend consistency for the same recut**
+
+1. Apply a specific filter combination (e.g. Stripe + card + date range).
+2. Note KPI "Receita total" value.
+3. Sum the "Receita" column in the revenue table.
+   Expect: matches KPI total (both draw from same `buildWhere`).
+4. Hover over trend chart points and mentally sum daily values.
+   Expect: rough match with KPI total.
+5. Check payment mix percentages sum to 100% (within rounding).
+6. Verify "Pedidos" KPI matches sum of order counts in revenue table.
+7. Verify "Reembolsado" KPI matches sum of refunded values in expandable rows.
+
+**Step 4 — Expandable-row payment mix details**
+
+1. Click any event row in the revenue table.
+   Expect: row expands showing "Reembolsado" and "Receita liquida".
+2. Verify "Receita liquida" = revenue minus refunded for that event.
+3. Click the same row again.
+   Expect: row collapses.
+4. Click a different row.
+   Expect: previous row stays collapsed; new row expands (one at a time).
+
+**Step 5 — CSV export consistency with on-screen totals**
+
+1. With filters applied, click "Exportar CSV".
+   Expect: file downloads as `financeiro-YYYY-MM-DD.csv`.
+2. Open the CSV. Verify header row:
+   `id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at`
+3. Count data rows. Compare with on-screen order count.
+   Expect: match (assuming < 10k orders; export caps at 10k).
+4. Sum `amount_cents` for `status=paid` rows.
+   Expect: matches "Receita total" KPI (in cents).
+5. Verify CSV fields with commas or quotes are properly escaped (double-quoted).
+6. With no filters, export again. Verify it includes all orders (paid + refunded).
+
+**Step 6 — Loading/empty/error/no-permission states**
+
+1. Throttle network (DevTools > Network > Slow 3G) and reload `/financeiro`.
+   Expect: skeleton pulse animation shows for KPIs, chart, and table.
+2. Apply a filter that matches zero orders (e.g. absurd date range).
+   Expect: "Sem dados financeiros" empty state.
+3. Kill the API server, then reload the page.
+   Expect: error state with message, "Tentar novamente" button, and copyable error ID.
+4. Click "Copiar ID: ..." button.
+   Expect: error ID copied to clipboard.
+5. Restart API and click "Tentar novamente".
+   Expect: page reloads and data appears.
+
+**Step 7 — Mobile responsive behavior**
+
+1. Resize browser to mobile width (< 640px) or use DevTools device emulation.
+2. Filter bar: verify "Filtros" toggle button appears instead of inline bar.
+   Tap it — filter panel opens. Tap again — closes.
+3. KPI tiles: verify 2-column grid on mobile (not 6-column).
+4. Revenue table: verify card layout replaces the desktop table.
+   Each card shows event title, date, city, revenue, orders, tickets.
+5. Tap a card — expandable section shows refunded + net revenue.
+6. Trend chart: verify it scales to fit narrow viewport via `ResponsiveContainer`.
+7. Payment mix: verify progress bars and labels remain readable.
+8. "Exportar CSV" button: verify it remains accessible and functional.
+
+**Pass criteria**
+
+- All "expect" results match across steps 1-7.
+- No console errors or React warnings during the flow.
+- KPI totals, table sums, and CSV totals are internally consistent.
+
+**Evidence to attach**
+
+- Screenshot of dashboard with data and filters applied.
+- Screenshot of staff role redirect.
+- Screenshot of mobile layout (revenue cards + collapsed filters).
+- Screenshot of empty state.
+- Screenshot of error state with error ID.
+- Exported CSV file snippet showing header + sample rows.
+
+**Common failures**
+
+| Symptom                                    | Fix                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Filters don't persist on page reload       | Check `useSearchParams` is reading from URL, not local state.                              |
+| KPI and table totals mismatch              | Verify both use `buildWhere` with same filter params; check paid-only vs all-status math.  |
+| CSV export empty despite on-screen data    | Server action may not forward auth cookie; check `finance-actions.ts` cookie forwarding.   |
+| Mobile cards don't show expandable section | Verify `onClick` handler on the card div, not just the desktop `<tr>`.                     |
+| Trend chart doesn't render                 | Check `recharts` is installed and `ResponsiveContainer` has a parent with explicit height. |
+
 ## 4. Roles
 
 ### Engineer (implementor)
@@ -266,6 +393,8 @@ v0.3+):
       reject (already used).
 - [ ] (v0.3+) Subscribe to Premium → My Tickets backfilled.
 - [ ] (v0.3+) Cancel Premium at period end → existing tickets remain.
+- [ ] Finance dashboard (`/financeiro`): staff blocked, admin/organizer
+      see KPIs. Filters reflect in URL. CSV export matches on-screen totals.
 - [ ] LGPD: `POST /me/export` returns a download link; `POST /me/delete`
       schedules purge; verify purge job at T+30 days in staging.
 - [ ] No Sentry errors during the regression run.
