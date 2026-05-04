@@ -1,5 +1,4 @@
 import type { TicketTier } from '@jdm/shared/events';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useCallback,
@@ -11,6 +10,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
+import { wizardStorage } from './storage';
 import type { OnOrderCreated, WizardAction, WizardState, WizardStepDefinition } from './types';
 
 function wizardReducer(state: WizardState, action: WizardAction): WizardState {
@@ -167,7 +167,7 @@ export function WizardProvider({
   useEffect(() => {
     void (async () => {
       try {
-        const raw = await AsyncStorage.getItem(key);
+        const raw = await wizardStorage.getItem(key);
         if (raw && !restoredRef.current) {
           const saved = JSON.parse(raw) as Partial<WizardState>;
           if (saved.quantity === quantity && saved.tickets) {
@@ -193,19 +193,21 @@ export function WizardProvider({
 
   useEffect(() => {
     if (!restoredRef.current) return;
-    void AsyncStorage.setItem(
-      key,
-      JSON.stringify({
-        quantity: state.quantity,
-        tickets: state.tickets,
-        position: state.position,
-        reviewing: state.reviewing,
-      }),
-    ).catch(() => {});
+    void wizardStorage
+      .setItem(
+        key,
+        JSON.stringify({
+          quantity: state.quantity,
+          tickets: state.tickets,
+          position: state.position,
+          reviewing: state.reviewing,
+        }),
+      )
+      .catch(() => {});
   }, [key, state.quantity, state.tickets, state.position, state.reviewing]);
 
   const clearStorage = useCallback(() => {
-    void AsyncStorage.removeItem(key).catch(() => {});
+    void wizardStorage.removeItem(key).catch(() => {});
   }, [key]);
 
   const wrappedOnOrderCreated: OnOrderCreated = useCallback(
