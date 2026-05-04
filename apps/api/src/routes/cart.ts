@@ -73,7 +73,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    let extraRows: {
+    const extraRows: {
       extraId: string;
       quantity: number;
       unitPriceCents: number;
@@ -85,10 +85,23 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         select: { id: true, priceCents: true },
       });
       const priceMap = new Map(extras.map((e) => [e.id, e.priceCents]));
-      extraRows = [...extraCounts.entries()].map(([extraId, qty]) => {
-        const unitPriceCents = priceMap.get(extraId) ?? 0;
-        return { extraId, quantity: qty, unitPriceCents, subtotalCents: unitPriceCents * qty };
-      });
+      for (const [extraId, qty] of extraCounts.entries()) {
+        const unitPriceCents = priceMap.get(extraId);
+        if (unitPriceCents === undefined) {
+          return reply
+            .status(409)
+            .send({
+              error: 'ExtraNotFound',
+              message: `Extra ${extraId} disappeared during pricing`,
+            });
+        }
+        extraRows.push({
+          extraId,
+          quantity: qty,
+          unitPriceCents,
+          subtotalCents: unitPriceCents * qty,
+        });
+      }
     }
 
     const amountCents = computeItemAmount(
@@ -186,7 +199,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      let extraRows: {
+      const extraRows: {
         extraId: string;
         quantity: number;
         unitPriceCents: number;
@@ -198,16 +211,30 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           select: { id: true, priceCents: true },
         });
         const priceMap = new Map(extras.map((e) => [e.id, e.priceCents]));
-        extraRows = [...extraCounts.entries()].map(([extraId, qty]) => {
-          const unitPriceCents = priceMap.get(extraId) ?? 0;
-          return { extraId, quantity: qty, unitPriceCents, subtotalCents: unitPriceCents * qty };
-        });
+        for (const [extraId, qty] of extraCounts.entries()) {
+          const unitPriceCents = priceMap.get(extraId);
+          if (unitPriceCents === undefined) {
+            return reply
+              .status(409)
+              .send({
+                error: 'ExtraNotFound',
+                message: `Extra ${extraId} disappeared during pricing`,
+              });
+          }
+          extraRows.push({
+            extraId,
+            quantity: qty,
+            unitPriceCents,
+            subtotalCents: unitPriceCents * qty,
+          });
+        }
       }
 
       const amountCents = computeItemAmount(
         { priceCents: validated.tier.priceCents },
         input.quantity,
         extraRows,
+        input.kind ?? 'ticket',
       );
 
       const updatedCart = await prisma.$transaction(async (tx) => {

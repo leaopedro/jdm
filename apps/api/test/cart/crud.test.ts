@@ -615,4 +615,114 @@ describe('Cart CRUD', () => {
       expect(delRes.statusCode).toBe(404);
     });
   });
+
+  // ---------- CTO review regressions ----------
+
+  describe('CTO review regressions', () => {
+    it('PATCH extras_only item excludes tier price from amount', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent({ priceCents: 5000 });
+      const extra = await seedExtra(event.id, { priceCents: 2000 });
+
+      const addRes = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          item: {
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            kind: 'extras_only',
+            tickets: [{ extras: [extra.id] }],
+          },
+        },
+      });
+      expect(addRes.statusCode).toBe(200);
+      const addedItem = upsertCartItemResponseSchema.parse(addRes.json()).cart.items[0]!;
+      expect(addedItem.amountCents).toBe(2000);
+
+      const patchRes = await app.inject({
+        method: 'PATCH',
+        url: `/cart/items/${addedItem.id}`,
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          item: {
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            kind: 'extras_only',
+            tickets: [{ extras: [extra.id] }],
+          },
+        },
+      });
+      expect(patchRes.statusCode).toBe(200);
+      const patchedItem = upsertCartItemResponseSchema.parse(patchRes.json()).cart.items[0]!;
+      expect(patchedItem.amountCents).toBe(2000);
+    });
+
+    it('POST rejects deleted extra instead of pricing at zero', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent();
+      const extra = await seedExtra(event.id, { priceCents: 1000 });
+
+      await prisma.ticketExtra.delete({ where: { id: extra.id } });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          item: {
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            tickets: [{ extras: [extra.id] }],
+          },
+        },
+      });
+      expect(res.statusCode).toBeGreaterThanOrEqual(400);
+      expect(res.statusCode).toBeLessThan(500);
+    });
+
+    it('PATCH rejects deleted extra instead of pricing at zero', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent();
+      const extra1 = await seedExtra(event.id, { priceCents: 1000 });
+      const extra2 = await seedExtra(event.id, { priceCents: 2000 });
+
+      const addRes = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          item: {
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            tickets: [{ extras: [extra1.id] }],
+          },
+        },
+      });
+      const itemId = upsertCartItemResponseSchema.parse(addRes.json()).cart.items[0]!.id;
+
+      await prisma.ticketExtra.delete({ where: { id: extra2.id } });
+
+      const patchRes = await app.inject({
+        method: 'PATCH',
+        url: `/cart/items/${itemId}`,
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          item: {
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            tickets: [{ extras: [extra2.id] }],
+          },
+        },
+      });
+      expect(patchRes.statusCode).toBeGreaterThanOrEqual(400);
+      expect(patchRes.statusCode).toBeLessThan(500);
+    });
+  });
 });
