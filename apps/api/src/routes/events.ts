@@ -80,6 +80,7 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, up
     type: e.type,
     description: e.description,
     capacity: e.capacity,
+    maxTicketsPerUser: e.maxTicketsPerUser,
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)

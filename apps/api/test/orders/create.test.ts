@@ -102,6 +102,62 @@ describe('POST /orders', () => {
     expect(stripe.calls[0]!.kind).toBe('createPaymentIntent');
   });
 
+  it('reserves N tier capacity slots for an N-ticket order (JDMA-267)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(10);
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { maxTicketsPerUser: 5 },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}, {}, {}],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    expect(body.amountCents).toBe(15000);
+
+    const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloaded.quantitySold).toBe(3);
+
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
+    expect(order.quantity).toBe(3);
+  });
+
+  it('rejects multi-ticket order when remaining tier capacity < tickets.length', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent(2);
+    await prisma.event.update({
+      where: { id: event.id },
+      data: { maxTicketsPerUser: 10 },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}, {}, {}],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloaded.quantitySold).toBe(0);
+  });
+
   it('allows repurchase: user with existing ticket creates new ticket order', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();
