@@ -175,8 +175,13 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'missing id or event field' });
     }
 
-    // H1: Reject sandbox/devMode events in production
-    if (event.devMode && app.env.NODE_ENV === 'production') {
+    // H1: Reject sandbox/devMode events in production unless an explicit
+    // override is enabled for controlled internal testing.
+    if (
+      event.devMode &&
+      app.env.NODE_ENV === 'production' &&
+      !app.env.ABACATEPAY_DEV_WEBHOOK_ENABLED
+    ) {
       request.log.warn(
         { eventId: event.id, eventType: event.event },
         'abacatepay webhook: rejected devMode event in production',

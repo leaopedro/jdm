@@ -210,6 +210,47 @@ describe('POST /abacatepay/webhook', () => {
     await prodApp.close();
   });
 
+  it('processes devMode events in production when ABACATEPAY_DEV_WEBHOOK_ENABLED=true', async () => {
+    const { user } = await createUser({ verified: true });
+    const { order } = await seedEventTierOrder(user.id);
+
+    const prodEnv: Env = {
+      ...env,
+      NODE_ENV: 'production',
+      ABACATEPAY_DEV_WEBHOOK_ENABLED: true,
+      RESEND_API_KEY: 'fake-resend-key',
+      SENTRY_DSN: undefined,
+      WORKER_ENABLED: false,
+    };
+    const prodApp = await buildApp(prodEnv, {
+      stripe: buildFakeStripe(),
+      abacatepay: buildFakeAbacatePay(),
+      push: new DevPushSender(),
+    });
+
+    const payload = JSON.stringify({
+      id: 'evt_devmode_prod_enabled',
+      event: 'transparent.completed',
+      devMode: true,
+      data: { billing: { id: order.providerRef } },
+    });
+
+    const res = await prodApp.inject({
+      method: 'POST',
+      url: webhookUrl,
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': 'valid-sig',
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(updatedOrder.status).toBe('paid');
+    await prodApp.close();
+  });
+
   it('allows devMode events in non-production', async () => {
     const { user } = await createUser({ verified: true });
     const { order } = await seedEventTierOrder(user.id);
