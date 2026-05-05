@@ -67,6 +67,8 @@ Living references; update these as features land.
 
 - **F4 Stripe ticketing** — §3.1 below (signup → buy → QR).
   Sandbox keys + Stripe CLI `stripe listen`.
+- **Cart redesign checkout parity** — §3.3 below (hosted checkout return,
+  webhook settlement, card + Pix compatibility matrix).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
 - **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
@@ -325,6 +327,74 @@ expandable-row details, CSV export, and responsive layout.
 | CSV export empty despite on-screen data    | Server action may not forward auth cookie; check `finance-actions.ts` cookie forwarding.   |
 | Mobile cards don't show expandable section | Verify `onClick` handler on the card div, not just the desktop `<tr>`.                     |
 | Trend chart doesn't render                 | Check `recharts` is installed and `ResponsiveContainer` has a parent with explicit height. |
+
+### 3.3 Cart redesign checkout parity matrix (JDMA-253)
+
+Use this matrix for the redesigned purchase flow rollout. The objective is
+to prove parity across provider behaviors at the settlement boundary:
+verified webhook marks state, duplicate delivery is idempotent, and stock
+release happens on failed/expired checkout.
+
+**Pre-requisites**
+
+- Run §3.1 steps 1–5 (API up, Stripe listener up, seeded DB).
+- Prepare a test event with at least one tier and one optional extra.
+- Keep one test user with no ticket for the event and one with a valid
+  ticket (for extras-only branch).
+
+| ID  | Provider              | Scenario                         | Trigger                                                                                                                                           | Expected result                                                                                                                                                                            |
+| --- | --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | Stripe (card)         | Hosted checkout happy path       | `POST /orders/checkout` from mobile web checkout, complete payment in Stripe-hosted page                                                          | Return URL includes `orderId`; webhook `checkout.session.completed` or `payment_intent.succeeded` settles order; `Order.status='paid'`; one `Ticket` (or `order.quantity` tickets) issued. |
+| C2  | Stripe (card)         | Session expired/cancelled        | Start checkout but abandon until `checkout.session.expired` (or trigger event replay for `checkout.session.expired`)                              | `Order.status='failed'`; reserved tier capacity and extras stock are released; no ticket issued.                                                                                           |
+| C3  | Stripe (card)         | Idempotent replay                | Replay the exact delivered Stripe event (`stripe events resend <evt_id>`)                                                                         | API returns `200` with `deduped: true`; no duplicate ticket or stock mutation.                                                                                                             |
+| C4  | Stripe (card)         | Cross-provider isolation         | Create a pending Pix order (`provider='abacatepay'`) with `providerRef` that matches a Stripe PI; send `checkout.session.completed` using that PI | Stripe handler returns `ignored`; Pix order remains `pending`; no ticket issued.                                                                                                           |
+| P1  | AbacatePay (Pix)      | Signature enforcement            | Send `/abacatepay/webhook` without or with invalid `x-webhook-signature`                                                                          | `401 Unauthorized`; no `PaymentWebhookEvent` row written.                                                                                                                                  |
+| P2  | AbacatePay (Pix)      | Idempotent replay                | Send the same valid AbacatePay event id twice                                                                                                     | First call `200 { ok: true }`; second call `200 { ok: true, deduped: true }`; exactly one `PaymentWebhookEvent` row for `(provider='abacatepay', eventId)`.                                |
+| C5  | Cart extras-only path | Existing ticket buys extras only | Existing ticket holder runs extras-only checkout flow                                                                                             | `Order.kind='extras_only'`; tier `quantitySold` unchanged; extras stock decremented and reconciled by webhook outcome.                                                                     |
+
+**UX evidence requirements for QA handoff (mandatory)**
+
+- Screen recording from tier selection to hosted checkout redirect and return
+  to app/web with `orderId` visible in URL/query.
+- Screenshot of cart/review total before checkout and success/failure state
+  after return.
+- API log excerpt with webhook `event.id`, event type, and `deduped`/`ignored`
+  result for the same order.
+- DB evidence for each matrix row:
+  - `SELECT id,status,provider,method,kind,quantity FROM "Order" WHERE id='<orderId>';`
+  - `SELECT id,order_id,status FROM "Ticket" WHERE order_id='<orderId>';`
+  - `SELECT id,quantity_sold FROM "TicketTier" WHERE id='<tierId>';`
+  - if extras used: `SELECT extra_id,quantity FROM "OrderExtra" WHERE order_id='<orderId>';`
+
+### 3.4 Cart rollout and rollback playbook (JDMA-253)
+
+Run this playbook when shipping cart-redesign checkout changes.
+
+**Rollout**
+
+1. Deploy API first (webhook + checkout handlers), then admin/mobile.
+2. Run matrix rows `C1`, `C3`, and `C4` immediately in staging/preview.
+3. If Pix is in scope for the release, also run `P1` and `P2` before
+   promoting to production.
+4. Promote only after evidence for all required rows is attached to the
+   Paperclip issue.
+
+**Rollback trigger conditions**
+
+- Duplicate ticket issuance for one paid order.
+- `Order.status` stuck `pending` after verified webhook delivery.
+- Tier/extras stock drift (`quantitySold` not released on failed/expired).
+- Cross-provider contamination (Stripe webhook mutates Pix order, or vice
+  versa).
+
+**Rollback path**
+
+1. Pause new checkouts at the app edge (hide buy CTA or maintenance gate).
+2. Revert API commit(s) that introduced checkout/cart behavior changes.
+3. Apply DB rollback steps from
+   `docs/migration-rollback-cart-redesign.md`.
+4. Replay one Stripe and one AbacatePay webhook in staging to verify
+   idempotency and isolation before reopening checkout.
 
 ## 4. Roles
 

@@ -391,6 +391,12 @@ v0.2.
 
 ### F4 — Ticketing (Stripe path)
 
+> note (2026-05-05, JDMA-254): cart redesign execution is merged on `main`
+> (PRs #109/#110/#112/#114), but `production` currently includes #109/#110
+> only. Keep 4.1–4.7 as `[~]` until `main -> production` promotion plus
+> post-deploy smoke evidence (matrix `C1/C3/C4`, plus `P1/P2` when Pix is in
+> scope).
+
 #### 4.1 Schema: TicketTier, Order, Ticket
 
 - [~] **Scope:** Already partially above; finalize constraints + indexes
