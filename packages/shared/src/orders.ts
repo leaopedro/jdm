@@ -3,6 +3,9 @@ import { z } from 'zod';
 export const paymentMethodSchema = z.enum(['card', 'pix']);
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
+export const paymentProviderSchema = z.enum(['stripe', 'abacatepay']);
+export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
+
 export const orderStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded', 'expired']);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
@@ -66,8 +69,10 @@ export type CreateWebCheckoutResponse = z.infer<typeof createWebCheckoutResponse
 export const getOrderResponseSchema = z.object({
   orderId: z.string().min(1),
   status: orderStatusSchema,
+  provider: paymentProviderSchema,
   expiresAt: z.string().datetime().nullable(),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
+  ticketId: z.string().min(1).optional(),
 });
 export type GetOrderResponse = z.infer<typeof getOrderResponseSchema>;

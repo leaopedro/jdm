@@ -78,11 +78,14 @@ describe('GET /orders/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
     const body = getOrderResponseSchema.parse(res.json());
     expect(body.status).toBe('pending');
     expect(body.orderId).toBe(order.id);
+    expect(body.provider).toBe('stripe');
     expect(body.amountCents).toBe(5000);
     expect(body.currency).toBe('BRL');
+    expect(body.ticketId).toBeUndefined();
 
     // no expiry side-effect
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
@@ -136,7 +139,7 @@ describe('GET /orders/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 404 when the order belongs to a different user', async () => {
+  it('returns 403 when the order belongs to a different user', async () => {
     const { user } = await createUser({ verified: true });
     const { user: other } = await createUser({ email: 'other@jdm.test', verified: true });
     const { event, tier } = await seedPublishedEvent();
@@ -158,7 +161,8 @@ describe('GET /orders/:id', () => {
       url: `/orders/${order.id}`,
       headers: { authorization: bearer(env, user.id) },
     });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: 'Forbidden' });
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -167,5 +171,93 @@ describe('GET /orders/:id', () => {
       url: '/orders/some-id',
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('returns paid + ticketId after Stripe webhook flips order to paid', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_paid_flow',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 900_000),
+      },
+    });
+    await prisma.ticketTier.update({ where: { id: tier.id }, data: { quantitySold: 1 } });
+
+    // 1st poll: pending, no ticketId
+    const pre = await app.inject({
+      method: 'GET',
+      url: `/orders/${order.id}`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(pre.statusCode).toBe(200);
+    const preBody = getOrderResponseSchema.parse(pre.json());
+    expect(preBody.status).toBe('pending');
+    expect(preBody.ticketId).toBeUndefined();
+
+    // Drive the existing webhook handler to flip to paid + issue ticket.
+    stripe.nextEvent = {
+      id: 'evt_get_paid_flow',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: order.providerRef, metadata: { orderId: order.id } } },
+    };
+    const webhookRes = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: Buffer.from(JSON.stringify(stripe.nextEvent)),
+    });
+    expect(webhookRes.statusCode).toBe(200);
+
+    // 2nd poll: paid + ticketId
+    const post = await app.inject({
+      method: 'GET',
+      url: `/orders/${order.id}`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(post.statusCode).toBe(200);
+    const paid = getOrderResponseSchema.parse(post.json());
+    expect(paid.status).toBe('paid');
+    expect(paid.ticketId).toBeDefined();
+
+    const dbTicket = await prisma.ticket.findFirstOrThrow({ where: { orderId: order.id } });
+    expect(paid.ticketId).toBe(dbTicket.id);
+  });
+
+  it('rate-limits the poller after 60 hits/minute/user', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        method: 'card',
+        provider: 'stripe',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 900_000),
+      },
+    });
+
+    let last = 200;
+    for (let i = 0; i < 65; i += 1) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/orders/${order.id}`,
+        headers: { authorization: bearer(env, user.id) },
+      });
+      last = res.statusCode;
+      if (last === 429) break;
+    }
+    expect(last).toBe(429);
   });
 });
