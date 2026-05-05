@@ -1,6 +1,7 @@
 import {
   createOrderRequestSchema,
   createOrderResponseSchema,
+  createPixOrderResponseSchema,
   createWebCheckoutRequestSchema,
   createWebCheckoutResponseSchema,
   getOrderResponseSchema,
@@ -8,6 +9,7 @@ import {
 import type {
   CreateOrderRequest,
   CreateOrderResponse,
+  CreatePixOrderResponse,
   CreateWebCheckoutRequest,
   CreateWebCheckoutResponse,
   GetOrderResponse,
@@ -28,6 +30,15 @@ export const createWebCheckout = (
   return authedRequest('/orders/checkout', createWebCheckoutResponseSchema, {
     method: 'POST',
     body: createWebCheckoutRequestSchema.parse(input),
+  });
+};
+
+export const createPixOrder = (
+  input: Omit<CreateOrderRequest, 'method'>,
+): Promise<CreatePixOrderResponse> => {
+  return authedRequest('/orders', createPixOrderResponseSchema, {
+    method: 'POST',
+    body: createOrderRequestSchema.parse({ ...input, method: 'pix' }),
   });
 };
 

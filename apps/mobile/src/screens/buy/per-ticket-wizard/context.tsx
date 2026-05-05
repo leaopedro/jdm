@@ -96,6 +96,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         tickets: Array.from({ length: state.quantity }, () => ({})),
         reviewing: false,
         extrasOnly: state.extrasOnly,
+        method: state.method,
       };
 
     default:
@@ -128,6 +129,7 @@ interface WizardProviderProps {
   onOrderCreated: OnOrderCreated;
   onExitWizard: () => void;
   extrasOnly?: boolean;
+  method?: 'card' | 'pix';
   children: ReactNode;
 }
 
@@ -139,6 +141,7 @@ export function WizardProvider({
   onOrderCreated,
   onExitWizard,
   extrasOnly = false,
+  method = 'card',
   children,
 }: WizardProviderProps) {
   const applicableSteps = useMemo(
@@ -156,8 +159,9 @@ export function WizardProvider({
       tickets: Array.from({ length: quantity }, () => ({})),
       reviewing: applicableSteps.length === 0,
       extrasOnly,
+      method,
     }),
-    [eventId, tier, quantity, applicableSteps, extrasOnly],
+    [eventId, tier, quantity, applicableSteps, extrasOnly, method],
   );
 
   const [state, rawDispatch] = useReducer(wizardReducer, initialState);
