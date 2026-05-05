@@ -292,6 +292,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
     if (input.method === 'pix') {
       if (!app.abacatepay) {
+        await rollbackReservation(data, data.tier.id);
         return reply
           .status(503)
           .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });

@@ -405,6 +405,35 @@ describe('POST /orders', () => {
     expect(res.statusCode).toBe(503);
   });
 
+  it('rolls back tier and extra stock when Pix returns 503 (provider not configured)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id);
+
+    const tierBefore = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    const extraBefore = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'pix',
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(503);
+
+    const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    const extraAfter = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+
+    expect(tierAfter.quantitySold).toBe(tierBefore.quantitySold);
+    expect(extraAfter.quantitySold).toBe(extraBefore.quantitySold);
+  });
+
   it('sweeps expired pending orders and reclaims capacity before reserving', async () => {
     const { user } = await createUser({ verified: true });
     const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });

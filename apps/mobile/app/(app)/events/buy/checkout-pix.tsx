@@ -42,7 +42,7 @@ export default function CheckoutPixScreen() {
   const [copied, setCopied] = useState(false);
 
   const { display, isExpired } = useCountdown(expiresAt);
-  const { status, retry } = useOrderStatus({
+  const { status, ticketId, retry } = useOrderStatus({
     orderId,
     expiresAt,
     enabled: !isExpired,
@@ -55,7 +55,11 @@ export default function CheckoutPixScreen() {
   };
 
   const handleViewTicket = () => {
-    router.replace('/tickets' as never);
+    if (ticketId) {
+      router.replace(`/tickets/${ticketId}` as never);
+    } else {
+      router.replace('/tickets' as never);
+    }
   };
 
   const handleTryAgain = () => {

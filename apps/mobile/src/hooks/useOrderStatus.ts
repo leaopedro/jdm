@@ -1,3 +1,4 @@
+import type { GetOrderResponse } from '@jdm/shared/orders';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getOrder } from '~/api/orders';
@@ -16,6 +17,8 @@ const MAX_INTERVAL_MS = 15_000;
 
 export function useOrderStatus({ orderId, expiresAt, enabled = true }: UseOrderStatusOptions) {
   const [status, setStatus] = useState<OrderPollStatus>('polling');
+  const [ticketId, setTicketId] = useState<string | undefined>();
+  const [retryCount, setRetryCount] = useState(0);
   const startedAt = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeRef = useRef(true);
@@ -41,10 +44,11 @@ export function useOrderStatus({ orderId, expiresAt, enabled = true }: UseOrderS
       }
 
       try {
-        const order = await getOrder(orderId);
+        const order: GetOrderResponse = await getOrder(orderId);
         if (!activeRef.current) return;
 
         if (order.status === 'paid') {
+          setTicketId(order.ticketId);
           setStatus('paid');
           return;
         }
@@ -69,12 +73,13 @@ export function useOrderStatus({ orderId, expiresAt, enabled = true }: UseOrderS
       activeRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [orderId, expiresAt, enabled, getInterval]);
+  }, [orderId, expiresAt, enabled, getInterval, retryCount]);
 
   const retry = useCallback(() => {
     setStatus('polling');
     startedAt.current = Date.now();
+    setRetryCount((c) => c + 1);
   }, []);
 
-  return { status, retry };
+  return { status, ticketId, retry };
 }
