@@ -2,9 +2,16 @@ export const ticketsCopy = {
   tab: 'Ingressos',
   list: {
     empty: 'Você ainda não tem ingressos.',
+    emptyFilter: 'Nenhum ingresso nesta categoria.',
     loading: 'Carregando seus ingressos...',
     upcoming: 'Próximos',
     past: 'Anteriores',
+  },
+  filters: {
+    all: 'Todos',
+    valid: 'Válidos',
+    used: 'Utilizados',
+    expired: 'Expirados',
   },
   detail: {
     title: 'Seu ingresso',
