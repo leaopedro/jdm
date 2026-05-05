@@ -60,7 +60,16 @@ export default function AppLayout() {
             },
           }}
         />
-        <Tabs.Screen name="tickets" options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }} />
+        <Tabs.Screen
+          name="tickets"
+          options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              router.replace('/tickets');
+            },
+          }}
+        />
         <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
         <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
         <Tabs.Screen
