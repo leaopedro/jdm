@@ -34,11 +34,13 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
     async (extraId: string) => {
       setPending((prev) => new Set(prev).add(extraId));
       try {
-        const currentExtras = item.tickets[0]?.extras ?? [];
-        const isSelected = currentExtras.includes(extraId);
-        const newExtras = isSelected
-          ? currentExtras.filter((id) => id !== extraId)
-          : [...currentExtras, extraId];
+        const tickets = item.tickets.map((ticket) => {
+          const isSelected = ticket.extras.includes(extraId);
+          const extras = isSelected
+            ? ticket.extras.filter((id) => id !== extraId)
+            : [...ticket.extras, extraId];
+          return { ...ticket, extras };
+        });
 
         await updateCartItem(item.id, {
           eventId: item.eventId,
@@ -46,11 +48,11 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
           source: item.source,
           kind: item.kind,
           quantity: item.quantity,
-          tickets: [{ extras: newExtras }],
+          tickets,
         });
         await refresh();
       } catch {
-        // Error handled silently; cart state unchanged on failure
+        // Cart state unchanged on failure
       } finally {
         setPending((prev) => {
           const next = new Set(prev);
