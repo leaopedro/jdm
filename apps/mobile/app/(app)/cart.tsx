@@ -1,5 +1,7 @@
+import type { CartItem } from '@jdm/shared/cart';
+import type { EventExtraPublic } from '@jdm/shared/extras';
 import { useRouter } from 'expo-router';
-import { Trash2 } from 'lucide-react-native';
+import { ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,16 +13,21 @@ import {
   View,
 } from 'react-native';
 
+import { getEventById } from '~/api/events';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { formatBRL } from '~/lib/format';
+import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import { theme } from '~/theme';
 
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [drawerItem, setDrawerItem] = useState<CartItem | null>(null);
+  const [drawerExtras, setDrawerExtras] = useState<EventExtraPublic[]>([]);
+  const [loadingExtras, setLoadingExtras] = useState(false);
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -41,6 +48,24 @@ export default function CartScreen() {
       },
     ]);
   }, [clear]);
+
+  const openExtrasDrawer = useCallback(async (item: CartItem) => {
+    setDrawerItem(item);
+    setLoadingExtras(true);
+    try {
+      const event = await getEventById(item.eventId);
+      setDrawerExtras(event.extras);
+    } catch {
+      setDrawerExtras([]);
+    } finally {
+      setLoadingExtras(false);
+    }
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerItem(null);
+    setDrawerExtras([]);
+  }, []);
 
   if (loading) {
     return (
@@ -75,6 +100,10 @@ export default function CartScreen() {
     );
   }
 
+  const currentDrawerItem = drawerItem
+    ? (cart.items.find((i) => i.id === drawerItem.id) ?? drawerItem)
+    : null;
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -82,7 +111,12 @@ export default function CartScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <Pressable
+            style={styles.card}
+            onPress={() => void openExtrasDrawer(item)}
+            accessibilityRole="button"
+            accessibilityHint={cartCopy.item.tapExtras}
+          >
             <View style={styles.cardTop}>
               <View style={styles.cardInfo}>
                 <Text style={styles.cardTitle}>
@@ -90,27 +124,37 @@ export default function CartScreen() {
                 </Text>
                 <Text style={styles.cardSub}>{formatBRL(item.amountCents)}</Text>
               </View>
-              <Pressable
-                onPress={() => void handleRemove(item.id)}
-                disabled={removingId === item.id}
-                accessibilityRole="button"
-                accessibilityLabel={cartCopy.item.remove}
-                hitSlop={8}
-                style={styles.removeBtn}
-              >
-                {removingId === item.id ? (
-                  <ActivityIndicator size="small" color={theme.colors.muted} />
-                ) : (
-                  <Trash2 color={theme.colors.muted} size={18} strokeWidth={1.75} />
-                )}
-              </Pressable>
+              <View style={styles.cardActions}>
+                <Pressable
+                  onPress={() => void handleRemove(item.id)}
+                  disabled={removingId === item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={cartCopy.item.remove}
+                  hitSlop={8}
+                  style={styles.removeBtn}
+                >
+                  {removingId === item.id ? (
+                    <ActivityIndicator size="small" color={theme.colors.muted} />
+                  ) : (
+                    <Trash2 color={theme.colors.muted} size={18} strokeWidth={1.75} />
+                  )}
+                </Pressable>
+                <ChevronRight color={theme.colors.muted} size={16} strokeWidth={1.75} />
+              </View>
             </View>
-            {item.extras.length > 0 && (
-              <Text style={styles.cardExtras}>
-                {cartCopy.item.extras}: {item.extras.length}
-              </Text>
+            {item.extras.length > 0 ? (
+              <View style={styles.extrasRow}>
+                <Text style={styles.cardExtras}>
+                  {item.extras.length} {cartCopy.item.extras.toLowerCase()}
+                </Text>
+                <Text style={styles.extrasAmount}>
+                  {formatBRL(item.extras.reduce((s, e) => s + e.subtotalCents, 0))}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.tapHint}>{cartCopy.item.tapExtras}</Text>
             )}
-          </View>
+          </Pressable>
         )}
       />
 
@@ -146,6 +190,15 @@ export default function CartScreen() {
           )}
         </View>
       </View>
+
+      {currentDrawerItem && !loadingExtras && (
+        <ExtrasDrawer
+          visible
+          item={currentDrawerItem}
+          eventExtras={drawerExtras}
+          onClose={closeDrawer}
+        />
+      )}
     </View>
   );
 }
@@ -183,7 +236,11 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1, gap: theme.spacing.xs },
   cardTitle: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
   cardSub: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   cardExtras: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  extrasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  extrasAmount: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  tapHint: { color: theme.colors.muted, fontSize: theme.font.size.sm, fontStyle: 'italic' },
   removeBtn: { padding: theme.spacing.xs },
   footer: {
     borderTopWidth: 1,
