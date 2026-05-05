@@ -367,7 +367,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     request.log.info(
       { eventId: event.id, eventType: event.event, devMode: event.devMode },
-      'abacatepay webhook: received',
+      'abacatepay webhook: unhandled event type',
     );
 
     return reply.status(200).send({ ok: true });
