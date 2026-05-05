@@ -31,7 +31,11 @@ const makePayload = (
     data: overrides.data ?? { billing: { id: 'pix_123' }, amount: 5000 },
   });
 
-const makeTransparentCompletedPayload = (billingId: string, eventId?: string) =>
+const makeTransparentCompletedPayload = (
+  billingId: string,
+  eventId?: string,
+  extra?: { metadata?: Record<string, string>; updatedAt?: string },
+) =>
   JSON.stringify({
     id: eventId ?? `evt_${Date.now()}`,
     event: 'transparent.completed',
@@ -41,7 +45,8 @@ const makeTransparentCompletedPayload = (billingId: string, eventId?: string) =>
       amount: 5000,
       status: 'PAID',
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      updatedAt: extra?.updatedAt ?? new Date().toISOString(),
+      ...(extra?.metadata && { metadata: extra.metadata }),
     },
   });
 
@@ -550,6 +555,60 @@ describe('POST /abacatepay/webhook', () => {
 
       const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
       expect(tickets).toHaveLength(1);
+    });
+
+    // Primary lookup path: data.metadata.orderId
+    it('uses data.metadata.orderId for primary order lookup', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id, {
+        providerRef: 'pix_char_unrelated', // intentional mismatch — must use metadata
+      });
+
+      const payload = makeTransparentCompletedPayload(
+        'pix_char_different_billing_id', // billingId in payload doesn't match providerRef
+        'evt_metadata_lookup_1',
+        { metadata: { orderId: order.id } },
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('paid');
+    });
+
+    // M5: Stale replay rejection
+    it('rejects events with payload timestamp older than 24h (M5)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id);
+
+      const stale = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+      const payload = makeTransparentCompletedPayload(order.providerRef!, 'evt_stale_1', {
+        updatedAt: stale,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Order should NOT be flipped to paid for stale events
+      const unchangedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(unchangedOrder.status).toBe('pending');
     });
 
     it('handles legacy data.billing.id format (fallback extraction)', async () => {

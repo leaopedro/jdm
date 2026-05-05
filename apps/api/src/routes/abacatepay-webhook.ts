@@ -52,6 +52,31 @@ const extractBillingId = (data: Record<string, unknown>): string | undefined => 
   return undefined;
 };
 
+const extractOrderIdFromMetadata = (data: Record<string, unknown>): string | undefined => {
+  if (typeof data.metadata === 'object' && data.metadata !== null) {
+    const metadata = data.metadata as Record<string, unknown>;
+    if (typeof metadata.orderId === 'string') return metadata.orderId;
+  }
+  return undefined;
+};
+
+const extractEventTimestamp = (data: Record<string, unknown>): Date | undefined => {
+  // /transparents settlement time is at data.updatedAt; fallback to createdAt
+  const candidate =
+    typeof data.updatedAt === 'string'
+      ? data.updatedAt
+      : typeof data.createdAt === 'string'
+        ? data.createdAt
+        : undefined;
+  if (!candidate) return undefined;
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+// M5: reject events whose payload timestamp is older than this window. Stops
+// stale-replay attacks where a captured signed payload is delivered weeks later.
+const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 const flagManualRefund = (context: {
   orderId: string;
   providerRef: string;
@@ -169,6 +194,22 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true });
     }
 
+    // M5: Replay window — reject events with payload timestamps older than 24h
+    const eventTimestamp = extractEventTimestamp(event.data);
+    if (eventTimestamp && Date.now() - eventTimestamp.getTime() > REPLAY_WINDOW_MS) {
+      Sentry.captureMessage('abacatepay webhook: stale event rejected', {
+        level: 'warning',
+        tags: { kind: 'webhook-stale-replay', provider: 'abacatepay' },
+        extra: { eventId: event.id, eventTimestamp: eventTimestamp.toISOString() },
+      });
+      request.log.warn(
+        { eventId: event.id, eventTimestamp: eventTimestamp.toISOString() },
+        'abacatepay webhook: stale event rejected',
+      );
+      await markProcessed(event.id, event);
+      return reply.status(200).send({ ok: true });
+    }
+
     // C3: Pix payment success — documented event name is transparent.completed
     if (event.event === 'transparent.completed') {
       const billingId = extractBillingId(event.data);
@@ -182,10 +223,18 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true });
       }
 
-      const order = await prisma.order.findFirst({
-        where: { provider: 'abacatepay', providerRef: billingId },
-        select: { id: true, userId: true, eventId: true },
-      });
+      // Primary lookup: orderId from metadata (passed during /transparents/create)
+      // Fallback: lookup by providerRef (charge ID) for backwards compat
+      const metadataOrderId = extractOrderIdFromMetadata(event.data);
+      const order = metadataOrderId
+        ? await prisma.order.findFirst({
+            where: { id: metadataOrderId, provider: 'abacatepay' },
+            select: { id: true, userId: true, eventId: true },
+          })
+        : await prisma.order.findFirst({
+            where: { provider: 'abacatepay', providerRef: billingId },
+            select: { id: true, userId: true, eventId: true },
+          });
 
       if (!order) {
         Sentry.addBreadcrumb({

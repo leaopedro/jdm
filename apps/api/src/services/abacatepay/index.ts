@@ -10,14 +10,25 @@ const ABACATEPAY_PUBLIC_KEY =
 export type PixBillingResult = {
   id: string;
   brCode: string;
+  brCodeBase64?: string;
+  amount: number;
   expiresAt: string;
   status: string;
+};
+
+export type PixBillingCustomer = {
+  name: string;
+  taxId: string;
+  email?: string;
+  cellphone?: string;
 };
 
 export type CreatePixBillingInput = {
   amountCents: number;
   externalId: string;
   description: string;
+  expiresInSeconds?: number;
+  customer?: PixBillingCustomer;
   metadata?: Record<string, string>;
 };
 
@@ -65,27 +76,47 @@ export const buildAbacatePay = (env: AbacatePayEnv): AbacatePayClient => {
   };
 
   return {
-    createPixBilling: async ({ amountCents, externalId, description, metadata }) => {
+    createPixBilling: async ({
+      amountCents,
+      externalId,
+      description,
+      expiresInSeconds,
+      customer,
+      metadata,
+    }) => {
+      const dataBody: Record<string, unknown> = {
+        amount: amountCents,
+        description,
+        externalId,
+        metadata: metadata ?? {},
+      };
+      if (expiresInSeconds !== undefined) dataBody.expiresIn = expiresInSeconds;
+      if (customer) dataBody.customer = customer;
+
       const result = await request<{
         id: string;
         brCode: string;
+        brCodeBase64?: string;
+        amount: number;
         expiresAt: string;
         status: string;
-      }>('POST', '/billing/pix/create', {
-        amount: amountCents,
-        externalId,
-        description,
-        metadata: metadata ?? {},
+      }>('POST', '/transparents/create', {
+        method: 'PIX',
+        data: dataBody,
       });
       return result;
     },
 
     getPixBilling: async (id) => {
-      const result = await request<{ id: string; status: string; paidAt: string | null }>(
+      const result = await request<{ id: string; status: string; updatedAt: string | null }>(
         'GET',
-        `/billing/pix/${id}`,
+        `/transparents/${id}`,
       );
-      return result;
+      return {
+        id: result.id,
+        status: result.status,
+        paidAt: result.status === 'PAID' ? result.updatedAt : null,
+      };
     },
 
     verifyWebhookSignature: (payload, signature) => {
