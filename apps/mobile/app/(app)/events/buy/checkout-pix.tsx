@@ -54,24 +54,25 @@ export default function CheckoutPixScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleViewTicket = () => {
+  const handleTryAgain = () => {
+    router.back();
+  };
+
+  useEffect(() => {
+    if (status !== 'paid') return;
     if (ticketId) {
       router.replace(`/tickets/${ticketId}` as never);
     } else {
       router.replace('/tickets' as never);
     }
-  };
-
-  const handleTryAgain = () => {
-    router.back();
-  };
+  }, [status, ticketId, router]);
 
   if (status === 'paid') {
     return (
       <View style={styles.center}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
         <Text style={styles.successTitle}>{pixCopy.paid}</Text>
         <Text style={styles.sub}>{pixCopy.paidSub}</Text>
-        <Button label={pixCopy.viewTicket} onPress={handleViewTicket} style={styles.cta} />
       </View>
     );
   }
