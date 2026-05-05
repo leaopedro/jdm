@@ -7,7 +7,13 @@ export const buildLoggerOptions = (env: Env): LoggerOptions => {
     level: env.LOG_LEVEL,
     base: { service: 'api', sha: env.GIT_SHA },
     redact: {
-      paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.headers["x-webhook-signature"]',
+        '*.password',
+        '*.token',
+      ],
       censor: '[REDACTED]',
     },
   };
