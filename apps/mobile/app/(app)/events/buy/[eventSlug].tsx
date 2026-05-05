@@ -163,7 +163,7 @@ export default function BuyScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
           accessibilityRole="button"
           accessibilityLabel="Voltar"
           hitSlop={8}
