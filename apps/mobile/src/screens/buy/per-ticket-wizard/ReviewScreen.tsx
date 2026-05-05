@@ -10,9 +10,14 @@ import {
   View,
 } from 'react-native';
 
-import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
 import type { TicketData } from './types';
+
+interface SelectedExtra {
+  id: string;
+  name: string;
+  priceCents: number;
+}
 
 import { createOrder } from '~/api/orders';
 import { Button } from '~/components/Button';

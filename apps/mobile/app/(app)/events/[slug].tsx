@@ -19,11 +19,9 @@ import { getEvent } from '~/api/events';
 import { createOrder } from '~/api/orders';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
-import { buyCopy } from '~/copy/buy';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
-import { useMyTicketForEvent } from '~/hooks/useMyTicketForEvent';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
 import { theme } from '~/theme';
@@ -36,7 +34,6 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
-  const { ticket: existingTicket, ownedExtraIds } = useMyTicketForEvent(event?.id);
   const { addItem, adding } = useCart();
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -200,15 +197,6 @@ export default function EventDetailScreen() {
         <Text style={styles.body}>{event.description}</Text>
       </View>
 
-      {existingTicket && event.extras.length > 0 && ownedExtraIds.size < event.extras.length && (
-        <View style={styles.section}>
-          <Button
-            label={buyCopy.extrasOnly.cta}
-            onPress={() => router.push(`/events/buy/${event.slug}` as never)}
-          />
-        </View>
-      )}
-
       <View style={styles.section}>
         <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
         {event.tiers.map((t) => {
@@ -258,7 +246,7 @@ export default function EventDetailScreen() {
         />
       </View>
 
-      {selectedTier && !existingTicket && (
+      {selectedTier && (
         <View style={styles.section}>
           <Pressable
             onPress={() => void addToCart(selectedTier)}

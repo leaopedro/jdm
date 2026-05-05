@@ -25,3 +25,6 @@ export const listEvents = (q: Partial<EventListQuery> = {}): Promise<EventListRe
 
 export const getEvent = (slug: string): Promise<EventDetail> =>
   request(`/events/${encodeURIComponent(slug)}`, eventDetailSchema);
+
+export const getEventById = (id: string): Promise<EventDetail> =>
+  request(`/events/by-id/${encodeURIComponent(id)}`, eventDetailSchema);

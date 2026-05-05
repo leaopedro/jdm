@@ -8,6 +8,16 @@ export const cartCopy = {
     extras: 'Extras',
     remove: 'Remover',
     quantity: (n: number) => `${n}x`,
+    tapExtras: 'Toque para gerenciar extras',
+  },
+  drawer: {
+    title: 'Extras',
+    empty: 'Nenhum extra disponível para este evento.',
+    add: 'Adicionar',
+    remove: 'Remover',
+    extrasTotal: 'Subtotal extras',
+    loading: 'Carregando extras...',
+    error: 'Erro ao carregar extras.',
   },
   totals: {
     tickets: 'Ingressos',
