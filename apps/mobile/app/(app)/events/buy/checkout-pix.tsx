@@ -60,12 +60,11 @@ export default function CheckoutPixScreen() {
 
   useEffect(() => {
     if (status !== 'paid') return;
-    if (ticketId) {
-      router.replace(`/tickets/${ticketId}` as never);
-    } else {
-      router.replace('/tickets' as never);
-    }
-  }, [status, ticketId, router]);
+    router.replace({
+      pathname: '/(app)/events/buy/checkout-confirmed',
+      params: ticketId ? { orderId, ticketId } : { orderId },
+    } as never);
+  }, [status, ticketId, orderId, router]);
 
   if (status === 'paid') {
     return (

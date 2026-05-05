@@ -36,6 +36,12 @@ export const buyCopy = {
     errorTitle: 'Erro',
     errorBody: 'Não conseguimos criar seu pedido. Tente novamente.',
   },
+  confirmed: {
+    title: 'Pagamento confirmado!',
+    subtitle: 'Seu ingresso está pronto.',
+    viewTicket: 'Ver ingresso',
+    goHome: 'Voltar para Eventos',
+  },
   webCheckout: {
     redirecting: 'Redirecionando para pagamento...',
     returnTitle: 'Finalizando compra',
