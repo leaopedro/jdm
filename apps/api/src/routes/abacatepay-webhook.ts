@@ -40,10 +40,23 @@ const markProcessed = async (eventId: string, payload: unknown): Promise<boolean
   }
 };
 
+// Current AbacatePay v2 webhooks for `transparent.completed` nest the charge
+// payload under `data.transparent` (alongside `customer` / `payerInformation`).
+// Older shapes (`data.id`, `data.billing.id`, `data.billingId`) are kept as
+// fallbacks for replay/back-compat.
+// https://docs.abacatepay.com/pages/webhooks/events/transparent
+const getTransparent = (data: Record<string, unknown>): Record<string, unknown> | undefined => {
+  if (typeof data.transparent === 'object' && data.transparent !== null) {
+    return data.transparent as Record<string, unknown>;
+  }
+  return undefined;
+};
+
 const extractBillingId = (data: Record<string, unknown>): string | undefined => {
-  // Primary: /transparents webhook puts charge ID at data.id
+  const transparent = getTransparent(data);
+  if (transparent && typeof transparent.id === 'string') return transparent.id;
+  // Legacy flat shape used by older deliveries / tests
   if (typeof data.id === 'string') return data.id;
-  // Legacy: nested billing object from /v2/billing/pix format
   if (typeof data.billing === 'object' && data.billing !== null) {
     const billing = data.billing as Record<string, unknown>;
     if (typeof billing.id === 'string') return billing.id;
@@ -53,6 +66,11 @@ const extractBillingId = (data: Record<string, unknown>): string | undefined => 
 };
 
 const extractOrderIdFromMetadata = (data: Record<string, unknown>): string | undefined => {
+  const transparent = getTransparent(data);
+  if (transparent && typeof transparent.metadata === 'object' && transparent.metadata !== null) {
+    const metadata = transparent.metadata as Record<string, unknown>;
+    if (typeof metadata.orderId === 'string') return metadata.orderId;
+  }
   if (typeof data.metadata === 'object' && data.metadata !== null) {
     const metadata = data.metadata as Record<string, unknown>;
     if (typeof metadata.orderId === 'string') return metadata.orderId;
@@ -61,12 +79,13 @@ const extractOrderIdFromMetadata = (data: Record<string, unknown>): string | und
 };
 
 const extractEventTimestamp = (data: Record<string, unknown>): Date | undefined => {
-  // /transparents settlement time is at data.updatedAt; fallback to createdAt
+  const transparent = getTransparent(data);
+  const source = transparent ?? data;
   const candidate =
-    typeof data.updatedAt === 'string'
-      ? data.updatedAt
-      : typeof data.createdAt === 'string'
-        ? data.createdAt
+    typeof source.updatedAt === 'string'
+      ? source.updatedAt
+      : typeof source.createdAt === 'string'
+        ? source.createdAt
         : undefined;
   if (!candidate) return undefined;
   const parsed = new Date(candidate);
