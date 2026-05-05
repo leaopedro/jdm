@@ -1,16 +1,7 @@
 import type { TicketTier } from '@jdm/shared/events';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-} from 'react';
+import { createContext, useContext, useMemo, useReducer } from 'react';
 import type { ReactNode } from 'react';
 
-import { wizardStorage } from './storage';
 import type { OnOrderCreated, WizardAction, WizardState, WizardStepDefinition } from './types';
 
 function wizardReducer(state: WizardState, action: WizardAction): WizardState {
@@ -117,10 +108,6 @@ interface WizardContextValue {
 
 const WizardContext = createContext<WizardContextValue | null>(null);
 
-function storageKey(eventId: string, tierId: string): string {
-  return `jdm.wizard.${eventId}.${tierId}`;
-}
-
 interface WizardProviderProps {
   eventId: string;
   tier: TicketTier;
@@ -144,11 +131,13 @@ export function WizardProvider({
   method = 'card',
   children,
 }: WizardProviderProps) {
-  const applicableSteps = useMemo(
+  const applicableSteps: WizardStepDefinition[] = useMemo(
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     () => steps.filter((s) => !s.appliesTo || s.appliesTo({ tier })),
     [steps, tier],
   );
 
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment */
   const initialState: WizardState = useMemo(
     () => ({
       eventId,
@@ -163,64 +152,9 @@ export function WizardProvider({
     }),
     [eventId, tier, quantity, applicableSteps, extrasOnly, method],
   );
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
-  const [state, rawDispatch] = useReducer(wizardReducer, initialState);
-  const key = storageKey(eventId, tier.id);
-  const restoredRef = useRef(false);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const raw = await wizardStorage.getItem(key);
-        if (raw && !restoredRef.current) {
-          const saved = JSON.parse(raw) as Partial<WizardState>;
-          if (saved.quantity === quantity && saved.tickets) {
-            rawDispatch({ type: 'RESET' });
-            for (let i = 0; i < saved.tickets.length && i < quantity; i++) {
-              const ticketData = saved.tickets[i];
-              if (ticketData && Object.keys(ticketData).length > 0) {
-                rawDispatch({ type: 'NEXT', stepData: ticketData });
-              }
-            }
-          }
-        }
-      } catch {
-        // Storage unavailable — start fresh
-      }
-      restoredRef.current = true;
-    })();
-  }, [key, quantity]);
-
-  const dispatch = useCallback((action: WizardAction) => {
-    rawDispatch(action);
-  }, []);
-
-  useEffect(() => {
-    if (!restoredRef.current) return;
-    void wizardStorage
-      .setItem(
-        key,
-        JSON.stringify({
-          quantity: state.quantity,
-          tickets: state.tickets,
-          position: state.position,
-          reviewing: state.reviewing,
-        }),
-      )
-      .catch(() => {});
-  }, [key, state.quantity, state.tickets, state.position, state.reviewing]);
-
-  const clearStorage = useCallback(() => {
-    void wizardStorage.removeItem(key).catch(() => {});
-  }, [key]);
-
-  const wrappedOnOrderCreated: OnOrderCreated = useCallback(
-    async (order) => {
-      clearStorage();
-      await onOrderCreated(order);
-    },
-    [clearStorage, onOrderCreated],
-  );
+  const [state, dispatch] = useReducer(wizardReducer, initialState);
 
   const totalStepCount = applicableSteps.length * quantity + 1;
   const currentGlobalStep = state.reviewing
@@ -241,7 +175,7 @@ export function WizardProvider({
       isExitBack,
       totalStepCount,
       currentGlobalStep,
-      onOrderCreated: wrappedOnOrderCreated,
+      onOrderCreated,
       onExitWizard,
     }),
     [
@@ -251,7 +185,7 @@ export function WizardProvider({
       isExitBack,
       totalStepCount,
       currentGlobalStep,
-      wrappedOnOrderCreated,
+      onOrderCreated,
       onExitWizard,
     ],
   );
