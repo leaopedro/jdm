@@ -366,7 +366,22 @@ reviewer) approves the merge.
 
 - **Stripe:** test mode keys, card `4242 4242 4242 4242`, decline
   `4000 0000 0000 9995`. Webhook via `stripe listen --forward-to`.
-- **AbacatePay:** sandbox keys. Document fixture URLs as F4b lands.
+- **AbacatePay:** sandbox keys.
+  - Simulate Pix approval in dev mode with the checkout transparent id in
+    the query string (not in JSON body):
+
+    ```bash
+    curl --request POST \
+      --url "https://api.abacatepay.com/v2/transparents/simulate-payment?id=<pix_transparent_id>" \
+      --header "Authorization: Bearer <ABACATEPAY_DEV_API_KEY>" \
+      --header "Content-Type: application/json" \
+      --data '{"metadata": {}}'
+    ```
+
+  - Use the same dev API key that created the charge and pass the provider
+    id returned by `POST /v2/transparents/create` (for JDM this is
+    `Order.providerRef`).
+
 - **Test users:** seed at least one verified attendee, one organizer, one
   admin in `pnpm --filter @jdm/db db:seed`. Use throwaway email aliases
   per smoke (e.g. `qa+stripe-2026-04-29@jdm.example`).
