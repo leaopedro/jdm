@@ -50,6 +50,49 @@ const makeTransparentCompletedPayload = (
     },
   });
 
+// Mirrors AbacatePay's actual v2 webhook payload for `transparent.completed`:
+// data is nested under `data.transparent`, not flat.
+// https://docs.abacatepay.com/pages/webhooks/events/transparent
+const makeV2TransparentCompletedPayload = (
+  billingId: string,
+  eventId?: string,
+  extra?: { metadata?: Record<string, string>; updatedAt?: string },
+) =>
+  JSON.stringify({
+    id: eventId ?? `evt_${Date.now()}`,
+    event: 'transparent.completed',
+    apiVersion: 2,
+    devMode: false,
+    data: {
+      transparent: {
+        id: billingId,
+        amount: 5000,
+        paidAmount: 5000,
+        status: 'PAID',
+        frequency: 'ONE_TIME',
+        devMode: true,
+        methods: ['PIX'],
+        createdAt: new Date().toISOString(),
+        updatedAt: extra?.updatedAt ?? new Date().toISOString(),
+        ...(extra?.metadata && { metadata: extra.metadata }),
+      },
+      customer: {
+        id: 'cust_test',
+        name: 'Maria Santos',
+        email: 'maria@example.com',
+        taxId: '12.***.***/0001-**',
+      },
+      payerInformation: {
+        method: 'PIX',
+        PIX: {
+          name: 'Maria Santos',
+          taxId: '12.***.***/0001-**',
+          isSameAsCustomer: true,
+        },
+      },
+    },
+  });
+
 const seedEventTierOrder = async (
   userId: string,
   opts?: { provider?: PaymentProvider; providerRef?: string; status?: OrderStatus },
@@ -676,6 +719,79 @@ describe('POST /abacatepay/webhook', () => {
       expect(res.statusCode).toBe(200);
       const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updatedOrder.status).toBe('paid');
+    });
+
+    it('handles v2 webhook shape with billing nested at data.transparent.id (JDMA-273)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id);
+
+      const payload = makeV2TransparentCompletedPayload(order.providerRef!, 'evt_v2_nested_1');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('paid');
+      expect(updatedOrder.paidAt).not.toBeNull();
+    });
+
+    it('uses data.transparent.metadata.orderId for v2 webhook lookup (JDMA-273)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id, {
+        providerRef: 'pix_char_unrelated',
+      });
+
+      const payload = makeV2TransparentCompletedPayload(
+        'pix_char_different_billing_id',
+        'evt_v2_metadata_1',
+        { metadata: { orderId: order.id } },
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('paid');
+    });
+
+    it('rejects v2 webhook with stale data.transparent.updatedAt (JDMA-273)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id);
+
+      const stale = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+      const payload = makeV2TransparentCompletedPayload(order.providerRef!, 'evt_v2_stale_1', {
+        updatedAt: stale,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const unchangedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(unchangedOrder.status).toBe('pending');
     });
 
     it('handles legacy data.billingId format (fallback extraction)', async () => {
