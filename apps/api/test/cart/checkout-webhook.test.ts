@@ -287,4 +287,106 @@ describe('POST /stripe/webhook (cart checkout settlement)', () => {
     const updatedCart = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
     expect(updatedCart.status).toBe('open');
   });
+
+  it('checkout.session.completed resolves cart via providerRef when session metadata lacks cartId', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, orders } = await seedCartWithOrders(user.id);
+
+    await prisma.order.update({
+      where: { id: orders[0]!.id },
+      data: { providerRef: 'pi_no_meta_cart' },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_cs_no_cartid',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_no_cartid_1',
+          payment_intent: 'pi_no_meta_cart',
+          payment_status: 'paid',
+          metadata: { orderId: orders[0]!.id },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const settled = await prisma.order.findMany({
+      where: { cartId: cart.id },
+      select: { status: true },
+    });
+    expect(settled.every((o) => o.status === 'paid')).toBe(true);
+
+    const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+    expect(tickets).toHaveLength(orders.length);
+  });
+
+  it('duplicate ticket in multi-order cart issues partial refund, not full PI refund', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, orders, events } = await seedCartWithOrders(user.id);
+
+    await prisma.event.update({
+      where: { id: events[0]!.event.id },
+      data: { maxTicketsPerUser: 1 },
+    });
+    await prisma.ticket.create({
+      data: {
+        userId: user.id,
+        eventId: events[0]!.event.id,
+        tierId: events[0]!.tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_cart_dup_partial',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_cart_dup',
+          metadata: {
+            cartId: cart.id,
+            userId: user.id,
+            orderIds: JSON.stringify(orders.map((o) => o.id)),
+          },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const refundCalls = stripe.calls.filter((c) => c.kind === 'refund');
+    expect(refundCalls).toHaveLength(1);
+    const refundPayload = refundCalls[0]!.payload as { amountCents?: number };
+    expect(refundPayload.amountCents).toBe(5000);
+
+    const orderStatuses = await prisma.order.findMany({
+      where: { cartId: cart.id },
+      select: { id: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const firstOrder = orderStatuses.find((o) => o.id === orders[0]!.id);
+    const secondOrder = orderStatuses.find((o) => o.id === orders[1]!.id);
+    expect(firstOrder!.status).toBe('refunded');
+    expect(secondOrder!.status).toBe('paid');
+
+    const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+    expect(tickets).toHaveLength(2);
+  });
 });

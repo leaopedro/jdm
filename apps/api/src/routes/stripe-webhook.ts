@@ -79,7 +79,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   ) => {
     const orders = await prisma.order.findMany({
       where: { cartId, status: 'pending' },
-      select: { id: true },
+      select: { id: true, amountCents: true },
     });
 
     if (orders.length === 0) {
@@ -99,9 +99,12 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         await issueTicketForPaidOrder(order.id, piId, app.env, { cartId });
       } catch (err) {
         if (err instanceof TicketAlreadyExistsForEventError) {
-          await app.stripe.refund(piId, 'duplicate-ticket');
+          await app.stripe.refund(piId, 'duplicate-ticket', order.amountCents);
           await markRefundedAndReleaseReservation(order.id);
-          request.log.warn({ orderId: order.id, piId }, 'cart webhook: duplicate ticket, refunded');
+          request.log.warn(
+            { orderId: order.id, piId },
+            'cart webhook: duplicate ticket, partial refund',
+          );
           continue;
         }
         if (err instanceof OrderNotPendingError) {
@@ -323,7 +326,14 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true, ignored: true });
       }
 
-      const sessionCartId = session.metadata?.cartId;
+      let sessionCartId = session.metadata?.cartId;
+      if (!sessionCartId) {
+        const cartOrder = await prisma.order.findFirst({
+          where: { provider: 'stripe', providerRef: piId, cartId: { not: null } },
+          select: { cartId: true },
+        });
+        if (cartOrder?.cartId) sessionCartId = cartOrder.cartId;
+      }
       if (sessionCartId) {
         return handleCartPaymentSucceeded(sessionCartId, piId, event, request, reply);
       }

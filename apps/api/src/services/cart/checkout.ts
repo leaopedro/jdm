@@ -128,7 +128,7 @@ export async function reserveAndCreateOrders(
 
         if (!isExtrasOnly) {
           const reservation = await tx.ticketTier.updateMany({
-            where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
+            where: { id: tier.id, quantitySold: { lte: tier.quantityTotal - item.quantity } },
             data: { quantitySold: { increment: item.quantity } },
           });
           if (reservation.count === 0) {
@@ -195,10 +195,15 @@ export async function reserveAndCreateOrders(
         });
       }
 
-      await tx.cart.update({
-        where: { id: cart.id },
+      const cartGuard = await tx.cart.updateMany({
+        where: { id: cart.id, status: 'open' },
         data: { status: 'checking_out' },
       });
+      if (cartGuard.count === 0) {
+        throw Object.assign(new Error('cart is already checking out'), {
+          code: 'CART_ALREADY_CHECKING_OUT',
+        });
+      }
 
       return orders;
     });
@@ -221,6 +226,9 @@ export async function reserveAndCreateOrders(
       return { ok: false, status: 409, error: 'Conflict', message: coded.message };
     }
     if (coded.code === 'EXTRA_SOLD_OUT') {
+      return { ok: false, status: 409, error: 'Conflict', message: coded.message };
+    }
+    if (coded.code === 'CART_ALREADY_CHECKING_OUT') {
       return { ok: false, status: 409, error: 'Conflict', message: coded.message };
     }
     throw err;

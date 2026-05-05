@@ -382,4 +382,64 @@ describe('POST /cart/checkout', () => {
     const cart = await prisma.cart.findFirst({ where: { userId: user.id } });
     expect(cart!.status).toBe('open');
   });
+
+  it('rejects checkout when quantity exceeds remaining capacity (no oversell)', async () => {
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event, tier } = await seedPublishedEvent({ quantityTotal: 10 });
+
+    await addCartItem(app, token, {
+      eventId: event.id,
+      tierId: tier.id,
+      quantity: 2,
+      tickets: [{ extras: [] }, { extras: [] }],
+    });
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 9 },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/cart/checkout',
+      headers: { authorization: token },
+      payload: { paymentMethod: 'card' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = errorSchema.parse(res.json());
+    expect(body.error).toBe('Conflict');
+
+    const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(tierAfter.quantitySold).toBe(9);
+  });
+
+  it('concurrent checkout requests: only one succeeds (no double reservation)', async () => {
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event, tier } = await seedPublishedEvent();
+
+    await addCartItem(app, token, { eventId: event.id, tierId: tier.id });
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        app.inject({
+          method: 'POST',
+          url: '/cart/checkout',
+          headers: { authorization: token },
+          payload: { paymentMethod: 'card' },
+        }),
+      ),
+    );
+
+    const successes = results.filter((r) => r.statusCode === 201);
+    const conflicts = results.filter((r) => r.statusCode === 409);
+
+    expect(successes).toHaveLength(1);
+    expect(conflicts.length).toBeGreaterThanOrEqual(1);
+
+    const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(tierAfter.quantitySold).toBe(1);
+  });
 });

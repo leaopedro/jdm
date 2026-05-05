@@ -40,7 +40,7 @@ export type StripeClient = {
   createCheckoutSession: (input: CreateCheckoutSessionInput) => Promise<CheckoutSessionResult>;
   getCheckoutSessionPaymentIntentId: (sessionId: string) => Promise<string | null>;
   constructWebhookEvent: (payload: Buffer, signature: string) => Promise<WebhookEvent>;
-  refund: (paymentIntentId: string, reason: string) => Promise<void>;
+  refund: (paymentIntentId: string, reason: string, amountCents?: number) => Promise<void>;
   cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
   publishableKey: () => string;
 };
@@ -95,7 +95,7 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
         ],
         success_url: successUrl,
         cancel_url: cancelUrl,
-        metadata: { orderId: metadata.orderId ?? '' },
+        metadata,
       };
       if (expiresAt) params.expires_at = expiresAt;
       const session = await stripe.checkout.sessions.create(params, { idempotencyKey });
@@ -172,12 +172,14 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
     },
     // Stripe's refund.reason is a constrained enum; callers pass free-form text
     // which we persist in metadata, not in the enum field.
-    refund: async (paymentIntentId, reason) => {
-      await stripe.refunds.create({
+    refund: async (paymentIntentId, reason, amountCents) => {
+      const params: Stripe.RefundCreateParams = {
         payment_intent: paymentIntentId,
         reason: 'requested_by_customer',
         metadata: { reason },
-      });
+      };
+      if (amountCents !== undefined) params.amount = amountCents;
+      await stripe.refunds.create(params);
     },
     cancelPaymentIntent: async (paymentIntentId) => {
       await stripe.paymentIntents.cancel(paymentIntentId);

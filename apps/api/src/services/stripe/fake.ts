@@ -60,8 +60,8 @@ export const buildFakeStripe = (): FakeStripe => {
       return fake.nextEvent;
     },
     // eslint-disable-next-line @typescript-eslint/require-await
-    refund: async (paymentIntentId, reason) => {
-      fake.calls.push({ kind: 'refund', payload: { paymentIntentId, reason } });
+    refund: async (paymentIntentId, reason, amountCents) => {
+      fake.calls.push({ kind: 'refund', payload: { paymentIntentId, reason, amountCents } });
     },
     // eslint-disable-next-line @typescript-eslint/require-await
     cancelPaymentIntent: async (paymentIntentId) => {
