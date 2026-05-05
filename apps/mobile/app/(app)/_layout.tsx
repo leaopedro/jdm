@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { router, Tabs } from 'expo-router';
 import { CalendarDays, Car, Ticket, UserRound } from 'lucide-react-native';
 
 import { CartProvider } from '~/cart/context';
@@ -47,7 +47,19 @@ export default function AppLayout() {
   return (
     <CartProvider>
       <Tabs screenOptions={screenOptions}>
-        <Tabs.Screen name="events" options={{ title: 'Eventos', tabBarIcon: EventsIcon }} />
+        <Tabs.Screen
+          name="events"
+          options={{ title: 'Eventos', tabBarIcon: EventsIcon }}
+          listeners={{
+            tabPress: (e) => {
+              // Default tab-press behavior on web preserves dynamic params
+              // (e.g. /events?eventSlug=...) which fails to pop deep routes
+              // like /events/buy/[eventSlug]. Force a clean replace to /events.
+              e.preventDefault();
+              router.replace('/events');
+            },
+          }}
+        />
         <Tabs.Screen name="tickets" options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }} />
         <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
         <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
