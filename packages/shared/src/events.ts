@@ -48,7 +48,9 @@ export const eventDetailSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
-  maxTicketsPerUser: z.number().int().min(1).max(10),
+  // Optional during rollout: legacy API responses may omit this field.
+  // Server enforces the real per-event cap regardless.
+  maxTicketsPerUser: z.number().int().min(1).max(10).optional(),
   tiers: z.array(ticketTierSchema),
   extras: z.array(eventExtraPublicSchema),
 });

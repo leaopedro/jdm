@@ -65,7 +65,7 @@ export default function BuyScreen() {
   }, [eventSlug]);
 
   const maxPerTier = selectedTier
-    ? Math.max(1, Math.min(selectedTier.remainingCapacity, event?.maxTicketsPerUser ?? 1))
+    ? Math.max(1, Math.min(selectedTier.remainingCapacity, event?.maxTicketsPerUser ?? 10))
     : 1;
 
   const handleStart = () => {
