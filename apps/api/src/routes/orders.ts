@@ -96,6 +96,17 @@ async function prepareOrder(
     }
   }
 
+  if (!isExtrasOnly && input.tickets.length > event.maxTicketsPerUser) {
+    return {
+      ok: false,
+      status: 422,
+      body: {
+        error: 'UnprocessableEntity',
+        message: `exceeds maximum ${event.maxTicketsPerUser} ticket(s) per user`,
+      },
+    };
+  }
+
   let validationResult: Awaited<ReturnType<typeof validateTickets>>;
   let expiredProviderRefs: string[];
   let reserved = false;
