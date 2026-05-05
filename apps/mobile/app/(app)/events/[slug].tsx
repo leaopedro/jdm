@@ -1,5 +1,4 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
-import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ShoppingCart } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -16,26 +15,21 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
-import { createOrder } from '~/api/orders';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
-import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
   const { addItem, adding } = useCart();
-  const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -55,61 +49,6 @@ export default function EventDetailScreen() {
     void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
   };
 
-  const buy = async (tier: TicketTier) => {
-    if (!event) return;
-    setPaying(true);
-    try {
-      const orderPayload = {
-        eventId: event.id,
-        tierId: tier.id,
-        method: 'card' as const,
-        quantity: 1,
-        extrasOnly: false,
-        tickets: [{ extras: [] as string[] }],
-      };
-
-      if (isWeb) {
-        await startWebCheckout(orderPayload);
-        return;
-      }
-
-      const order = await createOrder(orderPayload);
-
-      const init = await initPaymentSheet({
-        merchantDisplayName: 'JDM Experience',
-        paymentIntentClientSecret: order.clientSecret,
-        applePay: { merchantCountryCode: 'BR' },
-        googlePay: { merchantCountryCode: 'BR', testEnv: true },
-        defaultBillingDetails: {},
-      });
-      if (init.error) {
-        Alert.alert(ticketsCopy.purchase.error, init.error.message);
-        return;
-      }
-
-      const sheet = await presentPaymentSheet();
-      if (sheet.error) {
-        if (sheet.error.code === PaymentSheetError.Canceled) {
-          Alert.alert(ticketsCopy.purchase.cancelled);
-        } else {
-          Alert.alert(ticketsCopy.purchase.error, sheet.error.message);
-        }
-        return;
-      }
-
-      Alert.alert(ticketsCopy.purchase.success, undefined, [
-        {
-          text: ticketsCopy.purchase.successCta,
-          onPress: () => router.push('/tickets' as never),
-        },
-      ]);
-    } catch {
-      Alert.alert(ticketsCopy.purchase.error);
-    } finally {
-      setPaying(false);
-    }
-  };
-
   const addToCart = async (tier: TicketTier) => {
     if (!event) return;
     const ok = await addItem({
@@ -122,8 +61,7 @@ export default function EventDetailScreen() {
       metadata: { source: 'mobile' },
     });
     if (ok) {
-      setAddedToCart(true);
-      setTimeout(() => setAddedToCart(false), 2000);
+      router.push('/cart' as never);
     } else {
       Alert.alert(cartCopy.errors.add);
     }
@@ -233,16 +171,12 @@ export default function EventDetailScreen() {
 
       <View style={styles.section}>
         <Button
-          label={paying ? ticketsCopy.purchase.paying : ticketsCopy.purchase.confirm}
+          label={ticketsCopy.purchase.confirm}
           onPress={() => {
             if (!selectedTier) return;
-            if (selectedTier.requiresCar) {
-              router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
-              return;
-            }
-            void buy(selectedTier);
+            router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
           }}
-          disabled={!selectedTier || paying}
+          disabled={!selectedTier}
         />
       </View>
 
@@ -250,18 +184,14 @@ export default function EventDetailScreen() {
         <View style={styles.section}>
           <Pressable
             onPress={() => void addToCart(selectedTier)}
-            disabled={adding || addedToCart}
-            style={[styles.addToCartBtn, (adding || addedToCart) && styles.addToCartDisabled]}
+            disabled={adding}
+            style={[styles.addToCartBtn, adding && styles.addToCartDisabled]}
             accessibilityRole="button"
             accessibilityLabel={cartCopy.actions.addToCart}
           >
             <ShoppingCart color={theme.colors.fg} size={18} strokeWidth={1.75} />
             <Text style={styles.addToCartText}>
-              {addedToCart
-                ? cartCopy.actions.added
-                : adding
-                  ? cartCopy.actions.adding
-                  : cartCopy.actions.addToCart}
+              {adding ? cartCopy.actions.adding : cartCopy.actions.addToCart}
             </Text>
           </Pressable>
         </View>
