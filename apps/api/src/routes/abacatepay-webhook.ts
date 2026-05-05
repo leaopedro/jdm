@@ -41,6 +41,9 @@ const markProcessed = async (eventId: string, payload: unknown): Promise<boolean
 };
 
 const extractBillingId = (data: Record<string, unknown>): string | undefined => {
+  // Primary: /transparents webhook puts charge ID at data.id
+  if (typeof data.id === 'string') return data.id;
+  // Legacy: nested billing object from /v2/billing/pix format
   if (typeof data.billing === 'object' && data.billing !== null) {
     const billing = data.billing as Record<string, unknown>;
     if (typeof billing.id === 'string') return billing.id;

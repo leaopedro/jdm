@@ -36,7 +36,13 @@ const makeTransparentCompletedPayload = (billingId: string, eventId?: string) =>
     id: eventId ?? `evt_${Date.now()}`,
     event: 'transparent.completed',
     devMode: false,
-    data: { billing: { id: billingId } },
+    data: {
+      id: billingId,
+      amount: 5000,
+      status: 'PAID',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
   });
 
 const seedEventTierOrder = async (
@@ -546,12 +552,38 @@ describe('POST /abacatepay/webhook', () => {
       expect(tickets).toHaveLength(1);
     });
 
-    it('handles billingId in flat data format (fallback extraction)', async () => {
+    it('handles legacy data.billing.id format (fallback extraction)', async () => {
       const { user } = await createUser({ verified: true });
       const { order } = await seedEventTierOrder(user.id);
 
       const payload = JSON.stringify({
-        id: 'evt_flat_format_1',
+        id: 'evt_legacy_billing_1',
+        event: 'transparent.completed',
+        devMode: false,
+        data: { billing: { id: order.providerRef }, amount: 5000 },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('paid');
+    });
+
+    it('handles legacy data.billingId format (fallback extraction)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id);
+
+      const payload = JSON.stringify({
+        id: 'evt_legacy_flat_1',
         event: 'transparent.completed',
         devMode: false,
         data: { billingId: order.providerRef, amount: 5000 },
