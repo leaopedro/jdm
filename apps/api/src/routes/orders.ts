@@ -123,9 +123,10 @@ async function prepareOrder(
       const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
 
       if (!isExtrasOnly) {
+        const ticketCount = input.tickets.length;
         const reservation = await tx.ticketTier.updateMany({
-          where: { id: tier.id, quantitySold: { lt: tier.quantityTotal } },
-          data: { quantitySold: { increment: 1 } },
+          where: { id: tier.id, quantitySold: { lte: tier.quantityTotal - ticketCount } },
+          data: { quantitySold: { increment: ticketCount } },
         });
         if (reservation.count === 0) {
           return { soldOut: true, validation, expiredProviderRefs: sweep.expiredProviderRefs };
@@ -262,8 +263,8 @@ async function createPendingOrderPix(
 async function rollbackReservation(data: PreparedOrder, tierId: string): Promise<void> {
   if (data.reserved) {
     await prisma.ticketTier.updateMany({
-      where: { id: tierId, quantitySold: { gt: 0 } },
-      data: { quantitySold: { decrement: 1 } },
+      where: { id: tierId, quantitySold: { gte: data.ticketCount } },
+      data: { quantitySold: { decrement: data.ticketCount } },
     });
   }
   for (const { id, count } of data.validationResult.extraStock) {

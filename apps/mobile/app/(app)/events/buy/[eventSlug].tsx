@@ -64,17 +64,12 @@ export default function BuyScreen() {
     })();
   }, [eventSlug]);
 
-  // TODO(JDMA-142): replace hardcoded cap with event.maxTicketsPerUser once schema lands
-  // TODO(JDMA-147): raise cap above 1 once createOrder supports tickets[] batch shape
-  const maxPerTier = selectedTier ? Math.min(selectedTier.remainingCapacity, 1) : 1;
+  const maxPerTier = selectedTier
+    ? Math.max(1, Math.min(selectedTier.remainingCapacity, event?.maxTicketsPerUser ?? 1))
+    : 1;
 
   const handleStart = () => {
     if (!selectedTier) return;
-    // TODO(JDMA-147): remove guard once batch tickets[] API lands
-    if (quantity > 1) {
-      Alert.alert(buyCopy.review.errorTitle, 'Compra de múltiplos ingressos ainda não disponível.');
-      return;
-    }
     setPhase('wizard');
   };
 

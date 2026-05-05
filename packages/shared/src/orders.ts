@@ -27,8 +27,8 @@ export const createOrderRequestSchema = z.object({
   quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
   extrasOnly: z.boolean().default(false),
-  // One ticket per order until maxTicketsPerUser is enforced server-side (JDMA-142)
-  tickets: z.array(ticketInputSchema).min(1).max(1),
+  // Server enforces per-event maxTicketsPerUser; admin schema caps that at 10.
+  tickets: z.array(ticketInputSchema).min(1).max(10),
 });
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 

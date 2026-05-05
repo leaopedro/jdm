@@ -62,10 +62,6 @@ export function ReviewScreen() {
   });
 
   const handleSubmit = async () => {
-    if (quantity > 1) {
-      Alert.alert(buyCopy.review.errorTitle, 'Compra de múltiplos ingressos ainda não disponível.');
-      return;
-    }
     setSubmitting(true);
     try {
       if (method === 'pix') {

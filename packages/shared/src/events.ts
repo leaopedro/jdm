@@ -48,6 +48,7 @@ export const eventDetailSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
+  maxTicketsPerUser: z.number().int().min(1).max(10),
   tiers: z.array(ticketTierSchema),
   extras: z.array(eventExtraPublicSchema),
 });
