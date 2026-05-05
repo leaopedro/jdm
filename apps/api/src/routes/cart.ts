@@ -1,5 +1,7 @@
 import { prisma } from '@jdm/db';
 import {
+  beginCheckoutRequestSchema,
+  beginCheckoutResponseSchema,
   getCartResponseSchema,
   upsertCartItemRequestSchema,
   upsertCartItemResponseSchema,
@@ -9,6 +11,11 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
 import {
+  loadCartForCheckout,
+  reserveAndCreateOrders,
+  rollbackCartCheckout,
+} from '../services/cart/checkout.js';
+import {
   computeItemAmount,
   evictStaleItems,
   getActiveCart,
@@ -16,6 +23,7 @@ import {
   serializeCart,
   validateCartItem,
 } from '../services/cart/index.js';
+import { ORDER_EXPIRY_MS } from '../services/orders/expire.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const cartRoutes: FastifyPluginAsync = async (app) => {
@@ -322,5 +330,128 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return clearCartResponseSchema.parse({ ok: true });
+  });
+
+  // POST /cart/checkout
+  app.post('/cart/checkout', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const parsed = beginCheckoutRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({
+        error: 'UnprocessableEntity',
+        message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      });
+    }
+    const input = parsed.data;
+
+    if (input.paymentMethod !== 'card') {
+      return reply.status(400).send({
+        error: 'BadRequest',
+        message: 'only card is supported in this release',
+      });
+    }
+
+    const cartResult = await loadCartForCheckout(sub);
+    if (!cartResult.ok) {
+      return reply.status(cartResult.status).send({
+        error: cartResult.error,
+        message: cartResult.message,
+      });
+    }
+    const { cart } = cartResult;
+
+    if (cart.status !== 'open') {
+      return reply.status(409).send({
+        error: 'Conflict',
+        message: 'cart is already checking out',
+      });
+    }
+
+    const reserveResult = await reserveAndCreateOrders(cart, sub);
+    if (!reserveResult.ok) {
+      return reply.status(reserveResult.status).send({
+        error: reserveResult.error,
+        message: reserveResult.message,
+      });
+    }
+    const { data } = reserveResult;
+
+    for (const ref of data.expiredProviderRefs) {
+      app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
+        request.log.warn({ err: cancelErr, providerRef: ref }, 'cart checkout: PI cancel failed');
+      });
+    }
+
+    const STRIPE_MIN_SESSION_MS = 30 * 60 * 1000;
+    const sessionExpiryMs = Math.max(ORDER_EXPIRY_MS, STRIPE_MIN_SESSION_MS);
+    const expiresAtUnix = Math.floor((Date.now() + sessionExpiryMs) / 1000);
+
+    const eventTitles = await prisma.event.findMany({
+      where: { id: { in: data.orders.map((o) => o.eventId) } },
+      select: { title: true },
+    });
+    const productName = eventTitles.map((e) => e.title).join(' + ');
+
+    const successUrl = input.successUrl ?? 'https://app.jdmexperience.com.br/checkout/success';
+    const cancelUrl = input.cancelUrl ?? 'https://app.jdmexperience.com.br/checkout/cancel';
+
+    try {
+      const session = await app.stripe.createCheckoutSession({
+        amountCents: data.totalAmountCents,
+        currency: data.currency,
+        productName,
+        idempotencyKey: `cart_checkout_${cart.id}_v${cart.version}`,
+        metadata: {
+          cartId: cart.id,
+          userId: sub,
+          orderIds: JSON.stringify(data.orders.map((o) => o.id)),
+        },
+        successUrl,
+        cancelUrl,
+        expiresAt: expiresAtUnix,
+      });
+
+      if (session.paymentIntentId) {
+        await prisma.order.updateMany({
+          where: { cartId: cart.id, status: 'pending' },
+          data: { providerRef: null },
+        });
+        await prisma.order.update({
+          where: { id: data.orders[0]!.id },
+          data: { providerRef: session.paymentIntentId },
+        });
+      }
+
+      const updatedCart = await prisma.cart.findUniqueOrThrow({
+        where: { id: cart.id },
+        include: {
+          items: {
+            include: {
+              extras: true,
+              tier: { select: { priceCents: true, currency: true } },
+            },
+          },
+        },
+      });
+
+      const reservationExpiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
+
+      return reply.status(201).send(
+        beginCheckoutResponseSchema.parse({
+          checkoutId: cart.id,
+          status: 'pending',
+          cart: serializeCart(updatedCart),
+          orderIds: data.orders.map((o) => o.id),
+          provider: 'stripe',
+          providerRef: session.paymentIntentId,
+          clientSecret: null,
+          checkoutUrl: session.url,
+          reservationExpiresAt: reservationExpiresAt.toISOString(),
+        }),
+      );
+    } catch (err) {
+      await rollbackCartCheckout(cart.id, data.orders);
+      throw err;
+    }
   });
 };
