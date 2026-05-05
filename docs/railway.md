@@ -130,6 +130,9 @@ so on-call always lands on the same view.
 
 Every successful deploy should show:
 
+- **CRITICAL GO-LIVE GATE:** `ABACATEPAY_DEV_WEBHOOK_ENABLED` is explicitly
+  set to `false` in the production Railway environment. If this is `true`,
+  stop release and revert before shipping.
 - `/health` returns `{"status":"ok",...}` with `sha` matching the deployed
   commit.
 - Deploy logs contain the `prisma migrate deploy` step.

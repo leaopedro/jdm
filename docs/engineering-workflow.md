@@ -213,6 +213,8 @@ When the PR has CTO approval and (if applicable) a QA pass:
 3. Push.
 4. Verify deploy succeeded (Railway prod `/health`, Vercel preview, EAS build
    id). State the deploy evidence in the Paperclip issue.
+5. For API production deploys, confirm `ABACATEPAY_DEV_WEBHOOK_ENABLED=false`
+   before go-live. Treat `true` as a release blocker.
 
 If the change is merged but not yet deployable (e.g. Railway prod is still
 deferred), leave the checkbox at `[~]` and capture the deferral in the
