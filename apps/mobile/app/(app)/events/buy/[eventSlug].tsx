@@ -23,6 +23,7 @@ import {
   QuantityStepper,
   WizardProvider,
   createCarPlateStep,
+  createExtrasStep,
 } from '~/screens/buy/per-ticket-wizard';
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
@@ -139,7 +140,10 @@ export default function BuyScreen() {
     );
   }
 
-  const pluggableSteps: WizardStepDefinition[] = [createCarPlateStep()];
+  const pluggableSteps: WizardStepDefinition[] = [
+    createExtrasStep(event.extras),
+    createCarPlateStep(),
+  ];
 
   if (phase === 'wizard' && selectedTier) {
     return (
