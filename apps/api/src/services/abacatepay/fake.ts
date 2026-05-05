@@ -11,6 +11,7 @@ type FakeCall = { method: string; args: unknown[] };
 export type FakeAbacatePay = AbacatePayClient & {
   calls: FakeCall[];
   nextBilling: PixBillingResult | null;
+  nextBillingError: Error | null;
   nextStatus: PixBillingStatus | null;
   nextSignatureValid: boolean;
   nextEvent: AbacateWebhookEvent | null;
@@ -20,12 +21,14 @@ export const buildFakeAbacatePay = (): FakeAbacatePay => {
   const fake: FakeAbacatePay = {
     calls: [],
     nextBilling: null,
+    nextBillingError: null,
     nextStatus: null,
     nextSignatureValid: true,
     nextEvent: null,
 
     createPixBilling: (input: CreatePixBillingInput) => {
       fake.calls.push({ method: 'createPixBilling', args: [input] });
+      if (fake.nextBillingError) return Promise.reject(fake.nextBillingError);
       if (fake.nextBilling) return Promise.resolve(fake.nextBilling);
       return Promise.resolve({
         id: `pix_char_${Date.now()}`,

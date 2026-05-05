@@ -25,12 +25,22 @@ export type PixBillingCustomer = {
 
 export type CreatePixBillingInput = {
   amountCents: number;
-  externalId: string;
   description: string;
   expiresInSeconds?: number;
   customer?: PixBillingCustomer;
   metadata?: Record<string, string>;
 };
+
+export class AbacatePayUpstreamError extends Error {
+  readonly status: number;
+  readonly body: string;
+  constructor(status: number, body: string, message: string) {
+    super(message);
+    this.name = 'AbacatePayUpstreamError';
+    this.status = status;
+    this.body = body;
+  }
+}
 
 export type PixBillingStatus = {
   id: string;
@@ -68,26 +78,36 @@ export const buildAbacatePay = (env: AbacatePayEnv): AbacatePayClient => {
     const res = await fetch(`${BASE_URL}${path}`, init);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`AbacatePay ${method} ${path} failed: ${res.status} ${text}`);
+      throw new AbacatePayUpstreamError(
+        res.status,
+        text,
+        `AbacatePay ${method} ${path} failed: ${res.status} ${text}`,
+      );
     }
     const json = (await res.json()) as { data: T; success: boolean; error: string | null };
-    if (!json.success) throw new Error(`AbacatePay error: ${json.error}`);
+    if (!json.success) {
+      throw new AbacatePayUpstreamError(
+        res.status,
+        JSON.stringify(json),
+        `AbacatePay error: ${json.error}`,
+      );
+    }
     return json.data;
   };
 
   return {
     createPixBilling: async ({
       amountCents,
-      externalId,
       description,
       expiresInSeconds,
       customer,
       metadata,
     }) => {
+      // AbacatePay rejects unknown fields on /transparents/create with 422.
+      // Order linkage is preserved via metadata.orderId and the returned billing.id.
       const dataBody: Record<string, unknown> = {
         amount: amountCents,
         description,
-        externalId,
         metadata: metadata ?? {},
       };
       if (expiresInSeconds !== undefined) dataBody.expiresIn = expiresInSeconds;

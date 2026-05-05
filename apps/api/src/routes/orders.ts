@@ -12,6 +12,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { AbacatePayUpstreamError } from '../services/abacatepay/index.js';
 import {
   expireSingleOrder,
   ORDER_EXPIRY_MS,
@@ -301,18 +302,41 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       try {
         const { order } = await createPendingOrderPix(data);
 
-        const billing = await app.abacatepay.createPixBilling({
-          amountCents: data.amountCents,
-          externalId: order.id,
-          description: `Ingresso ${data.event.title}`,
-          metadata: {
-            orderId: order.id,
-            userId: sub,
-            eventId: data.event.id,
-            tierId: data.tier.id,
-            tickets: JSON.stringify(data.validationResult.ticketsMetadata),
-          },
-        });
+        let billing;
+        try {
+          billing = await app.abacatepay.createPixBilling({
+            amountCents: data.amountCents,
+            description: `Ingresso ${data.event.title}`,
+            metadata: {
+              orderId: order.id,
+              userId: sub,
+              eventId: data.event.id,
+              tierId: data.tier.id,
+              tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+            },
+          });
+        } catch (providerErr) {
+          if (
+            providerErr instanceof AbacatePayUpstreamError &&
+            providerErr.status >= 400 &&
+            providerErr.status < 500
+          ) {
+            request.log.warn(
+              { err: providerErr, orderId: order.id, status: providerErr.status },
+              'orders: AbacatePay rejected pix billing request',
+            );
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { status: 'expired' },
+            });
+            await rollbackReservation(data, data.tier.id);
+            return reply.status(502).send({
+              error: 'BadGateway',
+              message: 'pix provider rejected the request',
+            });
+          }
+          throw providerErr;
+        }
 
         await prisma.order.update({
           where: { id: order.id },
