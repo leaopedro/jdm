@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 
 import { buildApp } from '../src/app.js';
 import { loadEnv } from '../src/env.js';
+import { buildFakeAbacatePay, type FakeAbacatePay } from '../src/services/abacatepay/fake.js';
 import { hashPassword } from '../src/services/auth/password.js';
 import { createAccessToken } from '../src/services/auth/tokens.js';
 import { buildFakeStripe, type FakeStripe } from '../src/services/stripe/fake.js';
@@ -15,6 +16,17 @@ export const makeAppWithFakeStripe = async (): Promise<{
   const stripe = buildFakeStripe();
   const app = await buildApp(loadEnv(), { stripe });
   return { app, stripe };
+};
+
+export const makeAppWithFakes = async (): Promise<{
+  app: Awaited<ReturnType<typeof buildApp>>;
+  stripe: FakeStripe;
+  abacatepay: FakeAbacatePay;
+}> => {
+  const stripe = buildFakeStripe();
+  const abacatepay = buildFakeAbacatePay();
+  const app = await buildApp(loadEnv(), { stripe, abacatepay });
+  return { app, stripe, abacatepay };
 };
 
 export const resetDatabase = async (): Promise<void> => {
