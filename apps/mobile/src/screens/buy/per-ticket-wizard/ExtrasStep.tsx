@@ -64,7 +64,11 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
                 key={extra.id}
                 onPress={() => toggleExtra(extra)}
                 disabled={soldOut}
-                style={[styles.extraCard, isSelected && styles.extraCardSelected, soldOut && styles.disabled]}
+                style={[
+                  styles.extraCard,
+                  isSelected && styles.extraCardSelected,
+                  soldOut && styles.disabled,
+                ]}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: isSelected, disabled: soldOut }}
               >
@@ -72,7 +76,9 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
                   <Text style={styles.extraName}>{extra.name}</Text>
                   <Text style={styles.extraPrice}>{formatBRL(extra.priceCents)}</Text>
                 </View>
-                {extra.description ? <Text style={styles.extraDescription}>{extra.description}</Text> : null}
+                {extra.description ? (
+                  <Text style={styles.extraDescription}>{extra.description}</Text>
+                ) : null}
                 <Text style={styles.extraMeta}>
                   {extra.quantityRemaining === null
                     ? ''
