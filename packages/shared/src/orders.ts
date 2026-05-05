@@ -44,6 +44,16 @@ export const createOrderResponseSchema = z.object({
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
 
+export const createPixOrderResponseSchema = z.object({
+  orderId: z.string().min(1),
+  status: orderStatusSchema,
+  brCode: z.string().min(1),
+  expiresAt: z.string().datetime(),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+});
+export type CreatePixOrderResponse = z.infer<typeof createPixOrderResponseSchema>;
+
 const httpsUrlSchema = z
   .string()
   .url()

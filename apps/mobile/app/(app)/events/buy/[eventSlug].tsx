@@ -41,6 +41,7 @@ export default function BuyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [method, setMethod] = useState<'card' | 'pix'>('card');
   const [phase, setPhase] = useState<Phase>('loading');
 
   useEffect(() => {
@@ -144,13 +145,14 @@ export default function BuyScreen() {
     return (
       // key resets wizard state when tier/quantity changes — intentional fresh start
       <WizardProvider
-        key={`${selectedTier.id}-${quantity}`}
+        key={`${selectedTier.id}-${quantity}-${method}`}
         eventId={event.id}
         tier={selectedTier}
         quantity={quantity}
         steps={pluggableSteps}
         onOrderCreated={handleOrderCreated}
         onExitWizard={handleExitWizard}
+        method={method}
       >
         <PerTicketWizard />
       </WizardProvider>
@@ -214,6 +216,27 @@ export default function BuyScreen() {
             <Text style={styles.sectionTitle}>{buyCopy.stepper.title}</Text>
             <QuantityStepper value={quantity} max={maxPerTier} onChange={setQuantity} />
             <Text style={styles.sub}>{buyCopy.stepper.max(maxPerTier)}</Text>
+          </View>
+        )}
+
+        {selectedTier && (
+          <View style={styles.methodRow}>
+            <Pressable
+              style={[styles.methodBtn, method === 'card' && styles.methodBtnActive]}
+              onPress={() => setMethod('card')}
+            >
+              <Text style={[styles.methodText, method === 'card' && styles.methodTextActive]}>
+                Cartão
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.methodBtn, method === 'pix' && styles.methodBtnActive]}
+              onPress={() => setMethod('pix')}
+            >
+              <Text style={[styles.methodText, method === 'pix' && styles.methodTextActive]}>
+                Pix
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -297,4 +320,46 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   error: { color: theme.colors.muted },
+  extrasBanner: {
+    padding: 14,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.accent + '18',
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    marginBottom: 8,
+  },
+  extrasBannerTitle: {
+    color: theme.colors.accent,
+    fontWeight: '600',
+    fontSize: theme.font.size.md,
+  },
+  extrasBannerSub: {
+    color: theme.colors.muted,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  methodRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  methodBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  methodBtnActive: {
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '15',
+  },
+  methodText: {
+    fontSize: theme.font.size.sm,
+    color: theme.colors.muted,
+  },
+  methodTextActive: {
+    color: theme.colors.accent,
+    fontWeight: '600',
+  },
 });
