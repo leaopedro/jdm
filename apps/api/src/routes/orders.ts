@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@jdm/db';
 import {
   createOrderRequestSchema,
@@ -245,7 +246,6 @@ const withReturnParams = (rawUrl: string, params: Record<string, string>): strin
   return url.toString();
 };
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
@@ -377,32 +377,62 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const { id } = request.params as { id: string };
+  await app.register(async (scoped) => {
+    await scoped.register(rateLimit, {
+      max: 60,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const auth = (req as unknown as { user?: { sub?: string } }).user;
+        return auth?.sub ? `order-poll:${auth.sub}` : `order-poll-ip:${req.ip}`;
+      },
+    });
 
-    const result = await expireSingleOrder(id, sub);
-    if (!result) return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+    scoped.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const { id } = request.params as { id: string };
 
-    const { order, wasExpired } = result;
+      const result = await expireSingleOrder(id, sub);
+      if (result.kind === 'not_found') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+      if (result.kind === 'forbidden') {
+        return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
+      }
 
-    if (wasExpired && order.providerRef) {
-      app.stripe.cancelPaymentIntent(order.providerRef).catch((cancelErr) => {
-        request.log.warn(
-          { err: cancelErr, orderId: id },
-          'orders: stripe PI cancel failed after lazy expiry',
-        );
-      });
-    }
+      const { order, wasExpired } = result;
 
-    return reply.status(200).send(
-      getOrderResponseSchema.parse({
-        orderId: order.id,
-        status: order.status,
-        expiresAt: order.expiresAt?.toISOString() ?? null,
-        amountCents: order.amountCents,
-        currency: order.currency,
-      }),
-    );
+      if (wasExpired && order.providerRef && order.provider === 'stripe') {
+        app.stripe.cancelPaymentIntent(order.providerRef).catch((cancelErr) => {
+          request.log.warn(
+            { err: cancelErr, orderId: id },
+            'orders: stripe PI cancel failed after lazy expiry',
+          );
+        });
+      }
+
+      let ticketId: string | undefined;
+      if (order.status === 'paid') {
+        const ticket = await prisma.ticket.findFirst({
+          where: { orderId: order.id },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        ticketId = ticket?.id;
+      }
+
+      reply.header('Cache-Control', 'no-store');
+
+      return reply.status(200).send(
+        getOrderResponseSchema.parse({
+          orderId: order.id,
+          status: order.status,
+          provider: order.provider,
+          expiresAt: order.expiresAt?.toISOString() ?? null,
+          amountCents: order.amountCents,
+          currency: order.currency,
+          ...(ticketId ? { ticketId } : {}),
+        }),
+      );
+    });
   });
 };
