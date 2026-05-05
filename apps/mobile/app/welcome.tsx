@@ -67,7 +67,7 @@ export default function Welcome() {
   const secondary = items && items.length > 1 ? items.slice(1, 4) : [];
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
+    <SafeAreaView className="flex-1 bg-bg" style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
       <ScrollView
         className="flex-1"
         contentContainerClassName="pb-10"
