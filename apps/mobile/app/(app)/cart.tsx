@@ -7,12 +7,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { beginCheckout } from '~/api/cart';
 import { getEventById } from '~/api/events';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
@@ -21,6 +24,34 @@ import { formatBRL } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import { theme } from '~/theme';
 
+const isWeb = Platform.OS === 'web';
+
+function confirmDestructive(title: string, message: string): Promise<boolean> {
+  if (isWeb) {
+    if (typeof window === 'undefined') return Promise.resolve(false);
+    return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  }
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: cartCopy.actions.clearNo, style: 'cancel', onPress: () => resolve(false) },
+      {
+        text: cartCopy.actions.clearYes,
+        style: 'destructive',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
+
+function getCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
+  if (!isWeb || typeof window === 'undefined') return {};
+  const base = `${window.location.origin}/events/buy/checkout-return`;
+  return {
+    successUrl: base,
+    cancelUrl: `${base}?cancelled=true`,
+  };
+}
+
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
@@ -28,6 +59,7 @@ export default function CartScreen() {
   const [drawerItem, setDrawerItem] = useState<CartItem | null>(null);
   const [drawerExtras, setDrawerExtras] = useState<EventExtraPublic[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -38,16 +70,46 @@ export default function CartScreen() {
     [removeItem],
   );
 
-  const handleClear = useCallback(() => {
-    Alert.alert(cartCopy.actions.clear, cartCopy.actions.clearConfirm, [
-      { text: cartCopy.actions.clearNo, style: 'cancel' },
-      {
-        text: cartCopy.actions.clearYes,
-        style: 'destructive',
-        onPress: () => void clear(),
-      },
-    ]);
+  const handleClear = useCallback(async () => {
+    const confirmed = await confirmDestructive(
+      cartCopy.actions.clear,
+      cartCopy.actions.clearConfirm,
+    );
+    if (confirmed) {
+      await clear();
+    }
   }, [clear]);
+
+  const handlePay = useCallback(async () => {
+    setCheckingOut(true);
+    try {
+      const result = await beginCheckout({
+        paymentMethod: 'card',
+        ...getCheckoutReturnUrls(),
+      });
+      if (!result.checkoutUrl) {
+        if (isWeb && typeof window !== 'undefined') {
+          window.alert(cartCopy.errors.checkout);
+        } else {
+          Alert.alert(cartCopy.errors.checkout);
+        }
+        return;
+      }
+      if (isWeb && typeof window !== 'undefined') {
+        window.location.href = result.checkoutUrl;
+      } else {
+        await Linking.openURL(result.checkoutUrl);
+      }
+    } catch {
+      if (isWeb && typeof window !== 'undefined') {
+        window.alert(cartCopy.errors.checkout);
+      } else {
+        Alert.alert(cartCopy.errors.checkout);
+      }
+    } finally {
+      setCheckingOut(false);
+    }
+  }, []);
 
   const openExtrasDrawer = useCallback(async (item: CartItem) => {
     setDrawerItem(item);
@@ -184,7 +246,18 @@ export default function CartScreen() {
 
         <View style={styles.footerButtons}>
           {itemCount > 0 && (
-            <Pressable onPress={handleClear} style={styles.clearBtn}>
+            <Button
+              label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
+              onPress={() => void handlePay()}
+              disabled={checkingOut}
+            />
+          )}
+          {itemCount > 0 && (
+            <Pressable
+              onPress={() => void handleClear()}
+              style={styles.clearBtn}
+              disabled={checkingOut}
+            >
               <Text style={styles.clearText}>{cartCopy.actions.clear}</Text>
             </Pressable>
           )}
