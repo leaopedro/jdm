@@ -90,6 +90,7 @@ export const cartItemSchema = z.object({
   source: cartItemSourceSchema,
   kind: cartItemKindSchema,
   quantity: z.number().int().positive(),
+  requiresCar: z.boolean(),
   tickets: z.array(cartItemTicketSchema),
   extras: z.array(cartItemExtraSchema),
   amountCents: z.number().int().nonnegative(),

@@ -9,6 +9,10 @@ export const cartCopy = {
     remove: 'Remover',
     quantity: (n: number) => `${n}x`,
     tapExtras: 'Toque para gerenciar extras',
+    selectCar: 'Selecionar carro',
+    changeCar: 'Trocar carro',
+    carRequired: 'Carro obrigatório',
+    plate: (p: string) => `Placa ${p}`,
   },
   drawer: {
     title: 'Extras',

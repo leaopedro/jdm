@@ -51,6 +51,13 @@ export default function EventDetailScreen() {
 
   const addToCart = async (tier: TicketTier) => {
     if (!event) return;
+    if (tier.requiresCar) {
+      router.push({
+        pathname: '/cart/car-plate',
+        params: { eventId: event.id, tierId: tier.id },
+      } as never);
+      return;
+    }
     const ok = await addItem({
       eventId: event.id,
       tierId: tier.id,

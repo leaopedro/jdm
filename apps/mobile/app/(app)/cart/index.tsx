@@ -1,7 +1,7 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Trash2 } from 'lucide-react-native';
+import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,6 +25,16 @@ import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import { theme } from '~/theme';
 
 const isWeb = Platform.OS === 'web';
+
+function itemNeedsCar(item: CartItem): boolean {
+  if (!item.requiresCar || item.kind !== 'ticket') return false;
+  if (item.tickets.length === 0) return true;
+  return item.tickets.some((t) => !t.carId || !t.licensePlate);
+}
+
+function firstTicketPlate(item: CartItem): string | undefined {
+  return item.tickets[0]?.licensePlate;
+}
 
 function confirmDestructive(title: string, message: string): Promise<boolean> {
   if (isWeb) {
@@ -166,6 +176,22 @@ export default function CartScreen() {
     ? (cart.items.find((i) => i.id === drawerItem.id) ?? drawerItem)
     : null;
 
+  const blockedByCarRequirement = cart.items.some(itemNeedsCar);
+
+  const openCarPlate = (item: CartItem) => {
+    const firstTicket = item.tickets[0];
+    router.push({
+      pathname: '/cart/car-plate',
+      params: {
+        eventId: item.eventId,
+        tierId: item.tierId,
+        itemId: item.id,
+        ...(firstTicket?.carId ? { initialCarId: firstTicket.carId } : {}),
+        ...(firstTicket?.licensePlate ? { initialPlate: firstTicket.licensePlate } : {}),
+      },
+    } as never);
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -216,6 +242,32 @@ export default function CartScreen() {
             ) : (
               <Text style={styles.tapHint}>{cartCopy.item.tapExtras}</Text>
             )}
+            {item.requiresCar && item.kind === 'ticket' ? (
+              <Pressable
+                onPress={() => openCarPlate(item)}
+                style={[styles.carRow, itemNeedsCar(item) && styles.carRowWarn]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  itemNeedsCar(item) ? cartCopy.item.selectCar : cartCopy.item.changeCar
+                }
+              >
+                <CarIcon
+                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+                  size={16}
+                  strokeWidth={1.75}
+                />
+                <Text style={[styles.carRowText, itemNeedsCar(item) && styles.carRowTextWarn]}>
+                  {itemNeedsCar(item)
+                    ? cartCopy.item.selectCar
+                    : cartCopy.item.plate(firstTicketPlate(item) ?? '')}
+                </Text>
+                <ChevronRight
+                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+                  size={14}
+                  strokeWidth={1.75}
+                />
+              </Pressable>
+            ) : null}
           </Pressable>
         )}
       />
@@ -246,11 +298,16 @@ export default function CartScreen() {
 
         <View style={styles.footerButtons}>
           {itemCount > 0 && (
-            <Button
-              label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
-              onPress={() => void handlePay()}
-              disabled={checkingOut}
-            />
+            <>
+              <Button
+                label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
+                onPress={() => void handlePay()}
+                disabled={checkingOut || blockedByCarRequirement}
+              />
+              {blockedByCarRequirement ? (
+                <Text style={styles.payBlocked}>{cartCopy.item.carRequired}</Text>
+              ) : null}
+            </>
           )}
           {itemCount > 0 && (
             <Pressable
@@ -336,4 +393,18 @@ const styles = StyleSheet.create({
   footerButtons: { marginTop: theme.spacing.sm, gap: theme.spacing.sm },
   clearBtn: { alignSelf: 'center', padding: theme.spacing.sm },
   clearText: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  carRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+  },
+  carRowWarn: {},
+  carRowText: { color: theme.colors.muted, fontSize: theme.font.size.sm, flex: 1 },
+  carRowTextWarn: { color: theme.colors.accent, fontWeight: '600' },
+  payBlocked: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    textAlign: 'center',
+  },
 });

@@ -1,9 +1,7 @@
 import { router, Tabs } from 'expo-router';
-import { CalendarDays, Car, Ticket, UserRound, X } from 'lucide-react-native';
-import { Pressable } from 'react-native';
+import { CalendarDays, Car, Ticket, UserRound } from 'lucide-react-native';
 
 import { CartProvider } from '~/cart/context';
-import { cartCopy } from '~/copy/cart';
 
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
@@ -73,33 +71,7 @@ export default function AppLayout() {
         />
         <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
         <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
-        <Tabs.Screen
-          name="cart"
-          options={{
-            href: null,
-            headerShown: true,
-            headerTitle: cartCopy.title,
-            headerStyle: { backgroundColor: '#0a0a0a' },
-            headerTintColor: '#F5F5F5',
-            headerRight: () => (
-              <Pressable
-                onPress={() => {
-                  if (router.canGoBack()) {
-                    router.back();
-                  } else {
-                    router.replace('/events');
-                  }
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={cartCopy.actions.close}
-                hitSlop={12}
-                style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-              >
-                <X color="#F5F5F5" size={22} strokeWidth={1.75} />
-              </Pressable>
-            ),
-          }}
-        />
+        <Tabs.Screen name="cart" options={{ href: null }} />
       </Tabs>
     </CartProvider>
   );
