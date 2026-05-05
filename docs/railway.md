@@ -37,6 +37,9 @@ Postgres database. Build + start config lives in `apps/api/railway.json`
    Google/Apple client IDs) can be left empty during bootstrap if their
    features are not yet wired — the API env parser tolerates empty values
    for not-yet-active integrations.
+   - `ABACATEPAY_DEV_WEBHOOK_ENABLED=false` by default. Set to `true`
+     only for controlled internal tests that must process AbacatePay
+     `devMode` webhooks in production, then revert to `false`.
 
 5. **Public domain.** Networking → Generate Domain. Record the URL — this
    is `PROD_API_BASE_URL`. Paste it back into the JDMA-16 issue thread for
