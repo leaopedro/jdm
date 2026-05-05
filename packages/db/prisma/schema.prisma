@@ -293,6 +293,7 @@ model Order {
   userId          String
   eventId         String
   tierId          String
+  cartId          String?
   kind            OrderKind       @default(ticket)
   amountCents     Int
   currency        String          @default("BRL") @db.VarChar(3)
@@ -310,6 +311,7 @@ model Order {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tier        TicketTier   @relation(fields: [tierId], references: [id], onDelete: Restrict)
+  cart        Cart?        @relation(fields: [cartId], references: [id], onDelete: SetNull)
   tickets     Ticket[]
   orderExtras OrderExtra[]
 
@@ -318,6 +320,7 @@ model Order {
   @@index([eventId, status])
   @@index([status, createdAt])
   @@index([tierId, status, expiresAt])
+  @@index([cartId])
 }
 
 model OrderExtra {
@@ -441,8 +444,9 @@ model Cart {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items CartItem[]
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+  orders Order[]
 
   @@index([userId, status])
 }

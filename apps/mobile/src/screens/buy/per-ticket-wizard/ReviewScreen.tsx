@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
 import {
@@ -10,11 +11,16 @@ import {
   View,
 } from 'react-native';
 
-import type { SelectedExtra } from './ExtrasStep';
 import { useWizard } from './context';
 import type { TicketData } from './types';
 
-import { createOrder } from '~/api/orders';
+interface SelectedExtra {
+  id: string;
+  name: string;
+  priceCents: number;
+}
+
+import { createOrder, createPixOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
@@ -26,9 +32,10 @@ const ticketExtras = (t: TicketData): SelectedExtra[] =>
 
 export function ReviewScreen() {
   const { state, dispatch, onOrderCreated, onExitWizard } = useWizard();
-  const { tier, quantity, tickets, eventId, extrasOnly } = state;
+  const { tier, quantity, tickets, eventId, extrasOnly, method } = state;
   const canGoBack = state.steps.length > 0;
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
   const unitPrice = extrasOnly ? 0 : tier.priceCents;
   const extrasCents = tickets.reduce((sum, t) => {
@@ -38,17 +45,20 @@ export function ReviewScreen() {
 
   const [redirecting, setRedirecting] = useState(false);
 
+  const ticketPayloads = () =>
+    tickets.map((t) => ({
+      extras: ticketExtras(t).map((e) => e.id),
+      ...(t.carId ? { carId: t.carId as string } : {}),
+      ...(t.licensePlate ? { licensePlate: t.licensePlate as string } : {}),
+    }));
+
   const orderPayload = () => ({
     eventId,
     tierId: tier.id,
     quantity,
     method: 'card' as const,
     extrasOnly: false as const,
-    tickets: tickets.map((t) => ({
-      extras: ticketExtras(t).map((e) => e.id),
-      ...(t.carId ? { carId: t.carId as string } : {}),
-      ...(t.licensePlate ? { licensePlate: t.licensePlate as string } : {}),
-    })),
+    tickets: ticketPayloads(),
   });
 
   const handleSubmit = async () => {
@@ -58,6 +68,26 @@ export function ReviewScreen() {
     }
     setSubmitting(true);
     try {
+      if (method === 'pix') {
+        const pixOrder = await createPixOrder({
+          eventId,
+          tierId: tier.id,
+          quantity,
+          extrasOnly,
+          tickets: ticketPayloads(),
+        });
+        router.push({
+          pathname: '/(app)/events/buy/checkout-pix',
+          params: {
+            orderId: pixOrder.orderId,
+            brCode: pixOrder.brCode,
+            expiresAt: pixOrder.expiresAt,
+            amountCents: String(pixOrder.amountCents),
+            currency: pixOrder.currency,
+          },
+        } as never);
+        return;
+      }
       if (isWeb) {
         setRedirecting(true);
         await startWebCheckout(orderPayload());

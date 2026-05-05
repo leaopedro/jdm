@@ -72,6 +72,8 @@ export interface WizardState {
   reviewing: boolean;
   /** True when purchasing extras only (user already has ticket). */
   extrasOnly: boolean;
+  /** Payment method — 'card' (Stripe) or 'pix' (AbacatePay). */
+  method: 'card' | 'pix';
 }
 
 export type WizardAction =

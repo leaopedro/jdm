@@ -1,5 +1,4 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
-import type { MyTicket } from '@jdm/shared/tickets';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -15,23 +14,20 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
-import { getMyTicketForEvent } from '~/api/tickets';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL } from '~/lib/format';
-import { ExtrasOnlyCheckout } from '~/screens/buy/ExtrasOnlyCheckout';
 import {
   PerTicketWizard,
   QuantityStepper,
   WizardProvider,
   createCarPlateStep,
-  createExtrasStep,
 } from '~/screens/buy/per-ticket-wizard';
 import type { WizardStepDefinition } from '~/screens/buy/per-ticket-wizard';
 import { theme } from '~/theme';
 
-type Phase = 'loading' | 'select' | 'wizard' | 'extras_only';
+type Phase = 'loading' | 'select' | 'wizard';
 
 export default function BuyScreen() {
   const { eventSlug, tierId: initialTierId } = useLocalSearchParams<{
@@ -42,10 +38,10 @@ export default function BuyScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [event, setEvent] = useState<EventDetail | null>(null);
-  const [existingTicket, setExistingTicket] = useState<MyTicket | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [method, setMethod] = useState<'card' | 'pix'>('card');
   const [phase, setPhase] = useState<Phase>('loading');
 
   useEffect(() => {
@@ -54,10 +50,6 @@ export default function BuyScreen() {
       try {
         const ev = await getEvent(eventSlug);
         setEvent(ev);
-        const ticket = await getMyTicketForEvent(ev.id);
-        if (ticket) {
-          setExistingTicket(ticket);
-        }
         if (initialTierId) {
           const match = ev.tiers.find((t) => t.id === initialTierId);
           if (match && match.remainingCapacity > 0) {
@@ -147,33 +139,20 @@ export default function BuyScreen() {
     );
   }
 
-  if (phase === 'extras_only' && existingTicket) {
-    return (
-      <ExtrasOnlyCheckout
-        event={event}
-        existingTicket={existingTicket}
-        onPayment={(clientSecret) => void handlePayment(clientSecret)}
-        onBack={() => router.back()}
-      />
-    );
-  }
-
-  const pluggableSteps: WizardStepDefinition[] = [
-    createExtrasStep(event.extras),
-    createCarPlateStep(),
-  ];
+  const pluggableSteps: WizardStepDefinition[] = [createCarPlateStep()];
 
   if (phase === 'wizard' && selectedTier) {
     return (
       // key resets wizard state when tier/quantity changes — intentional fresh start
       <WizardProvider
-        key={`${selectedTier.id}-${quantity}`}
+        key={`${selectedTier.id}-${quantity}-${method}`}
         eventId={event.id}
         tier={selectedTier}
         quantity={quantity}
         steps={pluggableSteps}
         onOrderCreated={handleOrderCreated}
         onExitWizard={handleExitWizard}
+        method={method}
       >
         <PerTicketWizard />
       </WizardProvider>
@@ -196,17 +175,6 @@ export default function BuyScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {existingTicket && event.extras.length > 0 && (
-          <Pressable
-            style={styles.extrasBanner}
-            onPress={() => setPhase('extras_only')}
-            accessibilityRole="button"
-          >
-            <Text style={styles.extrasBannerTitle}>{buyCopy.extrasOnly.cta}</Text>
-            <Text style={styles.extrasBannerSub}>{buyCopy.extrasOnly.subtitle}</Text>
-          </Pressable>
-        )}
-
         <Text style={styles.sectionTitle}>{ticketsCopy.purchase.pickTier}</Text>
 
         {event.tiers.map((tier) => {
@@ -248,6 +216,27 @@ export default function BuyScreen() {
             <Text style={styles.sectionTitle}>{buyCopy.stepper.title}</Text>
             <QuantityStepper value={quantity} max={maxPerTier} onChange={setQuantity} />
             <Text style={styles.sub}>{buyCopy.stepper.max(maxPerTier)}</Text>
+          </View>
+        )}
+
+        {selectedTier && (
+          <View style={styles.methodRow}>
+            <Pressable
+              style={[styles.methodBtn, method === 'card' && styles.methodBtnActive]}
+              onPress={() => setMethod('card')}
+            >
+              <Text style={[styles.methodText, method === 'card' && styles.methodTextActive]}>
+                Cartão
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.methodBtn, method === 'pix' && styles.methodBtnActive]}
+              onPress={() => setMethod('pix')}
+            >
+              <Text style={[styles.methodText, method === 'pix' && styles.methodTextActive]}>
+                Pix
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -348,5 +337,29 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: 13,
     marginTop: 2,
+  },
+  methodRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  methodBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  methodBtnActive: {
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '15',
+  },
+  methodText: {
+    fontSize: theme.font.size.sm,
+    color: theme.colors.muted,
+  },
+  methodTextActive: {
+    color: theme.colors.accent,
+    fontWeight: '600',
   },
 });

@@ -513,7 +513,7 @@ copyPaste, expiresAt }`.
 
 #### 4.11 API: order status polling
 
-- [ ] **Scope:** `GET /orders/:id` returns current status for mobile poll.
+- [~] **Scope:** `GET /orders/:id` returns current status for mobile poll.
 - **Done when:** polling stops after `paid` or `expired`.
 
 #### 4.12 Mobile: Pix screen

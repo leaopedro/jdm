@@ -1,7 +1,9 @@
+import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@jdm/db';
 import {
   createOrderRequestSchema,
   createOrderResponseSchema,
+  createPixOrderResponseSchema,
   createWebCheckoutRequestSchema,
   createWebCheckoutResponseSchema,
   getOrderResponseSchema,
@@ -42,11 +44,11 @@ async function prepareOrder(
   | { ok: true; data: PreparedOrder }
   | { ok: false; status: number; body: { error: string; message: string } }
 > {
-  if (input.method !== 'card') {
+  if (input.method !== 'card' && input.method !== 'pix') {
     return {
       ok: false,
       status: 400,
-      body: { error: 'BadRequest', message: 'only card is supported in this release' },
+      body: { error: 'BadRequest', message: 'unsupported payment method' },
     };
   }
 
@@ -222,6 +224,40 @@ async function createPendingOrder(
   return { order, extraEntries: data.validationResult.extraEntries };
 }
 
+async function createPendingOrderPix(
+  data: PreparedOrder,
+): Promise<{ order: { id: string }; extraEntries: Array<{ extraId: string; quantity: number }> }> {
+  const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
+  const order = await prisma.order.create({
+    data: {
+      userId: data.sub,
+      eventId: data.event.id,
+      tierId: data.tier.id,
+      kind: data.isExtrasOnly ? 'extras_only' : 'ticket',
+      amountCents: data.amountCents,
+      quantity: data.ticketCount,
+      currency: data.tier.currency,
+      method: 'pix',
+      provider: 'abacatepay',
+      status: 'pending',
+      expiresAt,
+    },
+  });
+
+  if (data.validationResult.extraEntries.length > 0) {
+    await prisma.orderExtra.createMany({
+      data: data.validationResult.extraEntries.map(({ extraId, quantity }) => ({
+        orderId: order.id,
+        extraId,
+        quantity,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  return { order, extraEntries: data.validationResult.extraEntries };
+}
+
 async function rollbackReservation(data: PreparedOrder, tierId: string): Promise<void> {
   if (data.reserved) {
     await prisma.ticketTier.updateMany({
@@ -245,7 +281,6 @@ const withReturnParams = (rawUrl: string, params: Record<string, string>): strin
   return url.toString();
 };
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
@@ -254,6 +289,51 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     const result = await prepareOrder(sub, input);
     if (!result.ok) return reply.status(result.status).send(result.body);
     const data = result.data;
+
+    if (input.method === 'pix') {
+      if (!app.abacatepay) {
+        await rollbackReservation(data, data.tier.id);
+        return reply
+          .status(503)
+          .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });
+      }
+
+      try {
+        const { order } = await createPendingOrderPix(data);
+
+        const billing = await app.abacatepay.createPixBilling({
+          amountCents: data.amountCents,
+          externalId: order.id,
+          description: `Ingresso ${data.event.title}`,
+          metadata: {
+            orderId: order.id,
+            userId: sub,
+            eventId: data.event.id,
+            tierId: data.tier.id,
+            tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+          },
+        });
+
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { providerRef: billing.id },
+        });
+
+        return reply.status(201).send(
+          createPixOrderResponseSchema.parse({
+            orderId: order.id,
+            status: 'pending',
+            brCode: billing.brCode,
+            expiresAt: billing.expiresAt,
+            amountCents: data.amountCents,
+            currency: data.tier.currency,
+          }),
+        );
+      } catch (err) {
+        await rollbackReservation(data, data.tier.id);
+        throw err;
+      }
+    }
 
     for (const ref of data.expiredProviderRefs) {
       app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
@@ -377,32 +457,62 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const { id } = request.params as { id: string };
+  await app.register(async (scoped) => {
+    await scoped.register(rateLimit, {
+      max: 60,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const auth = (req as unknown as { user?: { sub?: string } }).user;
+        return auth?.sub ? `order-poll:${auth.sub}` : `order-poll-ip:${req.ip}`;
+      },
+    });
 
-    const result = await expireSingleOrder(id, sub);
-    if (!result) return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+    scoped.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const { id } = request.params as { id: string };
 
-    const { order, wasExpired } = result;
+      const result = await expireSingleOrder(id, sub);
+      if (result.kind === 'not_found') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+      if (result.kind === 'forbidden') {
+        return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
+      }
 
-    if (wasExpired && order.providerRef) {
-      app.stripe.cancelPaymentIntent(order.providerRef).catch((cancelErr) => {
-        request.log.warn(
-          { err: cancelErr, orderId: id },
-          'orders: stripe PI cancel failed after lazy expiry',
-        );
-      });
-    }
+      const { order, wasExpired } = result;
 
-    return reply.status(200).send(
-      getOrderResponseSchema.parse({
-        orderId: order.id,
-        status: order.status,
-        expiresAt: order.expiresAt?.toISOString() ?? null,
-        amountCents: order.amountCents,
-        currency: order.currency,
-      }),
-    );
+      if (wasExpired && order.providerRef && order.provider === 'stripe') {
+        app.stripe.cancelPaymentIntent(order.providerRef).catch((cancelErr) => {
+          request.log.warn(
+            { err: cancelErr, orderId: id },
+            'orders: stripe PI cancel failed after lazy expiry',
+          );
+        });
+      }
+
+      let ticketId: string | undefined;
+      if (order.status === 'paid') {
+        const ticket = await prisma.ticket.findFirst({
+          where: { orderId: order.id },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        ticketId = ticket?.id;
+      }
+
+      reply.header('Cache-Control', 'no-store');
+
+      return reply.status(200).send(
+        getOrderResponseSchema.parse({
+          orderId: order.id,
+          status: order.status,
+          provider: order.provider,
+          expiresAt: order.expiresAt?.toISOString() ?? null,
+          amountCents: order.amountCents,
+          currency: order.currency,
+          ...(ticketId ? { ticketId } : {}),
+        }),
+      );
+    });
   });
 };

@@ -28,17 +28,19 @@ export const buildFakeAbacatePay = (): FakeAbacatePay => {
       fake.calls.push({ method: 'createPixBilling', args: [input] });
       if (fake.nextBilling) return Promise.resolve(fake.nextBilling);
       return Promise.resolve({
-        id: `pix_${Date.now()}`,
+        id: `pix_char_${Date.now()}`,
         brCode: '00020126580014br.gov.bcb.pix...fake',
+        brCodeBase64: 'data:image/png;base64,iVBORw0KG...fake',
+        amount: input.amountCents,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-        status: 'pending',
+        status: 'PENDING',
       });
     },
 
     getPixBilling: (id: string) => {
       fake.calls.push({ method: 'getPixBilling', args: [id] });
       if (fake.nextStatus) return Promise.resolve(fake.nextStatus);
-      return Promise.resolve({ id, status: 'pending', paidAt: null });
+      return Promise.resolve({ id, status: 'PENDING', paidAt: null });
     },
 
     verifyWebhookSignature: (_payload: Buffer, _signature: string) => {

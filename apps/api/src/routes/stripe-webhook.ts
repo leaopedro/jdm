@@ -70,6 +70,132 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     done(null, body);
   });
 
+  const handleCartPaymentSucceeded = async (
+    cartId: string,
+    piId: string,
+    webhookEvent: { id: string; type: string; data: { object: Record<string, unknown> } },
+    request: { log: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void } },
+    reply: { status: (n: number) => { send: (b: unknown) => unknown } },
+  ) => {
+    const orders = await prisma.order.findMany({
+      where: { cartId, status: 'pending' },
+      select: { id: true, amountCents: true },
+    });
+
+    if (orders.length === 0) {
+      const alreadyPaid = await prisma.order.findFirst({
+        where: { cartId, status: 'paid' },
+        select: { id: true },
+      });
+      if (alreadyPaid) {
+        await markProcessed(webhookEvent.id, webhookEvent);
+        return reply.status(200).send({ ok: true, deduped: true });
+      }
+      return reply.status(200).send({ ok: true, ignored: true });
+    }
+
+    for (const order of orders) {
+      try {
+        await issueTicketForPaidOrder(order.id, piId, app.env, { cartId });
+      } catch (err) {
+        if (err instanceof TicketAlreadyExistsForEventError) {
+          await app.stripe.refund(piId, 'duplicate-ticket', order.amountCents);
+          await markRefundedAndReleaseReservation(order.id);
+          request.log.warn(
+            { orderId: order.id, piId },
+            'cart webhook: duplicate ticket, partial refund',
+          );
+          continue;
+        }
+        if (err instanceof OrderNotPendingError) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    await prisma.cart.update({
+      where: { id: cartId },
+      data: { status: 'converted' },
+    });
+
+    const firstTime = await markProcessed(webhookEvent.id, webhookEvent);
+    request.log.info({ cartId, piId, firstTime }, 'stripe webhook: cart checkout settled');
+
+    try {
+      const userId = (
+        await prisma.order.findFirst({
+          where: { cartId },
+          select: { userId: true },
+        })
+      )?.userId;
+      if (userId) {
+        await sendTransactionalPush(
+          {
+            userId,
+            kind: 'ticket.confirmed',
+            dedupeKey: `cart_${cartId}`,
+            title: 'Ingressos confirmados',
+            body: 'Seus ingressos estão prontos.',
+            data: { cartId },
+          },
+          { sender: app.push },
+        );
+      }
+    } catch (pushErr) {
+      request.log.warn({ err: pushErr, cartId }, 'cart webhook: push failed');
+    }
+
+    return reply.status(200).send({ ok: true, deduped: !firstTime });
+  };
+
+  const handleCartFailure = async (
+    cartId: string,
+    webhookEvent: { id: string; type: string; data: { object: Record<string, unknown> } },
+    request: { log: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void } },
+    reply: { status: (n: number) => { send: (b: unknown) => unknown } },
+  ) => {
+    await prisma.$transaction(async (tx) => {
+      const cartOrders = await tx.order.findMany({
+        where: { cartId, status: 'pending' },
+      });
+
+      for (const order of cartOrders) {
+        await tx.order.update({
+          where: { id: order.id },
+          data: { status: 'failed', failedAt: new Date() },
+        });
+
+        if (order.kind !== 'extras_only') {
+          await tx.ticketTier.updateMany({
+            where: { id: order.tierId, quantitySold: { gte: order.quantity } },
+            data: { quantitySold: { decrement: order.quantity } },
+          });
+        }
+
+        const orderExtras = await tx.orderExtra.findMany({
+          where: { orderId: order.id },
+          select: { extraId: true, quantity: true },
+        });
+        for (const { extraId, quantity } of orderExtras) {
+          await tx.ticketExtra.updateMany({
+            where: { id: extraId, quantitySold: { gte: quantity } },
+            data: { quantitySold: { decrement: quantity } },
+          });
+        }
+      }
+
+      await tx.cart.update({
+        where: { id: cartId },
+        data: { status: 'open' },
+      });
+    });
+
+    const firstTime = await markProcessed(webhookEvent.id, webhookEvent);
+    request.log.info({ cartId, firstTime }, 'stripe webhook: cart checkout failed/expired');
+    return reply.status(200).send({ ok: true, deduped: !firstTime });
+  };
+
   app.post('/stripe/webhook', async (request, reply) => {
     const signatureHeader =
       request.headers['stripe-signature'] ?? request.headers['webhook-signature'];
@@ -97,6 +223,12 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     const intent = event.data.object as { id?: string; metadata?: Record<string, string> };
     const orderId = intent.metadata?.orderId;
+    const cartId = intent.metadata?.cartId;
+
+    // Cart checkout settlement: multiple orders linked by cartId
+    if (event.type === 'payment_intent.succeeded' && cartId && intent.id) {
+      return handleCartPaymentSucceeded(cartId, intent.id, event, request, reply);
+    }
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
       try {
@@ -194,6 +326,18 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true, ignored: true });
       }
 
+      let sessionCartId = session.metadata?.cartId;
+      if (!sessionCartId) {
+        const cartOrder = await prisma.order.findFirst({
+          where: { provider: 'stripe', providerRef: piId, cartId: { not: null } },
+          select: { cartId: true },
+        });
+        if (cartOrder?.cartId) sessionCartId = cartOrder.cartId;
+      }
+      if (sessionCartId) {
+        return handleCartPaymentSucceeded(sessionCartId, piId, event, request, reply);
+      }
+
       let sessionOrderId = session.metadata?.orderId;
       if (!sessionOrderId) {
         const order = await prisma.order.findFirst({
@@ -278,6 +422,10 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (event.type === 'checkout.session.expired') {
+      const expiredCartId = session.metadata?.cartId;
+      if (expiredCartId) {
+        return handleCartFailure(expiredCartId, event, request, reply);
+      }
       const sessionOrderId = session.metadata?.orderId;
       if (sessionOrderId) {
         await prisma.$transaction(async (tx) => {
@@ -310,12 +458,11 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    if (event.type === 'payment_intent.payment_failed' && cartId) {
+      return handleCartFailure(cartId, event, request, reply);
+    }
+
     if (event.type === 'payment_intent.payment_failed' && orderId) {
-      // Atomic: either both the order flip and the capacity release commit,
-      // or neither does. Without the transaction, a crash between the two
-      // writes would strand the reservation (status=failed, quantitySold
-      // still incremented) because Stripe retries would skip release
-      // (updateMany count=0 on the no-longer-pending order).
       await prisma.$transaction(async (tx) => {
         const updated = await tx.order.updateMany({
           where: { id: orderId, status: 'pending' },

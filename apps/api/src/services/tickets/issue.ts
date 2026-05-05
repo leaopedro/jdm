@@ -221,7 +221,7 @@ export const issueTicketForPaidOrder = async (
 
     await tx.order.update({
       where: { id: order.id },
-      data: { status: 'paid', paidAt: new Date(), providerRef },
+      data: { status: 'paid', paidAt: new Date(), ...(order.cartId ? {} : { providerRef }) },
     });
 
     for (let i = 0; i < tickets.length; i++) {
@@ -245,7 +245,14 @@ export const issueTicketForPaidOrder = async (
 };
 
 const issueExtrasOnly = async (
-  order: { id: string; userId: string; eventId: string; status: string; event: { title: string } },
+  order: {
+    id: string;
+    userId: string;
+    eventId: string;
+    status: string;
+    cartId: string | null;
+    event: { title: string };
+  },
   providerRef: string,
   env: IssueEnv,
   tx: Tx,
@@ -274,7 +281,7 @@ const issueExtrasOnly = async (
 
   await tx.order.update({
     where: { id: order.id },
-    data: { status: 'paid', paidAt: new Date(), providerRef },
+    data: { status: 'paid', paidAt: new Date(), ...(order.cartId ? {} : { providerRef }) },
   });
 
   await upsertExtraItemsFromOrder(order.id, ticket.id, env, tx);

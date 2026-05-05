@@ -69,30 +69,35 @@ export const sweepExpiredOrdersForTier = async (
   };
 };
 
-export type ExpiredOrderResult = {
-  wasExpired: boolean;
-  order: {
-    id: string;
-    userId: string;
-    tierId: string;
-    kind: string;
-    status: string;
-    expiresAt: Date | null;
-    amountCents: number;
-    currency: string;
-    providerRef: string | null;
-  };
-};
+export type ExpireSingleOrderOutcome =
+  | { kind: 'not_found' }
+  | { kind: 'forbidden' }
+  | {
+      kind: 'ok';
+      wasExpired: boolean;
+      order: {
+        id: string;
+        userId: string;
+        tierId: string;
+        kind: string;
+        status: string;
+        expiresAt: Date | null;
+        amountCents: number;
+        currency: string;
+        provider: 'stripe' | 'abacatepay';
+        providerRef: string | null;
+      };
+    };
 
 /**
  * Atomically expire a single pending order if its TTL has passed, releasing
- * `quantitySold`. Returns null if the order doesn't exist or isn't owned by
- * `ownerId` (safe 404 for route handlers).
+ * `quantitySold`. Returns a discriminated outcome so the caller can split
+ * 404 (missing) from 403 (non-owner).
  */
 export const expireSingleOrder = async (
   orderId: string,
   ownerId: string,
-): Promise<ExpiredOrderResult | null> => {
+): Promise<ExpireSingleOrderOutcome> => {
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
@@ -105,15 +110,17 @@ export const expireSingleOrder = async (
         expiresAt: true,
         amountCents: true,
         currency: true,
+        provider: true,
         providerRef: true,
       },
     });
-    if (!order || order.userId !== ownerId) return null;
+    if (!order) return { kind: 'not_found' };
+    if (order.userId !== ownerId) return { kind: 'forbidden' };
 
     const isStale =
       order.status === 'pending' && order.expiresAt !== null && order.expiresAt < new Date();
 
-    if (!isStale) return { wasExpired: false, order };
+    if (!isStale) return { kind: 'ok', wasExpired: false, order };
 
     await tx.order.updateMany({
       where: { id: orderId, status: 'pending' },
@@ -138,6 +145,6 @@ export const expireSingleOrder = async (
       });
     }
 
-    return { wasExpired: true, order: { ...order, status: 'expired' } };
+    return { kind: 'ok', wasExpired: true, order: { ...order, status: 'expired' } };
   });
 };

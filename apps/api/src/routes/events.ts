@@ -148,4 +148,17 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializeDetail(event, app.uploads);
   });
+
+  app.get('/events/by-id/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const event = await prisma.event.findFirst({
+      where: { id, status: 'published' },
+      include: {
+        tiers: true,
+        extras: { where: { active: true } },
+      },
+    });
+    if (!event) return reply.status(404).send({ error: 'NotFound' });
+    return serializeDetail(event, app.uploads);
+  });
 };

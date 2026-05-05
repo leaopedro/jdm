@@ -2,17 +2,33 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const BASE_URL = 'https://api.abacatepay.com/v2';
 
+// AbacatePay signs webhooks with this fixed public key (not merchant-specific).
+// https://docs.abacatepay.com/pages/webhooks/security
+const ABACATEPAY_PUBLIC_KEY =
+  't9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9';
+
 export type PixBillingResult = {
   id: string;
   brCode: string;
+  brCodeBase64?: string;
+  amount: number;
   expiresAt: string;
   status: string;
+};
+
+export type PixBillingCustomer = {
+  name: string;
+  taxId: string;
+  email?: string;
+  cellphone?: string;
 };
 
 export type CreatePixBillingInput = {
   amountCents: number;
   externalId: string;
   description: string;
+  expiresInSeconds?: number;
+  customer?: PixBillingCustomer;
   metadata?: Record<string, string>;
 };
 
@@ -60,33 +76,51 @@ export const buildAbacatePay = (env: AbacatePayEnv): AbacatePayClient => {
   };
 
   return {
-    createPixBilling: async ({ amountCents, externalId, description, metadata }) => {
+    createPixBilling: async ({
+      amountCents,
+      externalId,
+      description,
+      expiresInSeconds,
+      customer,
+      metadata,
+    }) => {
+      const dataBody: Record<string, unknown> = {
+        amount: amountCents,
+        description,
+        externalId,
+        metadata: metadata ?? {},
+      };
+      if (expiresInSeconds !== undefined) dataBody.expiresIn = expiresInSeconds;
+      if (customer) dataBody.customer = customer;
+
       const result = await request<{
         id: string;
         brCode: string;
+        brCodeBase64?: string;
+        amount: number;
         expiresAt: string;
         status: string;
-      }>('POST', '/billing/pix/create', {
-        amount: amountCents,
-        externalId,
-        description,
-        metadata: metadata ?? {},
+      }>('POST', '/transparents/create', {
+        method: 'PIX',
+        data: dataBody,
       });
       return result;
     },
 
     getPixBilling: async (id) => {
-      const result = await request<{ id: string; status: string; paidAt: string | null }>(
+      const result = await request<{ id: string; status: string; updatedAt: string | null }>(
         'GET',
-        `/billing/pix/${id}`,
+        `/transparents/${id}`,
       );
-      return result;
+      return {
+        id: result.id,
+        status: result.status,
+        paidAt: result.status === 'PAID' ? result.updatedAt : null,
+      };
     },
 
     verifyWebhookSignature: (payload, signature) => {
-      const expected = createHmac('sha256', env.ABACATEPAY_WEBHOOK_SECRET)
-        .update(payload)
-        .digest('base64');
+      const expected = createHmac('sha256', ABACATEPAY_PUBLIC_KEY).update(payload).digest('base64');
       const a = Buffer.from(signature, 'base64');
       const b = Buffer.from(expected, 'base64');
       if (a.length !== b.length || !timingSafeEqual(a, b)) {
