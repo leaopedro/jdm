@@ -3,6 +3,7 @@ export const theme = {
     bg: '#0B0B0F',
     fg: '#F5F5F7',
     accent: '#E10600',
+    success: '#22C55E',
     muted: '#8A8A93',
     border: '#1F1F24',
   },

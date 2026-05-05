@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getOrder } from '~/api/orders';
-import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { theme } from '~/theme';
 
@@ -84,6 +83,14 @@ export default function CheckoutReturnScreen() {
     }
   }, [status]);
 
+  useEffect(() => {
+    if (status !== 'paid' || !orderId) return;
+    router.replace({
+      pathname: '/(app)/events/buy/checkout-confirmed',
+      params: { orderId },
+    } as never);
+  }, [status, orderId, router]);
+
   useFocusEffect(
     useCallback(() => {
       if (hasReachedTerminal.current) {
@@ -92,10 +99,6 @@ export default function CheckoutReturnScreen() {
     }, [router]),
   );
 
-  const goTickets = () => {
-    router.dismissAll();
-    router.navigate('/tickets' as never);
-  };
   const goEvents = () => {
     router.dismissAll();
     router.navigate('/events' as never);
@@ -113,11 +116,8 @@ export default function CheckoutReturnScreen() {
 
       {status === 'paid' && (
         <View style={styles.center}>
-          <Text style={styles.emoji}>✓</Text>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
           <Text style={styles.heading}>{buyCopy.webCheckout.success}</Text>
-          <View style={styles.actions}>
-            <Button label={buyCopy.webCheckout.successCta} onPress={goTickets} />
-          </View>
         </View>
       )}
 
@@ -179,11 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-  },
-  emoji: {
-    fontSize: 48,
-    color: theme.colors.accent,
-    marginBottom: 8,
   },
   heading: {
     color: theme.colors.fg,

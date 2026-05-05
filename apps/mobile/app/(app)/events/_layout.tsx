@@ -7,6 +7,7 @@ export default function EventsLayout() {
       <Stack.Screen name="[slug]" />
       <Stack.Screen name="buy/[eventSlug]" />
       <Stack.Screen name="buy/checkout-return" />
+      <Stack.Screen name="buy/checkout-confirmed" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }
