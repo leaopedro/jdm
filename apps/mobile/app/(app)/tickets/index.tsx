@@ -191,11 +191,10 @@ const styles = StyleSheet.create({
   chipText: {
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chipTextActive: {
     color: theme.colors.bg,
-    fontWeight: '600',
   },
   list: { gap: theme.spacing.md, padding: theme.spacing.md },
   card: {
