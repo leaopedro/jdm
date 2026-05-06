@@ -1,5 +1,6 @@
 import type { MyTicket } from '@jdm/shared/tickets';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,11 +16,14 @@ import {
 import { listMyTickets } from '~/api/tickets';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatEventDateRange } from '~/lib/format';
+import {
+  TICKET_STATUS_FILTERS,
+  applyEventFilter,
+  applyStatusFilter,
+  findEventTitle,
+  type TicketStatusFilter,
+} from '~/screens/tickets/filters';
 import { theme } from '~/theme';
-
-type TicketFilter = 'all' | 'valid' | 'used' | 'expired';
-
-const FILTERS: TicketFilter[] = ['all', 'valid', 'used', 'expired'];
 
 const statusLabel = (status: MyTicket['status']): string => {
   if (status === 'valid') return ticketsCopy.detail.valid;
@@ -27,31 +31,16 @@ const statusLabel = (status: MyTicket['status']): string => {
   return ticketsCopy.detail.revoked;
 };
 
-function isExpired(ticket: MyTicket): boolean {
-  return (
-    ticket.status === 'revoked' ||
-    (ticket.status === 'valid' && new Date(ticket.event.endsAt) < new Date())
-  );
-}
-
-function applyFilter(items: MyTicket[], filter: TicketFilter): MyTicket[] {
-  switch (filter) {
-    case 'valid':
-      return items.filter((t) => t.status === 'valid' && !isExpired(t));
-    case 'used':
-      return items.filter((t) => t.status === 'used');
-    case 'expired':
-      return items.filter(isExpired);
-    default:
-      return items;
-  }
-}
-
 export default function TicketsIndex() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const rawEventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const [items, setItems] = useState<MyTicket[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<TicketFilter>('valid');
+  const [filter, setFilter] = useState<TicketStatusFilter>('valid');
+  const [eventFilterCleared, setEventFilterCleared] = useState(false);
+
+  const eventId = eventFilterCleared ? null : (rawEventId ?? null);
 
   const load = useCallback(async () => {
     const res = await listMyTickets();
@@ -73,7 +62,17 @@ export default function TicketsIndex() {
     }
   }, [load]);
 
-  const filtered = useMemo(() => (items ? applyFilter(items, filter) : null), [items, filter]);
+  const filtered = useMemo(() => {
+    if (!items) return null;
+    return applyEventFilter(applyStatusFilter(items, filter), eventId);
+  }, [items, filter, eventId]);
+
+  const eventTitle = useMemo(() => findEventTitle(items ?? [], eventId), [items, eventId]);
+
+  const clearEventFilter = useCallback(() => {
+    setEventFilterCleared(true);
+    router.setParams({ eventId: undefined } as never);
+  }, [router]);
 
   if (items === null) {
     return (
@@ -93,13 +92,30 @@ export default function TicketsIndex() {
 
   return (
     <View style={styles.container}>
+      {eventId && eventTitle ? (
+        <View style={styles.eventBanner}>
+          <Text style={styles.eventBannerText} numberOfLines={1}>
+            {ticketsCopy.filters.event} {eventTitle}
+          </Text>
+          <Pressable
+            onPress={clearEventFilter}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={ticketsCopy.filters.eventClear}
+            style={styles.eventBannerClear}
+          >
+            <X color={theme.colors.bg} size={16} strokeWidth={2} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
       >
-        {FILTERS.map((f) => {
+        {TICKET_STATUS_FILTERS.map((f) => {
           const active = filter === f;
           return (
             <Pressable
@@ -171,6 +187,29 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg,
   },
   empty: { color: theme.colors.muted },
+  eventBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.fg,
+  },
+  eventBannerText: {
+    flex: 1,
+    color: theme.colors.bg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  eventBannerClear: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterScroll: { flexGrow: 0, flexShrink: 0 },
   filterRow: {
     flexDirection: 'row',
