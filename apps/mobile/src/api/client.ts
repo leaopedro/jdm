@@ -1,3 +1,4 @@
+import { ACCOUNT_DISABLED_ERROR } from '@jdm/shared/auth';
 import Constants from 'expo-constants';
 import type { z } from 'zod';
 
@@ -47,6 +48,7 @@ type TokenProvider = {
   getAccessToken: () => string | null;
   refresh: () => Promise<string>;
   onSignOut: () => Promise<void>;
+  onAccountDisabled?: () => Promise<void>;
 };
 
 let provider: TokenProvider | null = null;
@@ -86,6 +88,23 @@ export const authedRequest = async <T>(
 
   let response = await attempt(current);
   if (response.status === 401) {
+    const cloned = response.clone();
+    let errorBody: unknown = null;
+    try {
+      const errText = await cloned.text();
+      errorBody = errText.length > 0 ? JSON.parse(errText) : null;
+    } catch {
+      errorBody = null;
+    }
+    if (
+      typeof errorBody === 'object' &&
+      errorBody !== null &&
+      (errorBody as { error?: unknown }).error === ACCOUNT_DISABLED_ERROR
+    ) {
+      if (provider.onAccountDisabled) await provider.onAccountDisabled();
+      else await provider.onSignOut();
+      throw new ApiError(401, 'account disabled', errorBody);
+    }
     try {
       const refreshed = await dedupedRefresh();
       response = await attempt(refreshed);

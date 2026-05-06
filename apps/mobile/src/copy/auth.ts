@@ -18,6 +18,7 @@ export const authCopy = {
     weakPassword: 'Use pelo menos 10 caracteres.',
     rateLimited: 'Muitas tentativas. Aguarde um instante.',
     invalidLink: 'Link inválido.',
+    accountDisabled: 'Sua conta foi desabilitada. Contate o suporte.',
   },
   login: {
     title: 'Entrar',
