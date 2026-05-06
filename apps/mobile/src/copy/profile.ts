@@ -22,6 +22,8 @@ export const profileCopy = {
     yearLabel: 'Ano',
     nicknameLabel: 'Apelido (opcional)',
     save: 'Salvar',
+    saved: 'Carro atualizado.',
+    saveFailed: 'Não foi possível salvar o carro.',
     delete: 'Excluir',
     deleteConfirm: 'Remover este carro?',
     addPhoto: 'Adicionar foto',
