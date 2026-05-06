@@ -8,7 +8,17 @@ import {
   getFinancePaymentMix,
   getFinanceSummary,
   getFinanceTrends,
+  listAdminEvents,
 } from './admin-api';
+
+export type FinanceFilterEvent = { id: string; title: string; startsAt: string };
+
+export async function fetchFinanceFilterEvents(): Promise<FinanceFilterEvent[]> {
+  const res = await listAdminEvents();
+  return res.items
+    .map((e) => ({ id: e.id, title: e.title, startsAt: e.startsAt }))
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+}
 
 export async function fetchFinanceDashboard(q?: AdminFinanceQuery) {
   const [summary, byEvent, trends, paymentMix] = await Promise.all([

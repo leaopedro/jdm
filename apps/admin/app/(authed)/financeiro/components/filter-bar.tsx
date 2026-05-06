@@ -10,10 +10,14 @@ type Filters = {
   provider: string | null;
   method: string | null;
   search: string | null;
+  eventId: string | null;
 };
+
+type EventOption = { id: string; title: string };
 
 type Props = {
   filters: Filters;
+  events: EventOption[];
   onFilterChange: (key: string, value: string | null) => void;
   onClear: () => void;
   isPending: boolean;
@@ -44,12 +48,28 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
   );
 }
 
-export function FilterBar({ filters, onFilterChange, onClear, isPending }: Props) {
+export function FilterBar({ filters, events, onFilterChange, onClear, isPending }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const hasFilters = Object.values(filters).some(Boolean);
 
   const filterContent = (
     <div className="flex flex-wrap items-center gap-2">
+      <select
+        value={filters.eventId ?? ''}
+        onChange={(e) => onFilterChange('eventId', e.target.value || null)}
+        className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+        aria-label="Filtrar por evento"
+      >
+        <option value="">Todos os eventos</option>
+        {events.map((ev) => (
+          <option key={ev.id} value={ev.id}>
+            {ev.title}
+          </option>
+        ))}
+      </select>
+
+      <span className="mx-1 h-4 w-px bg-[color:var(--color-border)]" />
+
       <DatePickerField
         value={filters.from}
         onChange={(v) => onFilterChange('from', v)}
