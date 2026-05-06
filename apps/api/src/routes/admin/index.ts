@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { adminCheckInRoutes } from './check-in.js';
@@ -6,7 +7,7 @@ import { adminExtraRoutes } from './extras.js';
 import { adminFinanceRoutes } from './finance.js';
 import { adminTicketRoutes } from './tickets.js';
 import { adminTierRoutes } from './tiers.js';
-import { adminUserRoutes } from './users.js';
+import { adminUserMutationRoutes, adminUserRoutes } from './users.js';
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', app.authenticate);
@@ -26,5 +27,19 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminTicketRoutes);
     await scope.register(adminUserRoutes);
     await scope.register(adminFinanceRoutes);
+  });
+
+  // User create/disable/enable: admin-only with tighter rate limit.
+  await app.register(async (scope) => {
+    scope.addHook('preHandler', scope.requireRole('admin'));
+    await scope.register(rateLimit, {
+      max: 30,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const auth = (req as unknown as { user?: { sub?: string } }).user;
+        return auth?.sub ? `admin-user-mut:${auth.sub}` : `admin-user-mut-ip:${req.ip}`;
+      },
+    });
+    await scope.register(adminUserMutationRoutes);
   });
 };

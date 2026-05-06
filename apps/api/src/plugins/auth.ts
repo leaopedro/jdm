@@ -1,4 +1,5 @@
-import type { UserRoleName } from '@jdm/shared/auth';
+import { prisma } from '@jdm/db';
+import { ACCOUNT_DISABLED_ERROR, type UserRoleName } from '@jdm/shared/auth';
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 
@@ -33,11 +34,22 @@ export const authPlugin = fp(async (app) => {
       return reply.status(401).send({ error: 'Unauthorized', message: 'missing bearer token' });
     }
     const token = header.slice('Bearer '.length);
+    let payload: AccessPayload;
     try {
-      request.user = verifyAccessToken(token, app.env);
+      payload = verifyAccessToken(token, app.env);
     } catch {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid token' });
     }
+    const userRow = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { status: true },
+    });
+    if (!userRow || userRow.status === 'disabled') {
+      return reply
+        .status(401)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
+    }
+    request.user = payload;
     return undefined;
   });
 
