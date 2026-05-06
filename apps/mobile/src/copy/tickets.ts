@@ -6,6 +6,8 @@ export const ticketsCopy = {
     loading: 'Carregando seus ingressos...',
     upcoming: 'Próximos',
     past: 'Anteriores',
+    pendingExtras: 'Extras não utilizados',
+    pendingExtrasOne: 'Extra não utilizado',
   },
   filters: {
     all: 'Todos',
@@ -21,6 +23,7 @@ export const ticketsCopy = {
     valid: 'Válido',
     notFound: 'Ingresso não encontrado.',
     extrasTitle: 'Extras',
+    qrUsed: 'QrCode Utilizado',
   },
   purchase: {
     pickTier: 'Escolha um ingresso',
