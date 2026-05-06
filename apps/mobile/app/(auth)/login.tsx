@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@jdm/shared/auth';
 import type { LoginInput } from '@jdm/shared/auth';
 import { Button, Text } from '@jdm/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import {
   Image,
@@ -16,12 +16,15 @@ import {
 
 import { ApiError } from '~/api/client';
 import { useAuth } from '~/auth/context';
+import { buildSignupHref, DEFAULT_POST_AUTH, sanitizeNext } from '~/auth/redirect-intent';
 import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
 
 export default function LoginScreen() {
   const { login } = useAuth();
   const router = useRouter();
+  const { next: nextParam } = useLocalSearchParams<{ next?: string }>();
+  const next = sanitizeNext(nextParam);
   const {
     control,
     handleSubmit,
@@ -35,7 +38,7 @@ export default function LoginScreen() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login(values);
-      router.replace('/welcome');
+      router.replace((next ?? DEFAULT_POST_AUTH) as never);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401)
@@ -43,7 +46,7 @@ export default function LoginScreen() {
         else if (err.status === 403)
           router.replace({
             pathname: '/verify-email-pending',
-            params: { email: values.email },
+            params: next ? { email: values.email, next } : { email: values.email },
           });
         else if (err.status === 429) setError('password', { message: authCopy.errors.rateLimited });
         else setError('password', { message: authCopy.errors.unknown });
@@ -143,7 +146,7 @@ export default function LoginScreen() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel={authCopy.login.createAccount}
-              onPress={() => router.push('/signup')}
+              onPress={() => router.push(buildSignupHref(next) as never)}
               hitSlop={8}
             >
               <Text tone="brand" weight="semibold">

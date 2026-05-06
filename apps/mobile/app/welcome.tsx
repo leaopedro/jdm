@@ -8,6 +8,7 @@ import { Image, Pressable, SafeAreaView, ScrollView, View } from 'react-native';
 
 import { listEvents } from '~/api/events';
 import { useAuth } from '~/auth/context';
+import { buildLoginHref } from '~/auth/redirect-intent';
 import { formatEventDateRange } from '~/lib/format';
 
 const copy = {
@@ -41,7 +42,8 @@ const venueLine = (e: EventSummary) =>
 
 export default function Welcome() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, status } = useAuth();
+  const isAnon = status === 'unauthenticated';
   const [items, setItems] = useState<EventSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,9 +93,11 @@ export default function Welcome() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Perfil"
+              accessibilityLabel={isAnon ? 'Entrar' : 'Perfil'}
               hitSlop={8}
-              onPress={() => router.push('/profile')}
+              onPress={() =>
+                router.push(isAnon ? (buildLoginHref('/welcome') as never) : '/profile')
+              }
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
             >
               <User color="#F5F5F5" size={22} strokeWidth={1.75} />

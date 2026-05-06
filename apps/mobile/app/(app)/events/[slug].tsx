@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
+import { useAuth } from '~/auth/context';
+import { buildLoginHref } from '~/auth/redirect-intent';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
@@ -30,6 +32,12 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const { addItem, adding } = useCart();
+  const { status: authStatus } = useAuth();
+  const isAnon = authStatus === 'unauthenticated';
+
+  const requireLogin = (next: string) => {
+    router.push(buildLoginHref(next) as never);
+  };
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -51,6 +59,10 @@ export default function EventDetailScreen() {
 
   const addToCart = async (tier: TicketTier) => {
     if (!event) return;
+    if (isAnon) {
+      requireLogin(`/events/buy/${event.slug}?tierId=${tier.id}`);
+      return;
+    }
     if (tier.requiresCar) {
       router.push({
         pathname: '/cart/car-plate',
@@ -181,7 +193,12 @@ export default function EventDetailScreen() {
           label={ticketsCopy.purchase.confirm}
           onPress={() => {
             if (!selectedTier) return;
-            router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
+            const dest = `/events/buy/${event.slug}?tierId=${selectedTier.id}`;
+            if (isAnon) {
+              requireLogin(dest);
+              return;
+            }
+            router.push(dest as never);
           }}
           disabled={!selectedTier}
         />

@@ -4,13 +4,15 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { verifyEmailRequest } from '~/api/auth';
 import { useAuth } from '~/auth/context';
+import { buildLoginHref, DEFAULT_POST_AUTH, sanitizeNext } from '~/auth/redirect-intent';
 import { authCopy } from '~/copy/auth';
 import { theme } from '~/theme';
 
 type Status = 'pending' | 'done' | 'error';
 
 export default function VerifyScreen() {
-  const { token } = useLocalSearchParams<{ token?: string }>();
+  const { token, next: nextParam } = useLocalSearchParams<{ token?: string; next?: string }>();
+  const next = sanitizeNext(nextParam);
   const router = useRouter();
   const { status: authStatus, refreshUser } = useAuth();
   const [status, setStatus] = useState<Status>('pending');
@@ -32,7 +34,11 @@ export default function VerifyScreen() {
         }
         redirectTimer.current = setTimeout(() => {
           redirectTimer.current = null;
-          router.replace(authStatus === 'authenticated' ? '/welcome' : '/login');
+          if (authStatus === 'authenticated') {
+            router.replace((next ?? DEFAULT_POST_AUTH) as never);
+          } else {
+            router.replace(buildLoginHref(next) as never);
+          }
         }, 1_500);
       } catch {
         if (!cancelled) setStatus('error');
@@ -42,7 +48,7 @@ export default function VerifyScreen() {
       cancelled = true;
       if (redirectTimer.current) clearTimeout(redirectTimer.current);
     };
-  }, [token, authStatus, refreshUser, router]);
+  }, [token, authStatus, refreshUser, router, next]);
 
   return (
     <View style={styles.container}>
