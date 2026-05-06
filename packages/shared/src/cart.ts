@@ -155,6 +155,7 @@ export const beginCheckoutResponseSchema = z.object({
   providerRef: z.string().min(1).nullable(),
   clientSecret: z.string().min(1).nullable(),
   checkoutUrl: z.string().url().nullable(),
+  brCode: z.string().min(1).nullable(),
   reservationExpiresAt: z.string().datetime().nullable(),
 });
 export type BeginCheckoutResponse = z.infer<typeof beginCheckoutResponseSchema>;

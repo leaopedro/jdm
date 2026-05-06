@@ -78,6 +78,7 @@ export default function CartScreen() {
   const [drawerExtras, setDrawerExtras] = useState<EventExtraPublic[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -102,9 +103,29 @@ export default function CartScreen() {
     setCheckingOut(true);
     try {
       const result = await beginCheckout({
-        paymentMethod: 'card',
+        paymentMethod,
         ...getCheckoutReturnUrls(),
       });
+
+      if (paymentMethod === 'pix') {
+        const firstOrderId = result.orderIds[0];
+        if (!result.brCode || !result.reservationExpiresAt || !firstOrderId) {
+          showError(cartCopy.errors.checkout);
+          return;
+        }
+        router.push({
+          pathname: '/(app)/events/buy/checkout-pix',
+          params: {
+            orderId: firstOrderId,
+            brCode: result.brCode,
+            expiresAt: result.reservationExpiresAt,
+            amountCents: String(result.cart.totals.amountCents),
+            currency: result.cart.totals.currency,
+          },
+        } as never);
+        return;
+      }
+
       if (!result.checkoutUrl) {
         showError(cartCopy.errors.checkout);
         return;
@@ -119,7 +140,7 @@ export default function CartScreen() {
     } finally {
       setCheckingOut(false);
     }
-  }, []);
+  }, [paymentMethod, router]);
 
   const openExtrasDrawer = useCallback(async (item: CartItem) => {
     setDrawerItem(item);
@@ -296,6 +317,33 @@ export default function CartScreen() {
           <Text style={styles.totalValue}>{formatBRL(cart.totals.amountCents)}</Text>
         </View>
 
+        {itemCount > 0 && (
+          <View style={styles.methodRow}>
+            <Pressable
+              style={[styles.methodBtn, paymentMethod === 'card' && styles.methodBtnActive]}
+              onPress={() => setPaymentMethod('card')}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: paymentMethod === 'card' }}
+            >
+              <Text
+                style={[styles.methodText, paymentMethod === 'card' && styles.methodTextActive]}
+              >
+                {cartCopy.payment.card}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.methodBtn, paymentMethod === 'pix' && styles.methodBtnActive]}
+              onPress={() => setPaymentMethod('pix')}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: paymentMethod === 'pix' }}
+            >
+              <Text style={[styles.methodText, paymentMethod === 'pix' && styles.methodTextActive]}>
+                {cartCopy.payment.pix}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         <View style={styles.footerButtons}>
           {itemCount > 0 && (
             <>
@@ -413,5 +461,30 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontSize: theme.font.size.sm,
     textAlign: 'center',
+  },
+  methodRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  methodBtn: {
+    flex: 1,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  methodBtnActive: {
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '15',
+  },
+  methodText: {
+    fontSize: theme.font.size.sm,
+    color: theme.colors.muted,
+  },
+  methodTextActive: {
+    color: theme.colors.accent,
+    fontWeight: '600',
   },
 });

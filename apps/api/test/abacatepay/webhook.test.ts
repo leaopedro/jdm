@@ -820,4 +820,131 @@ describe('POST /abacatepay/webhook', () => {
       expect(updatedOrder.status).toBe('paid');
     });
   });
+
+  describe('cart-level settlement (metadata.cartId)', () => {
+    const seedEventAndTier = async (label: string) => {
+      const event = await prisma.event.create({
+        data: {
+          slug: `cev-${Math.random().toString(36).slice(2, 8)}`,
+          title: `Cart Event ${label}`,
+          description: 'd',
+          startsAt: new Date(Date.now() + 86400_000),
+          endsAt: new Date(Date.now() + 90000_000),
+          venueName: 'v',
+          venueAddress: 'a',
+          city: 'São Paulo',
+          stateCode: 'SP',
+          type: 'meeting',
+          status: 'published',
+          capacity: 10,
+          maxTicketsPerUser: 1,
+          publishedAt: new Date(),
+        },
+      });
+      const tier = await prisma.ticketTier.create({
+        data: {
+          eventId: event.id,
+          name: 'Geral',
+          priceCents: 5000,
+          quantityTotal: 5,
+          quantitySold: 1,
+          sortOrder: 0,
+        },
+      });
+      return { event, tier };
+    };
+
+    const seedCartWithPendingOrders = async (userId: string, billingId: string) => {
+      const cart = await prisma.cart.create({
+        data: { userId, status: 'checking_out', expiresAt: new Date(Date.now() + 600_000) },
+      });
+      const orders = [];
+      for (let i = 0; i < 2; i++) {
+        const { event, tier } = await seedEventAndTier(String(i));
+        const order = await prisma.order.create({
+          data: {
+            userId,
+            eventId: event.id,
+            tierId: tier.id,
+            cartId: cart.id,
+            amountCents: 5000,
+            quantity: 1,
+            method: 'pix',
+            provider: 'abacatepay',
+            providerRef: i === 0 ? billingId : null,
+            status: 'pending',
+          },
+        });
+        orders.push(order);
+      }
+      return { cart, orders };
+    };
+
+    it('settles all pending cart orders when transparent.completed has metadata.cartId', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = 'pix_cart_billing_1';
+      const { cart, orders } = await seedCartWithPendingOrders(user.id, billingId);
+
+      const payload = makeV2TransparentCompletedPayload(billingId, 'evt_cart_settle_1', {
+        metadata: { cartId: cart.id, userId: user.id },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findMany({
+        where: { id: { in: orders.map((o) => o.id) } },
+      });
+      for (const o of updated) {
+        expect(o.status).toBe('paid');
+      }
+      const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+      expect(cartAfter.status).toBe('converted');
+
+      const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+      expect(tickets).toHaveLength(orders.length);
+    });
+
+    it('dedupes cart settlement on replay', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = 'pix_cart_billing_dedupe';
+      const { cart } = await seedCartWithPendingOrders(user.id, billingId);
+
+      const payload = makeV2TransparentCompletedPayload(billingId, 'evt_cart_dedup_1', {
+        metadata: { cartId: cart.id },
+      });
+
+      const first = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+      expect(second.statusCode).toBe(200);
+      const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+      expect(tickets).toHaveLength(2);
+    });
+  });
 });
