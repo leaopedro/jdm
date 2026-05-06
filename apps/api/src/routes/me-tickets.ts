@@ -3,7 +3,6 @@ import {
   myTicketSchema,
   myTicketsResponseSchema,
   updateTicketRequestSchema,
-  updateTicketResponseSchema,
 } from '@jdm/shared/tickets';
 import type { Ticket, Event, TicketTier, TicketExtraItem, TicketExtra } from '@prisma/client';
 import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
@@ -90,7 +89,6 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
       include: { event: true, tier: true, extraItems: { include: { extra: true } } },
     });
 
-    const parsed = myTicketSchema.parse(serializeTicket(updated, app));
-    return updateTicketResponseSchema.parse({ ticket: parsed });
+    return myTicketSchema.parse(serializeTicket(updated, app));
   });
 };

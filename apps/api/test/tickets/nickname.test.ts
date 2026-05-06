@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import { myTicketsResponseSchema, updateTicketResponseSchema } from '@jdm/shared/tickets';
+import { myTicketSchema, myTicketsResponseSchema } from '@jdm/shared/tickets';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -186,9 +186,9 @@ describe('Ticket nicknames', () => {
         payload: { nickname: 'Acompanhante' },
       });
       expect(res.statusCode).toBe(200);
-      const body = updateTicketResponseSchema.parse(res.json());
-      expect(body.ticket.id).toBe(ticket.id);
-      expect(body.ticket.nickname).toBe('Acompanhante');
+      const body = myTicketSchema.parse(res.json());
+      expect(body.id).toBe(ticket.id);
+      expect(body.nickname).toBe('Acompanhante');
 
       const reloaded = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
       expect(reloaded.nickname).toBe('Acompanhante');
@@ -214,8 +214,8 @@ describe('Ticket nicknames', () => {
         payload: {},
       });
       expect(res.statusCode).toBe(200);
-      const body = updateTicketResponseSchema.parse(res.json());
-      expect(body.ticket.nickname).toBe('preservar');
+      const body = myTicketSchema.parse(res.json());
+      expect(body.nickname).toBe('preservar');
 
       const reloaded = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
       expect(reloaded.nickname).toBe('preservar');
@@ -241,8 +241,8 @@ describe('Ticket nicknames', () => {
         payload: { nickname: null },
       });
       expect(res.statusCode).toBe(200);
-      const body = updateTicketResponseSchema.parse(res.json());
-      expect(body.ticket.nickname).toBeNull();
+      const body = myTicketSchema.parse(res.json());
+      expect(body.nickname).toBeNull();
 
       const reloaded = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
       expect(reloaded.nickname).toBeNull();
