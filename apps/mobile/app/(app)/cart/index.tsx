@@ -1,18 +1,21 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Trash2 } from 'lucide-react-native';
+import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { beginCheckout } from '~/api/cart';
 import { getEventById } from '~/api/events';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
@@ -21,6 +24,52 @@ import { formatBRL } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import { theme } from '~/theme';
 
+const isWeb = Platform.OS === 'web';
+
+function itemNeedsCar(item: CartItem): boolean {
+  if (!item.requiresCar || item.kind !== 'ticket') return false;
+  if (item.tickets.length === 0) return true;
+  return item.tickets.some((t) => !t.carId || !t.licensePlate);
+}
+
+function firstTicketPlate(item: CartItem): string | undefined {
+  return item.tickets[0]?.licensePlate;
+}
+
+function showError(message: string) {
+  if (isWeb && typeof window !== 'undefined') {
+    window.alert(message);
+  } else {
+    Alert.alert(message);
+  }
+}
+
+function confirmDestructive(title: string, message: string): Promise<boolean> {
+  if (isWeb) {
+    if (typeof window === 'undefined') return Promise.resolve(false);
+    return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  }
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: cartCopy.actions.clearNo, style: 'cancel', onPress: () => resolve(false) },
+      {
+        text: cartCopy.actions.clearYes,
+        style: 'destructive',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
+
+function getCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
+  if (!isWeb || typeof window === 'undefined') return {};
+  const base = `${window.location.origin}/events/buy/checkout-return`;
+  return {
+    successUrl: base,
+    cancelUrl: `${base}?cancelled=true`,
+  };
+}
+
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
@@ -28,6 +77,7 @@ export default function CartScreen() {
   const [drawerItem, setDrawerItem] = useState<CartItem | null>(null);
   const [drawerExtras, setDrawerExtras] = useState<EventExtraPublic[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -38,16 +88,38 @@ export default function CartScreen() {
     [removeItem],
   );
 
-  const handleClear = useCallback(() => {
-    Alert.alert(cartCopy.actions.clear, cartCopy.actions.clearConfirm, [
-      { text: cartCopy.actions.clearNo, style: 'cancel' },
-      {
-        text: cartCopy.actions.clearYes,
-        style: 'destructive',
-        onPress: () => void clear(),
-      },
-    ]);
+  const handleClear = useCallback(async () => {
+    const confirmed = await confirmDestructive(
+      cartCopy.actions.clear,
+      cartCopy.actions.clearConfirm,
+    );
+    if (confirmed) {
+      await clear();
+    }
   }, [clear]);
+
+  const handlePay = useCallback(async () => {
+    setCheckingOut(true);
+    try {
+      const result = await beginCheckout({
+        paymentMethod: 'card',
+        ...getCheckoutReturnUrls(),
+      });
+      if (!result.checkoutUrl) {
+        showError(cartCopy.errors.checkout);
+        return;
+      }
+      if (isWeb && typeof window !== 'undefined') {
+        window.location.href = result.checkoutUrl;
+      } else {
+        await Linking.openURL(result.checkoutUrl);
+      }
+    } catch {
+      showError(cartCopy.errors.checkout);
+    } finally {
+      setCheckingOut(false);
+    }
+  }, []);
 
   const openExtrasDrawer = useCallback(async (item: CartItem) => {
     setDrawerItem(item);
@@ -104,6 +176,22 @@ export default function CartScreen() {
     ? (cart.items.find((i) => i.id === drawerItem.id) ?? drawerItem)
     : null;
 
+  const blockedByCarRequirement = cart.items.some(itemNeedsCar);
+
+  const openCarPlate = (item: CartItem) => {
+    const firstTicket = item.tickets[0];
+    router.push({
+      pathname: '/cart/car-plate',
+      params: {
+        eventId: item.eventId,
+        tierId: item.tierId,
+        itemId: item.id,
+        ...(firstTicket?.carId ? { initialCarId: firstTicket.carId } : {}),
+        ...(firstTicket?.licensePlate ? { initialPlate: firstTicket.licensePlate } : {}),
+      },
+    } as never);
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -154,6 +242,32 @@ export default function CartScreen() {
             ) : (
               <Text style={styles.tapHint}>{cartCopy.item.tapExtras}</Text>
             )}
+            {item.requiresCar && item.kind === 'ticket' ? (
+              <Pressable
+                onPress={() => openCarPlate(item)}
+                style={[styles.carRow, itemNeedsCar(item) && styles.carRowWarn]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  itemNeedsCar(item) ? cartCopy.item.selectCar : cartCopy.item.changeCar
+                }
+              >
+                <CarIcon
+                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+                  size={16}
+                  strokeWidth={1.75}
+                />
+                <Text style={[styles.carRowText, itemNeedsCar(item) && styles.carRowTextWarn]}>
+                  {itemNeedsCar(item)
+                    ? cartCopy.item.selectCar
+                    : cartCopy.item.plate(firstTicketPlate(item) ?? '')}
+                </Text>
+                <ChevronRight
+                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+                  size={14}
+                  strokeWidth={1.75}
+                />
+              </Pressable>
+            ) : null}
           </Pressable>
         )}
       />
@@ -184,7 +298,23 @@ export default function CartScreen() {
 
         <View style={styles.footerButtons}>
           {itemCount > 0 && (
-            <Pressable onPress={handleClear} style={styles.clearBtn}>
+            <>
+              <Button
+                label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
+                onPress={() => void handlePay()}
+                disabled={checkingOut || blockedByCarRequirement}
+              />
+              {blockedByCarRequirement ? (
+                <Text style={styles.payBlocked}>{cartCopy.item.carRequired}</Text>
+              ) : null}
+            </>
+          )}
+          {itemCount > 0 && (
+            <Pressable
+              onPress={() => void handleClear()}
+              style={styles.clearBtn}
+              disabled={checkingOut}
+            >
               <Text style={styles.clearText}>{cartCopy.actions.clear}</Text>
             </Pressable>
           )}
@@ -263,4 +393,25 @@ const styles = StyleSheet.create({
   footerButtons: { marginTop: theme.spacing.sm, gap: theme.spacing.sm },
   clearBtn: { alignSelf: 'center', padding: theme.spacing.sm },
   clearText: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  carRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+  },
+  carRowWarn: {
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '15',
+  },
+  carRowText: { color: theme.colors.muted, fontSize: theme.font.size.sm, flex: 1 },
+  carRowTextWarn: { color: theme.colors.accent, fontWeight: '600' },
+  payBlocked: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    textAlign: 'center',
+  },
 });

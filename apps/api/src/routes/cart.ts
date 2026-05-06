@@ -154,7 +154,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           items: {
             include: {
               extras: true,
-              tier: { select: { priceCents: true, currency: true } },
+              tier: { select: { priceCents: true, currency: true, requiresCar: true } },
             },
           },
         },
@@ -277,7 +277,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
             items: {
               include: {
                 extras: true,
-                tier: { select: { priceCents: true, currency: true } },
+                tier: { select: { priceCents: true, currency: true, requiresCar: true } },
               },
             },
           },
@@ -428,7 +428,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           items: {
             include: {
               extras: true,
-              tier: { select: { priceCents: true, currency: true } },
+              tier: { select: { priceCents: true, currency: true, requiresCar: true } },
             },
           },
         },

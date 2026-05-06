@@ -7,7 +7,7 @@ type CartWithItems = Prisma.CartGetPayload<{
     items: {
       include: {
         extras: true;
-        tier: { select: { priceCents: true; currency: true } };
+        tier: { select: { priceCents: true; currency: true; requiresCar: true } };
       };
     };
   };
@@ -17,7 +17,7 @@ const CART_INCLUDE = {
   items: {
     include: {
       extras: true,
-      tier: { select: { priceCents: true, currency: true } },
+      tier: { select: { priceCents: true, currency: true, requiresCar: true } },
     },
   },
 } satisfies Prisma.CartInclude;
@@ -106,6 +106,7 @@ export function serializeCart(cart: CartWithItems): Cart {
     source: item.source as 'purchase',
     kind: item.kind as CartItem['kind'],
     quantity: item.quantity,
+    requiresCar: item.tier.requiresCar,
     tickets: item.tickets as CartItem['tickets'],
     extras: item.extras.map((e) => ({
       extraId: e.extraId,

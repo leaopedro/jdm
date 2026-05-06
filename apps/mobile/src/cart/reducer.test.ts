@@ -15,6 +15,7 @@ const mockCart = {
       source: 'purchase' as const,
       kind: 'ticket' as const,
       quantity: 1,
+      requiresCar: false,
       tickets: [{ extras: [] as string[] }],
       extras: [],
       amountCents: 5000,
