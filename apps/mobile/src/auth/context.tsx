@@ -14,6 +14,7 @@ import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './storag
 
 import { loginRequest, logoutRequest, meAuthed, refreshRequest, signupRequest } from '~/api/auth';
 import { registerTokenProvider } from '~/api/client';
+import { authCopy } from '~/copy/auth';
 import { usePushRegistration } from '~/notifications/use-push-registration';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
@@ -22,6 +23,7 @@ type AuthState = {
   status: AuthStatus;
   user: PublicUser | null;
   tokens: StoredTokens | null;
+  flashMessage: string | null;
 };
 
 type AuthContextValue = AuthState & {
@@ -30,24 +32,50 @@ type AuthContextValue = AuthState & {
   setSession: (tokens: StoredTokens, user: PublicUser) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  setFlashMessage: (message: string | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, setState] = useState<AuthState>({ status: 'loading', user: null, tokens: null });
+  const [state, setState] = useState<AuthState>({
+    status: 'loading',
+    user: null,
+    tokens: null,
+    flashMessage: null,
+  });
   const tokensRef = useRef<StoredTokens | null>(null);
+
+  const setFlashMessage = useCallback((message: string | null) => {
+    setState((prev) => ({ ...prev, flashMessage: message }));
+  }, []);
 
   const applySession = useCallback(async (tokens: StoredTokens, user: PublicUser) => {
     tokensRef.current = tokens;
     await saveTokens(tokens);
-    setState({ status: 'authenticated', tokens, user });
+    setState((prev) => ({ ...prev, status: 'authenticated', tokens, user, flashMessage: null }));
   }, []);
 
   const signOut = useCallback(async () => {
     tokensRef.current = null;
     await clearTokens();
-    setState({ status: 'unauthenticated', user: null, tokens: null });
+    setState({
+      status: 'unauthenticated',
+      user: null,
+      tokens: null,
+      flashMessage: null,
+    });
+  }, []);
+
+  const handleAccountDisabled = useCallback(async () => {
+    tokensRef.current = null;
+    await clearTokens();
+    setState({
+      status: 'unauthenticated',
+      user: null,
+      tokens: null,
+      flashMessage: authCopy.errors.accountDisabled,
+    });
   }, []);
 
   // Register provider once. Reads/writes go through tokensRef so the
@@ -66,24 +94,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return refreshed.accessToken;
       },
       onSignOut: signOut,
+      onAccountDisabled: handleAccountDisabled,
     });
-  }, [applySession, signOut]);
+  }, [applySession, signOut, handleAccountDisabled]);
 
   useEffect(() => {
     const boot = async () => {
       const stored = await loadTokens();
       if (!stored) {
-        setState({ status: 'unauthenticated', user: null, tokens: null });
+        setState((prev) => ({ ...prev, status: 'unauthenticated', user: null, tokens: null }));
         return;
       }
       tokensRef.current = stored;
       try {
         const user = await meAuthed();
-        setState({
+        setState((prev) => ({
+          ...prev,
           status: 'authenticated',
           user,
           tokens: tokensRef.current ?? stored,
-        });
+        }));
       } catch {
         await signOut();
       }
@@ -140,8 +170,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   usePushRegistration({ isAuthenticated: state.status === 'authenticated' });
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, signup, login, setSession: applySession, logout, refreshUser }),
-    [state, signup, login, applySession, logout, refreshUser],
+    () => ({
+      ...state,
+      signup,
+      login,
+      setSession: applySession,
+      logout,
+      refreshUser,
+      setFlashMessage,
+    }),
+    [state, signup, login, applySession, logout, refreshUser, setFlashMessage],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

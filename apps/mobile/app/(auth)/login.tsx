@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema } from '@jdm/shared/auth';
+import { ACCOUNT_DISABLED_ERROR, loginSchema } from '@jdm/shared/auth';
 import type { LoginInput } from '@jdm/shared/auth';
 import { Button, Text } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,7 +21,7 @@ import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, flashMessage, setFlashMessage } = useAuth();
   const router = useRouter();
   const { next: nextParam } = useLocalSearchParams<{ next?: string }>();
   const next = sanitizeNext(nextParam);
@@ -37,6 +37,7 @@ export default function LoginScreen() {
 
   const onSubmit = handleSubmit(async (values) => {
     try {
+      setFlashMessage(null);
       await login(values);
       // Defer to next tick so Gate re-renders with the new authenticated
       // state and mounts the target navigator (e.g. (app)) before the
@@ -45,7 +46,13 @@ export default function LoginScreen() {
       setTimeout(() => router.replace((next ?? DEFAULT_POST_AUTH) as never), 0);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 401)
+        const errorCode =
+          typeof err.body === 'object' && err.body !== null
+            ? (err.body as { error?: unknown }).error
+            : undefined;
+        if (err.status === 403 && errorCode === ACCOUNT_DISABLED_ERROR) {
+          setFlashMessage(authCopy.errors.accountDisabled);
+        } else if (err.status === 401)
           setError('password', { message: authCopy.errors.invalidCredentials });
         else if (err.status === 403)
           router.replace({
@@ -84,6 +91,17 @@ export default function LoginScreen() {
               {authCopy.login.tagline}
             </Text>
           </View>
+
+          {flashMessage ? (
+            <View
+              accessibilityRole="alert"
+              className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2"
+            >
+              <Text variant="bodySm" className="text-red-200">
+                {flashMessage}
+              </Text>
+            </View>
+          ) : null}
 
           <View className="pt-6 gap-4">
             <Controller
