@@ -10,6 +10,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { AbacatePayUpstreamError } from '../services/abacatepay/index.js';
 import {
   loadCartForCheckout,
   reserveAndCreateOrders,
@@ -344,11 +345,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
     const input = parsed.data;
 
-    if (input.paymentMethod !== 'card') {
-      return reply.status(400).send({
-        error: 'BadRequest',
-        message: 'only card is supported in this release',
-      });
+    if (input.paymentMethod === 'pix' && !app.abacatepay) {
+      return reply
+        .status(503)
+        .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });
     }
 
     const cartResult = await loadCartForCheckout(sub);
@@ -367,7 +367,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const reserveResult = await reserveAndCreateOrders(cart, sub);
+    const reserveResult = await reserveAndCreateOrders(cart, sub, {
+      method: input.paymentMethod,
+    });
     if (!reserveResult.ok) {
       return reply.status(reserveResult.status).send({
         error: reserveResult.error,
@@ -380,6 +382,71 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
         request.log.warn({ err: cancelErr, providerRef: ref }, 'cart checkout: PI cancel failed');
       });
+    }
+
+    if (input.paymentMethod === 'pix') {
+      const eventTitlesPix = await prisma.event.findMany({
+        where: { id: { in: data.orders.map((o) => o.eventId) } },
+        select: { title: true },
+      });
+      const description = `Ingressos ${eventTitlesPix.map((e) => e.title).join(' + ')}`;
+
+      try {
+        const billing = await app.abacatepay!.createPixBilling({
+          amountCents: data.totalAmountCents,
+          description,
+          metadata: {
+            cartId: cart.id,
+            userId: sub,
+            orderIds: JSON.stringify(data.orders.map((o) => o.id)),
+          },
+        });
+
+        await prisma.order.update({
+          where: { id: data.orders[0]!.id },
+          data: { providerRef: billing.id },
+        });
+
+        const updatedCart = await prisma.cart.findUniqueOrThrow({
+          where: { id: cart.id },
+          include: {
+            items: {
+              include: {
+                extras: true,
+                tier: { select: { priceCents: true, currency: true, requiresCar: true } },
+              },
+            },
+          },
+        });
+
+        return reply.status(201).send(
+          beginCheckoutResponseSchema.parse({
+            checkoutId: cart.id,
+            status: 'pending',
+            cart: serializeCart(updatedCart),
+            orderIds: data.orders.map((o) => o.id),
+            provider: 'abacatepay',
+            providerRef: billing.id,
+            clientSecret: null,
+            checkoutUrl: null,
+            brCode: billing.brCode,
+            reservationExpiresAt: billing.expiresAt,
+          }),
+        );
+      } catch (err) {
+        await rollbackCartCheckout(cart.id, data.orders);
+        if (err instanceof AbacatePayUpstreamError && err.status >= 400 && err.status < 500) {
+          request.log.warn(
+            { err, cartId: cart.id, status: err.status },
+            'cart checkout: AbacatePay rejected pix billing request',
+          );
+          return reply.status(502).send({
+            error: 'BadGateway',
+            message: 'pix provider rejected the request',
+          });
+        }
+        throw err;
+      }
     }
 
     const STRIPE_MIN_SESSION_MS = 30 * 60 * 1000;
@@ -446,6 +513,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           providerRef: session.paymentIntentId,
           clientSecret: null,
           checkoutUrl: session.url,
+          brCode: null,
           reservationExpiresAt: reservationExpiresAt.toISOString(),
         }),
       );

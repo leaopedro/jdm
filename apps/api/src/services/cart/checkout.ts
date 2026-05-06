@@ -90,12 +90,22 @@ export async function loadCartForCheckout(
   return { ok: true, cart };
 }
 
+export type CartCheckoutMethod = 'card' | 'pix';
+
+const PROVIDER_FOR_METHOD: Record<CartCheckoutMethod, 'stripe' | 'abacatepay'> = {
+  card: 'stripe',
+  pix: 'abacatepay',
+};
+
 export async function reserveAndCreateOrders(
   cart: CartWithItems,
   userId: string,
+  options: { method: CartCheckoutMethod } = { method: 'card' },
 ): Promise<
   { ok: true; data: CheckoutResult } | { ok: false; status: number; error: string; message: string }
 > {
+  const method = options.method;
+  const provider = PROVIDER_FOR_METHOD[method];
   const allExpiredRefs: string[] = [];
 
   try {
@@ -167,8 +177,8 @@ export async function reserveAndCreateOrders(
             amountCents: item.amountCents,
             quantity: item.quantity,
             currency: tier.currency,
-            method: 'card',
-            provider: 'stripe',
+            method,
+            provider,
             status: 'pending',
             expiresAt,
           },
