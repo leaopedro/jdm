@@ -7,8 +7,11 @@ import {
   adminFinanceSummarySchema,
   adminFinanceTrendResponseSchema,
   adminGrantTicketResponseSchema,
+  adminUserCreatedSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
+  adminUserStatusUpdatedSchema,
+  type AdminCreateUserBody,
   type AdminEventCreate,
   type AdminEventUpdate,
   type AdminExtraCreate,
@@ -34,6 +37,7 @@ import {
   type TicketCheckInRequest,
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
+import { publicProfileSchema } from '@jdm/shared/profile';
 import { z } from 'zod';
 
 import { apiFetch } from './api';
@@ -147,6 +151,27 @@ export const searchAdminUsers = (params?: { q?: string; cursor?: string; limit?:
 
 export const getAdminUser = (id: string) =>
   apiFetch(`/admin/users/${id}`, { schema: adminUserDetailSchema });
+
+export const createAdminUser = (input: AdminCreateUserBody) =>
+  apiFetch('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminUserCreatedSchema,
+  });
+
+export const disableAdminUser = (id: string) =>
+  apiFetch(`/admin/users/${id}/disable`, {
+    method: 'POST',
+    schema: adminUserStatusUpdatedSchema,
+  });
+
+export const enableAdminUser = (id: string) =>
+  apiFetch(`/admin/users/${id}/enable`, {
+    method: 'POST',
+    schema: adminUserStatusUpdatedSchema,
+  });
+
+export const getMe = () => apiFetch('/me', { schema: publicProfileSchema });
 
 export const grantTicket = (input: AdminGrantTicket) =>
   apiFetch('/admin/tickets/grant', {

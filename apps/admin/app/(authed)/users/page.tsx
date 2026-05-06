@@ -2,7 +2,9 @@ import Link from 'next/link';
 
 import { SearchForm } from './search-form';
 
+import { CreateUserModal } from '~/components/create-user-modal';
 import { UserAvatar } from '~/components/user-avatar';
+import { UserStatusChip } from '~/components/user-status-chip';
 import { searchAdminUsers } from '~/lib/admin-api';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +29,10 @@ export default async function UsersPage({
   return (
     <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">Usuários</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-bold">Usuários</h1>
+          <CreateUserModal />
+        </div>
         <SearchForm />
       </header>
 
@@ -36,6 +41,7 @@ export default async function UsersPage({
           <tr className="border-b border-[color:var(--color-border)] text-sm text-[color:var(--color-muted)]">
             <th className="py-2">Nome</th>
             <th>Email</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -48,11 +54,14 @@ export default async function UsersPage({
                 </Link>
               </td>
               <td className="text-sm text-[color:var(--color-muted)]">{u.email}</td>
+              <td className="text-sm">
+                <UserStatusChip status={u.status} />
+              </td>
             </tr>
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={2} className="py-6 text-center text-[color:var(--color-muted)]">
+              <td colSpan={3} className="py-6 text-center text-[color:var(--color-muted)]">
                 Nenhum usuário encontrado.
               </td>
             </tr>

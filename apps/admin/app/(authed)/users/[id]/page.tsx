@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 
 import { GrantTicketModal } from '~/components/grant-ticket-modal';
 import { UserAvatar } from '~/components/user-avatar';
-import { getAdminUser, listAdminEvents } from '~/lib/admin-api';
+import { UserStatusActions } from '~/components/user-status-actions';
+import { getAdminUser, getMe, listAdminEvents } from '~/lib/admin-api';
 import { ApiError } from '~/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -50,9 +51,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
     throw err;
   }
 
-  const { items: events } = await listAdminEvents();
+  const [{ items: events }, me] = await Promise.all([listAdminEvents(), getMe()]);
   const publishedEvents = events.filter((ev) => ev.status === 'published');
   const location = [user.city, user.stateCode].filter(Boolean).join('/');
+  const isSelf = me.id === user.id;
 
   return (
     <section className="flex flex-col gap-6">
@@ -60,7 +62,14 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
         ← Usuários
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {isSelf ? (
+          <span className="text-xs text-[color:var(--color-muted)]">
+            Você não pode alterar o status da sua própria conta.
+          </span>
+        ) : (
+          <UserStatusActions userId={user.id} initialStatus={user.status} />
+        )}
         <GrantTicketModal userId={user.id} events={publishedEvents} />
       </div>
 
