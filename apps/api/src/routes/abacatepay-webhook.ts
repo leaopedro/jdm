@@ -78,6 +78,19 @@ const extractOrderIdFromMetadata = (data: Record<string, unknown>): string | und
   return undefined;
 };
 
+const extractCartIdFromMetadata = (data: Record<string, unknown>): string | undefined => {
+  const transparent = getTransparent(data);
+  if (transparent && typeof transparent.metadata === 'object' && transparent.metadata !== null) {
+    const metadata = transparent.metadata as Record<string, unknown>;
+    if (typeof metadata.cartId === 'string') return metadata.cartId;
+  }
+  if (typeof data.metadata === 'object' && data.metadata !== null) {
+    const metadata = data.metadata as Record<string, unknown>;
+    if (typeof metadata.cartId === 'string') return metadata.cartId;
+  }
+  return undefined;
+};
+
 const extractEventTimestamp = (data: Record<string, unknown>): Date | undefined => {
   const transparent = getTransparent(data);
   const source = transparent ?? data;
@@ -245,6 +258,96 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         });
         await markProcessed(event.id, event);
         return reply.status(200).send({ ok: true });
+      }
+
+      // Cart-level settlement: one billing → N orders flipped atomically
+      const metadataCartId = extractCartIdFromMetadata(event.data);
+      if (metadataCartId) {
+        const cartOrders = await prisma.order.findMany({
+          where: { cartId: metadataCartId, provider: 'abacatepay', status: 'pending' },
+          select: { id: true, userId: true, eventId: true, amountCents: true },
+        });
+
+        if (cartOrders.length === 0) {
+          const alreadyPaid = await prisma.order.findFirst({
+            where: { cartId: metadataCartId, provider: 'abacatepay', status: 'paid' },
+            select: { id: true },
+          });
+          if (alreadyPaid) {
+            await markProcessed(event.id, event);
+            return reply.status(200).send({ ok: true, deduped: true });
+          }
+          await markProcessed(event.id, event);
+          return reply.status(200).send({ ok: true, ignored: true });
+        }
+
+        for (const order of cartOrders) {
+          try {
+            await issueTicketForPaidOrder(order.id, billingId, app.env, {
+              cartId: metadataCartId,
+            });
+          } catch (err) {
+            if (err instanceof TicketAlreadyExistsForEventError) {
+              flagManualRefund({
+                orderId: order.id,
+                providerRef: billingId,
+                userId: order.userId,
+                eventId: order.eventId,
+                reason: 'duplicate-ticket',
+              });
+              continue;
+            }
+            if (err instanceof TicketRevokedForExtrasOnlyError) {
+              flagManualRefund({
+                orderId: order.id,
+                providerRef: billingId,
+                userId: order.userId,
+                eventId: order.eventId,
+                reason: 'ticket-revoked',
+              });
+              continue;
+            }
+            if (err instanceof OrderNotPendingError) {
+              continue;
+            }
+            throw err;
+          }
+        }
+
+        await prisma.cart.update({
+          where: { id: metadataCartId },
+          data: { status: 'converted' },
+        });
+
+        const firstTime = await markProcessed(event.id, event);
+        request.log.info(
+          { cartId: metadataCartId, billingId, firstTime },
+          'abacatepay webhook: cart settled',
+        );
+
+        try {
+          const userId = cartOrders[0]?.userId;
+          if (userId) {
+            await sendTransactionalPush(
+              {
+                userId,
+                kind: 'ticket.confirmed',
+                dedupeKey: `cart_${metadataCartId}`,
+                title: 'Ingressos confirmados',
+                body: 'Seus ingressos estão prontos.',
+                data: { cartId: metadataCartId },
+              },
+              { sender: app.push },
+            );
+          }
+        } catch (pushErr) {
+          request.log.warn(
+            { err: pushErr, cartId: metadataCartId },
+            'abacatepay cart webhook: push failed',
+          );
+        }
+
+        return reply.status(200).send({ ok: true, deduped: !firstTime });
       }
 
       // Primary lookup: orderId from metadata (passed during /transparents/create)

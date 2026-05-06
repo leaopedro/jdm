@@ -5,8 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { loadEnv } from '../../src/env.js';
+import type { FakeAbacatePay } from '../../src/services/abacatepay/fake.js';
+import { AbacatePayUpstreamError } from '../../src/services/abacatepay/index.js';
 import type { FakeStripe } from '../../src/services/stripe/fake.js';
-import { bearer, createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js';
+import {
+  bearer,
+  createUser,
+  makeAppWithFakes,
+  makeAppWithFakeStripe,
+  resetDatabase,
+} from '../helpers.js';
 
 const env = loadEnv();
 const errorSchema = z.object({ error: z.string(), message: z.string().optional() });
@@ -441,5 +449,125 @@ describe('POST /cart/checkout', () => {
 
     const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(tierAfter.quantitySold).toBe(1);
+  });
+});
+
+describe('POST /cart/checkout — pix', () => {
+  let app: FastifyInstance;
+  let abacatepay: FakeAbacatePay;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    ({ app, abacatepay } = await makeAppWithFakes());
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('creates pix billing for cart and returns brCode + abacatepay provider', async () => {
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event: ev1, tier: tier1 } = await seedPublishedEvent({ priceCents: 4000 });
+    const { event: ev2, tier: tier2 } = await seedPublishedEvent({ priceCents: 6000 });
+
+    await addCartItem(app, token, { eventId: ev1.id, tierId: tier1.id });
+    await addCartItem(app, token, { eventId: ev2.id, tierId: tier2.id });
+
+    abacatepay.nextBilling = {
+      id: 'pix_cart_test',
+      brCode: '00020126...cartpix',
+      amount: 10000,
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      status: 'PENDING',
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/cart/checkout',
+      headers: { authorization: token },
+      payload: { paymentMethod: 'pix' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = beginCheckoutResponseSchema.parse(res.json());
+    expect(body.provider).toBe('abacatepay');
+    expect(body.brCode).toBe('00020126...cartpix');
+    expect(body.checkoutUrl).toBeNull();
+    expect(body.clientSecret).toBeNull();
+    expect(body.providerRef).toBe('pix_cart_test');
+    expect(body.orderIds).toHaveLength(2);
+
+    const billingCall = abacatepay.calls.find((c) => c.method === 'createPixBilling');
+    expect(billingCall).toBeDefined();
+    const input = billingCall!.args[0] as { amountCents: number; metadata: Record<string, string> };
+    expect(input.amountCents).toBe(10000);
+    expect(input.metadata.cartId).toBe(body.checkoutId);
+    expect(input.metadata.userId).toBe(user.id);
+
+    const orders = await prisma.order.findMany({ where: { id: { in: body.orderIds } } });
+    expect(orders).toHaveLength(2);
+    for (const order of orders) {
+      expect(order.method).toBe('pix');
+      expect(order.provider).toBe('abacatepay');
+      expect(order.status).toBe('pending');
+      expect(order.cartId).toBe(body.checkoutId);
+    }
+    const withRef = orders.filter((o) => o.providerRef === 'pix_cart_test');
+    expect(withRef).toHaveLength(1);
+  });
+
+  it('returns 503 when abacatepay is not configured', async () => {
+    await app.close();
+    ({ app } = await makeAppWithFakeStripe());
+
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event, tier } = await seedPublishedEvent();
+    await addCartItem(app, token, { eventId: event.id, tierId: tier.id });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/cart/checkout',
+      headers: { authorization: token },
+      payload: { paymentMethod: 'pix' },
+    });
+
+    expect(res.statusCode).toBe(503);
+    const body = errorSchema.parse(res.json());
+    expect(body.error).toBe('ServiceUnavailable');
+  });
+
+  it('rolls back reservations and returns 502 when abacatepay rejects (4xx)', async () => {
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event, tier } = await seedPublishedEvent({ quantityTotal: 5 });
+    const extra = await seedExtra(event.id, { quantityTotal: 10 });
+
+    await addCartItem(app, token, {
+      eventId: event.id,
+      tierId: tier.id,
+      tickets: [{ extras: [extra.id] }],
+    });
+
+    abacatepay.nextBillingError = new AbacatePayUpstreamError(422, 'invalid', 'amount invalid');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/cart/checkout',
+      headers: { authorization: token },
+      payload: { paymentMethod: 'pix' },
+    });
+
+    expect(res.statusCode).toBe(502);
+    const body = errorSchema.parse(res.json());
+    expect(body.error).toBe('BadGateway');
+
+    const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(tierAfter.quantitySold).toBe(0);
+    const extraAfter = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+    expect(extraAfter.quantitySold).toBe(0);
+    const cart = await prisma.cart.findFirst({ where: { userId: user.id } });
+    expect(cart!.status).toBe('open');
   });
 });

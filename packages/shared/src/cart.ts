@@ -17,7 +17,7 @@ export type CartPaymentMethod = z.infer<typeof cartPaymentMethodSchema>;
 export const cartItemTicketSchema = z.object({
   carId: z.string().min(1).optional(),
   licensePlate: licensePlateSchema.optional(),
-  nickname: z.string().min(1).max(100).optional(),
+  nickname: z.string().trim().min(1).max(60).optional(),
   extras: z.array(z.string().min(1)),
 });
 export type CartItemTicket = z.infer<typeof cartItemTicketSchema>;
@@ -156,6 +156,7 @@ export const beginCheckoutResponseSchema = z.object({
   providerRef: z.string().min(1).nullable(),
   clientSecret: z.string().min(1).nullable(),
   checkoutUrl: z.string().url().nullable(),
+  brCode: z.string().min(1).nullable(),
   reservationExpiresAt: z.string().datetime().nullable(),
 });
 export type BeginCheckoutResponse = z.infer<typeof beginCheckoutResponseSchema>;

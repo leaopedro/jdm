@@ -261,7 +261,7 @@ describe('Ticket nicknames', () => {
       expect(res.statusCode).toBe(401);
     });
 
-    it('rejects nickname over 100 chars', async () => {
+    it('rejects nickname over 60 chars', async () => {
       const { user } = await createUser({ verified: true });
       const { event, tier } = await seedEventAndTier();
       const ticket = await prisma.ticket.create({
@@ -272,7 +272,7 @@ describe('Ticket nicknames', () => {
         method: 'PATCH',
         url: `/me/tickets/${ticket.id}`,
         headers: { authorization: bearer(env, user.id) },
-        payload: { nickname: 'x'.repeat(101) },
+        payload: { nickname: 'x'.repeat(61) },
       });
       expect(res.statusCode).toBeGreaterThanOrEqual(400);
       expect(res.statusCode).toBeLessThan(500);

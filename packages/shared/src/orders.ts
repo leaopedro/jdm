@@ -18,7 +18,7 @@ export const ticketInputSchema = z.object({
   extras: z.array(z.string().min(1)).default([]),
   carId: z.string().min(1).optional(),
   licensePlate: licensePlateSchema.optional(),
-  nickname: z.string().min(1).max(100).optional(),
+  nickname: z.string().trim().min(1).max(60).optional(),
 });
 export type TicketInput = z.infer<typeof ticketInputSchema>;
 

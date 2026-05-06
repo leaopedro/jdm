@@ -42,6 +42,11 @@ export const cartCopy = {
     clearNo: 'Cancelar',
     close: 'Fechar',
   },
+  payment: {
+    method: 'Forma de pagamento',
+    card: 'Cartão',
+    pix: 'Pix',
+  },
   errors: {
     load: 'Não foi possível carregar o carrinho.',
     add: 'Erro ao adicionar item ao carrinho.',

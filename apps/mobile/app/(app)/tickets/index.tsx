@@ -1,5 +1,6 @@
 import type { MyTicket } from '@jdm/shared/tickets';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,11 +16,14 @@ import {
 import { listMyTickets } from '~/api/tickets';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatEventDateRange } from '~/lib/format';
+import {
+  TICKET_STATUS_FILTERS,
+  applyEventFilter,
+  applyStatusFilter,
+  findEventTitle,
+  type TicketStatusFilter,
+} from '~/screens/tickets/filters';
 import { theme } from '~/theme';
-
-type TicketFilter = 'all' | 'valid' | 'used' | 'expired';
-
-const FILTERS: TicketFilter[] = ['all', 'valid', 'used', 'expired'];
 
 const statusLabel = (status: MyTicket['status']): string => {
   if (status === 'valid') return ticketsCopy.detail.valid;
@@ -27,31 +31,16 @@ const statusLabel = (status: MyTicket['status']): string => {
   return ticketsCopy.detail.revoked;
 };
 
-function isExpired(ticket: MyTicket): boolean {
-  return (
-    ticket.status === 'revoked' ||
-    (ticket.status === 'valid' && new Date(ticket.event.endsAt) < new Date())
-  );
-}
-
-function applyFilter(items: MyTicket[], filter: TicketFilter): MyTicket[] {
-  switch (filter) {
-    case 'valid':
-      return items.filter((t) => t.status === 'valid' && !isExpired(t));
-    case 'used':
-      return items.filter((t) => t.status === 'used');
-    case 'expired':
-      return items.filter(isExpired);
-    default:
-      return items;
-  }
-}
-
 export default function TicketsIndex() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const rawEventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const [items, setItems] = useState<MyTicket[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<TicketFilter>('valid');
+  const [filter, setFilter] = useState<TicketStatusFilter>('valid');
+  const [eventFilterCleared, setEventFilterCleared] = useState(false);
+
+  const eventId = eventFilterCleared ? null : (rawEventId ?? null);
 
   const load = useCallback(async () => {
     const res = await listMyTickets();
@@ -73,7 +62,17 @@ export default function TicketsIndex() {
     }
   }, [load]);
 
-  const filtered = useMemo(() => (items ? applyFilter(items, filter) : null), [items, filter]);
+  const filtered = useMemo(() => {
+    if (!items) return null;
+    return applyEventFilter(applyStatusFilter(items, filter), eventId);
+  }, [items, filter, eventId]);
+
+  const eventTitle = useMemo(() => findEventTitle(items ?? [], eventId), [items, eventId]);
+
+  const clearEventFilter = useCallback(() => {
+    setEventFilterCleared(true);
+    router.setParams({ eventId: undefined } as never);
+  }, [router]);
 
   if (items === null) {
     return (
@@ -93,13 +92,30 @@ export default function TicketsIndex() {
 
   return (
     <View style={styles.container}>
+      {eventId && eventTitle ? (
+        <View style={styles.eventBanner}>
+          <Text style={styles.eventBannerText} numberOfLines={1}>
+            {ticketsCopy.filters.event} {eventTitle}
+          </Text>
+          <Pressable
+            onPress={clearEventFilter}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={ticketsCopy.filters.eventClear}
+            style={styles.eventBannerClear}
+          >
+            <X color={theme.colors.bg} size={16} strokeWidth={2} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
       >
-        {FILTERS.map((f) => {
+        {TICKET_STATUS_FILTERS.map((f) => {
           const active = filter === f;
           return (
             <Pressable
@@ -130,29 +146,64 @@ export default function TicketsIndex() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() =>
-                router.push({
-                  pathname: '/tickets/[ticketId]',
-                  params: { ticketId: item.id, ticket: JSON.stringify(item) },
-                } as never)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}`}
-              accessibilityHint="Opens ticket QR code"
-            >
-              <Text style={styles.title}>{item.event.title}</Text>
-              <Text style={styles.sub}>
-                {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
-              </Text>
-              <Text style={styles.sub}>{item.tierName}</Text>
-              <Text style={[styles.status, item.status !== 'valid' && styles.statusMuted]}>
-                {statusLabel(item.status)}
-              </Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const nickname = item.nickname?.trim() || null;
+            const pendingExtras = item.extras.filter((e) => e.status === 'valid');
+            const pendingLabel =
+              pendingExtras.length === 1
+                ? ticketsCopy.list.pendingExtrasOne
+                : ticketsCopy.list.pendingExtras;
+            const a11yExtras =
+              pendingExtras.length > 0
+                ? `, ${pendingExtras.length} ${pendingLabel}: ${pendingExtras.map((e) => e.extraName).join(', ')}`
+                : '';
+            return (
+              <Pressable
+                style={styles.card}
+                onPress={() =>
+                  router.push({
+                    pathname: '/tickets/[ticketId]',
+                    params: { ticketId: item.id, ticket: JSON.stringify(item) },
+                  } as never)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`${nickname ? `${nickname}, ` : ''}${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}${a11yExtras}`}
+                accessibilityHint="Opens ticket QR code"
+              >
+                {nickname ? (
+                  <>
+                    <Text style={styles.title}>{nickname}</Text>
+                    <Text style={styles.eventName}>{item.event.title}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.title}>{item.event.title}</Text>
+                )}
+                <Text style={styles.sub}>
+                  {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
+                </Text>
+                <Text style={styles.sub}>{item.tierName}</Text>
+                <Text style={[styles.status, item.status !== 'valid' && styles.statusMuted]}>
+                  {statusLabel(item.status)}
+                </Text>
+                {pendingExtras.length > 0 && (
+                  <View style={styles.pendingExtras}>
+                    <Text style={styles.pendingExtrasLabel}>
+                      {pendingExtras.length} {pendingLabel}
+                    </Text>
+                    <View style={styles.pendingExtrasChips}>
+                      {pendingExtras.map((extra) => (
+                        <View key={extra.id} style={styles.pendingExtraChip}>
+                          <Text style={styles.pendingExtraChipText} numberOfLines={1}>
+                            {extra.extraName}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </Pressable>
+            );
+          }}
         />
       )}
     </View>
@@ -171,6 +222,29 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg,
   },
   empty: { color: theme.colors.muted },
+  eventBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.fg,
+  },
+  eventBannerText: {
+    flex: 1,
+    color: theme.colors.bg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  eventBannerClear: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterScroll: { flexGrow: 0, flexShrink: 0 },
   filterRow: {
     flexDirection: 'row',
@@ -206,7 +280,39 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
+  eventName: { color: theme.colors.fg, fontSize: theme.font.size.sm, fontWeight: '500' },
   sub: { color: theme.colors.muted },
   status: { color: theme.colors.fg, fontWeight: '600', marginTop: theme.spacing.xs },
   statusMuted: { color: theme.colors.muted },
+  pendingExtras: {
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.muted,
+    gap: theme.spacing.xs,
+  },
+  pendingExtrasLabel: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pendingExtrasChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  pendingExtraChip: {
+    backgroundColor: theme.colors.accent,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 999,
+    maxWidth: '100%',
+  },
+  pendingExtraChipText: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
 });
