@@ -4,66 +4,66 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "default": "./dist/index.js"
     },
     "./admin": {
-      "types": "./dist/admin.d.ts",
+      "types": "./src/admin.ts",
       "default": "./dist/admin.js"
     },
     "./auth": {
-      "types": "./dist/auth.d.ts",
+      "types": "./src/auth.ts",
       "default": "./dist/auth.js"
     },
     "./cars": {
-      "types": "./dist/cars.d.ts",
+      "types": "./src/cars.ts",
       "default": "./dist/cars.js"
     },
     "./check-in": {
-      "types": "./dist/check-in.d.ts",
+      "types": "./src/check-in.ts",
       "default": "./dist/check-in.js"
     },
     "./events": {
-      "types": "./dist/events.d.ts",
+      "types": "./src/events.ts",
       "default": "./dist/events.js"
     },
     "./extras": {
-      "types": "./dist/extras.d.ts",
+      "types": "./src/extras.ts",
       "default": "./dist/extras.js"
     },
     "./health": {
-      "types": "./dist/health.d.ts",
+      "types": "./src/health.ts",
       "default": "./dist/health.js"
     },
     "./ids": {
-      "types": "./dist/ids.d.ts",
+      "types": "./src/ids.ts",
       "default": "./dist/ids.js"
     },
     "./orders": {
-      "types": "./dist/orders.d.ts",
+      "types": "./src/orders.ts",
       "default": "./dist/orders.js"
     },
     "./cart": {
-      "types": "./dist/cart.d.ts",
+      "types": "./src/cart.ts",
       "default": "./dist/cart.js"
     },
     "./profile": {
-      "types": "./dist/profile.d.ts",
+      "types": "./src/profile.ts",
       "default": "./dist/profile.js"
     },
     "./push": {
-      "types": "./dist/push.d.ts",
+      "types": "./src/push.ts",
       "default": "./dist/push.js"
     },
     "./tickets": {
-      "types": "./dist/tickets.d.ts",
+      "types": "./src/tickets.ts",
       "default": "./dist/tickets.js"
     },
     "./uploads": {
-      "types": "./dist/uploads.d.ts",
+      "types": "./src/uploads.ts",
       "default": "./dist/uploads.js"
     }
   },
