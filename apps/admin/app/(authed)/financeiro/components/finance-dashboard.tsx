@@ -24,7 +24,12 @@ import { PaymentMix } from './payment-mix';
 import { RevenueTable } from './revenue-table';
 import { TrendChart } from './trend-chart';
 
-import { fetchFinanceDashboard, fetchFinanceExportCsv } from '~/lib/finance-actions';
+import {
+  fetchFinanceDashboard,
+  fetchFinanceExportCsv,
+  fetchFinanceFilterEvents,
+  type FinanceFilterEvent,
+} from '~/lib/finance-actions';
 
 type DashboardData = {
   summary: AdminFinanceSummary;
@@ -47,6 +52,7 @@ function DashboardInner() {
 
   const [view, setView] = useState<ViewState>({ status: 'loading' });
   const [isExporting, setIsExporting] = useState(false);
+  const [events, setEvents] = useState<FinanceFilterEvent[]>([]);
   const abortRef = useRef(0);
 
   const buildQuery = useCallback((): AdminFinanceQuery | undefined => {
@@ -55,9 +61,11 @@ function DashboardInner() {
     const provider = searchParams.get('provider') as AdminFinanceQuery['provider'] | undefined;
     const method = searchParams.get('method') as AdminFinanceQuery['method'] | undefined;
     const search = searchParams.get('search') ?? undefined;
+    const eventId = searchParams.get('eventId') ?? undefined;
+    const eventIds = eventId ? [eventId] : undefined;
 
-    if (!from && !to && !provider && !method && !search) return undefined;
-    return { from, to, provider, method, search };
+    if (!from && !to && !provider && !method && !search && !eventIds) return undefined;
+    return { from, to, provider, method, search, eventIds };
   }, [searchParams]);
 
   const updateFilter = useCallback(
@@ -77,6 +85,20 @@ function DashboardInner() {
       router.replace(pathname);
     });
   }, [router, pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFinanceFilterEvents()
+      .then((list) => {
+        if (!cancelled) setEvents(list);
+      })
+      .catch(() => {
+        // Non-critical: dashboard still works without the dropdown options.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const id = ++abortRef.current;
@@ -127,6 +149,7 @@ function DashboardInner() {
     provider: searchParams.get('provider'),
     method: searchParams.get('method'),
     search: searchParams.get('search'),
+    eventId: searchParams.get('eventId'),
   };
 
   if (view.status === 'error') {
@@ -169,6 +192,7 @@ function DashboardInner() {
 
       <FilterBar
         filters={activeFilters}
+        events={events}
         onFilterChange={updateFilter}
         onClear={clearFilters}
         isPending={isPending}

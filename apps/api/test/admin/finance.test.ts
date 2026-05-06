@@ -200,6 +200,32 @@ describe('Admin Finance Endpoints', () => {
       expect(body.totalRevenueCents).toBe(10000);
     });
 
+    it('filters by eventIds', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event1 = await seedEvent('meet-sp', 'São Paulo', 'SP');
+      const event2 = await seedEvent('meet-rj', 'Rio de Janeiro', 'RJ');
+      const tier1 = await seedTier(event1.id);
+      const tier2 = await seedTier(event2.id);
+
+      await seedOrder(buyer.id, event1.id, tier1.id, { amountCents: 10000 });
+      await seedOrder(buyer.id, event2.id, tier2.id, { amountCents: 5000 });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/admin/finance/summary?eventIds=${event1.id}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceSummarySchema.parse(res.json());
+      expect(body.totalRevenueCents).toBe(10000);
+      expect(body.orderCount).toBe(1);
+    });
+
     it('filters by method', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',

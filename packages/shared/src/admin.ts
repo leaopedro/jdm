@@ -380,10 +380,13 @@ export type AdminExtraUpdate = z.infer<typeof adminExtraUpdateSchema>;
 
 // ── Admin finance ─────────────────────────────────────────────────────
 
+const coerceArray = <T extends z.ZodTypeAny>(inner: T) =>
+  z.preprocess((v) => (typeof v === 'string' ? [v] : v), z.array(inner));
+
 export const adminFinanceQuerySchema = z.object({
   from: z.string().date().optional(),
   to: z.string().date().optional(),
-  eventIds: z.array(z.string().min(1)).optional(),
+  eventIds: coerceArray(z.string().min(1)).optional(),
   search: z.string().min(1).max(200).optional(),
   city: z.string().min(1).max(100).optional(),
   stateCode: stateCodeSchema.optional(),
