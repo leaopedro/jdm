@@ -23,6 +23,7 @@ export const ticketsCopy = {
     valid: 'Válido',
     notFound: 'Ingresso não encontrado.',
     extrasTitle: 'Extras',
+    qrUsed: 'QrCode Utilizado',
   },
   purchase: {
     pickTier: 'Escolha um ingresso',
