@@ -1,12 +1,18 @@
 import { prisma } from '@jdm/db';
 import {
+  adminCreateUserBodySchema,
+  adminUserCreatedSchema,
   adminUserDetailSchema,
   adminUserSearchQuerySchema,
   adminUserSearchResponseSchema,
+  adminUserStatusUpdatedSchema,
 } from '@jdm/shared/admin';
 import type { Prisma, User as DbUser } from '@prisma/client';
+import { Prisma as PrismaNS } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { requireUser } from '../../plugins/auth.js';
+import { recordAudit } from '../../services/admin-audit.js';
 import type { Uploads } from '../../services/uploads/index.js';
 
 const encodeCursor = (u: Pick<DbUser, 'createdAt' | 'id'>): string =>
@@ -58,6 +64,7 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
         name: true,
         email: true,
         avatarObjectKey: true,
+        status: true,
         createdAt: true,
       },
     });
@@ -72,6 +79,7 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
         name: u.name,
         email: u.email,
         avatarUrl: avatarUrl(u, app.uploads),
+        status: u.status,
       })),
       nextCursor: hasMore && last ? encodeCursor(last) : null,
     });
@@ -87,6 +95,7 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
         email: true,
         name: true,
         role: true,
+        status: true,
         emailVerifiedAt: true,
         createdAt: true,
         bio: true,
@@ -132,6 +141,7 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      status: user.status,
       emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
       createdAt: user.createdAt.toISOString(),
       bio: user.bio ?? null,
@@ -155,5 +165,118 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
         createdAt: o.createdAt.toISOString(),
       })),
     });
+  });
+};
+
+// Admin-only mutation routes: create / disable / enable users.
+// Registered under requireRole('admin') in admin/index.ts.
+// eslint-disable-next-line @typescript-eslint/require-await
+export const adminUserMutationRoutes: FastifyPluginAsync = async (app) => {
+  app.post('/users', async (request, reply) => {
+    const { email } = adminCreateUserBodySchema.parse(request.body);
+    const actor = requireUser(request);
+
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email,
+          name: email,
+          status: 'partial',
+          passwordHash: null,
+          emailVerifiedAt: null,
+          role: 'user',
+        },
+        select: { id: true, email: true, status: true, createdAt: true },
+      });
+
+      await recordAudit({
+        actorId: actor.sub,
+        action: 'user.create',
+        entityType: 'user',
+        entityId: user.id,
+        metadata: { email: user.email },
+      });
+      app.log.info(
+        { actorId: actor.sub, targetId: user.id, action: 'user.create' },
+        'admin user created',
+      );
+
+      return reply.status(201).send(
+        adminUserCreatedSchema.parse({
+          id: user.id,
+          email: user.email,
+          status: user.status,
+          createdAt: user.createdAt.toISOString(),
+        }),
+      );
+    } catch (err) {
+      if (err instanceof PrismaNS.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return reply.status(409).send({ error: 'Conflict', message: 'email already exists' });
+      }
+      throw err;
+    }
+  });
+
+  app.post('/users/:id/disable', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const actor = requireUser(request);
+
+    if (id === actor.sub) {
+      return reply.status(400).send({ error: 'BadRequest', message: 'cannot disable self' });
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!target) return reply.status(404).send({ error: 'NotFound' });
+
+    if (target.status !== 'disabled') {
+      await prisma.$transaction([
+        prisma.user.update({ where: { id }, data: { status: 'disabled' } }),
+        prisma.refreshToken.deleteMany({ where: { userId: id } }),
+      ]);
+      await recordAudit({
+        actorId: actor.sub,
+        action: 'user.disable',
+        entityType: 'user',
+        entityId: id,
+      });
+      app.log.info(
+        { actorId: actor.sub, targetId: id, action: 'user.disable' },
+        'admin user disabled',
+      );
+    }
+
+    return reply.status(200).send(adminUserStatusUpdatedSchema.parse({ id, status: 'disabled' }));
+  });
+
+  app.post('/users/:id/enable', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const actor = requireUser(request);
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, status: true, passwordHash: true },
+    });
+    if (!target) return reply.status(404).send({ error: 'NotFound' });
+
+    const next = target.passwordHash ? 'active' : 'partial';
+    if (target.status !== next) {
+      await prisma.user.update({ where: { id }, data: { status: next } });
+      await recordAudit({
+        actorId: actor.sub,
+        action: 'user.enable',
+        entityType: 'user',
+        entityId: id,
+        metadata: { newStatus: next },
+      });
+      app.log.info(
+        { actorId: actor.sub, targetId: id, action: 'user.enable', newStatus: next },
+        'admin user enabled',
+      );
+    }
+
+    return reply.status(200).send(adminUserStatusUpdatedSchema.parse({ id, status: next }));
   });
 };

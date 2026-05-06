@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { userRoleSchema } from './auth.js';
+import { userRoleSchema, userStatusSchema } from './auth.js';
 import {
   eventDetailSchema,
   eventStatusSchema,
@@ -26,6 +26,9 @@ export const adminAuditActionSchema = z.enum([
   'extra.update',
   'extra.delete',
   'extra.claim',
+  'user.create',
+  'user.disable',
+  'user.enable',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -245,6 +248,32 @@ export const adminTicketsListResponseSchema = z.object({
 });
 export type AdminTicketsListResponse = z.infer<typeof adminTicketsListResponseSchema>;
 
+// ── Admin user create / disable / enable ──────────────────────────
+
+export const adminCreateUserBodySchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((v) => v.toLowerCase()),
+});
+export type AdminCreateUserBody = z.infer<typeof adminCreateUserBodySchema>;
+
+export const adminUserCreatedSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().email(),
+  status: userStatusSchema,
+  createdAt: z.string().datetime(),
+});
+export type AdminUserCreated = z.infer<typeof adminUserCreatedSchema>;
+
+export const adminUserStatusUpdatedSchema = z.object({
+  id: z.string().min(1),
+  status: userStatusSchema,
+});
+export type AdminUserStatusUpdated = z.infer<typeof adminUserStatusUpdatedSchema>;
+
 // ── Admin user search + detail ─────────────────────────────────────
 
 export const adminUserSearchQuerySchema = z.object({
@@ -259,6 +288,7 @@ export const adminUserRowSchema = z.object({
   name: z.string(),
   email: z.string().email(),
   avatarUrl: z.string().nullable(),
+  status: userStatusSchema,
 });
 export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
 
@@ -290,6 +320,7 @@ export const adminUserDetailSchema = z.object({
   email: z.string().email(),
   name: z.string(),
   role: userRoleSchema,
+  status: userStatusSchema,
   emailVerifiedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   bio: z.string().nullable(),

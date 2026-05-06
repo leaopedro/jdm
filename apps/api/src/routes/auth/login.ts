@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import { authResponseSchema, loginSchema } from '@jdm/shared/auth';
+import { ACCOUNT_DISABLED_ERROR, authResponseSchema, loginSchema } from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { verifyPassword } from '../../services/auth/password.js';
@@ -18,6 +18,12 @@ export const loginRoute: FastifyPluginAsync = async (app) => {
     const ok = await verifyPassword(input.password, user.passwordHash);
     if (!ok) {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid credentials' });
+    }
+
+    if (user.status === 'disabled') {
+      return reply
+        .status(403)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
     }
 
     if (!user.emailVerifiedAt) {

@@ -14,8 +14,19 @@ export const resetPasswordRoute: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'invalid or expired token' });
     }
     const hash = await hashPassword(password);
+    const target = await prisma.user.findUnique({
+      where: { id: consumed.userId },
+      select: { status: true },
+    });
+    const flipPartial = target?.status === 'partial';
     await prisma.$transaction([
-      prisma.user.update({ where: { id: consumed.userId }, data: { passwordHash: hash } }),
+      prisma.user.update({
+        where: { id: consumed.userId },
+        data: {
+          passwordHash: hash,
+          ...(flipPartial ? { status: 'active', emailVerifiedAt: new Date() } : {}),
+        },
+      }),
       prisma.refreshToken.updateMany({
         where: { userId: consumed.userId, revokedAt: null },
         data: { revokedAt: new Date() },
