@@ -352,6 +352,7 @@ model Ticket {
   tierId       String
   carId        String?
   licensePlate String?      @db.VarChar(20)
+  nickname     String?      @db.VarChar(60)
   source       TicketSource @default(purchase)
   status       TicketStatus @default(valid)
   usedAt       DateTime?

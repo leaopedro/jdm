@@ -17,6 +17,7 @@ export type CartPaymentMethod = z.infer<typeof cartPaymentMethodSchema>;
 export const cartItemTicketSchema = z.object({
   carId: z.string().min(1).optional(),
   licensePlate: licensePlateSchema.optional(),
+  nickname: z.string().trim().min(1).max(60).optional(),
   extras: z.array(z.string().min(1)),
 });
 export type CartItemTicket = z.infer<typeof cartItemTicketSchema>;

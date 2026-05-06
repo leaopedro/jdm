@@ -6,7 +6,7 @@ export interface TicketValidationResult {
   /** One entry per unique extra with aggregated quantity, for OrderExtra row creation */
   extraEntries: { extraId: string; priceCents: number; quantity: number }[];
   /** Compact tickets array packed into Stripe PI metadata */
-  ticketsMetadata: { e: string[]; c?: string; p?: string }[];
+  ticketsMetadata: { e: string[]; c?: string; p?: string; n?: string }[];
   /** For CAS reservation inside transaction — one entry per unique extraId with total count */
   extraStock: { id: string; quantityTotal: number | null; count: number }[];
 }
@@ -82,6 +82,7 @@ export async function validateTickets(
         e: [] as string[],
         ...(t.carId ? { c: t.carId } : {}),
         ...(t.licensePlate ? { p: t.licensePlate } : {}),
+        ...(t.nickname ? { n: t.nickname } : {}),
       })),
       extraStock: [],
     };
@@ -119,6 +120,7 @@ export async function validateTickets(
     e: ticket.extras ?? [],
     ...(ticket.carId ? { c: ticket.carId } : {}),
     ...(ticket.licensePlate ? { p: ticket.licensePlate } : {}),
+    ...(ticket.nickname ? { n: ticket.nickname } : {}),
   }));
 
   let totalExtrasCents = 0;

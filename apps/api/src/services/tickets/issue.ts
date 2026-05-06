@@ -75,6 +75,7 @@ type TicketMeta = {
   extras: string[];
   carId?: string | undefined;
   licensePlate?: string | undefined;
+  nickname?: string | undefined;
 };
 
 function parseTicketsMeta(metadata: Record<string, string> | undefined): TicketMeta[] {
@@ -92,6 +93,7 @@ function parseTicketsMeta(metadata: Record<string, string> | undefined): TicketM
         extras: Array.isArray(obj.e) ? (obj.e as string[]) : [],
         carId: typeof obj.c === 'string' ? obj.c : undefined,
         licensePlate: typeof obj.p === 'string' ? obj.p : undefined,
+        nickname: typeof obj.n === 'string' ? obj.n : undefined,
       };
     });
   } catch {
@@ -214,6 +216,7 @@ export const issueTicketForPaidOrder = async (
           status: 'valid',
           ...(meta?.carId ? { carId: meta.carId } : {}),
           ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
+          ...(meta?.nickname ? { nickname: meta.nickname } : {}),
         },
       });
       tickets.push(ticket);

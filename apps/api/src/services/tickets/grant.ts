@@ -16,6 +16,7 @@ export type GrantInput = {
   extras?: string[];
   carId?: string;
   licensePlate?: string;
+  nickname?: string;
   note?: string;
 };
 
@@ -45,7 +46,17 @@ export class GrantInputError extends Error {
 }
 
 export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise<GrantResult> => {
-  const { actorId, userId, eventId, tierId, extras = [], carId, licensePlate, note } = input;
+  const {
+    actorId,
+    userId,
+    eventId,
+    tierId,
+    extras = [],
+    carId,
+    licensePlate,
+    nickname,
+    note,
+  } = input;
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
@@ -103,6 +114,7 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
           tierId,
           ...(carId && { carId }),
           ...(licensePlate && { licensePlate }),
+          ...(nickname && { nickname }),
           source: 'comp',
           status: 'valid',
         },
@@ -130,6 +142,7 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
     const metadata: Record<string, unknown> = { eventId, userId };
     if (carId) metadata['carId'] = carId;
     if (licensePlate) metadata['licensePlate'] = licensePlate;
+    if (nickname) metadata['nickname'] = nickname;
     if (note) metadata['note'] = note;
 
     await tx.adminAudit.create({
