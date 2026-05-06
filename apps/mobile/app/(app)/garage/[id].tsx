@@ -1,11 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type Car, carUpdateSchema, type CarUpdateInput } from '@jdm/shared/cars';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import { addCarPhoto, deleteCar, getCar, removeCarPhoto, updateCar } from '~/api
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
+import { confirmDestructive, showMessage } from '~/lib/confirm';
 import { pickAndUpload } from '~/lib/upload-image';
 import { theme } from '~/theme';
 
@@ -28,6 +28,15 @@ export default function CarDetail() {
   const router = useRouter();
   const [car, setCar] = useState<Car | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showBanner = (message: string) => {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner(message);
+    bannerTimer.current = setTimeout(() => setBanner(null), 3000);
+  };
 
   const form = useForm<CarUpdateInput>({
     resolver: zodResolver(carUpdateSchema),
@@ -49,8 +58,13 @@ export default function CarDetail() {
 
   const onSave = form.handleSubmit(async (values) => {
     if (!car) return;
-    const updated = await updateCar(car.id, values);
-    setCar(updated);
+    try {
+      const updated = await updateCar(car.id, values);
+      setCar(updated);
+      showBanner(profileCopy.garage.saved);
+    } catch {
+      showBanner(profileCopy.garage.saveFailed);
+    }
   });
 
   const photo = car?.photos[0] ?? null;
@@ -72,20 +86,22 @@ export default function CarDetail() {
     }
   };
 
-  const onRemovePhoto = () => {
+  const onRemovePhoto = async () => {
     if (!car || !photo) return;
-    Alert.alert(profileCopy.garage.removePhotoConfirm, '', [
-      { text: profileCopy.garage.save, style: 'cancel' },
-      {
-        text: profileCopy.garage.removePhoto,
-        style: 'destructive',
-        onPress: () => {
-          void removeCarPhoto(car.id, photo.id).then(() => {
-            setCar({ ...car, photos: [] });
-          });
-        },
-      },
-    ]);
+    const confirmed = await confirmDestructive(
+      profileCopy.garage.removePhotoConfirm,
+      '',
+      profileCopy.garage.removePhoto,
+      profileCopy.profile.cancel,
+    );
+    if (!confirmed) return;
+
+    try {
+      await removeCarPhoto(car.id, photo.id);
+      setCar({ ...car, photos: [] });
+    } catch {
+      showMessage(profileCopy.errors.unknown);
+    }
   };
 
   const onReplacePhoto = async () => {
@@ -107,20 +123,25 @@ export default function CarDetail() {
     }
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!car) return;
-    Alert.alert(profileCopy.garage.deleteConfirm, '', [
-      { text: profileCopy.garage.save, style: 'cancel' },
-      {
-        text: profileCopy.garage.delete,
-        style: 'destructive',
-        onPress: () => {
-          void deleteCar(car.id).then(() => {
-            router.replace('/garage' as never);
-          });
-        },
-      },
-    ]);
+    const confirmed = await confirmDestructive(
+      profileCopy.garage.deleteConfirm,
+      '',
+      profileCopy.garage.delete,
+      profileCopy.profile.cancel,
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await deleteCar(car.id);
+      router.replace('/garage' as never);
+    } catch {
+      showMessage(profileCopy.errors.unknown);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!car) {
@@ -147,7 +168,7 @@ export default function CarDetail() {
             <Image source={{ uri: photo.url }} style={styles.avatarImage} accessible={false} />
             <Pressable
               style={styles.trashBtn}
-              onPress={onRemovePhoto}
+              onPress={() => void onRemovePhoto()}
               accessibilityRole="button"
               accessibilityLabel={profileCopy.garage.removePhoto}
               hitSlop={8}
@@ -228,8 +249,13 @@ export default function CarDetail() {
         )}
       />
 
-      <Button label={profileCopy.garage.save} onPress={() => void onSave()} />
-      <Button label={profileCopy.garage.delete} onPress={onDelete} />
+      {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+      <Button label={profileCopy.garage.save} onPress={() => void onSave()} disabled={deleting} />
+      <Button
+        label={deleting ? `${profileCopy.garage.delete}...` : profileCopy.garage.delete}
+        onPress={() => void onDelete()}
+        disabled={deleting}
+      />
     </ScrollView>
   );
 }
@@ -298,5 +324,8 @@ const styles = StyleSheet.create({
   link: {
     color: theme.colors.fg,
     textDecorationLine: 'underline',
+  },
+  banner: {
+    color: theme.colors.muted,
   },
 });
