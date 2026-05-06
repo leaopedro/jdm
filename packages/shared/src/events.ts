@@ -43,18 +43,29 @@ export const eventSummarySchema = z.object({
 });
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
-// Detail: full payload with tiers, extras + venue.
-export const eventDetailSchema = eventSummarySchema.extend({
+// Public detail: anonymous-safe payload, no commerce data (no tiers, no extras).
+export const eventDetailPublicSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
   // Optional during rollout: legacy API responses may omit this field.
   // Server enforces the real per-event cap regardless.
   maxTicketsPerUser: z.number().int().min(1).max(10).optional(),
+});
+export type EventDetailPublic = z.infer<typeof eventDetailPublicSchema>;
+
+// Commerce detail: public detail + tiers + extras. Authenticated routes only.
+export const eventDetailCommerceSchema = eventDetailPublicSchema.extend({
   tiers: z.array(ticketTierSchema),
   extras: z.array(eventExtraPublicSchema),
 });
-export type EventDetail = z.infer<typeof eventDetailSchema>;
+export type EventDetailCommerce = z.infer<typeof eventDetailCommerceSchema>;
+
+// Backwards-compatible alias retained for callers still on the legacy combined
+// shape (mobile commerce screens, admin detail). Migrating consumers move to
+// `eventDetailPublicSchema` / `eventDetailCommerceSchema` directly.
+export const eventDetailSchema = eventDetailCommerceSchema;
+export type EventDetail = EventDetailCommerce;
 
 // Query: all filters optional. cursor is opaque base64 string.
 export const eventListQuerySchema = z.object({
