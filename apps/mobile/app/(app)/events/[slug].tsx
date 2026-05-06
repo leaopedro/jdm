@@ -17,13 +17,13 @@ import {
 import { getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
-import { buildLoginHref } from '~/auth/redirect-intent';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
+import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
@@ -38,10 +38,6 @@ export default function EventDetailScreen() {
   const { status: authStatus } = useAuth();
   const isAnon = authStatus === 'unauthenticated';
   const isAuthed = authStatus === 'authenticated';
-
-  const requireLogin = (next: string) => {
-    router.push(buildLoginHref(next) as never);
-  };
 
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
@@ -251,14 +247,19 @@ export default function EventDetailScreen() {
         <Button
           label={ticketsCopy.purchase.confirm}
           onPress={() => {
-            if (isAnon) {
-              requireLogin(`/events/buy/${event.slug}`);
-              return;
-            }
-            if (!selectedTier) return;
-            router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
+            const action = resolveBuyCta({
+              authStatus,
+              eventSlug: event.slug,
+              selectedTierId: selectedTier?.id ?? null,
+            });
+            if (action.kind === 'noop') return;
+            router.push(action.href as never);
           }}
-          disabled={isAuthed && !selectedTier}
+          disabled={isBuyCtaDisabled({
+            authStatus,
+            eventSlug: event.slug,
+            selectedTierId: selectedTier?.id ?? null,
+          })}
         />
       </View>
 
