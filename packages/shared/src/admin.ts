@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { userRoleSchema } from './auth.js';
 import {
-  eventDetailSchema,
+  eventDetailCommerceSchema,
   eventStatusSchema,
   eventTypeSchema,
   ticketTierSchema,
@@ -106,7 +106,7 @@ export const adminTicketTierSchema = ticketTierSchema.extend({
 export type AdminTicketTier = z.infer<typeof adminTicketTierSchema>;
 
 // Admin event detail — public detail + admin-only fields, with adminTicketTierSchema tiers.
-export const adminEventDetailSchema = eventDetailSchema.omit({ tiers: true }).extend({
+export const adminEventDetailSchema = eventDetailCommerceSchema.omit({ tiers: true }).extend({
   status: eventStatusSchema,
   coverObjectKey: z.string().nullable(),
   maxTicketsPerUser: z.number().int().min(1).max(10),

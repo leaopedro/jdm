@@ -1,4 +1,4 @@
-import type { EventDetail, TicketTier } from '@jdm/shared/events';
+import type { EventDetailCommerce, TicketTier } from '@jdm/shared/events';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { getEvent } from '~/api/events';
+import { getEventCommerce } from '~/api/events';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { ticketsCopy } from '~/copy/tickets';
@@ -38,7 +38,7 @@ export default function BuyScreen() {
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [event, setEvent] = useState<EventDetailCommerce | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -49,7 +49,7 @@ export default function BuyScreen() {
     if (!eventSlug || typeof eventSlug !== 'string') return;
     void (async () => {
       try {
-        const ev = await getEvent(eventSlug);
+        const ev = await getEventCommerce(eventSlug);
         setEvent(ev);
         if (initialTierId) {
           const match = ev.tiers.find((t) => t.id === initialTierId);

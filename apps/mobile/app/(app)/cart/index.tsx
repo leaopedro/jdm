@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 
 import { beginCheckout } from '~/api/cart';
-import { getEventById } from '~/api/events';
+import { getEventCommerceById } from '~/api/events';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
@@ -146,7 +146,7 @@ export default function CartScreen() {
     setDrawerItem(item);
     setLoadingExtras(true);
     try {
-      const event = await getEventById(item.eventId);
+      const event = await getEventCommerceById(item.eventId);
       setDrawerExtras(event.extras);
     } catch {
       setDrawerExtras([]);

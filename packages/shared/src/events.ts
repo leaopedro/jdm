@@ -61,12 +61,6 @@ export const eventDetailCommerceSchema = eventDetailPublicSchema.extend({
 });
 export type EventDetailCommerce = z.infer<typeof eventDetailCommerceSchema>;
 
-// Backwards-compatible alias retained for callers still on the legacy combined
-// shape (mobile commerce screens, admin detail). Migrating consumers move to
-// `eventDetailPublicSchema` / `eventDetailCommerceSchema` directly.
-export const eventDetailSchema = eventDetailCommerceSchema;
-export type EventDetail = EventDetailCommerce;
-
 // Query: all filters optional. cursor is opaque base64 string.
 export const eventListQuerySchema = z.object({
   window: eventWindowSchema.default('upcoming'),
