@@ -86,7 +86,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
 
     const updated = await prisma.ticket.update({
       where: { id },
-      data: { nickname: body.nickname },
+      data: 'nickname' in body ? { nickname: body.nickname ?? null } : {},
       include: { event: true, tier: true, extraItems: { include: { extra: true } } },
     });
 

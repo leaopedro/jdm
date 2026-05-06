@@ -39,7 +39,7 @@ export const myTicketsResponseSchema = z.object({
 export type MyTicketsResponse = z.infer<typeof myTicketsResponseSchema>;
 
 export const updateTicketRequestSchema = z.object({
-  nickname: z.string().trim().min(1).max(60).nullable(),
+  nickname: z.string().trim().min(1).max(60).nullable().optional(),
 });
 export type UpdateTicketRequest = z.infer<typeof updateTicketRequestSchema>;
 

@@ -194,6 +194,33 @@ describe('Ticket nicknames', () => {
       expect(reloaded.nickname).toBe('Acompanhante');
     });
 
+    it('treats an empty body as a no-op (omitted nickname does not clear)', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedEventAndTier();
+      const ticket = await prisma.ticket.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          nickname: 'preservar',
+        },
+      });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/me/tickets/${ticket.id}`,
+        headers: { authorization: bearer(env, user.id) },
+        payload: {},
+      });
+      expect(res.statusCode).toBe(200);
+      const body = updateTicketResponseSchema.parse(res.json());
+      expect(body.ticket.nickname).toBe('preservar');
+
+      const reloaded = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(reloaded.nickname).toBe('preservar');
+    });
+
     it('clears the nickname when null is provided', async () => {
       const { user } = await createUser({ verified: true });
       const { event, tier } = await seedEventAndTier();
