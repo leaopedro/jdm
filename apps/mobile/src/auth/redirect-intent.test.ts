@@ -38,8 +38,7 @@ describe('sanitizeNext', () => {
     expect(sanitizeNext('/welcome')).toBe('/welcome');
     expect(sanitizeNext('/events')).toBe('/events');
     expect(sanitizeNext('/events/track-day')).toBe('/events/track-day');
-    expect(sanitizeNext('/events/buy/track-day')).toBe('/events/buy/track-day');
-    expect(sanitizeNext('/events/buy/track-day?tierId=t1')).toBe('/events/buy/track-day?tierId=t1');
+    expect(sanitizeNext('/events/track-day?tierId=t1')).toBe('/events/track-day?tierId=t1');
     expect(sanitizeNext('/cart')).toBe('/cart');
     expect(sanitizeNext('/cart/car-plate')).toBe('/cart/car-plate');
     expect(sanitizeNext('/tickets')).toBe('/tickets');
@@ -94,12 +93,10 @@ describe('buildLoginHref / buildSignupHref', () => {
 
   it('encodes the next query param when valid', () => {
     expect(buildLoginHref('/cart')).toBe('/login?next=%2Fcart');
-    expect(buildLoginHref('/events/buy/track-day?tierId=t1')).toBe(
-      '/login?next=%2Fevents%2Fbuy%2Ftrack-day%3FtierId%3Dt1',
+    expect(buildLoginHref('/events/track-day?tierId=t1')).toBe(
+      '/login?next=%2Fevents%2Ftrack-day%3FtierId%3Dt1',
     );
-    expect(buildSignupHref('/events/buy/track-day')).toBe(
-      '/signup?next=%2Fevents%2Fbuy%2Ftrack-day',
-    );
+    expect(buildSignupHref('/events/track-day')).toBe('/signup?next=%2Fevents%2Ftrack-day');
   });
 });
 
