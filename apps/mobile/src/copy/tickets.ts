@@ -6,6 +6,8 @@ export const ticketsCopy = {
     loading: 'Carregando seus ingressos...',
     upcoming: 'Próximos',
     past: 'Anteriores',
+    pendingExtras: 'Extras não utilizados',
+    pendingExtrasOne: 'Extra não utilizado',
   },
   filters: {
     all: 'Todos',
