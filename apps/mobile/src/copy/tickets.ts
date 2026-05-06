@@ -14,6 +14,8 @@ export const ticketsCopy = {
     valid: 'Válidos',
     used: 'Utilizados',
     expired: 'Expirados',
+    event: 'Evento:',
+    eventClear: 'Limpar filtro de evento',
   },
   detail: {
     title: 'Seu ingresso',
