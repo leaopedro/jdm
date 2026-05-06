@@ -130,29 +130,39 @@ export default function TicketsIndex() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() =>
-                router.push({
-                  pathname: '/tickets/[ticketId]',
-                  params: { ticketId: item.id, ticket: JSON.stringify(item) },
-                } as never)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}`}
-              accessibilityHint="Opens ticket QR code"
-            >
-              <Text style={styles.title}>{item.event.title}</Text>
-              <Text style={styles.sub}>
-                {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
-              </Text>
-              <Text style={styles.sub}>{item.tierName}</Text>
-              <Text style={[styles.status, item.status !== 'valid' && styles.statusMuted]}>
-                {statusLabel(item.status)}
-              </Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const nickname = item.nickname?.trim() || null;
+            return (
+              <Pressable
+                style={styles.card}
+                onPress={() =>
+                  router.push({
+                    pathname: '/tickets/[ticketId]',
+                    params: { ticketId: item.id, ticket: JSON.stringify(item) },
+                  } as never)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`${nickname ? `${nickname}, ` : ''}${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}`}
+                accessibilityHint="Opens ticket QR code"
+              >
+                {nickname ? (
+                  <>
+                    <Text style={styles.title}>{nickname}</Text>
+                    <Text style={styles.eventName}>{item.event.title}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.title}>{item.event.title}</Text>
+                )}
+                <Text style={styles.sub}>
+                  {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
+                </Text>
+                <Text style={styles.sub}>{item.tierName}</Text>
+                <Text style={[styles.status, item.status !== 'valid' && styles.statusMuted]}>
+                  {statusLabel(item.status)}
+                </Text>
+              </Pressable>
+            );
+          }}
         />
       )}
     </View>
@@ -206,6 +216,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
+  eventName: { color: theme.colors.fg, fontSize: theme.font.size.sm, fontWeight: '500' },
   sub: { color: theme.colors.muted },
   status: { color: theme.colors.fg, fontWeight: '600', marginTop: theme.spacing.xs },
   statusMuted: { color: theme.colors.muted },
