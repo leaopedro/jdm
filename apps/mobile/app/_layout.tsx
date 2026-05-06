@@ -12,13 +12,13 @@ import { DarkTheme, ThemeProvider, type Theme } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
-import { Redirect, Slot, usePathname } from 'expo-router';
+import { Redirect, Slot, useGlobalSearchParams, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 
 import { AuthProvider, useAuth } from '~/auth/context';
-import { buildLoginHref, isPublicPath } from '~/auth/redirect-intent';
+import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
 import { initSentry } from '~/lib/sentry';
 import { theme } from '~/theme';
 
@@ -43,6 +43,8 @@ const jdmNavTheme: Theme = {
 const Gate = () => {
   const auth = useAuth();
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ next?: string }>();
+  const next = sanitizeNext(params.next);
   const inAuth =
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
@@ -66,7 +68,7 @@ const Gate = () => {
     return <Redirect href="/verify-email-pending" />;
   }
   if (auth.status === 'authenticated' && inAuth && auth.user?.emailVerifiedAt) {
-    return <Redirect href="/welcome" />;
+    return <Redirect href={(next ?? '/welcome') as never} />;
   }
   return <Slot />;
 };

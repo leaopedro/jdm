@@ -38,7 +38,11 @@ export default function LoginScreen() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login(values);
-      router.replace((next ?? DEFAULT_POST_AUTH) as never);
+      // Defer to next tick so Gate re-renders with the new authenticated
+      // state and mounts the target navigator (e.g. (app)) before the
+      // replace fires; otherwise cross-group routes like /profile fail
+      // with "action 'REPLACE' not handled by any navigator".
+      setTimeout(() => router.replace((next ?? DEFAULT_POST_AUTH) as never), 0);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401)
