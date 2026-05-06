@@ -96,6 +96,7 @@ export default function TicketsIndex() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
       >
         {FILTERS.map((f) => {
@@ -170,6 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg,
   },
   empty: { color: theme.colors.muted },
+  filterScroll: { flexGrow: 0, flexShrink: 0 },
   filterRow: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
@@ -191,11 +193,10 @@ const styles = StyleSheet.create({
   chipText: {
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   chipTextActive: {
     color: theme.colors.bg,
-    fontWeight: '600',
   },
   list: { gap: theme.spacing.md, padding: theme.spacing.md },
   card: {
