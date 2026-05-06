@@ -38,9 +38,8 @@ export default function TicketsIndex() {
   const [items, setItems] = useState<MyTicket[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<TicketStatusFilter>('valid');
-  const [eventFilterCleared, setEventFilterCleared] = useState(false);
 
-  const eventId = eventFilterCleared ? null : (rawEventId ?? null);
+  const eventId = rawEventId ?? null;
 
   const load = useCallback(async () => {
     const res = await listMyTickets();
@@ -70,7 +69,6 @@ export default function TicketsIndex() {
   const eventTitle = useMemo(() => findEventTitle(items ?? [], eventId), [items, eventId]);
 
   const clearEventFilter = useCallback(() => {
-    setEventFilterCleared(true);
     router.setParams({ eventId: undefined } as never);
   }, [router]);
 
