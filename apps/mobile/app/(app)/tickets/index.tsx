@@ -96,6 +96,7 @@ export default function TicketsIndex() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
       >
         {FILTERS.map((f) => {
@@ -170,6 +171,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg,
   },
   empty: { color: theme.colors.muted },
+  filterScroll: { flexGrow: 0, flexShrink: 0 },
   filterRow: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
