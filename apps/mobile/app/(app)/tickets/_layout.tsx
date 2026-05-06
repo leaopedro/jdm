@@ -11,7 +11,10 @@ export default function TicketsLayout() {
         headerTintColor: '#F5F5F5',
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Meus ingressos' }} />
+      <Stack.Screen
+        name="index"
+        options={{ title: 'Meus ingressos', headerBackVisible: false, headerLeft: () => null }}
+      />
       <Stack.Screen
         name="[ticketId]"
         options={{
