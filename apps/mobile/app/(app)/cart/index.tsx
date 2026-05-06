@@ -36,6 +36,14 @@ function firstTicketPlate(item: CartItem): string | undefined {
   return item.tickets[0]?.licensePlate;
 }
 
+function showError(message: string) {
+  if (isWeb && typeof window !== 'undefined') {
+    window.alert(message);
+  } else {
+    Alert.alert(message);
+  }
+}
+
 function confirmDestructive(title: string, message: string): Promise<boolean> {
   if (isWeb) {
     if (typeof window === 'undefined') return Promise.resolve(false);
@@ -98,11 +106,7 @@ export default function CartScreen() {
         ...getCheckoutReturnUrls(),
       });
       if (!result.checkoutUrl) {
-        if (isWeb && typeof window !== 'undefined') {
-          window.alert(cartCopy.errors.checkout);
-        } else {
-          Alert.alert(cartCopy.errors.checkout);
-        }
+        showError(cartCopy.errors.checkout);
         return;
       }
       if (isWeb && typeof window !== 'undefined') {
@@ -111,11 +115,7 @@ export default function CartScreen() {
         await Linking.openURL(result.checkoutUrl);
       }
     } catch {
-      if (isWeb && typeof window !== 'undefined') {
-        window.alert(cartCopy.errors.checkout);
-      } else {
-        Alert.alert(cartCopy.errors.checkout);
-      }
+      showError(cartCopy.errors.checkout);
     } finally {
       setCheckingOut(false);
     }
@@ -398,8 +398,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.xs,
     marginTop: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radii.md,
   },
-  carRowWarn: {},
+  carRowWarn: {
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '15',
+  },
   carRowText: { color: theme.colors.muted, fontSize: theme.font.size.sm, flex: 1 },
   carRowTextWarn: { color: theme.colors.accent, fontWeight: '600' },
   payBlocked: {

@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
-import { upsertCartItem } from '~/api/cart';
+import { updateCartItem, upsertCartItem } from '~/api/cart';
 import { useCart } from '~/cart/context';
 import { cartCopy } from '~/copy/cart';
 import { CarPlatePicker } from '~/screens/cart/CarPlatePicker';
@@ -32,6 +32,7 @@ export default function CartCarPlateScreen() {
 
   const eventId = typeof params.eventId === 'string' ? params.eventId : '';
   const tierId = typeof params.tierId === 'string' ? params.tierId : '';
+  const itemId = typeof params.itemId === 'string' ? params.itemId : undefined;
   const initialCarId = typeof params.initialCarId === 'string' ? params.initialCarId : undefined;
   const initialPlate = typeof params.initialPlate === 'string' ? params.initialPlate : undefined;
 
@@ -52,7 +53,11 @@ export default function CartCarPlateScreen() {
           tickets: [{ extras: [], carId, licensePlate }],
           metadata: { source: 'mobile' },
         };
-        await upsertCartItem(input);
+        if (itemId) {
+          await updateCartItem(itemId, input);
+        } else {
+          await upsertCartItem(input);
+        }
         await refresh();
         router.replace('/cart');
       } catch {
@@ -61,7 +66,7 @@ export default function CartCarPlateScreen() {
         setSubmitting(false);
       }
     },
-    [eventId, tierId, refresh, router],
+    [eventId, tierId, itemId, refresh, router],
   );
 
   return (
