@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { signupSchema } from '@jdm/shared/auth';
 import type { SignupInput } from '@jdm/shared/auth';
 import { Button, Text } from '@jdm/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -17,12 +17,15 @@ import {
 
 import { ApiError } from '~/api/client';
 import { useAuth } from '~/auth/context';
+import { buildLoginHref, sanitizeNext } from '~/auth/redirect-intent';
 import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
 
 export default function SignupScreen() {
   const { signup } = useAuth();
   const router = useRouter();
+  const { next: nextParam } = useLocalSearchParams<{ next?: string }>();
+  const next = sanitizeNext(nextParam);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
   const {
@@ -43,7 +46,10 @@ export default function SignupScreen() {
     setTermsError(null);
     try {
       await signup(values);
-      router.replace({ pathname: '/verify-email-pending', params: { email: values.email } });
+      router.replace({
+        pathname: '/verify-email-pending',
+        params: next ? { email: values.email, next } : { email: values.email },
+      });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError('email', { message: authCopy.errors.emailExists });
@@ -199,7 +205,7 @@ export default function SignupScreen() {
             <Pressable
               accessibilityRole="link"
               accessibilityLabel={authCopy.signup.haveAccountLink}
-              onPress={() => router.replace('/login')}
+              onPress={() => router.replace(buildLoginHref(next) as never)}
               hitSlop={8}
             >
               <Text tone="brand" weight="semibold">

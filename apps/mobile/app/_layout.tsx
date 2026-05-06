@@ -18,6 +18,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 
 import { AuthProvider, useAuth } from '~/auth/context';
+import { buildLoginHref, isPublicPath } from '~/auth/redirect-intent';
 import { initSentry } from '~/lib/sentry';
 import { theme } from '~/theme';
 
@@ -52,8 +53,8 @@ const Gate = () => {
   if (auth.status === 'loading') {
     return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
   }
-  if (auth.status === 'unauthenticated' && !inAuth) {
-    return <Redirect href="/login" />;
+  if (auth.status === 'unauthenticated' && !inAuth && !isPublicPath(pathname)) {
+    return <Redirect href={buildLoginHref(pathname) as never} />;
   }
   if (
     auth.status === 'authenticated' &&
