@@ -147,6 +147,7 @@ export default function TicketsIndex() {
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
           }
           renderItem={({ item }) => {
+            const nickname = item.nickname?.trim() || null;
             const pendingExtras = item.extras.filter((e) => e.status === 'valid');
             const pendingLabel =
               pendingExtras.length === 1
@@ -166,10 +167,17 @@ export default function TicketsIndex() {
                   } as never)
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}${a11yExtras}`}
+                accessibilityLabel={`${nickname ? `${nickname}, ` : ''}${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}${a11yExtras}`}
                 accessibilityHint="Opens ticket QR code"
               >
-                <Text style={styles.title}>{item.event.title}</Text>
+                {nickname ? (
+                  <>
+                    <Text style={styles.title}>{nickname}</Text>
+                    <Text style={styles.eventName}>{item.event.title}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.title}>{item.event.title}</Text>
+                )}
                 <Text style={styles.sub}>
                   {formatEventDateRange(item.event.startsAt, item.event.endsAt)}
                 </Text>
@@ -272,6 +280,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   title: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
+  eventName: { color: theme.colors.fg, fontSize: theme.font.size.sm, fontWeight: '500' },
   sub: { color: theme.colors.muted },
   status: { color: theme.colors.fg, fontWeight: '600', marginTop: theme.spacing.xs },
   statusMuted: { color: theme.colors.muted },

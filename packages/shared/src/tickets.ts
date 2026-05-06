@@ -25,6 +25,7 @@ export const myTicketSchema = z.object({
   status: ticketStatusSchema,
   source: ticketSourceSchema,
   tierName: z.string().min(1),
+  nickname: z.string().min(1).max(60).nullable().optional(),
   usedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   event: eventSummarySchema,
@@ -36,3 +37,8 @@ export const myTicketsResponseSchema = z.object({
   items: z.array(myTicketSchema),
 });
 export type MyTicketsResponse = z.infer<typeof myTicketsResponseSchema>;
+
+export const updateTicketRequestSchema = z.object({
+  nickname: z.string().trim().min(1).max(60).nullable(),
+});
+export type UpdateTicketRequest = z.infer<typeof updateTicketRequestSchema>;
