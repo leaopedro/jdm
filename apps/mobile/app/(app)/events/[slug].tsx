@@ -1,4 +1,4 @@
-import type { EventDetail, TicketTier } from '@jdm/shared/events';
+import type { EventDetailCommerce, EventDetailPublic, TicketTier } from '@jdm/shared/events';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ShoppingCart, Ticket as TicketIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { getEvent } from '~/api/events';
+import { getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
 import { buildLoginHref } from '~/auth/redirect-intent';
@@ -29,13 +29,15 @@ import { theme } from '~/theme';
 export default function EventDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
-  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [publicEvent, setPublicEvent] = useState<EventDetailPublic | null>(null);
+  const [commerceEvent, setCommerceEvent] = useState<EventDetailCommerce | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [hasTicket, setHasTicket] = useState(false);
   const { addItem, adding } = useCart();
   const { status: authStatus } = useAuth();
   const isAnon = authStatus === 'unauthenticated';
+  const isAuthed = authStatus === 'authenticated';
 
   const requireLogin = (next: string) => {
     router.push(buildLoginHref(next) as never);
@@ -45,12 +47,29 @@ export default function EventDetailScreen() {
     if (!slug || typeof slug !== 'string') return;
     void (async () => {
       try {
-        setEvent(await getEvent(slug));
+        setPublicEvent(await getEvent(slug));
       } catch {
         setError(eventsCopy.errors.notFound);
       }
     })();
   }, [slug]);
+
+  useEffect(() => {
+    if (!slug || typeof slug !== 'string') return;
+    if (!isAuthed) {
+      setCommerceEvent(null);
+      return;
+    }
+    void (async () => {
+      try {
+        setCommerceEvent(await getEventCommerce(slug));
+      } catch {
+        setCommerceEvent(null);
+      }
+    })();
+  }, [slug, isAuthed]);
+
+  const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
 
   useEffect(() => {
     if (!event || isAnon || authStatus === 'loading') {
@@ -71,7 +90,7 @@ export default function EventDetailScreen() {
     };
   }, [event, isAnon, authStatus]);
 
-  const openMap = (e: EventDetail) => {
+  const openMap = (e: EventDetailPublic) => {
     const parts = [e.venueName, e.venueAddress, e.city, e.stateCode].filter(Boolean);
     if (parts.length === 0) return;
     const q = encodeURIComponent(parts.join(', '));
@@ -79,20 +98,16 @@ export default function EventDetailScreen() {
   };
 
   const addToCart = async (tier: TicketTier) => {
-    if (!event) return;
-    if (isAnon) {
-      requireLogin(`/events/buy/${event.slug}?tierId=${tier.id}`);
-      return;
-    }
+    if (!commerceEvent) return;
     if (tier.requiresCar) {
       router.push({
         pathname: '/cart/car-plate',
-        params: { eventId: event.id, tierId: tier.id },
+        params: { eventId: commerceEvent.id, tierId: tier.id },
       } as never);
       return;
     }
     const ok = await addItem({
-      eventId: event.id,
+      eventId: commerceEvent.id,
       tierId: tier.id,
       source: 'purchase',
       kind: 'ticket',
@@ -122,7 +137,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const selectedTier = event.tiers.find((t) => t.id === selectedTierId) ?? null;
+  const selectedTier = commerceEvent?.tiers.find((t) => t.id === selectedTierId) ?? null;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -196,57 +211,58 @@ export default function EventDetailScreen() {
         <Text style={styles.body}>{event.description}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
-        {event.tiers.map((t) => {
-          const soldOut = t.remainingCapacity === 0;
-          const isSelected = selectedTierId === t.id;
-          return (
-            <Pressable
-              key={t.id}
-              onPress={() => !soldOut && setSelectedTierId(t.id)}
-              disabled={soldOut}
-              style={[
-                styles.tier,
-                isSelected && styles.tierSelected,
-                soldOut && styles.tierDisabled,
-              ]}
-              accessibilityRole="radio"
-              accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
-              accessibilityState={{ selected: isSelected, disabled: soldOut }}
-              accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
-            >
-              <View style={styles.tierTop}>
-                <Text style={styles.tierName}>{t.name}</Text>
-                <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
-              </View>
-              <Text style={styles.sub}>
-                {soldOut
-                  ? ticketsCopy.purchase.soldOut
-                  : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {commerceEvent ? (
+        <View style={styles.section}>
+          <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
+          {commerceEvent.tiers.map((t) => {
+            const soldOut = t.remainingCapacity === 0;
+            const isSelected = selectedTierId === t.id;
+            return (
+              <Pressable
+                key={t.id}
+                onPress={() => !soldOut && setSelectedTierId(t.id)}
+                disabled={soldOut}
+                style={[
+                  styles.tier,
+                  isSelected && styles.tierSelected,
+                  soldOut && styles.tierDisabled,
+                ]}
+                accessibilityRole="radio"
+                accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
+                accessibilityState={{ selected: isSelected, disabled: soldOut }}
+                accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
+              >
+                <View style={styles.tierTop}>
+                  <Text style={styles.tierName}>{t.name}</Text>
+                  <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
+                </View>
+                <Text style={styles.sub}>
+                  {soldOut
+                    ? ticketsCopy.purchase.soldOut
+                    : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Button
           label={ticketsCopy.purchase.confirm}
           onPress={() => {
-            if (!selectedTier) return;
-            const dest = `/events/buy/${event.slug}?tierId=${selectedTier.id}`;
             if (isAnon) {
-              requireLogin(dest);
+              requireLogin(`/events/buy/${event.slug}`);
               return;
             }
-            router.push(dest as never);
+            if (!selectedTier) return;
+            router.push(`/events/buy/${event.slug}?tierId=${selectedTier.id}` as never);
           }}
-          disabled={!selectedTier}
+          disabled={isAuthed && !selectedTier}
         />
       </View>
 
-      {selectedTier && (
+      {commerceEvent && selectedTier && (
         <View style={styles.section}>
           <Pressable
             onPress={() => void addToCart(selectedTier)}

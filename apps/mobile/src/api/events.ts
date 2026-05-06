@@ -1,12 +1,14 @@
 import {
-  type EventDetail,
-  eventDetailSchema,
+  type EventDetailCommerce,
+  eventDetailCommerceSchema,
+  type EventDetailPublic,
+  eventDetailPublicSchema,
   type EventListQuery,
   type EventListResponse,
   eventListResponseSchema,
 } from '@jdm/shared/events';
 
-import { request } from './client';
+import { authedRequest, request } from './client';
 
 const buildQueryString = (q: Partial<EventListQuery>): string => {
   const params = new URLSearchParams();
@@ -23,8 +25,14 @@ const buildQueryString = (q: Partial<EventListQuery>): string => {
 export const listEvents = (q: Partial<EventListQuery> = {}): Promise<EventListResponse> =>
   request(`/events${buildQueryString(q)}`, eventListResponseSchema);
 
-export const getEvent = (slug: string): Promise<EventDetail> =>
-  request(`/events/${encodeURIComponent(slug)}`, eventDetailSchema);
+export const getEvent = (slug: string): Promise<EventDetailPublic> =>
+  request(`/events/${encodeURIComponent(slug)}`, eventDetailPublicSchema);
 
-export const getEventById = (id: string): Promise<EventDetail> =>
-  request(`/events/by-id/${encodeURIComponent(id)}`, eventDetailSchema);
+export const getEventById = (id: string): Promise<EventDetailPublic> =>
+  request(`/events/by-id/${encodeURIComponent(id)}`, eventDetailPublicSchema);
+
+export const getEventCommerce = (slug: string): Promise<EventDetailCommerce> =>
+  authedRequest(`/events/${encodeURIComponent(slug)}/commerce`, eventDetailCommerceSchema);
+
+export const getEventCommerceById = (id: string): Promise<EventDetailCommerce> =>
+  authedRequest(`/events/by-id/${encodeURIComponent(id)}/commerce`, eventDetailCommerceSchema);

@@ -1,6 +1,7 @@
 import { prisma } from '@jdm/db';
 import {
-  eventDetailSchema,
+  eventDetailCommerceSchema,
+  eventDetailPublicSchema,
   eventListQuerySchema,
   eventListResponseSchema,
   eventSummarySchema,
@@ -65,8 +66,29 @@ const serializeExtra = (x: DbExtra) =>
     sortOrder: x.sortOrder,
   });
 
-const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, uploads: Uploads) =>
-  eventDetailSchema.parse({
+const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
+  eventDetailPublicSchema.parse({
+    id: e.id,
+    slug: e.slug,
+    title: e.title,
+    coverUrl: e.coverObjectKey ? uploads.buildPublicUrl(e.coverObjectKey) : null,
+    startsAt: e.startsAt.toISOString(),
+    endsAt: e.endsAt.toISOString(),
+    venueName: e.venueName,
+    venueAddress: e.venueAddress,
+    city: e.city,
+    stateCode: e.stateCode,
+    type: e.type,
+    description: e.description,
+    capacity: e.capacity,
+    maxTicketsPerUser: e.maxTicketsPerUser,
+  });
+
+const serializeCommerceDetail = (
+  e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] },
+  uploads: Uploads,
+) =>
+  eventDetailCommerceSchema.parse({
     id: e.id,
     slug: e.slug,
     title: e.title,
@@ -141,25 +163,47 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     const { slug } = request.params as { slug: string };
     const event = await prisma.event.findFirst({
       where: { slug, status: 'published' },
-      include: {
-        tiers: true,
-        extras: { where: { active: true } },
-      },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    return serializeDetail(event, app.uploads);
+    return serializePublicDetail(event, app.uploads);
   });
 
   app.get('/events/by-id/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const event = await prisma.event.findFirst({
       where: { id, status: 'published' },
+    });
+    if (!event) return reply.status(404).send({ error: 'NotFound' });
+    return serializePublicDetail(event, app.uploads);
+  });
+
+  app.get('/events/:slug/commerce', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const event = await prisma.event.findFirst({
+      where: { slug, status: 'published' },
       include: {
         tiers: true,
         extras: { where: { active: true } },
       },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    return serializeDetail(event, app.uploads);
+    return serializeCommerceDetail(event, app.uploads);
   });
+
+  app.get(
+    '/events/by-id/:id/commerce',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const event = await prisma.event.findFirst({
+        where: { id, status: 'published' },
+        include: {
+          tiers: true,
+          extras: { where: { active: true } },
+        },
+      });
+      if (!event) return reply.status(404).send({ error: 'NotFound' });
+      return serializeCommerceDetail(event, app.uploads);
+    },
+  );
 };

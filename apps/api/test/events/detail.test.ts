@@ -1,11 +1,11 @@
 import { prisma } from '@jdm/db';
-import { eventDetailSchema } from '@jdm/shared/events';
+import { eventDetailPublicSchema } from '@jdm/shared/events';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { makeApp, resetDatabase } from '../helpers.js';
 
-describe('GET /events/:slug', () => {
+describe('GET /events/:slug (public)', () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
@@ -17,7 +17,7 @@ describe('GET /events/:slug', () => {
     await app.close();
   });
 
-  it('returns the published event with tiers and remaining capacity', async () => {
+  it('returns the public detail without tiers or extras', async () => {
     const event = await prisma.event.create({
       data: {
         slug: 'encontro-sp',
@@ -44,42 +44,13 @@ describe('GET /events/:slug', () => {
 
     const res = await app.inject({ method: 'GET', url: `/events/${event.slug}` });
     expect(res.statusCode).toBe(200);
-    const body = eventDetailSchema.parse(res.json());
+    const json: Record<string, unknown> = res.json();
+    expect(json).not.toHaveProperty('tiers');
+    expect(json).not.toHaveProperty('extras');
+    const body = eventDetailPublicSchema.parse(json);
     expect(body.slug).toBe('encontro-sp');
-    expect(body.tiers).toHaveLength(2);
-    const general = body.tiers.find((t) => t.name === 'Geral');
-    expect(general?.remainingCapacity).toBe(90);
-    const vip = body.tiers.find((t) => t.name === 'VIP');
-    expect(vip?.remainingCapacity).toBe(20);
-  });
-
-  it('returns tiers in sortOrder', async () => {
-    await prisma.event.create({
-      data: {
-        slug: 'sorted',
-        title: 't',
-        description: 'd',
-        startsAt: new Date(Date.now() + 86400_000),
-        endsAt: new Date(Date.now() + 90000_000),
-        venueName: 'v',
-        venueAddress: 'a',
-        city: 'São Paulo',
-        stateCode: 'SP',
-        type: 'meeting',
-        status: 'published',
-        capacity: 10,
-        publishedAt: new Date(),
-        tiers: {
-          create: [
-            { name: 'B', priceCents: 100, quantityTotal: 5, sortOrder: 1 },
-            { name: 'A', priceCents: 200, quantityTotal: 5, sortOrder: 0 },
-          ],
-        },
-      },
-    });
-    const res = await app.inject({ method: 'GET', url: '/events/sorted' });
-    const body = eventDetailSchema.parse(res.json());
-    expect(body.tiers.map((t) => t.name)).toEqual(['A', 'B']);
+    expect(body.description).toBe('Um belo encontro');
+    expect(body.capacity).toBe(200);
   });
 
   it('returns 404 for unknown slug', async () => {
@@ -108,51 +79,6 @@ describe('GET /events/:slug', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('exposes requiresCar on tier in public detail response', async () => {
-    await prisma.event.create({
-      data: {
-        slug: 'pilots-only',
-        title: 'Drift Event',
-        description: 'd',
-        startsAt: new Date(Date.now() + 86400_000),
-        endsAt: new Date(Date.now() + 90000_000),
-        venueName: 'v',
-        venueAddress: 'a',
-        city: 'São Paulo',
-        stateCode: 'SP',
-        type: 'drift',
-        status: 'published',
-        capacity: 50,
-        publishedAt: new Date(),
-        tiers: {
-          create: [
-            {
-              name: 'Espectador',
-              priceCents: 2000,
-              quantityTotal: 40,
-              sortOrder: 0,
-              requiresCar: false,
-            },
-            {
-              name: 'Piloto',
-              priceCents: 8000,
-              quantityTotal: 10,
-              sortOrder: 1,
-              requiresCar: true,
-            },
-          ],
-        },
-      },
-    });
-    const res = await app.inject({ method: 'GET', url: '/events/pilots-only' });
-    expect(res.statusCode).toBe(200);
-    const body = eventDetailSchema.parse(res.json());
-    const espectador = body.tiers.find((t) => t.name === 'Espectador');
-    const piloto = body.tiers.find((t) => t.name === 'Piloto');
-    expect(espectador?.requiresCar).toBe(false);
-    expect(piloto?.requiresCar).toBe(true);
-  });
-
   it('returns 404 for cancelled event', async () => {
     await prisma.event.create({
       data: {
@@ -171,6 +97,57 @@ describe('GET /events/:slug', () => {
       },
     });
     const res = await app.inject({ method: 'GET', url: '/events/cancelled-one' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /events/by-id/:id (public)', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns the public detail without tiers or extras', async () => {
+    const event = await prisma.event.create({
+      data: {
+        slug: 'by-id-public',
+        title: 'By ID',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'published',
+        capacity: 50,
+        publishedAt: new Date(),
+        tiers: {
+          create: [{ name: 'Geral', priceCents: 1000, quantityTotal: 10, sortOrder: 0 }],
+        },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: `/events/by-id/${event.id}` });
+    expect(res.statusCode).toBe(200);
+    const json: Record<string, unknown> = res.json();
+    expect(json).not.toHaveProperty('tiers');
+    expect(json).not.toHaveProperty('extras');
+    const body = eventDetailPublicSchema.parse(json);
+    expect(body.id).toBe(event.id);
+  });
+
+  it('returns 404 for unknown id', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/events/by-id/00000000-0000-0000-0000-000000000000',
+    });
     expect(res.statusCode).toBe(404);
   });
 });
