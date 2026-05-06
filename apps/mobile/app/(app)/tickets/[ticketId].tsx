@@ -131,15 +131,28 @@ export default function TicketDetail() {
       </Text>
       <Text style={styles.sub}>{ticket.tierName}</Text>
 
-      <View
-        style={styles.qrBox}
-        accessible={true}
-        accessibilityRole="image"
-        accessibilityLabel={`QR code for ${ticket.event.title}`}
-      >
-        <QRCode value={ticket.code} size={240} />
-      </View>
-      <Text style={styles.hint}>{ticketsCopy.detail.brightness}</Text>
+      {ticket.status === 'used' ? (
+        <View
+          style={styles.qrUsedBox}
+          accessible={true}
+          accessibilityRole="text"
+          accessibilityLabel={ticketsCopy.detail.qrUsed}
+        >
+          <Text style={styles.qrUsedText}>{ticketsCopy.detail.qrUsed}</Text>
+        </View>
+      ) : (
+        <>
+          <View
+            style={styles.qrBox}
+            accessible={true}
+            accessibilityRole="image"
+            accessibilityLabel={`QR code for ${ticket.event.title}`}
+          >
+            <QRCode value={ticket.code} size={240} />
+          </View>
+          <Text style={styles.hint}>{ticketsCopy.detail.brightness}</Text>
+        </>
+      )}
       <Text style={[styles.status, ticket.status !== 'valid' && styles.statusMuted]}>{label}</Text>
 
       {ticket.extras.length > 0 && (
@@ -159,14 +172,25 @@ export default function TicketDetail() {
                 <Text style={[styles.extraName, isUsed && styles.textMuted]}>
                   {extra.extraName}
                 </Text>
-                <View
-                  style={styles.extraQrBox}
-                  accessible={true}
-                  accessibilityRole="image"
-                  accessibilityLabel={`QR code for ${extra.extraName}`}
-                >
-                  <QRCode value={extra.code} size={140} />
-                </View>
+                {extra.status === 'used' ? (
+                  <View
+                    style={styles.extraQrUsedBox}
+                    accessible={true}
+                    accessibilityRole="text"
+                    accessibilityLabel={ticketsCopy.detail.qrUsed}
+                  >
+                    <Text style={styles.qrUsedText}>{ticketsCopy.detail.qrUsed}</Text>
+                  </View>
+                ) : (
+                  <View
+                    style={styles.extraQrBox}
+                    accessible={true}
+                    accessibilityRole="image"
+                    accessibilityLabel={`QR code for ${extra.extraName}`}
+                  >
+                    <QRCode value={extra.code} size={140} />
+                  </View>
+                )}
                 <Text style={[styles.extraStatus, isUsed && styles.textMuted]}>{extraLabel}</Text>
               </View>
             );
@@ -315,6 +339,39 @@ const styles = StyleSheet.create({
   },
   extraStatus: { color: theme.colors.fg, fontWeight: '600', fontSize: theme.font.size.sm },
   textMuted: { color: theme.colors.muted },
+  qrUsedBox: {
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.xl + theme.spacing.lg,
+    minHeight: 240 + theme.spacing.lg * 2,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 280,
+  },
+  extraQrUsedBox: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
+    minHeight: 140 + theme.spacing.md * 2,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+  },
+  qrUsedText: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.md,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   modalRoot: {
     flex: 1,
     justifyContent: 'center',

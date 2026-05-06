@@ -1,6 +1,6 @@
 import type { EventDetail, TicketTier } from '@jdm/shared/events';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, ShoppingCart } from 'lucide-react-native';
+import { ArrowLeft, ShoppingCart, Ticket as TicketIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import { getEvent } from '~/api/events';
+import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
 import { buildLoginHref } from '~/auth/redirect-intent';
 import { useCart } from '~/cart/context';
@@ -31,6 +32,7 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
+  const [hasTicket, setHasTicket] = useState(false);
   const { addItem, adding } = useCart();
   const { status: authStatus } = useAuth();
   const isAnon = authStatus === 'unauthenticated';
@@ -49,6 +51,25 @@ export default function EventDetailScreen() {
       }
     })();
   }, [slug]);
+
+  useEffect(() => {
+    if (!event || isAnon || authStatus === 'loading') {
+      setHasTicket(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ticket = await getMyTicketForEvent(event.id);
+        if (!cancelled) setHasTicket(ticket !== null);
+      } catch {
+        if (!cancelled) setHasTicket(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [event, isAnon, authStatus]);
 
   const openMap = (e: EventDetail) => {
     const parts = [e.venueName, e.venueAddress, e.city, e.stateCode].filter(Boolean);
@@ -122,7 +143,28 @@ export default function EventDetailScreen() {
         </Pressable>
       </View>
       <View style={styles.section}>
-        <Text style={styles.title}>{event.title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={3}>
+            {event.title}
+          </Text>
+          {hasTicket ? (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/tickets',
+                  params: { eventId: event.id },
+                } as never)
+              }
+              accessibilityRole="button"
+              accessibilityLabel={eventsCopy.detail.viewMyTickets}
+              style={styles.viewTicketsBtn}
+              hitSlop={8}
+            >
+              <TicketIcon color={theme.colors.bg} size={14} strokeWidth={2} />
+              <Text style={styles.viewTicketsText}>{eventsCopy.detail.viewMyTickets}</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
       </View>
 
@@ -246,7 +288,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   section: { padding: theme.spacing.lg, gap: theme.spacing.xs },
-  title: { color: theme.colors.fg, fontSize: theme.font.size.lg, fontWeight: '700' },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  title: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.lg,
+    fontWeight: '700',
+    flex: 1,
+    flexShrink: 1,
+  },
+  viewTicketsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: 999,
+    backgroundColor: theme.colors.fg,
+  },
+  viewTicketsText: {
+    color: theme.colors.bg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
   h2: {
     color: theme.colors.fg,
     fontSize: theme.font.size.md,

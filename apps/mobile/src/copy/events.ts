@@ -41,6 +41,7 @@ export const eventsCopy = {
     soldOut: 'Esgotado',
     buy: 'Comprar',
     back: 'Voltar',
+    viewMyTickets: 'Ver meus ingressos',
   },
   errors: {
     load: 'Não foi possível carregar os eventos.',
