@@ -49,6 +49,27 @@ export const shippingAddressSchema = z.object({
 });
 export type ShippingAddress = z.infer<typeof shippingAddressSchema>;
 
+export const shippingAddressInputSchema = shippingAddressSchema.extend({
+  isDefault: z.boolean().optional(),
+});
+export type ShippingAddressInput = z.infer<typeof shippingAddressInputSchema>;
+
+export const shippingAddressUpdateSchema = shippingAddressInputSchema.partial();
+export type ShippingAddressUpdate = z.infer<typeof shippingAddressUpdateSchema>;
+
+export const shippingAddressRecordSchema = shippingAddressSchema.extend({
+  id: z.string().min(1),
+  isDefault: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ShippingAddressRecord = z.infer<typeof shippingAddressRecordSchema>;
+
+export const shippingAddressListResponseSchema = z.object({
+  items: z.array(shippingAddressRecordSchema),
+});
+export type ShippingAddressListResponse = z.infer<typeof shippingAddressListResponseSchema>;
+
 export const storeCollectionSchema = z.object({
   id: z.string().min(1),
   slug: z.string().trim().min(1).max(140),

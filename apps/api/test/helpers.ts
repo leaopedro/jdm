@@ -46,6 +46,7 @@ export const resetDatabase = async (): Promise<void> => {
   await prisma.event.deleteMany();
   await prisma.carPhoto.deleteMany();
   await prisma.car.deleteMany();
+  await prisma.shippingAddress.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.verificationToken.deleteMany();
   await prisma.refreshToken.deleteMany();
