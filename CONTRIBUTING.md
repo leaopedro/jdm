@@ -32,9 +32,9 @@ your first PR.
 - Branch off `main`. Use Conventional Commit prefixes for branch names too:
   `feat/ticketing-stripe`, `fix/auth-refresh-rotation`, etc.
 - Keep PRs small. One task from `roadmap.md` ≈ one PR.
-- Local git hooks block commits on `production` and pushes targeting
-  `production`. Run `pnpm prepare` after clone or dependency install if the
-  hooks are missing.
+- Agent sessions are blocked from editing `production` by the committed
+  `CLAUDE.md` preflight and `.claude/settings.json` hooks. Human terminal
+  pushes are intentionally not blocked by repo git hooks.
 
 ## Commits
 
