@@ -5,7 +5,9 @@ import type { FastifyPluginAsync } from 'fastify';
 
 function buildWhere(query: unknown): Prisma.OrderWhereInput {
   const q = adminFinanceQuerySchema.parse(query);
-  const where: Prisma.OrderWhereInput = {};
+  const where: Prisma.OrderWhereInput = {
+    kind: { in: ['ticket', 'extras_only'] },
+  };
 
   if (q.statuses && q.statuses.length > 0) {
     where.status = { in: q.statuses };
@@ -102,8 +104,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
     const refundMap = new Map(
       refunds
-        .filter((refund): refund is typeof refund & { eventId: string } => refund.eventId !== null)
-        .map((refund) => [refund.eventId, refund._sum.amountCents ?? 0]),
+        .filter((r): r is typeof r & { eventId: string } => r.eventId !== null)
+        .map((r) => [r.eventId, r._sum.amountCents ?? 0]),
     );
 
     const ticketCounts = await prisma.ticket.groupBy({
@@ -115,10 +117,7 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       },
       _count: { id: true },
     });
-    const ticketMap = new Map<string, number>();
-    for (const ticketCount of ticketCounts) {
-      ticketMap.set(ticketCount.eventId, ticketCount._count?.id ?? 0);
-    }
+    const ticketMap = new Map(ticketCounts.map((t) => [t.eventId, t._count?.id ?? 0]));
 
     const items = orders
       .map((o) => {
