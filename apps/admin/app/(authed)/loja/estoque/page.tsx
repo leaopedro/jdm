@@ -32,7 +32,7 @@ export default async function InventoryPage({
           <p className="text-sm text-[color:var(--color-muted)]">
             Limite de estoque baixo: <strong>{threshold}</strong>{' '}
             <Link
-              href="/configuracoes"
+              href="/loja/configuracoes"
               className="underline decoration-dotted hover:decoration-solid"
             >
               ajustar

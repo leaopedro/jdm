@@ -615,11 +615,12 @@ route.
 
 **Step 1 — Threshold + filters**
 
-1. Open `/loja/estoque`.
+1. Open `/loja/estoque` (via the `Estoque` tab in the Loja section).
    Expect: header reads `Limite de estoque baixo: 5` (or whatever
-   the singleton holds) with an `ajustar` link to `/configuracoes`.
-   Filter chips show `Todos (N)`, `Estoque baixo (N)`, `Esgotados
-(N)` with non-zero counts matching the seeded matrix.
+   the singleton holds) with an `ajustar` link to
+   `/loja/configuracoes`. Filter chips show `Todos (N)`, `Estoque
+baixo (N)`, `Esgotados (N)` with non-zero counts matching the
+   seeded matrix.
 2. Click `Estoque baixo`.
    Expect: only `v_low` is listed. URL becomes
    `/loja/estoque?status=low`.
@@ -663,8 +664,8 @@ route.
 
 **Step 5 — Threshold awareness**
 
-1. Open `/configuracoes`, change `lowStockThreshold` from `5` to
-   `10`, save.
+1. Open `/loja/configuracoes`, change `lowStockThreshold` from `5`
+   to `10`, save.
 2. Return to `/loja/estoque` (one refresh).
    Expect: variants previously labelled `OK` whose `available`
    now sits within `[1, 10]` switch to the amber `Baixo` badge and
@@ -674,9 +675,10 @@ route.
 **Step 6 — Auth gates**
 
 1. Log in as a `staff` user.
-   Expect: the Estoque link is not present in the admin nav and a
-   direct hit on `/loja/estoque` returns the layout's role gate
-   (or 403 if you `curl` `/admin/store/inventory`).
+   Expect: the Loja section (and its Estoque tab) is not present in
+   the admin nav and a direct hit on `/loja/estoque` returns the
+   layout's role gate (or 403 if you `curl`
+   `/admin/store/inventory`).
 2. Curl `/admin/store/inventory` without a token.
    Expect: `401`.
 
