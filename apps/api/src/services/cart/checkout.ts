@@ -31,7 +31,15 @@ type CartWithItems = Prisma.CartGetPayload<{
             quantitySold: true;
             active: true;
             name: true;
-            product: { select: { id: true; title: true; status: true; currency: true } };
+            product: {
+              select: {
+                id: true;
+                title: true;
+                status: true;
+                currency: true;
+                shippingFeeCents: true;
+              };
+            };
           };
         };
       };
@@ -80,7 +88,15 @@ const CART_CHECKOUT_INCLUDE = {
           quantitySold: true,
           active: true,
           name: true,
-          product: { select: { id: true, title: true, status: true, currency: true } },
+          product: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              currency: true,
+              shippingFeeCents: true,
+            },
+          },
         },
       },
     },
@@ -115,7 +131,7 @@ const PROVIDER_FOR_METHOD: Record<CartCheckoutMethod, 'stripe' | 'abacatepay'> =
 export async function reserveAndCreateOrders(
   cart: CartWithItems,
   userId: string,
-  options: { method: CartCheckoutMethod } = { method: 'card' },
+  options: { method: CartCheckoutMethod; shippingAddressId?: string | null } = { method: 'card' },
 ): Promise<
   { ok: true; data: CheckoutResult } | { ok: false; status: number; error: string; message: string }
 > {
@@ -135,6 +151,7 @@ export async function reserveAndCreateOrders(
             userId,
             method,
             provider,
+            options.shippingAddressId ?? null,
             tx,
             allExpiredRefs,
           );
@@ -325,6 +342,7 @@ async function reserveProductCartItem(
   userId: string,
   method: CartCheckoutMethod,
   provider: 'stripe' | 'abacatepay',
+  shippingAddressId: string | null,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
 ): Promise<CartOrder> {
@@ -357,6 +375,8 @@ async function reserveProductCartItem(
   }
 
   const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
+  const shippingCents = variant.product.shippingFeeCents ?? 0;
+  const fulfillmentMethod = variant.product.shippingFeeCents === null ? 'pickup' : 'ship';
   const order = await tx.order.create({
     data: {
       userId,
@@ -369,6 +389,9 @@ async function reserveProductCartItem(
       currency: variant.product.currency,
       method,
       provider,
+      shippingAddressId: fulfillmentMethod === 'ship' ? shippingAddressId : null,
+      shippingCents,
+      fulfillmentMethod,
       status: 'pending',
       expiresAt,
     },

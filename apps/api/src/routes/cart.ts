@@ -156,7 +156,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const { unitPriceCents, currency } = priceFromValidation(validated);
     const amountCents = computeItemAmount(
       validated.kind === 'product'
-        ? { variantPriceCents: unitPriceCents }
+        ? {
+            variantPriceCents: unitPriceCents,
+            shippingFeeCents: validated.variant.shippingFeeCents,
+          }
         : { tierPriceCents: unitPriceCents },
       input.quantity,
       extraRows,
@@ -272,7 +275,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       const { unitPriceCents, currency } = priceFromValidation(validated);
       const amountCents = computeItemAmount(
         validated.kind === 'product'
-          ? { variantPriceCents: unitPriceCents }
+          ? {
+              variantPriceCents: unitPriceCents,
+              shippingFeeCents: validated.variant.shippingFeeCents,
+            }
           : { tierPriceCents: unitPriceCents },
         input.quantity,
         extraRows,
@@ -399,8 +405,32 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    const requiresShipping = cart.items.some(
+      (item) => item.kind === 'product' && item.variant?.product.shippingFeeCents !== null,
+    );
+    let shippingAddressId: string | null = null;
+
+    if (requiresShipping) {
+      if (!input.shippingAddressId) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          message: 'shippingAddressId: endereço de entrega é obrigatório para produtos físicos',
+        });
+      }
+
+      const shippingAddress = await prisma.shippingAddress.findFirst({
+        where: { id: input.shippingAddressId, userId: sub },
+        select: { id: true },
+      });
+      if (!shippingAddress) {
+        return reply.status(404).send({ error: 'NotFound', message: 'shipping address not found' });
+      }
+      shippingAddressId = shippingAddress.id;
+    }
+
     const reserveResult = await reserveAndCreateOrders(cart, sub, {
       method: input.paymentMethod,
+      shippingAddressId,
     });
     if (!reserveResult.ok) {
       return reply.status(reserveResult.status).send({
@@ -434,6 +464,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
             cartId: cart.id,
             userId: sub,
             orderIds: JSON.stringify(data.orders.map((o) => o.id)),
+            orderKinds: JSON.stringify(data.orders.map((o) => o.kind)),
+            hasShippableItems: requiresShipping ? 'true' : 'false',
+            ...(shippingAddressId ? { shippingAddressId } : {}),
           },
         });
 
@@ -496,6 +529,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           cartId: cart.id,
           userId: sub,
           orderIds: JSON.stringify(data.orders.map((o) => o.id)),
+          orderKinds: JSON.stringify(data.orders.map((o) => o.kind)),
+          hasShippableItems: requiresShipping ? 'true' : 'false',
+          ...(shippingAddressId ? { shippingAddressId } : {}),
         },
         successUrl,
         cancelUrl,
