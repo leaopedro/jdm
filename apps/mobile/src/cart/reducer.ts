@@ -53,7 +53,7 @@ export function reducer(state: CartState, action: CartAction): CartState {
     case 'MUTATE_OK':
       return { ...state, adding: false, cart: action.cart, stockWarnings: [], evictedItems: [] };
     case 'MUTATE_ERROR':
-      return { ...state, adding: false, error: action.error };
+      return { ...state, adding: false };
     case 'CLEAR_OK':
       return { ...initialState };
     case 'RESET':

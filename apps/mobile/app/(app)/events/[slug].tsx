@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 
+import { getApiErrorMessage } from '~/api/errors';
 import { getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
@@ -114,19 +115,19 @@ export default function EventDetailScreen() {
       } as never);
       return;
     }
-    const ok = await addItem({
-      eventId: commerceEvent.id,
-      tierId: tier.id,
-      source: 'purchase',
-      kind: 'ticket',
-      quantity: 1,
-      tickets: [{ extras: [] }],
-      metadata: { source: 'mobile' },
-    });
-    if (ok) {
+    try {
+      await addItem({
+        eventId: commerceEvent.id,
+        tierId: tier.id,
+        source: 'purchase',
+        kind: 'ticket',
+        quantity: 1,
+        tickets: [{ extras: [] }],
+        metadata: { source: 'mobile' },
+      });
       router.push('/cart' as never);
-    } else {
-      Alert.alert(cartCopy.errors.add);
+    } catch (error: unknown) {
+      Alert.alert(getApiErrorMessage(error, cartCopy.errors.add));
     }
   };
 
