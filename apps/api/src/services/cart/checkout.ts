@@ -120,6 +120,12 @@ export async function reserveAndCreateOrders(
           extras?: string[];
         }>;
 
+        if (!item.tierId || !item.eventId) {
+          throw Object.assign(new Error('cart item missing eventId/tierId'), {
+            code: 'CART_ITEM_INVALID',
+          });
+        }
+
         const tier = await tx.ticketTier.findUniqueOrThrow({
           where: { id: item.tierId },
           select: {
@@ -238,7 +244,7 @@ export async function reserveAndCreateOrders(
     if (coded.code === 'EXTRA_SOLD_OUT') {
       return { ok: false, status: 409, error: 'Conflict', message: coded.message };
     }
-    if (coded.code === 'CART_ALREADY_CHECKING_OUT') {
+    if (coded.code === 'CART_ALREADY_CHECKING_OUT' || coded.code === 'CART_ITEM_INVALID') {
       return { ok: false, status: 409, error: 'Conflict', message: coded.message };
     }
     throw err;
