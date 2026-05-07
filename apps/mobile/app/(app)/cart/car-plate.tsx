@@ -4,8 +4,8 @@ import { useCallback, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import { updateCartItem, upsertCartItem } from '~/api/cart';
-import { getApiErrorMessage } from '~/api/errors';
 import { useCart } from '~/cart/context';
+import { getCartAddErrorMessage } from '~/cart/error-message';
 import { cartCopy } from '~/copy/cart';
 import { CarPlatePicker } from '~/screens/cart/CarPlatePicker';
 
@@ -62,7 +62,7 @@ export default function CartCarPlateScreen() {
         await refresh();
         router.replace('/cart');
       } catch (error: unknown) {
-        showError(getApiErrorMessage(error, cartCopy.errors.add));
+        showError(getCartAddErrorMessage(error));
       } finally {
         setSubmitting(false);
       }

@@ -142,7 +142,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       const e = err as Error & { statusCode?: number; code?: string };
       const status = e.statusCode ?? 400;
       const { error } = mapValidationError(e.code);
-      return reply.status(status).send({ error, message: e.message });
+      return reply.status(status).send({ error, code: e.code, message: e.message });
     }
 
     const extrasResult = await priceCartItemExtras(input);
@@ -230,7 +230,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         const e = err as Error & { statusCode?: number; code?: string };
         const status = e.statusCode ?? 400;
         const { error } = mapValidationError(e.code);
-        return reply.status(status).send({ error, message: e.message });
+        return reply.status(status).send({ error, code: e.code, message: e.message });
       }
 
       const extraCounts = new Map<string, number>();

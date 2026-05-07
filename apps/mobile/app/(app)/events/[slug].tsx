@@ -4,7 +4,6 @@ import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   Pressable,
@@ -14,15 +13,16 @@ import {
   View,
 } from 'react-native';
 
-import { getApiErrorMessage } from '~/api/errors';
 import { getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
 import { useCart } from '~/cart/context';
+import { getCartAddErrorMessage } from '~/cart/error-message';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
+import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
 import { theme } from '~/theme';
@@ -127,7 +127,7 @@ export default function EventDetailScreen() {
       });
       router.push('/cart' as never);
     } catch (error: unknown) {
-      Alert.alert(getApiErrorMessage(error, cartCopy.errors.add));
+      showMessage(getCartAddErrorMessage(error));
     }
   };
 
