@@ -146,6 +146,10 @@ export default function CartScreen() {
     setDrawerItem(item);
     setLoadingExtras(true);
     try {
+      if (!item.eventId) {
+        setDrawerExtras([]);
+        return;
+      }
       const event = await getEventCommerceById(item.eventId);
       setDrawerExtras(event.extras);
     } catch {
@@ -200,6 +204,7 @@ export default function CartScreen() {
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
 
   const openCarPlate = (item: CartItem) => {
+    if (!item.eventId || !item.tierId) return;
     const firstTicket = item.tickets[0];
     router.push({
       pathname: '/cart/car-plate',
