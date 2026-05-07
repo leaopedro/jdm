@@ -1,6 +1,6 @@
 import type { Car } from '@jdm/shared/cars';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -55,9 +55,11 @@ export function CarPlatePicker({
     }
   }, []);
 
-  useEffect(() => {
-    void fetchCars();
-  }, [fetchCars]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchCars();
+    }, [fetchCars]),
+  );
 
   const handlePlateChange = (raw: string) => {
     const upper = raw.toUpperCase().slice(0, 8);
@@ -94,7 +96,9 @@ export function CarPlatePicker({
           <Text style={styles.emptyText}>{buyCopy.carPlate.subtitle}</Text>
           <Pressable
             style={styles.ctaButton}
-            onPress={() => router.push('/garage/new' as never)}
+            onPress={() =>
+              router.push({ pathname: '/garage/new', params: { returnTo: '/cart' } } as never)
+            }
             accessibilityRole="button"
           >
             <Text style={styles.ctaLabel}>{buyCopy.carPlate.emptyCta}</Text>

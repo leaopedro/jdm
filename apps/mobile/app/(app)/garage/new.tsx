@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { carInputSchema, type CarInput } from '@jdm/shared/cars';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
@@ -12,6 +12,8 @@ import { theme } from '~/theme';
 
 export default function NewCar() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : null;
   const form = useForm<CarInput>({
     resolver: zodResolver(carInputSchema),
     defaultValues: {
@@ -24,7 +26,11 @@ export default function NewCar() {
 
   const onSave = form.handleSubmit(async (values) => {
     const car = await createCar(values);
-    router.replace(`/garage/${car.id}` as never);
+    if (returnTo) {
+      router.replace(returnTo as never);
+    } else {
+      router.replace(`/garage/${car.id}` as never);
+    }
   });
 
   return (
