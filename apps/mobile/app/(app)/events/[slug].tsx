@@ -1,6 +1,6 @@
 import type { EventDetailCommerce, EventDetailPublic, TicketTier } from '@jdm/shared/events';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, ShoppingCart, Ticket as TicketIcon } from 'lucide-react-native';
+import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,7 +27,10 @@ import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, tierId: requestedTierId } = useLocalSearchParams<{
+    slug: string;
+    tierId?: string;
+  }>();
   const router = useRouter();
   const [publicEvent, setPublicEvent] = useState<EventDetailPublic | null>(null);
   const [commerceEvent, setCommerceEvent] = useState<EventDetailCommerce | null>(null);
@@ -58,12 +61,21 @@ export default function EventDetailScreen() {
     }
     void (async () => {
       try {
-        setCommerceEvent(await getEventCommerce(slug));
+        const nextCommerceEvent = await getEventCommerce(slug);
+        setCommerceEvent(nextCommerceEvent);
+        if (typeof requestedTierId === 'string') {
+          const requestedTier = nextCommerceEvent.tiers.find(
+            (tier) => tier.id === requestedTierId && tier.remainingCapacity > 0,
+          );
+          if (requestedTier) {
+            setSelectedTierId(requestedTier.id);
+          }
+        }
       } catch {
         setCommerceEvent(null);
       }
     })();
-  }, [slug, isAuthed]);
+  }, [slug, isAuthed, requestedTierId]);
 
   const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
 
@@ -116,6 +128,22 @@ export default function EventDetailScreen() {
     } else {
       Alert.alert(cartCopy.errors.add);
     }
+  };
+
+  const handlePurchasePress = async () => {
+    const action = resolveBuyCta({
+      authStatus,
+      eventSlug: event?.slug ?? '',
+      selectedTierId: selectedTier?.id ?? null,
+    });
+    if (action.kind === 'login') {
+      router.push(action.href as never);
+      return;
+    }
+    if (action.kind === 'noop' || !selectedTier) {
+      return;
+    }
+    await addToCart(selectedTier);
   };
 
   if (error) {
@@ -245,40 +273,18 @@ export default function EventDetailScreen() {
 
       <View style={styles.section}>
         <Button
-          label={ticketsCopy.purchase.confirm}
-          onPress={() => {
-            const action = resolveBuyCta({
+          label={adding ? cartCopy.actions.adding : cartCopy.actions.addToCart}
+          onPress={() => void handlePurchasePress()}
+          disabled={
+            adding ||
+            isBuyCtaDisabled({
               authStatus,
               eventSlug: event.slug,
               selectedTierId: selectedTier?.id ?? null,
-            });
-            if (action.kind === 'noop') return;
-            router.push(action.href as never);
-          }}
-          disabled={isBuyCtaDisabled({
-            authStatus,
-            eventSlug: event.slug,
-            selectedTierId: selectedTier?.id ?? null,
-          })}
+            })
+          }
         />
       </View>
-
-      {commerceEvent && selectedTier && (
-        <View style={styles.section}>
-          <Pressable
-            onPress={() => void addToCart(selectedTier)}
-            disabled={adding}
-            style={[styles.addToCartBtn, adding && styles.addToCartDisabled]}
-            accessibilityRole="button"
-            accessibilityLabel={cartCopy.actions.addToCart}
-          >
-            <ShoppingCart color={theme.colors.fg} size={18} strokeWidth={1.75} />
-            <Text style={styles.addToCartText}>
-              {adding ? cartCopy.actions.adding : cartCopy.actions.addToCart}
-            </Text>
-          </Pressable>
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -364,16 +370,4 @@ const styles = StyleSheet.create({
   tierTop: { flexDirection: 'row', justifyContent: 'space-between' },
   tierName: { color: theme.colors.fg, fontWeight: '600' },
   tierPrice: { color: theme.colors.fg },
-  addToCartBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.radii.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  addToCartDisabled: { opacity: 0.5 },
-  addToCartText: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '500' },
 });

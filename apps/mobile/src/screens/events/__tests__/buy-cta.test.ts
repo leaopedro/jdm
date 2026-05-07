@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isBuyCtaDisabled, resolveBuyCta } from '../buy-cta';
 
 describe('resolveBuyCta', () => {
-  it('routes anonymous users through /login with the buy path as next', () => {
+  it('routes anonymous users through /login with the event detail as next', () => {
     const action = resolveBuyCta({
       authStatus: 'unauthenticated',
       eventSlug: 'track-day',
@@ -11,29 +11,29 @@ describe('resolveBuyCta', () => {
     });
     expect(action).toEqual({
       kind: 'login',
-      href: '/login?next=%2Fevents%2Fbuy%2Ftrack-day',
+      href: '/login?next=%2Fevents%2Ftrack-day',
     });
   });
 
-  it('ignores tier selection for anonymous users (login still required)', () => {
+  it('preserves the selected tier in the login return URL', () => {
     const action = resolveBuyCta({
       authStatus: 'unauthenticated',
       eventSlug: 'track-day',
       selectedTierId: 'tier_1',
     });
-    expect(action.kind).toBe('login');
+    expect(action).toEqual({
+      kind: 'login',
+      href: '/login?next=%2Fevents%2Ftrack-day%3FtierId%3Dtier_1',
+    });
   });
 
-  it('builds the buy href with the selected tier when authenticated', () => {
+  it('returns a cart action when authenticated and a tier is selected', () => {
     const action = resolveBuyCta({
       authStatus: 'authenticated',
       eventSlug: 'track-day',
       selectedTierId: 'tier_1',
     });
-    expect(action).toEqual({
-      kind: 'buy',
-      href: '/events/buy/track-day?tierId=tier_1',
-    });
+    expect(action).toEqual({ kind: 'cart' });
   });
 
   it('returns noop when authenticated user has not picked a tier', () => {
