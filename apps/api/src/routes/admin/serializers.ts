@@ -1,4 +1,5 @@
 import type {
+  StoreSettings as DbStoreSettings,
   ProductType as DbProductType,
   TicketExtra as DbTicketExtra,
   TicketTier as DbTier,
@@ -39,4 +40,13 @@ export const serializeAdminExtra = (e: DbTicketExtra) => ({
   sortOrder: e.sortOrder,
   createdAt: e.createdAt.toISOString(),
   updatedAt: e.updatedAt.toISOString(),
+});
+
+export const serializeAdminStoreSettings = (s: DbStoreSettings) => ({
+  id: s.id,
+  defaultShippingFeeCents: s.defaultShippingFeeCents,
+  lowStockThreshold: s.lowStockThreshold,
+  pickupDisplayLabel: s.pickupDisplayLabel,
+  supportPhone: s.supportPhone,
+  updatedAt: s.updatedAt.toISOString(),
 });

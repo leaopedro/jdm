@@ -12,6 +12,7 @@ export type RecordAuditInput = {
     | 'extra'
     | 'ticket_extra_item'
     | 'user'
+    | 'store_settings'
     | 'product'
     | 'variant'
     | 'product_type';
