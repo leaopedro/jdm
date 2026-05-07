@@ -101,16 +101,20 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
     const refundMap = new Map(refunds.map((r) => [r.eventId, r._sum.amountCents ?? 0]));
 
-    const ticketCounts = await prisma.ticket.groupBy({
-      by: ['eventId'],
-      where: {
-        eventId: { in: eventIds },
-        order: where,
-        status: { in: ['valid', 'used'] },
-      },
-      _count: { id: true },
-    });
-    const ticketMap = new Map(ticketCounts.map((t) => [t.eventId, t._count.id]));
+    const ticketCounts: Array<Pick<Prisma.TicketGroupByOutputType, 'eventId' | '_count'>> =
+      await prisma.ticket.groupBy({
+        by: ['eventId'],
+        where: {
+          eventId: { in: eventIds },
+          order: where,
+          status: { in: ['valid', 'used'] },
+        },
+        _count: { id: true },
+      });
+    const ticketMap = new Map<string, number>();
+    for (const ticketCount of ticketCounts) {
+      ticketMap.set(ticketCount.eventId, ticketCount._count?.id ?? 0);
+    }
 
     const items = orders
       .map((o) => {
