@@ -735,3 +735,41 @@ export const adminStoreProductListResponseSchema = z.object({
   items: z.array(adminStoreProductRowSchema),
 });
 export type AdminStoreProductListResponse = z.infer<typeof adminStoreProductListResponseSchema>;
+
+export const adminStoreInventoryStatusSchema = z.enum(['ok', 'low', 'zero']);
+export type AdminStoreInventoryStatus = z.infer<typeof adminStoreInventoryStatusSchema>;
+
+export const adminStoreInventoryFilterSchema = z.enum(['all', 'low', 'zero']);
+export type AdminStoreInventoryFilter = z.infer<typeof adminStoreInventoryFilterSchema>;
+
+export const adminStoreInventoryRowSchema = z.object({
+  variantId: z.string(),
+  productId: z.string(),
+  productSlug: z.string(),
+  productTitle: z.string(),
+  productStatus: adminStoreProductStatusSchema,
+  variantName: z.string(),
+  sku: z.string().nullable(),
+  attributes: z.record(z.string()),
+  active: z.boolean(),
+  priceCents: z.number().int().nonnegative(),
+  currency: z.string(),
+  quantityTotal: z.number().int().nonnegative(),
+  quantitySold: z.number().int().nonnegative(),
+  available: z.number().int(),
+  status: adminStoreInventoryStatusSchema,
+  updatedAt: z.string().datetime(),
+});
+export type AdminStoreInventoryRow = z.infer<typeof adminStoreInventoryRowSchema>;
+
+export const adminStoreInventoryListResponseSchema = z.object({
+  threshold: z.number().int().nonnegative(),
+  totals: z.object({
+    all: z.number().int().nonnegative(),
+    ok: z.number().int().nonnegative(),
+    low: z.number().int().nonnegative(),
+    zero: z.number().int().nonnegative(),
+  }),
+  items: z.array(adminStoreInventoryRowSchema),
+});
+export type AdminStoreInventoryListResponse = z.infer<typeof adminStoreInventoryListResponseSchema>;

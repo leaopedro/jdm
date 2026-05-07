@@ -205,6 +205,30 @@ export const updateVariantAction = async (
   return { error: null };
 };
 
+export const updateInventoryAction = async (
+  variantId: string,
+  _prev: StoreFormState,
+  fd: FormData,
+): Promise<StoreFormState> => {
+  const values = captureValues(fd);
+  const raw = fd.get('quantityTotal');
+  if (typeof raw !== 'string' || raw === '') {
+    return { error: 'Informe o estoque total.', values };
+  }
+  const parsed = adminStoreVariantUpdateSchema.safeParse({ quantityTotal: Number(raw) });
+  if (!parsed.success) {
+    return { error: issuesToMessage(parsed.error.issues), values };
+  }
+  try {
+    await updateAdminStoreVariant(variantId, parsed.data);
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message, values };
+    return { error: 'Erro ao atualizar estoque.', values };
+  }
+  revalidatePath('/loja/estoque');
+  return { error: null };
+};
+
 export const deleteVariantAction = async (
   productId: string,
   variantId: string,
