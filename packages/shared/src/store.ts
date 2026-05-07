@@ -12,6 +12,8 @@ export const storeFulfillmentStatusSchema = z.enum([
   'packed',
   'shipped',
   'delivered',
+  'pickup_ready',
+  'picked_up',
   'cancelled',
 ]);
 export type StoreFulfillmentStatus = z.infer<typeof storeFulfillmentStatusSchema>;

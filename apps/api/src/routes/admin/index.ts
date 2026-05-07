@@ -7,6 +7,7 @@ import { adminEventRoutes } from './events.js';
 import { adminExtraRoutes } from './extras.js';
 import { adminFinanceRoutes } from './finance.js';
 import { adminStoreInventoryRoutes } from './store/inventory.js';
+import { adminStoreOrderRoutes } from './store/orders.js';
 import { adminStorePhotoRoutes } from './store/photos.js';
 import { adminStoreProductRoutes } from './store/products.js';
 import { adminStoreVariantRoutes } from './store/variants.js';
@@ -40,6 +41,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminStoreVariantRoutes);
     await scope.register(adminStorePhotoRoutes);
     await scope.register(adminStoreInventoryRoutes);
+    await scope.register(adminStoreOrderRoutes);
     await scope.register(adminCollectionRoutes);
   });
 

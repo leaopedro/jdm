@@ -16,7 +16,8 @@ export type RecordAuditInput = {
     | 'store_settings'
     | 'product'
     | 'variant'
-    | 'product_type';
+    | 'product_type'
+    | 'order';
   entityId: string;
   metadata?: Record<string, unknown>;
 };
