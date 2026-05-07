@@ -86,8 +86,8 @@ export type CartTotals = z.infer<typeof cartTotalsSchema>;
 
 export const cartItemSchema = z.object({
   id: z.string().min(1),
-  eventId: z.string().min(1),
-  tierId: z.string().min(1),
+  eventId: z.string().min(1).nullable(),
+  tierId: z.string().min(1).nullable(),
   source: cartItemSourceSchema,
   kind: cartItemKindSchema,
   quantity: z.number().int().positive(),

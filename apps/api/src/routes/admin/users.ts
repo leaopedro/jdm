@@ -161,7 +161,7 @@ export const adminUserRoutes: FastifyPluginAsync = async (app) => {
         status: o.status,
         amountCents: o.amountCents,
         currency: o.currency,
-        eventTitle: o.event.title,
+        eventTitle: o.event?.title ?? '',
         createdAt: o.createdAt.toISOString(),
       })),
     });
