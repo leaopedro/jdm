@@ -13,6 +13,8 @@ export type RecordAuditInput = {
     | 'ticket_extra_item'
     | 'user'
     | 'store_settings'
+    | 'product'
+    | 'variant'
     | 'product_type';
   entityId: string;
   metadata?: Record<string, unknown>;

@@ -2,7 +2,7 @@ import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createId } from '@paralleldrive/cuid2';
 
-import type { PresignInput, PresignResult, Uploads } from './types.js';
+import type { PresignInput, PresignResult, UploadKind, Uploads } from './types.js';
 import { EXT_FOR_MIME } from './types.js';
 
 export class R2Uploads implements Uploads {
@@ -47,11 +47,7 @@ export class R2Uploads implements Uploads {
     return `${this.publicBase.replace(/\/$/, '')}/${objectKey}`;
   }
 
-  isOwnedKey(
-    objectKey: string,
-    userId: string,
-    kind: 'avatar' | 'car_photo' | 'event_cover',
-  ): boolean {
+  isOwnedKey(objectKey: string, userId: string, kind: UploadKind): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }
 
