@@ -19,7 +19,7 @@ export default async function AuthedLayout({ children }: { children: React.React
               <Link href="/events" className="text-sm opacity-80 hover:opacity-100">
                 Eventos
               </Link>
-              <Link href="/loja/produtos" className="text-sm opacity-80 hover:opacity-100">
+              <Link href="/loja" className="text-sm opacity-80 hover:opacity-100">
                 Loja
               </Link>
               <Link href="/users" className="text-sm opacity-80 hover:opacity-100">
@@ -27,15 +27,6 @@ export default async function AuthedLayout({ children }: { children: React.React
               </Link>
               <Link href="/financeiro" className="text-sm opacity-80 hover:opacity-100">
                 Financeiro
-              </Link>
-              <Link href="/loja/colecoes" className="text-sm opacity-80 hover:opacity-100">
-                Coleções
-              </Link>
-              <Link href="/configuracoes" className="text-sm opacity-80 hover:opacity-100">
-                Configurações
-              </Link>
-              <Link href="/store/tipos" className="text-sm opacity-80 hover:opacity-100">
-                Tipos da loja
               </Link>
             </>
           ) : null}
