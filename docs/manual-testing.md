@@ -67,6 +67,9 @@ Living references; update these as features land.
 
 - **F4 Stripe ticketing** — §3.1 below (signup → buy → QR).
   Sandbox keys + Stripe CLI `stripe listen`.
+- **Mobile web local branch smoke** — `docs/mobile-web.md` local-dev
+  section. Use for navigation / IA checks that can run on Expo web before
+  a native-device pass.
 - **Cart redesign checkout parity** — §3.3 below (hosted checkout return,
   webhook settlement, card + Pix compatibility matrix).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
