@@ -3,7 +3,7 @@ import { CalendarDays, Car, ShoppingCart, Ticket, UserRound } from 'lucide-react
 
 import { useCart } from '~/cart/context';
 import { CartProvider } from '~/cart/context';
-import { cartCopy } from '~/copy/cart';
+import { APP_TAB_SPECS, getCartTabBadge } from '~/navigation/app-tabs';
 
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
@@ -49,12 +49,13 @@ const screenOptions = {
 
 function AppTabs() {
   const { itemCount } = useCart();
+  const cartBadge = getCartTabBadge(itemCount);
 
   return (
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
-        name="events"
-        options={{ title: 'Eventos', tabBarIcon: EventsIcon }}
+        name={APP_TAB_SPECS[0].name}
+        options={{ title: APP_TAB_SPECS[0].title, tabBarIcon: EventsIcon }}
         listeners={{
           tabPress: (e) => {
             // Default tab-press behavior on web preserves dynamic params
@@ -66,8 +67,8 @@ function AppTabs() {
         }}
       />
       <Tabs.Screen
-        name="tickets"
-        options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }}
+        name={APP_TAB_SPECS[1].name}
+        options={{ title: APP_TAB_SPECS[1].title, tabBarIcon: TicketsIcon }}
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
@@ -76,14 +77,9 @@ function AppTabs() {
         }}
       />
       <Tabs.Screen
-        name="garage"
-        options={{ href: null, title: 'Garagem', tabBarIcon: GarageIcon }}
-      />
-      <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
-      <Tabs.Screen
-        name="cart"
+        name={APP_TAB_SPECS[2].name}
         options={{
-          title: cartCopy.title,
+          title: APP_TAB_SPECS[2].title,
           tabBarIcon: CartIcon,
           tabBarBadgeStyle: {
             backgroundColor: ACTIVE,
@@ -91,7 +87,7 @@ function AppTabs() {
             fontFamily: 'Inter_700Bold',
             fontSize: 10,
           },
-          ...(itemCount > 0 ? { tabBarBadge: cartCopy.badge(itemCount) } : {}),
+          ...(cartBadge ? { tabBarBadge: cartBadge } : {}),
         }}
         listeners={{
           tabPress: (e) => {
@@ -99,6 +95,14 @@ function AppTabs() {
             router.replace('/cart');
           },
         }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[3].name}
+        options={{ title: APP_TAB_SPECS[3].title, tabBarIcon: ProfileIcon }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[4].name}
+        options={{ href: null, title: APP_TAB_SPECS[4].title, tabBarIcon: GarageIcon }}
       />
     </Tabs>
   );
