@@ -1,5 +1,6 @@
 import type {
   StoreSettings as DbStoreSettings,
+  ProductType as DbProductType,
   TicketExtra as DbTicketExtra,
   TicketTier as DbTier,
 } from '@prisma/client';
@@ -16,6 +17,14 @@ export const serializeAdminTier = (t: DbTier) => ({
   salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
   sortOrder: t.sortOrder,
   requiresCar: t.requiresCar,
+});
+
+export const serializeAdminProductType = (p: DbProductType, productCount: number) => ({
+  id: p.id,
+  name: p.name,
+  sortOrder: p.sortOrder,
+  productCount,
+  createdAt: p.createdAt.toISOString(),
 });
 
 export const serializeAdminExtra = (e: DbTicketExtra) => ({
