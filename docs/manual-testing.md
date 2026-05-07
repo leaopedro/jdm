@@ -702,7 +702,8 @@ baixo (N)`, `Esgotados (N)` with non-zero counts matching the
 **Until QA is hired**
 
 The implementing engineer runs steps 1–6 locally and attaches the
-evidence above to the PR. Wire-level coverage of the threshold and
+evidence above to the PR. The first run for JDMA-363 is captured in
+`docs/screenshots/jdma-363/`. Wire-level coverage of the threshold and
 status filters is asserted by
 `apps/api/test/admin/store-inventory.test.ts`.
 
