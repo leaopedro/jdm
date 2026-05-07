@@ -188,7 +188,10 @@ export default function CartScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.emptyText}>
-          {cartCopy.errors[error as keyof typeof cartCopy.errors] ?? cartCopy.errors.load}
+          {(() => {
+            const v = cartCopy.errors[error as keyof typeof cartCopy.errors];
+            return typeof v === 'string' ? v : cartCopy.errors.load;
+          })()}
         </Text>
         <View style={styles.ctaWrap}>
           <Button label={cartCopy.errors.retry} onPress={() => void refresh()} />

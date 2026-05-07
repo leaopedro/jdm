@@ -54,6 +54,13 @@ export const cartCopy = {
     clear: 'Erro ao limpar o carrinho.',
     checkout: 'Erro ao iniciar o pagamento.',
     retry: 'Tentar novamente',
+    maxTicketsExceeded: (max: number) =>
+      `Você já atingiu o limite de ${max} ingresso${max === 1 ? '' : 's'} por pessoa neste evento.`,
+    tierSoldOut: 'Ingresso esgotado.',
+    salesNotOpen: 'As vendas ainda não começaram para este ingresso.',
+    salesClosed: 'As vendas para este ingresso foram encerradas.',
+    extraSoldOut: 'Um dos extras selecionados está esgotado.',
+    variantSoldOut: 'Este produto está esgotado.',
   },
   badge: (n: number) => (n > 9 ? '9+' : `${n}`),
   stockWarning: {

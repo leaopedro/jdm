@@ -289,6 +289,9 @@ describe('Cart CRUD', () => {
         },
       });
       expect(res.statusCode).toBe(409);
+      const body = errorSchema.extend({ code: z.string().optional() }).parse(res.json());
+      expect(body.code).toBe('MAX_TICKETS_EXCEEDED');
+      expect(body.message).toMatch(/max 2 ticket/i);
     });
 
     it('rejects when tickets array length does not match quantity', async () => {
