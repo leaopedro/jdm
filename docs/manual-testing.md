@@ -72,6 +72,9 @@ Living references; update these as features land.
   a native-device pass.
 - **Cart redesign checkout parity** — §3.3 below (hosted checkout return,
   webhook settlement, card + Pix compatibility matrix).
+- **Loja admin — collections + catalog visibility** — §3.5 below
+  (admin produto/coleção CRUD, disable-collection visibility gate,
+  storefront wire check).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
 - **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
@@ -398,6 +401,193 @@ Run this playbook when shipping cart-redesign checkout changes.
    `docs/migration-rollback-cart-redesign.md`.
 4. Replay one Stripe and one AbacatePay webhook in staging to verify
    idempotency and isolation before reopening checkout.
+
+### 3.5 Loja admin — collections + catalog visibility (JDMA-369)
+
+Covers the admin store CRUD surface and the storefront visibility gate.
+Primary objective: prove that disabling a `Collection` removes it from the
+public storefront within one refresh, while products still ship via their
+own `Product.status`.
+
+The smoke runs entirely against local infra (Postgres + API + admin web).
+Mobile storefront UI is not yet shipped, so storefront verification reads
+the public `/store/*` API directly — that is the wire mobile will consume.
+
+**Pre-requisites**
+
+- Postgres up via `docker compose up -d`.
+- Migrations applied + seed loaded:
+
+  ```bash
+  pnpm --filter @jdm/db prisma migrate deploy
+  pnpm --filter @jdm/db db:seed
+  ```
+
+- API running: `pnpm --filter @jdm/api dev` (port 4000).
+- Admin running: `pnpm --filter @jdm/admin dev` (port 3000).
+- An admin user. The seed does not create one; sign up via the
+  mobile/admin flow, then promote via Prisma Studio (or directly in
+  Postgres):
+
+  ```sql
+  UPDATE "User" SET role = 'admin', email_verified_at = NOW()
+  WHERE email = '<your-email>';
+  ```
+
+- `curl` and `jq` for the wire checks.
+
+The seed already provisions one `ProductType`
+(`Vestuário e Acessórios`), one `Collection` (`colecao-jdm-2026`),
+plus the `StoreSettings` singleton and at least two seeded products
+attached to that collection. Reuse them for steps 1–6 and create
+fresh entities only when exercising create flows.
+
+**Step 1 — Login + nav (admin browser)**
+
+1. Open `http://localhost:3000/login`. Sign in as the admin user.
+2. Open `/loja/produtos`.
+   Expect: list renders with the seeded products, columns
+   `título`, `tipo`, `status`, `variantes`, `vendidos`, `preço`.
+3. Open `/loja/colecoes`.
+   Expect: `colecao-jdm-2026` appears with the `Ativa` toggle on and
+   the seeded product count.
+4. Open `/configuracoes` (store settings — admin-only, not nested
+   under `/loja`).
+   Expect: singleton form renders with `defaultShippingFeeCents`,
+   `lowStockThreshold`, `pickupDisplayLabel`, `supportPhone` filled
+   from `StoreSettings`.
+
+**Step 2 — Create a Coleção**
+
+1. From `/loja/colecoes` click `Nova coleção`.
+2. Fill: `slug=qa-2026`, `nome=QA 2026`, `descrição=Teste QA`,
+   `ordem=99`, leave `Ativa` checked.
+3. Submit.
+   Expect: redirect to `/loja/colecoes/<id>`. Editor renders empty
+   `Produtos` block.
+
+**Step 3 — Attach two products to the new Coleção**
+
+1. In the editor, use the `Adicionar produto:` select to add one
+   `active` product. Wait for the `Salvando…` indicator to clear.
+   Expect: product appears in the assigned list with order index `1`.
+2. Add a second `active` product.
+   Expect: list now shows two products, indices `1` and `2`.
+3. Drag-equivalent: click the `↓` button on the first row.
+   Expect: order swaps. Refresh the page.
+   Expect: persisted order matches what was visible before refresh
+   (server is the source of truth).
+
+**Step 4 — Confirm storefront sees the new Coleção**
+
+Run from a second terminal (uses the same API origin the mobile app
+will hit):
+
+```bash
+curl -s http://localhost:4000/store/collections | jq '.items[] | {slug, name, productCount}'
+```
+
+Expect: `qa-2026` row present with `productCount: 2`.
+
+```bash
+curl -s 'http://localhost:4000/store/products?collectionSlug=qa-2026' \
+  | jq '.items | length, [.[] | .slug]'
+```
+
+Expect: length `2`; both attached product slugs returned.
+
+**Step 5 — Disable the Coleção (the gate)**
+
+1. Back in the admin editor at `/loja/colecoes/<id>`, uncheck `Ativa`
+   and click `Salvar`.
+   Expect: form persists, `Salvando…` toggles, page returns to its
+   normal state without an error toast.
+2. **One refresh later**, re-run the two `curl` checks from Step 4.
+   - `/store/collections`: `qa-2026` MUST be absent. Other active
+     collections that still have an active product remain present.
+   - `/store/products?collectionSlug=qa-2026`: response items array
+     MUST be empty (`[]`). The endpoint stops surfacing any product
+     scoped through the disabled collection slug.
+3. The two products themselves remain visible via `/store/products`
+   (no collection filter) because their `Product.status` is still
+   `active`. This is the intended behavior — disabling a collection
+   hides the _collection-scoped_ surface, not the products.
+4. Open `/loja/colecoes` in the admin.
+   Expect: `qa-2026` row still listed for admins (admin list ignores
+   the active flag) and the toggle visibly reflects `inativa`.
+
+**Step 6 — Re-enable + verify recovery**
+
+1. Re-check `Ativa` and save.
+2. Re-run the two `curl` checks.
+   Expect: `qa-2026` and its two products are visible again.
+
+**Step 7 — Tipos and Configurações sanity**
+
+1. `/store/tipos`: create `QA Bonés`. Expect: appears in the list.
+2. Try to delete a type that has products attached.
+   Expect: server returns the existing PT-BR error message; row stays.
+3. `/configuracoes`: change `lowStockThreshold` from `5` to `3`,
+   save, refresh. Expect: persisted value is `3`. Restore to `5`
+   afterward.
+
+**Step 8 — Audit trail**
+
+After the run, inspect `AdminAudit` for the actions you performed:
+
+```bash
+psql "$DATABASE_URL" -c \
+  "SELECT entity_type, action, entity_id, created_at \
+   FROM \"AdminAudit\" ORDER BY created_at DESC LIMIT 20;"
+```
+
+Expect one row per mutation across steps 2, 3, 5, 6, 7 with the
+right `actorUserId` and entity types (`store_collection`,
+`store_settings`, `product_type`). Product↔collection assignment
+edits emit `action = store.collection.update` rather than a separate
+entity row — that is intentional.
+
+**Pass criteria**
+
+- Steps 1–8 produce the expected results.
+- The disable-collection gate (Step 5) shows the storefront wire
+  hiding both the collection and all collection-scoped products on
+  the very next request after save.
+- Admin list still shows the disabled collection so an admin can
+  re-enable it without database access.
+- No console errors in the admin browser session and no `5xx` log
+  lines in the API terminal.
+
+**Evidence to attach**
+
+- Screenshot of `/loja/colecoes` after Step 2 (new coleção visible).
+- Screenshot of the editor at Step 3 with two products assigned.
+- Terminal capture of the four `curl` commands in Steps 4 and 5
+  showing the `length: 2` → `length: 0` transition for the same
+  `collectionSlug`.
+- Screenshot of `/loja/colecoes` after disable (Step 5.4) showing
+  `qa-2026` still present with the toggle off.
+- DB query output from Step 8.
+
+**Until QA is hired**
+
+The implementing engineer (or PR reviewer) runs steps 1–8 against
+their local stack and attaches the evidence above to the PR + the
+parent QA issue. Wire-level coverage of the disable gate is also
+asserted by `apps/api/test/store/catalog.test.ts` (cases
+`returns only active collections that contain at least one active product`
+and `filters by collectionSlug and ignores disabled collections`),
+which lets the smoke be reproduced headlessly when the admin UI
+cannot be exercised in the heartbeat.
+
+**Common failures**
+
+| Symptom                                                 | Fix                                                                                            |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `/store/collections` still lists the disabled coleção   | Check `apps/api/src/routes/store.ts` keeps `where: { active: true, products: { some: ... } }`. |
+| Disabled coleção still surfaces products via slug query | Check `where.collections.some.collection.active = true` is still enforced on the public route. |
+| Admin list hides disabled coleções                      | Admin route must NOT inherit the active filter; otherwise admins cannot re-enable.             |
+| `AdminAudit` row missing after a mutation               | Verify the route still calls `recordAdminAudit` with the expected `entityType` + `action`.     |
 
 ## 4. Roles
 
