@@ -29,6 +29,11 @@ export const adminAuditActionSchema = z.enum([
   'user.create',
   'user.disable',
   'user.enable',
+  'store.collection.create',
+  'store.collection.update',
+  'store.collection.delete',
+  'store.collection.reorder',
+  'store.collection.assign_products',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -449,3 +454,88 @@ export const adminFinancePaymentMixResponseSchema = z.object({
   items: z.array(adminFinancePaymentMixItemSchema),
 });
 export type AdminFinancePaymentMixResponse = z.infer<typeof adminFinancePaymentMixResponseSchema>;
+
+// ── Admin store collections ──────────────────────────────────────────
+
+const adminCollectionDescription = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+  z.string().trim().min(1).max(2_000).nullable(),
+);
+
+export const adminStoreCollectionSchema = z.object({
+  id: z.string().min(1),
+  slug: z.string().min(1).max(140),
+  name: z.string().min(1).max(140),
+  description: z.string().nullable(),
+  active: z.boolean(),
+  sortOrder: z.number().int(),
+  productCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminStoreCollection = z.infer<typeof adminStoreCollectionSchema>;
+
+export const adminStoreCollectionListResponseSchema = z.object({
+  items: z.array(adminStoreCollectionSchema),
+});
+export type AdminStoreCollectionListResponse = z.infer<
+  typeof adminStoreCollectionListResponseSchema
+>;
+
+export const adminStoreCollectionProductSchema = z.object({
+  productId: z.string().min(1),
+  sortOrder: z.number().int().nonnegative(),
+  title: z.string().min(1),
+  slug: z.string().min(1),
+  status: z.enum(['draft', 'active', 'archived']),
+});
+export type AdminStoreCollectionProduct = z.infer<typeof adminStoreCollectionProductSchema>;
+
+export const adminStoreCollectionDetailSchema = adminStoreCollectionSchema.extend({
+  products: z.array(adminStoreCollectionProductSchema),
+});
+export type AdminStoreCollectionDetail = z.infer<typeof adminStoreCollectionDetailSchema>;
+
+export const adminStoreCollectionCreateSchema = z.object({
+  slug: slugSchema,
+  name: z.string().trim().min(1).max(140),
+  description: adminCollectionDescription.optional(),
+  active: z.boolean().default(true),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+export type AdminStoreCollectionCreate = z.infer<typeof adminStoreCollectionCreateSchema>;
+
+export const adminStoreCollectionUpdateSchema = z
+  .object({
+    slug: slugSchema,
+    name: z.string().trim().min(1).max(140),
+    description: adminCollectionDescription,
+    active: z.boolean(),
+    sortOrder: z.number().int().nonnegative(),
+  })
+  .partial()
+  .strict();
+export type AdminStoreCollectionUpdate = z.infer<typeof adminStoreCollectionUpdateSchema>;
+
+export const adminStoreCollectionReorderSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+});
+export type AdminStoreCollectionReorder = z.infer<typeof adminStoreCollectionReorderSchema>;
+
+export const adminStoreCollectionProductsSchema = z.object({
+  productIds: z.array(z.string().min(1)).max(500),
+});
+export type AdminStoreCollectionProducts = z.infer<typeof adminStoreCollectionProductsSchema>;
+
+export const adminStoreProductLookupItemSchema = z.object({
+  id: z.string().min(1),
+  slug: z.string().min(1),
+  title: z.string().min(1),
+  status: z.enum(['draft', 'active', 'archived']),
+});
+export type AdminStoreProductLookupItem = z.infer<typeof adminStoreProductLookupItemSchema>;
+
+export const adminStoreProductLookupResponseSchema = z.object({
+  items: z.array(adminStoreProductLookupItemSchema),
+});
+export type AdminStoreProductLookupResponse = z.infer<typeof adminStoreProductLookupResponseSchema>;

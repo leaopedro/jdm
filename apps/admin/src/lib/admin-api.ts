@@ -7,6 +7,10 @@ import {
   adminFinanceSummarySchema,
   adminFinanceTrendResponseSchema,
   adminGrantTicketResponseSchema,
+  adminStoreCollectionDetailSchema,
+  adminStoreCollectionListResponseSchema,
+  adminStoreCollectionSchema,
+  adminStoreProductLookupResponseSchema,
   adminUserCreatedSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
@@ -22,6 +26,8 @@ import {
   type AdminFinanceSummary,
   type AdminFinanceTrendResponse,
   type AdminGrantTicket,
+  type AdminStoreCollectionCreate,
+  type AdminStoreCollectionUpdate,
   type AdminTierCreate,
   type AdminTierUpdate,
   adminTicketTierSchema,
@@ -218,3 +224,48 @@ export const getFinancePaymentMix = (
 
 export const getFinanceExportUrl = (q?: AdminFinanceQuery) =>
   `/admin/finance/export${financeQs(q)}`;
+
+// ── Admin store collections ───────────────────────────────────────────
+
+export const listAdminCollections = () =>
+  apiFetch('/admin/store/collections', { schema: adminStoreCollectionListResponseSchema });
+
+export const getAdminCollection = (id: string) =>
+  apiFetch(`/admin/store/collections/${id}`, { schema: adminStoreCollectionDetailSchema });
+
+export const createAdminCollection = (input: AdminStoreCollectionCreate) =>
+  apiFetch('/admin/store/collections', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminStoreCollectionSchema,
+  });
+
+export const updateAdminCollection = (id: string, input: AdminStoreCollectionUpdate) =>
+  apiFetch(`/admin/store/collections/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminStoreCollectionSchema,
+  });
+
+export const deleteAdminCollection = (id: string) =>
+  apiFetch(`/admin/store/collections/${id}`, {
+    method: 'DELETE',
+    schema: z.unknown(),
+  });
+
+export const reorderAdminCollections = (ids: string[]) =>
+  apiFetch('/admin/store/collections/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+    schema: z.unknown(),
+  });
+
+export const setAdminCollectionProducts = (id: string, productIds: string[]) =>
+  apiFetch(`/admin/store/collections/${id}/products`, {
+    method: 'PUT',
+    body: JSON.stringify({ productIds }),
+    schema: adminStoreCollectionDetailSchema,
+  });
+
+export const lookupAdminStoreProducts = () =>
+  apiFetch('/admin/store/products/lookup', { schema: adminStoreProductLookupResponseSchema });
