@@ -2,6 +2,8 @@ import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
   adminExtraSchema,
+  adminProductTypeListResponseSchema,
+  adminProductTypeSchema,
   adminFinanceByEventResponseSchema,
   adminFinancePaymentMixResponseSchema,
   adminFinanceSummarySchema,
@@ -16,6 +18,8 @@ import {
   type AdminEventUpdate,
   type AdminExtraCreate,
   type AdminExtraUpdate,
+  type AdminProductTypeCreate,
+  type AdminProductTypeUpdate,
   type AdminFinanceByEventResponse,
   type AdminFinancePaymentMixResponse,
   type AdminFinanceQuery,
@@ -117,6 +121,33 @@ export const deleteExtra = (extraId: string) =>
   apiFetch(`/admin/extras/${extraId}`, {
     method: 'DELETE',
     schema: adminExtraSchema,
+  });
+
+// ── Admin store: product types ─────────────────────────────────────
+
+export const listAdminProductTypes = () =>
+  apiFetch('/admin/store/product-types', {
+    schema: adminProductTypeListResponseSchema,
+  });
+
+export const createAdminProductType = (input: AdminProductTypeCreate) =>
+  apiFetch('/admin/store/product-types', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminProductTypeSchema,
+  });
+
+export const updateAdminProductType = (id: string, input: AdminProductTypeUpdate) =>
+  apiFetch(`/admin/store/product-types/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminProductTypeSchema,
+  });
+
+export const deleteAdminProductType = (id: string) =>
+  apiFetch(`/admin/store/product-types/${id}`, {
+    method: 'DELETE',
+    schema: adminProductTypeSchema, // 204
   });
 
 export const listCheckInEvents = () =>

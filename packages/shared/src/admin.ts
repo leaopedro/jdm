@@ -29,6 +29,9 @@ export const adminAuditActionSchema = z.enum([
   'user.create',
   'user.disable',
   'user.enable',
+  'product_type.create',
+  'product_type.update',
+  'product_type.delete',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -377,6 +380,37 @@ export const adminExtraUpdateSchema = z
   .partial()
   .strict();
 export type AdminExtraUpdate = z.infer<typeof adminExtraUpdateSchema>;
+
+// ── Store product types ────────────────────────────────────────────────
+
+export const adminProductTypeSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(80),
+  sortOrder: z.number().int(),
+  productCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+});
+export type AdminProductType = z.infer<typeof adminProductTypeSchema>;
+
+export const adminProductTypeListResponseSchema = z.object({
+  items: z.array(adminProductTypeSchema),
+});
+export type AdminProductTypeListResponse = z.infer<typeof adminProductTypeListResponseSchema>;
+
+export const adminProductTypeCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  sortOrder: z.number().int().optional(),
+});
+export type AdminProductTypeCreate = z.infer<typeof adminProductTypeCreateSchema>;
+
+export const adminProductTypeUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    sortOrder: z.number().int(),
+  })
+  .partial()
+  .strict();
+export type AdminProductTypeUpdate = z.infer<typeof adminProductTypeUpdateSchema>;
 
 // ── Admin finance ─────────────────────────────────────────────────────
 
