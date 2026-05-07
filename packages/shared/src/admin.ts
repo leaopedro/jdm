@@ -29,6 +29,16 @@ export const adminAuditActionSchema = z.enum([
   'user.create',
   'user.disable',
   'user.enable',
+  'store.product.create',
+  'store.product.update',
+  'store.product.archive',
+  'store.product.activate',
+  'store.variant.create',
+  'store.variant.update',
+  'store.variant.delete',
+  'store.variant.disable',
+  'store.photo.add',
+  'store.photo.remove',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -449,3 +459,154 @@ export const adminFinancePaymentMixResponseSchema = z.object({
   items: z.array(adminFinancePaymentMixItemSchema),
 });
 export type AdminFinancePaymentMixResponse = z.infer<typeof adminFinancePaymentMixResponseSchema>;
+
+// --- Store admin: products, variants, photos ---
+
+export const adminStoreProductStatusSchema = z.enum(['draft', 'active', 'archived']);
+export type AdminStoreProductStatus = z.infer<typeof adminStoreProductStatusSchema>;
+
+const productSlugSchema = z
+  .string()
+  .min(3)
+  .max(140)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase kebab-case');
+
+const productPhotoObjectKeySchema = z
+  .string()
+  .min(1)
+  .max(300)
+  .regex(/^product_photo\//, 'must be a product_photo key');
+
+export const adminStoreVariantAttributesSchema = z.record(z.string().min(1).max(40)).default({});
+export type AdminStoreVariantAttributes = z.infer<typeof adminStoreVariantAttributesSchema>;
+
+export const adminStoreVariantSchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  name: z.string(),
+  sku: z.string().nullable(),
+  priceCents: z.number().int().nonnegative(),
+  quantityTotal: z.number().int().nonnegative(),
+  quantitySold: z.number().int().nonnegative(),
+  attributes: z.record(z.string()),
+  active: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminStoreVariant = z.infer<typeof adminStoreVariantSchema>;
+
+export const adminStoreVariantCreateSchema = z.object({
+  name: z.string().trim().min(1).max(140),
+  sku: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().min(1).max(80).nullable(),
+  ),
+  priceCents: z.number().int().nonnegative(),
+  quantityTotal: z.number().int().nonnegative(),
+  attributes: adminStoreVariantAttributesSchema,
+  active: z.boolean().default(true),
+});
+export type AdminStoreVariantCreate = z.infer<typeof adminStoreVariantCreateSchema>;
+
+export const adminStoreVariantUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(140).optional(),
+    sku: z
+      .preprocess(
+        (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+        z.string().trim().min(1).max(80).nullable(),
+      )
+      .optional(),
+    priceCents: z.number().int().nonnegative().optional(),
+    quantityTotal: z.number().int().nonnegative().optional(),
+    attributes: adminStoreVariantAttributesSchema.optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
+export type AdminStoreVariantUpdate = z.infer<typeof adminStoreVariantUpdateSchema>;
+
+export const adminStoreProductPhotoSchema = z.object({
+  id: z.string(),
+  objectKey: z.string(),
+  url: z.string().url(),
+  sortOrder: z.number().int(),
+});
+export type AdminStoreProductPhoto = z.infer<typeof adminStoreProductPhotoSchema>;
+
+export const adminStoreProductPhotoCreateSchema = z.object({
+  objectKey: productPhotoObjectKeySchema,
+  sortOrder: z.number().int().nonnegative().default(0),
+});
+export type AdminStoreProductPhotoCreate = z.infer<typeof adminStoreProductPhotoCreateSchema>;
+
+export const adminStoreProductDetailSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string(),
+  productTypeId: z.string(),
+  basePriceCents: z.number().int().nonnegative(),
+  currency: z.string(),
+  status: adminStoreProductStatusSchema,
+  shippingFeeCents: z.number().int().nonnegative().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  variants: z.array(adminStoreVariantSchema),
+  photos: z.array(adminStoreProductPhotoSchema),
+});
+export type AdminStoreProductDetail = z.infer<typeof adminStoreProductDetailSchema>;
+
+export const adminStoreProductCreateSchema = z.object({
+  slug: productSlugSchema,
+  title: z.string().trim().min(1).max(140),
+  description: z.string().trim().min(1).max(10_000),
+  productTypeId: z.string().min(1),
+  basePriceCents: z.number().int().nonnegative(),
+  currency: z.string().length(3).default('BRL'),
+  shippingFeeCents: z
+    .preprocess(
+      (v) => (v === '' || v === null || v === undefined ? null : v),
+      z.number().int().nonnegative().nullable(),
+    )
+    .default(null),
+});
+export type AdminStoreProductCreate = z.infer<typeof adminStoreProductCreateSchema>;
+
+export const adminStoreProductUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(140).optional(),
+    description: z.string().trim().min(1).max(10_000).optional(),
+    productTypeId: z.string().min(1).optional(),
+    basePriceCents: z.number().int().nonnegative().optional(),
+    currency: z.string().length(3).optional(),
+    shippingFeeCents: z
+      .preprocess(
+        (v) => (v === '' || v === null || v === undefined ? null : v),
+        z.number().int().nonnegative().nullable(),
+      )
+      .optional(),
+    status: adminStoreProductStatusSchema.optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
+export type AdminStoreProductUpdate = z.infer<typeof adminStoreProductUpdateSchema>;
+
+export const adminStoreProductRowSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  status: adminStoreProductStatusSchema,
+  basePriceCents: z.number().int().nonnegative(),
+  currency: z.string(),
+  productTypeId: z.string(),
+  productTypeName: z.string(),
+  variantCount: z.number().int().nonnegative(),
+  photoCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminStoreProductRow = z.infer<typeof adminStoreProductRowSchema>;
+
+export const adminStoreProductListResponseSchema = z.object({
+  items: z.array(adminStoreProductRowSchema),
+});
+export type AdminStoreProductListResponse = z.infer<typeof adminStoreProductListResponseSchema>;

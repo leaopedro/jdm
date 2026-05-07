@@ -14,3 +14,12 @@ export const presignEventCoverAction = async (input: PresignInput) => {
     schema: presignResponseSchema,
   });
 };
+
+export const presignProductPhotoAction = async (input: PresignInput) => {
+  const body = presignRequestSchema.parse({ kind: 'product_photo', ...input });
+  return apiFetch('/uploads/presign', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    schema: presignResponseSchema,
+  });
+};

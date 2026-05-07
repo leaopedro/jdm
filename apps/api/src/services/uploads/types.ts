@@ -1,5 +1,7 @@
+export type UploadKind = 'avatar' | 'car_photo' | 'event_cover' | 'product_photo';
+
 export type PresignInput = {
-  kind: 'avatar' | 'car_photo' | 'event_cover';
+  kind: UploadKind;
   userId: string;
   contentType: string;
   size: number;
@@ -16,11 +18,7 @@ export type PresignResult = {
 export interface Uploads {
   presignPut(input: PresignInput): Promise<PresignResult>;
   buildPublicUrl(objectKey: string): string;
-  isOwnedKey(
-    objectKey: string,
-    userId: string,
-    kind: 'avatar' | 'car_photo' | 'event_cover',
-  ): boolean;
+  isOwnedKey(objectKey: string, userId: string, kind: UploadKind): boolean;
   deleteObject(objectKey: string): Promise<void>;
 }
 
