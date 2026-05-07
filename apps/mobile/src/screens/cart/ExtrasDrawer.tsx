@@ -42,6 +42,7 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
           return { ...ticket, extras };
         });
 
+        if (!item.eventId || !item.tierId) return;
         await updateCartItem(item.id, {
           eventId: item.eventId,
           tierId: item.tierId,
