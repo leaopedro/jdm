@@ -204,6 +204,57 @@ const buildCursorWhere = (
   };
 };
 
+const PRODUCT_INCLUDE = {
+  productType: true,
+  variants: true,
+  photos: true,
+  collections: { select: { collectionId: true } },
+} satisfies Prisma.ProductInclude;
+
+const fetchInStockPage = async (
+  where: Prisma.ProductWhereInput,
+  sort: StoreSort,
+  limit: number,
+): Promise<{ items: ProductWithRelations[]; nextCursor: string | null }> => {
+  const collected: ProductWithRelations[] = [];
+  let after: CursorPayload | null = null;
+
+  while (collected.length < limit + 1) {
+    const batchWhere: Prisma.ProductWhereInput = after
+      ? {
+          AND: [where, buildCursorWhere(sort, after) ?? {}],
+        }
+      : where;
+    const rows = await prisma.product.findMany({
+      where: batchWhere,
+      orderBy: buildOrderBy(sort),
+      include: PRODUCT_INCLUDE,
+      take: limit + 1,
+    });
+
+    if (rows.length === 0) break;
+
+    const inStockRows = rows.filter((p) =>
+      p.variants.some((v) => v.active && v.quantitySold < v.quantityTotal),
+    );
+    collected.push(...inStockRows);
+
+    const lastRow = rows[rows.length - 1];
+    after = lastRow ? { k: cursorKeyForProduct(lastRow, sort), i: lastRow.id } : null;
+
+    if (rows.length < limit + 1) break;
+  }
+
+  const hasMore = collected.length > limit;
+  const page = hasMore ? collected.slice(0, limit) : collected;
+  const last = page[page.length - 1];
+
+  return {
+    items: page,
+    nextCursor: hasMore && last ? encodeCursor(cursorKeyForProduct(last, sort), last.id) : null,
+  };
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const storeRoutes: FastifyPluginAsync = async (app) => {
   app.get('/store/product-types', async () => {
@@ -281,35 +332,28 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
       where.AND = [...((where.AND as Prisma.ProductWhereInput[]) ?? []), cursorWhere];
     }
 
-    const fetchSize = query.inStock ? Math.max(query.limit * 3, query.limit + 1) : query.limit + 1;
-    const rows = await prisma.product.findMany({
-      where,
-      orderBy: buildOrderBy(query.sort),
-      include: {
-        productType: true,
-        variants: true,
-        photos: true,
-        collections: { select: { collectionId: true } },
-      },
-      take: fetchSize,
-    });
-
-    let filtered = rows;
-    if (query.inStock) {
-      filtered = rows.filter((p) =>
-        p.variants.some((v) => v.active && v.quantitySold < v.quantityTotal),
-      );
-    }
-
-    const hasMore = filtered.length > query.limit;
-    const page = hasMore ? filtered.slice(0, query.limit) : filtered;
-    const last = page[page.length - 1];
-    const nextCursor =
-      hasMore && last ? encodeCursor(cursorKeyForProduct(last, query.sort), last.id) : null;
+    const pageResult = query.inStock
+      ? await fetchInStockPage(where, query.sort, query.limit)
+      : await (async () => {
+          const rows = await prisma.product.findMany({
+            where,
+            orderBy: buildOrderBy(query.sort),
+            include: PRODUCT_INCLUDE,
+            take: query.limit + 1,
+          });
+          const hasMore = rows.length > query.limit;
+          const page = hasMore ? rows.slice(0, query.limit) : rows;
+          const last = page[page.length - 1];
+          return {
+            items: page,
+            nextCursor:
+              hasMore && last ? encodeCursor(cursorKeyForProduct(last, query.sort), last.id) : null,
+          };
+        })();
 
     return storeProductListResponseSchema.parse({
-      items: page.map((p) => serializeSummary(p, app.uploads)),
-      nextCursor,
+      items: pageResult.items.map((p) => serializeSummary(p, app.uploads)),
+      nextCursor: pageResult.nextCursor,
     });
   });
 

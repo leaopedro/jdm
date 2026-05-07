@@ -258,6 +258,49 @@ describe('GET /store/products', () => {
     expect(body.items[0]?.inStock).toBe(true);
   });
 
+  it('keeps paginating until it finds enough in-stock items', async () => {
+    const type = await makeProductType();
+    const t0 = Date.now();
+    await makeProduct(type.id, {
+      slug: 'fresh-1',
+      createdAt: new Date(t0 - 10_000),
+      variants: [{ quantityTotal: 5, quantitySold: 0 }],
+    });
+    await makeProduct(type.id, {
+      slug: 'sold-1',
+      createdAt: new Date(t0 - 20_000),
+      variants: [{ quantityTotal: 5, quantitySold: 5 }],
+    });
+    await makeProduct(type.id, {
+      slug: 'sold-2',
+      createdAt: new Date(t0 - 30_000),
+      variants: [{ quantityTotal: 5, quantitySold: 5 }],
+    });
+    await makeProduct(type.id, {
+      slug: 'fresh-2',
+      createdAt: new Date(t0 - 40_000),
+      variants: [{ quantityTotal: 5, quantitySold: 0 }],
+    });
+
+    const page1 = await app.inject({
+      method: 'GET',
+      url: '/store/products?inStock=true&limit=1',
+    });
+    expect(page1.statusCode).toBe(200);
+    const body1 = storeProductListResponseSchema.parse(page1.json());
+    expect(body1.items.map((p) => p.slug)).toEqual(['fresh-1']);
+    expect(body1.nextCursor).not.toBeNull();
+
+    const page2 = await app.inject({
+      method: 'GET',
+      url: `/store/products?inStock=true&limit=1&cursor=${encodeURIComponent(body1.nextCursor ?? '')}`,
+    });
+    expect(page2.statusCode).toBe(200);
+    const body2 = storeProductListResponseSchema.parse(page2.json());
+    expect(body2.items.map((p) => p.slug)).toEqual(['fresh-2']);
+    expect(body2.nextCursor).toBeNull();
+  });
+
   it('sorts price_asc and price_desc by basePriceCents', async () => {
     const type = await makeProductType();
     await makeProduct(type.id, { slug: 'mid', basePriceCents: 5000 });
