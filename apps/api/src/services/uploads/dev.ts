@@ -1,6 +1,6 @@
 import { createId } from '@paralleldrive/cuid2';
 
-import type { PresignInput, PresignResult, Uploads } from './types.js';
+import type { PresignInput, PresignResult, UploadKind, Uploads } from './types.js';
 import { EXT_FOR_MIME } from './types.js';
 
 export class DevUploads implements Uploads {
@@ -26,11 +26,7 @@ export class DevUploads implements Uploads {
     return `${this.publicBase}/${objectKey}`;
   }
 
-  isOwnedKey(
-    objectKey: string,
-    userId: string,
-    kind: 'avatar' | 'car_photo' | 'event_cover',
-  ): boolean {
+  isOwnedKey(objectKey: string, userId: string, kind: UploadKind): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }
 

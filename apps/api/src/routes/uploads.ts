@@ -13,6 +13,11 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
         .status(403)
         .send({ error: 'Forbidden', message: 'role cannot upload event covers' });
     }
+    if (kind === 'product_photo' && role !== 'organizer' && role !== 'admin') {
+      return reply
+        .status(403)
+        .send({ error: 'Forbidden', message: 'role cannot upload product photos' });
+    }
     const result = await app.uploads.presignPut({ kind, userId: sub, contentType, size });
     return {
       uploadUrl: result.uploadUrl,

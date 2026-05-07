@@ -1,0 +1,154 @@
+import { prisma } from '@jdm/db';
+import {
+  adminStoreProductCreateSchema,
+  adminStoreProductListResponseSchema,
+  adminStoreProductUpdateSchema,
+} from '@jdm/shared/admin';
+import type { Prisma } from '@prisma/client';
+import type { FastifyPluginAsync } from 'fastify';
+
+import { requireUser } from '../../../plugins/auth.js';
+import { recordAudit } from '../../../services/admin-audit.js';
+
+import { serializeAdminProductDetail } from './serializers.js';
+
+const productInclude = { variants: true, photos: true } as const;
+
+// eslint-disable-next-line @typescript-eslint/require-await
+export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/store/products', async () => {
+    const products = await prisma.product.findMany({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        productType: { select: { id: true, name: true } },
+        _count: { select: { variants: true, photos: true } },
+      },
+    });
+    return adminStoreProductListResponseSchema.parse({
+      items: products.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        status: p.status,
+        basePriceCents: p.basePriceCents,
+        currency: p.currency,
+        productTypeId: p.productTypeId,
+        productTypeName: p.productType.name,
+        variantCount: p._count.variants,
+        photoCount: p._count.photos,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      })),
+    });
+  });
+
+  app.post('/store/products', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const input = adminStoreProductCreateSchema.parse(request.body);
+
+    const productType = await prisma.productType.findUnique({
+      where: { id: input.productTypeId },
+      select: { id: true },
+    });
+    if (!productType) {
+      return reply
+        .status(400)
+        .send({ error: 'BadRequest', message: 'productTypeId does not exist' });
+    }
+
+    try {
+      const product = await prisma.product.create({
+        data: {
+          slug: input.slug,
+          title: input.title,
+          description: input.description,
+          productTypeId: input.productTypeId,
+          basePriceCents: input.basePriceCents,
+          currency: input.currency,
+          shippingFeeCents: input.shippingFeeCents ?? null,
+          status: 'draft',
+        },
+        include: productInclude,
+      });
+      await recordAudit({
+        actorId: sub,
+        action: 'store.product.create',
+        entityType: 'product',
+        entityId: product.id,
+        metadata: { slug: product.slug },
+      });
+      return reply.status(201).send(serializeAdminProductDetail(product, app.uploads));
+    } catch (e) {
+      const err = e as Prisma.PrismaClientKnownRequestError;
+      if (err.code === 'P2002') {
+        return reply.status(409).send({ error: 'Conflict', message: 'slug already exists' });
+      }
+      throw e;
+    }
+  });
+
+  app.get('/store/products/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: productInclude,
+    });
+    if (!product) return reply.status(404).send({ error: 'NotFound' });
+    return serializeAdminProductDetail(product, app.uploads);
+  });
+
+  app.patch('/store/products/:id', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const input = adminStoreProductUpdateSchema.parse(request.body);
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'NotFound' });
+
+    if (input.productTypeId !== undefined && input.productTypeId !== existing.productTypeId) {
+      const pt = await prisma.productType.findUnique({
+        where: { id: input.productTypeId },
+        select: { id: true },
+      });
+      if (!pt) {
+        return reply
+          .status(400)
+          .send({ error: 'BadRequest', message: 'productTypeId does not exist' });
+      }
+    }
+
+    const data: Prisma.ProductUpdateInput = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.description !== undefined) data.description = input.description;
+    if (input.productTypeId !== undefined) {
+      data.productType = { connect: { id: input.productTypeId } };
+    }
+    if (input.basePriceCents !== undefined) data.basePriceCents = input.basePriceCents;
+    if (input.currency !== undefined) data.currency = input.currency;
+    if (input.shippingFeeCents !== undefined) data.shippingFeeCents = input.shippingFeeCents;
+    let auditAction: 'store.product.update' | 'store.product.archive' | 'store.product.activate' =
+      'store.product.update';
+    if (input.status !== undefined) {
+      data.status = input.status;
+      if (input.status === 'archived' && existing.status !== 'archived') {
+        auditAction = 'store.product.archive';
+      } else if (input.status === 'active' && existing.status !== 'active') {
+        auditAction = 'store.product.activate';
+      }
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data,
+      include: productInclude,
+    });
+    await recordAudit({
+      actorId: sub,
+      action: auditAction,
+      entityType: 'product',
+      entityId: id,
+      metadata: { fields: Object.keys(input) },
+    });
+    return serializeAdminProductDetail(updated, app.uploads);
+  });
+};
