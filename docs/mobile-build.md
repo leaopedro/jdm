@@ -1,103 +1,172 @@
-# Mobile build runbook (iOS preview, EAS cloud)
+# Mobile build runbook
 
-Goal: produce one installable iOS preview build of `@jdm/mobile`, install it on a physical iPhone, run the smoke-test checklist.
+Goal: produce the first working mobile builds from the profiles already checked
+into `apps/mobile/eas.json`, then install the preview build on real devices for
+Phase 0.9 smoke testing.
 
-Profile: `preview` from `apps/mobile/eas.json` — internal distribution, non-simulator IPA, channel `preview`. Build env already pins:
+Read [`docs/eas-credentials.md`](./eas-credentials.md) first. That file covers
+Apple, Google Play, and Expo account setup. This file is the execution path once
+those prerequisites exist.
 
-- `APP_VARIANT=preview` → bundle id `com.jdmexperience.app.preview`, app name "JDM Experience (Preview)"
-- `EXPO_PUBLIC_API_BASE_URL=https://jdm-production.up.railway.app`
+## Profile map
 
-Stripe publishable key and Sentry DSN are not required for first install. Stripe screens will fail gracefully; Sentry no-ops if DSN empty.
+| Profile       | Output                           | Device target                    | Main use            |
+| ------------- | -------------------------------- | -------------------------------- | ------------------- |
+| `development` | iOS simulator development client | local iOS simulator              | Fastest first proof |
+| `preview`     | iOS internal build + Android APK | physical iPhone / Android device | Real-device smoke   |
+| `production`  | Store-ready build                | App Store / Play Console         | Release only        |
 
-## Prerequisites (one-time)
+Important:
 
-- Apple Developer Program membership ($99/yr) on the same Apple ID you sign into Xcode with.
-- Expo account (free).
-- iPhone running iOS 16+, paired with the same Apple ID or registered as a test device.
-- Mac with Xcode Command Line Tools installed (`xcode-select --install`).
-- Repo at this commit or later, `pnpm install` already run.
+- `development` is not enough for push or real-device smoke.
+- `preview` is the first build that matters for v0.1 verification.
+- Expo Go is not the target here. Native modules in the app require an EAS
+  build.
 
-## Step-by-step
+## Prerequisites
 
-All commands run from the repo root unless noted.
+- `pnpm install` already ran at repo root.
+- `pnpm dlx eas-cli login` already succeeded.
+- `apps/mobile/.env` contains a valid `EAS_PROJECT_ID`.
+- For iOS preview installs, at least one iPhone was registered with
+  `eas device:create`.
 
-### 1. Authenticate `eas-cli`
+## Step 1: Confirm the current config
 
-```bash
-pnpm dlx eas-cli@latest login
-```
-
-Use your Expo username/password. Confirm with `pnpm --filter @jdm/mobile exec eas whoami`.
-
-### 2. Initialise the EAS project
-
-```bash
-pnpm --filter @jdm/mobile exec eas init --non-interactive
-```
-
-This creates an EAS project on the Expo dashboard and prints a `EAS_PROJECT_ID` UUID. Copy it into `apps/mobile/.env`:
-
-```
-EAS_PROJECT_ID=<uuid-from-eas-init>
-```
-
-`apps/mobile/app.config.ts` reads it via `process.env.EAS_PROJECT_ID`.
-
-### 3. Register your iPhone as an internal test device
+Run from the repo root:
 
 ```bash
-pnpm --filter @jdm/mobile exec eas device:create
+pnpm --filter @jdm/mobile exec eas whoami
+cat apps/mobile/eas.json
 ```
 
-Pick "Website" → choose Apple Team → EAS prints a URL and QR code. Open the URL in **Safari on the iPhone**, install the provided profile in Settings → Profile Downloaded, accept the prompt to add the device. The UDID is now registered in your Apple Developer account and pinned in EAS.
+Sanity-check:
 
-### 4. Build
+- `development` has `developmentClient: true`
+- `development.ios.simulator` is `true`
+- `preview.distribution` is `internal`
+- `preview.android.buildType` is `apk`
+
+## Step 2: First proof build
+
+Run the fastest build first:
+
+```bash
+pnpm --filter @jdm/mobile exec eas build --profile development --platform ios
+```
+
+What this proves:
+
+- Expo project linkage works
+- the native iOS project compiles on EAS
+- the `com.jdmexperience.app.dev` variant resolves correctly
+
+What it does not prove:
+
+- device install
+- push registration
+- Apple ad hoc provisioning
+- TestFlight readiness
+
+## Step 3: First installable iPhone build
+
+Run the real preview build:
 
 ```bash
 pnpm --filter @jdm/mobile exec eas build --profile preview --platform ios
 ```
 
-First run will:
+On the first run, accept the EAS prompts to:
 
-- Prompt to register the bundle id `com.jdmexperience.app.preview` on App Store Connect (accept).
-- Prompt to generate a distribution certificate and provisioning profile (accept; let EAS manage them).
-- Queue a cloud build. Typical time: 12–25 min.
+- log into the Apple team if asked
+- create or reuse the `com.jdmexperience.app.preview` identifier
+- generate the signing certificate and provisioning profile
+- include the registered test devices in the ad hoc profile
 
-Watch progress in the terminal or at the EAS dashboard URL printed.
+When it finishes:
 
-### 5. Install on the iPhone
+- open the EAS build page
+- send the install link to the iPhone
+- install from Safari
+- trust the profile in iOS settings if prompted
 
-When the build finishes EAS prints an install URL and QR code:
+Expected app name:
 
-- Open the URL on the iPhone in Safari, or scan the QR with the camera app.
-- Tap "Install" — the app downloads as `JDM Experience (Preview)`.
-- First launch: Settings → General → VPN & Device Management → trust the developer profile if iOS prompts.
+- `JDM Experience (Preview)`
 
-App is installed and points at Railway prod (`https://jdm-production.up.railway.app`).
+Expected backend target:
 
-## Smoke-test checklist
+- `https://jdm-production.up.railway.app`
 
-Run on the device after install. Each step is a binary pass/fail; capture failures with screenshots and post on JDMA-122.
+## Step 4: First installable Android build
 
-- [ ] App launches without crash. Splash → first screen.
-- [ ] Network: any request that hits the API returns successfully (check that the welcome / events list does not show a network-error empty state).
-- [ ] Auth flow: open the sign-in or magic-link screen, request a code, confirm the request reaches the API (Railway logs).
-- [ ] Navigation: at least two route transitions work (expo-router).
-- [ ] Status bar / dark theme renders correctly.
-- [ ] Backgrounding the app and resuming does not crash or blank-screen.
-- [ ] No red-box JS errors visible.
-- [ ] Sentry: not required for this build (DSN unset; no events expected).
-- [ ] Stripe: not required for this build; payment screens may show inline errors and that is expected.
+Run:
+
+```bash
+pnpm --filter @jdm/mobile exec eas build --profile preview --platform android
+```
+
+When it finishes:
+
+- download the APK from the EAS artifact page
+- install it directly on an Android device
+- or keep the artifact URL as the proof while Play Internal is being prepared
+
+Expected result:
+
+- installable APK for `com.jdmexperience.app.preview`
+
+## Step 5: Optional Play Internal handoff
+
+If Google Play Internal is already configured, move from direct APK sharing to
+store-backed Android testing:
+
+1. Build the Android artifact intended for Play.
+2. Upload it to Play Console Internal testing.
+3. Add tester emails or a Google Group.
+4. Share the opt-in link or Play listing URL with testers.
+
+Use this only after the direct APK proof exists. It is a distribution upgrade,
+not the first unblocker.
+
+## Step 6: Smoke checklist on the installed preview build
+
+Run on at least one real phone:
+
+- [ ] App launches without a native crash.
+- [ ] First screen renders without a blank state loop.
+- [ ] API is reachable and no global network error appears.
+- [ ] Auth entrypoint opens.
+- [ ] At least two route transitions work.
+- [ ] Background and foreground once without crashing.
+- [ ] No red-box or native fatal error appears.
+
+Push and payments:
+
+- Push is meaningful only on a real device build.
+- Stripe native flows also need the real device build.
+- If keys are still unset, record that limitation in the issue comment instead
+  of treating it as a build failure.
+
+## Step 7: What to paste into `JDMA-116`
+
+Capture:
+
+- build page URL for `development` iOS
+- build page URL for `preview` iOS
+- build page URL for `preview` Android
+- which physical devices installed successfully
+- pass/fail for each smoke item
+- exact blocker, if any, with the failing profile and platform
 
 ## Troubleshooting
 
-- **`eas init` says project already linked** — `EAS_PROJECT_ID` is already set. Re-read `apps/mobile/.env` and skip to step 3.
-- **Build fails on "no devices registered"** — re-run `eas device:create` and confirm the device appears in `eas device:list`.
-- **Install link opens Safari but iOS refuses install** — the device profile is missing or the build was created before the device was registered. Re-run step 4 after device registration.
-- **App opens but every API call fails** — confirm Railway prod is healthy: `curl https://jdm-production.up.railway.app/health` should return `200 {"status":"ok",...}`.
-- **App crashes immediately on launch** — pull device logs via `xcrun devicectl device console --device <id>` or Xcode → Window → Devices, send the crash trace on JDMA-122.
-
-## After the build
-
-- Post the build URL and any failures from the smoke checklist as a comment on JDMA-122.
-- If the build is good, follow-up issues should cover: Sentry DSN wiring for preview, Stripe test key for preview, automated EAS build on `main` push.
+- Build asks for Apple login during `preview`:
+  expected on the first interactive iOS build.
+- iPhone install fails after adding a new device:
+  rebuild `preview` iOS so the new UDID is in the provisioning profile.
+- Android testers need Play instead of direct APK:
+  use the Play Internal path after the first APK proof.
+- Build succeeds but the app points to the wrong API:
+  rebuild using the checked-in `preview` profile and verify the build page
+  shows the expected environment.
