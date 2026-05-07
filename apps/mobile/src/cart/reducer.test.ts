@@ -12,14 +12,12 @@ const mockCart = {
       id: 'item-1',
       eventId: 'evt-1',
       tierId: 'tier-1',
-      variantId: null,
       source: 'purchase' as const,
       kind: 'ticket' as const,
       quantity: 1,
       requiresCar: false,
       tickets: [{ extras: [] as string[] }],
       extras: [],
-      product: null,
       amountCents: 5000,
       currency: 'BRL',
       reservationExpiresAt: null,
@@ -30,7 +28,6 @@ const mockCart = {
   totals: {
     ticketSubtotalCents: 5000,
     extrasSubtotalCents: 0,
-    productsSubtotalCents: 0,
     discountCents: 0,
     amountCents: 5000,
     currency: 'BRL',
@@ -76,12 +73,12 @@ describe('cart reducer', () => {
     expect(next.cart).toBe(mockCart);
   });
 
-  it('MUTATE_ERROR clears adding without overwriting cart load state', () => {
+  it('MUTATE_ERROR clears adding and sets error', () => {
     const mutating: CartState = { ...initialState, adding: true };
     const next = reducer(mutating, { type: 'MUTATE_ERROR', error: 'remove' });
 
     expect(next.adding).toBe(false);
-    expect(next.error).toBeNull();
+    expect(next.error).toBe('remove');
   });
 
   it('full removeItem flow: MUTATE_START → FETCH_OK resets adding', () => {

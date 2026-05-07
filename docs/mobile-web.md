@@ -6,10 +6,8 @@ config lives in `apps/mobile/vercel.json`.
 
 ## What works on web
 
-- Authentication (email + password, session via localStorage —
-  `src/auth/storage.web.ts`).
+- Authentication (OTP login, session via cookie/localStorage — `src/auth/storage.web.ts`).
 - Browsing events, event detail, ticket viewing.
-- Cart add/remove flows and profile / garage navigation.
 - Check-in QR (rendered via `react-native-qrcode-svg` under `react-native-web`).
 - Sentry error reporting.
 
@@ -83,89 +81,11 @@ config lives in `apps/mobile/vercel.json`.
   to production.
 - **Manual redeploy:** Vercel dashboard → Deployments → Redeploy (no cache).
 
-## Local branch smoke
-
-Use this when a mobile PR changes navigation, IA, auth-adjacent behavior,
-or other flows that can be exercised on Expo web before a native smoke.
-
-### Preconditions
-
-1. Bring up Postgres:
-
-```bash
-docker compose up -d
-```
-
-2. If you are in a Paperclip / Claude worktree, bootstrap the worktree
-   itself before starting Expo or the API. Borrowed/symlinked installs can
-   produce false negatives such as Metro failing to resolve
-   `@jdm/shared/*`.
-
-```bash
-pnpm install --offline --force
-pnpm --filter @jdm/shared build
-pnpm --filter @jdm/db db:generate
-pnpm --filter @jdm/db build
-```
-
-3. Create local env files if missing:
-
-```bash
-cp -n apps/api/.env.example apps/api/.env
-cp -n packages/db/.env.example packages/db/.env
-```
-
-4. Remove blank AbacatePay dev vars from `apps/api/.env` or replace them
-   with real values. The current env parser treats empty strings as
-   invalid values rather than "unset", so the API will fail fast if these
-   keys are present but blank.
-
-5. Apply migrations and seed:
-
-```bash
-pnpm --filter @jdm/db db:deploy
-pnpm --filter @jdm/db db:seed
-```
-
-6. Start the API and Expo web:
-
-```bash
-pnpm --filter @jdm/api dev
-pnpm --filter @jdm/mobile start:web --port 8081
-```
-
-Wait for API `listening on 0.0.0.0:4000` and Expo `Web is waiting on http://localhost:8081`.
-
-### Smoke flow
-
-1. Open `http://localhost:8081/signup`.
-2. Create a fresh account with email/password.
-3. Watch the API terminal for the `[dev-mail]` verification link and open
-   that link in the browser. The app currently lands on
-   `/verify-email-pending` until the verification URL is followed.
-4. Continue through the target flow.
-
-### Good fits for web smoke
-
-- Profile / account information architecture changes.
-- Cart add/remove flows up to the point where native payment would start.
-- Event browsing, event detail, and ticket list/detail rendering.
-- Deep-link and post-auth routing behavior.
-
-### Known limits
-
-- Stripe remains stubbed on web; payment completion still needs a native
-  device/dev-client smoke.
-- Push registration is intentionally skipped on web.
-- Some native-only package drift warnings may appear in Expo startup logs;
-  treat those as maintenance follow-up, not automatic blockers, unless
-  they break bundling or the target flow.
-
 ## Verification (smoke test after first deploy)
 
 Open the Vercel preview URL from a PR and verify:
 
-- [ ] `/login` loads and email/password auth succeeds (auth → localStorage session).
+- [ ] `/login` loads, OTP request fires, code accepted (auth → cookie session).
 - [ ] `/events` lists events fetched from Railway prod API.
 - [ ] Event detail page renders (image, copy, ticket button).
 - [ ] Ticket purchase button on web shows graceful "Pagamento só disponível no app" message (Stripe stub).
@@ -174,13 +94,11 @@ Open the Vercel preview URL from a PR and verify:
 
 ## Troubleshooting
 
-| Symptom                                                 | Likely cause                                                     | Fix                                                                                             |
-| ------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Build fails: `Cannot find module '@jdm/shared'`         | `installCommand` not running from repo root                      | Ensure `vercel.json` `buildCommand` starts with `cd ../.. && pnpm install --frozen-lockfile`.   |
-| `EXPO_PUBLIC_API_BASE_URL` undefined in browser         | Env var not set for the deploy scope                             | Add it under the matching scope (Preview/Production) in Vercel → Settings → Env vars.           |
-| API calls return CORS errors                            | `CORS_ORIGINS` not updated in Railway after adding Vercel domain | Update Railway `CORS_ORIGINS` and redeploy.                                                     |
-| API fails at boot with `ABACATEPAY_*` validation errors | `apps/api/.env` copied empty optional AbacatePay keys            | Delete the blank `ABACATEPAY_*` lines or set real values.                                       |
-| Local worktree Metro cannot resolve `@jdm/shared/*`     | Worktree dependencies were borrowed instead of installed locally | Run `pnpm install --offline --force` in the worktree, then rebuild `@jdm/shared` and `@jdm/db`. |
-| Bundle includes `codegenNativeCommands` errors          | Native-only module not aliased on web                            | Add the package to the platform alias map in `apps/mobile/metro.config.js` (see Stripe).        |
-| Push notification UI prompts in browser                 | Missing `Platform.OS === 'web'` guard                            | Guard the call site; see `src/notifications/use-push-registration.ts`.                          |
-| Sentry source maps missing                              | `SENTRY_AUTH_TOKEN` not set                                      | Set the token in Vercel env vars.                                                               |
+| Symptom                                         | Likely cause                                                     | Fix                                                                                           |
+| ----------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Build fails: `Cannot find module '@jdm/shared'` | `installCommand` not running from repo root                      | Ensure `vercel.json` `buildCommand` starts with `cd ../.. && pnpm install --frozen-lockfile`. |
+| `EXPO_PUBLIC_API_BASE_URL` undefined in browser | Env var not set for the deploy scope                             | Add it under the matching scope (Preview/Production) in Vercel → Settings → Env vars.         |
+| API calls return CORS errors                    | `CORS_ORIGINS` not updated in Railway after adding Vercel domain | Update Railway `CORS_ORIGINS` and redeploy.                                                   |
+| Bundle includes `codegenNativeCommands` errors  | Native-only module not aliased on web                            | Add the package to the platform alias map in `apps/mobile/metro.config.js` (see Stripe).      |
+| Push notification UI prompts in browser         | Missing `Platform.OS === 'web'` guard                            | Guard the call site; see `src/notifications/use-push-registration.ts`.                        |
+| Sentry source maps missing                      | `SENTRY_AUTH_TOKEN` not set                                      | Set the token in Vercel env vars.                                                             |

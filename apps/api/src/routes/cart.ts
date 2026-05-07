@@ -7,7 +7,6 @@ import {
   upsertCartItemResponseSchema,
   clearCartResponseSchema,
 } from '@jdm/shared/cart';
-import type { CartItemInput } from '@jdm/shared/cart';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
@@ -18,7 +17,6 @@ import {
   rollbackCartCheckout,
 } from '../services/cart/checkout.js';
 import {
-  CART_INCLUDE_FOR_SERIALIZE,
   computeItemAmount,
   evictStaleItems,
   getActiveCart,
@@ -26,81 +24,7 @@ import {
   serializeCart,
   validateCartItem,
 } from '../services/cart/index.js';
-import type { ValidatedCartItem } from '../services/cart/index.js';
 import { ORDER_EXPIRY_MS } from '../services/orders/expire.js';
-
-type ExtraRow = {
-  extraId: string;
-  quantity: number;
-  unitPriceCents: number;
-  subtotalCents: number;
-};
-
-async function priceCartItemExtras(
-  input: CartItemInput,
-): Promise<
-  { ok: true; extras: ExtraRow[] } | { ok: false; status: number; error: string; message: string }
-> {
-  const counts = new Map<string, number>();
-  for (const ticket of input.tickets) {
-    for (const extraId of ticket.extras) {
-      counts.set(extraId, (counts.get(extraId) ?? 0) + 1);
-    }
-  }
-  if (counts.size === 0) return { ok: true, extras: [] };
-  const extras = await prisma.ticketExtra.findMany({
-    where: { id: { in: [...counts.keys()] } },
-    select: { id: true, priceCents: true },
-  });
-  const priceMap = new Map(extras.map((e) => [e.id, e.priceCents]));
-  const rows: ExtraRow[] = [];
-  for (const [extraId, qty] of counts.entries()) {
-    const unitPriceCents = priceMap.get(extraId);
-    if (unitPriceCents === undefined) {
-      return {
-        ok: false,
-        status: 409,
-        error: 'ExtraNotFound',
-        message: `Extra ${extraId} disappeared during pricing`,
-      };
-    }
-    rows.push({
-      extraId,
-      quantity: qty,
-      unitPriceCents,
-      subtotalCents: unitPriceCents * qty,
-    });
-  }
-  return { ok: true, extras: rows };
-}
-
-function mapValidationError(code: string | undefined): { error: string; status: number } {
-  if (
-    code === 'TIER_SOLD_OUT' ||
-    code === 'MAX_TICKETS_EXCEEDED' ||
-    code === 'EXTRA_SOLD_OUT' ||
-    code === 'VARIANT_SOLD_OUT'
-  ) {
-    return { error: 'SoldOut', status: 409 };
-  }
-  if (code === 'VARIANT_NOT_ACTIVE') {
-    return { error: 'Conflict', status: 409 };
-  }
-  if (code === 'TICKETS_QUANTITY_MISMATCH') {
-    return { error: 'BadRequest', status: 400 };
-  }
-  return { error: 'NotFound', status: 404 };
-}
-
-function priceFromValidation(validated: ValidatedCartItem): {
-  unitPriceCents: number;
-  currency: string;
-} {
-  if (validated.kind === 'product') {
-    return { unitPriceCents: validated.variant.priceCents, currency: validated.variant.currency };
-  }
-  return { unitPriceCents: validated.tier.priceCents, currency: validated.tier.currency };
-}
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const cartRoutes: FastifyPluginAsync = async (app) => {
@@ -135,32 +59,63 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const { sub } = requireUser(request);
     const { item: input } = upsertCartItemRequestSchema.parse(request.body);
 
-    let validated: ValidatedCartItem;
+    let validated;
     try {
       validated = await validateCartItem(input, sub);
     } catch (err: unknown) {
       const e = err as Error & { statusCode?: number; code?: string };
       const status = e.statusCode ?? 400;
-      const { error } = mapValidationError(e.code);
-      return reply.status(status).send({ error, code: e.code, message: e.message });
+      const code = e.code ?? 'ValidationError';
+      const errName =
+        code === 'TIER_SOLD_OUT' || code === 'MAX_TICKETS_EXCEEDED' || code === 'EXTRA_SOLD_OUT'
+          ? 'SoldOut'
+          : code === 'TICKETS_QUANTITY_MISMATCH'
+            ? 'BadRequest'
+            : 'NotFound';
+      return reply.status(status).send({ error: errName, message: e.message });
     }
 
-    const extrasResult = await priceCartItemExtras(input);
-    if (!extrasResult.ok) {
-      return reply.status(extrasResult.status).send({
-        error: extrasResult.error,
-        message: extrasResult.message,
-      });
+    const extraCounts = new Map<string, number>();
+    for (const ticket of input.tickets) {
+      for (const extraId of ticket.extras) {
+        extraCounts.set(extraId, (extraCounts.get(extraId) ?? 0) + 1);
+      }
     }
-    const extraRows = extrasResult.extras;
-    const { unitPriceCents, currency } = priceFromValidation(validated);
+
+    const extraRows: {
+      extraId: string;
+      quantity: number;
+      unitPriceCents: number;
+      subtotalCents: number;
+    }[] = [];
+    if (extraCounts.size > 0) {
+      const extras = await prisma.ticketExtra.findMany({
+        where: { id: { in: [...extraCounts.keys()] } },
+        select: { id: true, priceCents: true },
+      });
+      const priceMap = new Map(extras.map((e) => [e.id, e.priceCents]));
+      for (const [extraId, qty] of extraCounts.entries()) {
+        const unitPriceCents = priceMap.get(extraId);
+        if (unitPriceCents === undefined) {
+          return reply.status(409).send({
+            error: 'ExtraNotFound',
+            message: `Extra ${extraId} disappeared during pricing`,
+          });
+        }
+        extraRows.push({
+          extraId,
+          quantity: qty,
+          unitPriceCents,
+          subtotalCents: unitPriceCents * qty,
+        });
+      }
+    }
+
     const amountCents = computeItemAmount(
-      validated.kind === 'product'
-        ? { variantPriceCents: unitPriceCents }
-        : { tierPriceCents: unitPriceCents },
+      { priceCents: validated.tier.priceCents },
       input.quantity,
       extraRows,
-      validated.kind,
+      input.kind ?? 'ticket',
     );
 
     const cart = await getOrCreateCart(sub);
@@ -169,16 +124,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       const newItem = await tx.cartItem.create({
         data: {
           cartId: cart.id,
-          eventId: validated.kind === 'product' ? null : (input.eventId ?? null),
-          tierId: validated.kind === 'product' ? null : (input.tierId ?? null),
-          variantId: validated.kind === 'product' ? validated.variant.id : null,
+          eventId: input.eventId,
+          tierId: input.tierId,
           source: input.source ?? 'purchase',
-          kind: validated.kind,
+          kind: input.kind ?? 'ticket',
           quantity: input.quantity,
           tickets: input.tickets as unknown as object,
           metadata: (input.metadata as unknown as object) ?? undefined,
           amountCents,
-          currency,
+          currency: validated.tier.currency,
         },
       });
 
@@ -197,7 +151,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       return tx.cart.update({
         where: { id: cart.id },
         data: { version: { increment: 1 } },
-        include: CART_INCLUDE_FOR_SERIALIZE,
+        include: {
+          items: {
+            include: {
+              extras: true,
+              tier: { select: { priceCents: true, currency: true, requiresCar: true } },
+            },
+          },
+        },
       });
     });
 
@@ -223,14 +184,19 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(404).send({ error: 'NotFound', message: 'cart item not found' });
       }
 
-      let validated: ValidatedCartItem;
+      let validated;
       try {
         validated = await validateCartItem(input, sub, itemId);
       } catch (err: unknown) {
         const e = err as Error & { statusCode?: number; code?: string };
         const status = e.statusCode ?? 400;
-        const { error } = mapValidationError(e.code);
-        return reply.status(status).send({ error, code: e.code, message: e.message });
+        const errName =
+          e.code === 'TIER_SOLD_OUT' || e.code === 'MAX_TICKETS_EXCEEDED'
+            ? 'SoldOut'
+            : e.code === 'TICKETS_QUANTITY_MISMATCH'
+              ? 'BadRequest'
+              : 'NotFound';
+        return reply.status(status).send({ error: errName, message: e.message });
       }
 
       const extraCounts = new Map<string, number>();
@@ -269,14 +235,11 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const { unitPriceCents, currency } = priceFromValidation(validated);
       const amountCents = computeItemAmount(
-        validated.kind === 'product'
-          ? { variantPriceCents: unitPriceCents }
-          : { tierPriceCents: unitPriceCents },
+        { priceCents: validated.tier.priceCents },
         input.quantity,
         extraRows,
-        validated.kind,
+        input.kind ?? 'ticket',
       );
 
       const updatedCart = await prisma.$transaction(async (tx) => {
@@ -285,16 +248,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         await tx.cartItem.update({
           where: { id: itemId },
           data: {
-            eventId: validated.kind === 'product' ? null : (input.eventId ?? null),
-            tierId: validated.kind === 'product' ? null : (input.tierId ?? null),
-            variantId: validated.kind === 'product' ? validated.variant.id : null,
+            tierId: input.tierId,
             source: input.source ?? 'purchase',
-            kind: validated.kind,
+            kind: input.kind ?? 'ticket',
             quantity: input.quantity,
             tickets: input.tickets as unknown as object,
             metadata: (input.metadata as unknown as object) ?? undefined,
             amountCents,
-            currency,
+            currency: validated.tier.currency,
           },
         });
 
@@ -313,7 +274,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         return tx.cart.update({
           where: { id: cart.id },
           data: { version: { increment: 1 } },
-          include: CART_INCLUDE_FOR_SERIALIZE,
+          include: {
+            items: {
+              include: {
+                extras: true,
+                tier: { select: { priceCents: true, currency: true, requiresCar: true } },
+              },
+            },
+          },
         });
       });
 
@@ -417,14 +385,11 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (input.paymentMethod === 'pix') {
-      const hasTicketOrder = data.orders.some(
-        (o) => o.kind === 'ticket' || o.kind === 'extras_only',
-      );
-      const hasProductOrder = data.orders.some((o) => o.kind === 'product');
-      const labels = data.orders.map((o) => o.description);
-      const prefix =
-        hasTicketOrder && hasProductOrder ? 'Pedido' : hasProductOrder ? 'Loja' : 'Ingressos';
-      const description = `${prefix} ${labels.join(' + ')}`;
+      const eventTitlesPix = await prisma.event.findMany({
+        where: { id: { in: data.orders.map((o) => o.eventId) } },
+        select: { title: true },
+      });
+      const description = `Ingressos ${eventTitlesPix.map((e) => e.title).join(' + ')}`;
 
       try {
         const billing = await app.abacatepay!.createPixBilling({
@@ -444,7 +409,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
 
         const updatedCart = await prisma.cart.findUniqueOrThrow({
           where: { id: cart.id },
-          include: CART_INCLUDE_FOR_SERIALIZE,
+          include: {
+            items: {
+              include: {
+                extras: true,
+                tier: { select: { priceCents: true, currency: true, requiresCar: true } },
+              },
+            },
+          },
         });
 
         return reply.status(201).send(
@@ -481,7 +453,11 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const sessionExpiryMs = Math.max(ORDER_EXPIRY_MS, STRIPE_MIN_SESSION_MS);
     const expiresAtUnix = Math.floor((Date.now() + sessionExpiryMs) / 1000);
 
-    const productName = data.orders.map((o) => o.description).join(' + ');
+    const eventTitles = await prisma.event.findMany({
+      where: { id: { in: data.orders.map((o) => o.eventId) } },
+      select: { title: true },
+    });
+    const productName = eventTitles.map((e) => e.title).join(' + ');
 
     const successUrl = input.successUrl ?? 'https://app.jdmexperience.com.br/checkout/success';
     const cancelUrl = input.cancelUrl ?? 'https://app.jdmexperience.com.br/checkout/cancel';
@@ -515,7 +491,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
 
       const updatedCart = await prisma.cart.findUniqueOrThrow({
         where: { id: cart.id },
-        include: CART_INCLUDE_FOR_SERIALIZE,
+        include: {
+          items: {
+            include: {
+              extras: true,
+              tier: { select: { priceCents: true, currency: true, requiresCar: true } },
+            },
+          },
+        },
       });
 
       const reservationExpiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);

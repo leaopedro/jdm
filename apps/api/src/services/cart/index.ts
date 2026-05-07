@@ -1,12 +1,5 @@
 import { prisma } from '@jdm/db';
-import type {
-  Cart,
-  CartItem,
-  CartItemInput,
-  CartItemProduct,
-  CartTotals,
-  EvictedCartItem,
-} from '@jdm/shared/cart';
+import type { Cart, CartItem, CartItemInput, CartTotals, EvictedCartItem } from '@jdm/shared/cart';
 import type { Prisma } from '@prisma/client';
 
 type CartWithItems = Prisma.CartGetPayload<{
@@ -15,44 +8,16 @@ type CartWithItems = Prisma.CartGetPayload<{
       include: {
         extras: true;
         tier: { select: { priceCents: true; currency: true; requiresCar: true } };
-        variant: {
-          select: {
-            id: true;
-            productId: true;
-            name: true;
-            sku: true;
-            priceCents: true;
-            attributes: true;
-            active: true;
-            quantityTotal: true;
-            quantitySold: true;
-            product: { select: { id: true; slug: true; title: true; currency: true } };
-          };
-        };
       };
     };
   };
 }>;
 
-export const CART_INCLUDE_FOR_SERIALIZE = {
+const CART_INCLUDE = {
   items: {
     include: {
       extras: true,
       tier: { select: { priceCents: true, currency: true, requiresCar: true } },
-      variant: {
-        select: {
-          id: true,
-          productId: true,
-          name: true,
-          sku: true,
-          priceCents: true,
-          attributes: true,
-          active: true,
-          quantityTotal: true,
-          quantitySold: true,
-          product: { select: { id: true, slug: true, title: true, currency: true } },
-        },
-      },
     },
   },
 } satisfies Prisma.CartInclude;
@@ -60,7 +25,7 @@ export const CART_INCLUDE_FOR_SERIALIZE = {
 export async function getActiveCart(userId: string): Promise<CartWithItems | null> {
   return prisma.cart.findFirst({
     where: { userId, status: 'open' },
-    include: CART_INCLUDE_FOR_SERIALIZE,
+    include: CART_INCLUDE,
   });
 }
 
@@ -71,12 +36,12 @@ export async function getOrCreateCart(userId: string): Promise<CartWithItems> {
         async (tx) => {
           const existing = await tx.cart.findFirst({
             where: { userId, status: 'open' },
-            include: CART_INCLUDE_FOR_SERIALIZE,
+            include: CART_INCLUDE,
           });
           if (existing) return existing;
           return tx.cart.create({
             data: { userId, status: 'open' },
-            include: CART_INCLUDE_FOR_SERIALIZE,
+            include: CART_INCLUDE,
           });
         },
         { isolationLevel: 'Serializable' },
@@ -86,7 +51,7 @@ export async function getOrCreateCart(userId: string): Promise<CartWithItems> {
       if (code === 'P2034' || code === 'P2002') {
         const found = await prisma.cart.findFirst({
           where: { userId, status: 'open' },
-          include: CART_INCLUDE_FOR_SERIALIZE,
+          include: CART_INCLUDE,
         });
         if (found) return found;
         continue;
@@ -98,15 +63,12 @@ export async function getOrCreateCart(userId: string): Promise<CartWithItems> {
 }
 
 export function computeItemAmount(
-  pricing: { tierPriceCents?: number; variantPriceCents?: number },
+  tier: { priceCents: number },
   quantity: number,
   extras: { subtotalCents: number }[],
-  kind: 'ticket' | 'extras_only' | 'product' = 'ticket',
+  kind: 'ticket' | 'extras_only' = 'ticket',
 ): number {
-  if (kind === 'product') {
-    return (pricing.variantPriceCents ?? 0) * quantity;
-  }
-  const tierTotal = kind === 'ticket' ? (pricing.tierPriceCents ?? 0) * quantity : 0;
+  const tierTotal = kind === 'ticket' ? tier.priceCents * quantity : 0;
   const extrasTotal = extras.reduce((sum, e) => sum + e.subtotalCents, 0);
   return tierTotal + extrasTotal;
 }
@@ -114,14 +76,10 @@ export function computeItemAmount(
 export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   let ticketSubtotalCents = 0;
   let extrasSubtotalCents = 0;
-  let productsSubtotalCents = 0;
 
   for (const item of items) {
-    if (item.kind === 'ticket' && item.tier) {
+    if (item.kind === 'ticket') {
       ticketSubtotalCents += item.tier.priceCents * item.quantity;
-    }
-    if (item.kind === 'product' && item.variant) {
-      productsSubtotalCents += item.variant.priceCents * item.quantity;
     }
     for (const extra of item.extras) {
       extrasSubtotalCents += extra.subtotalCents;
@@ -129,13 +87,11 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   }
 
   const discountCents = 0;
-  const amountCents =
-    ticketSubtotalCents + extrasSubtotalCents + productsSubtotalCents - discountCents;
+  const amountCents = ticketSubtotalCents + extrasSubtotalCents - discountCents;
 
   return {
     ticketSubtotalCents,
     extrasSubtotalCents,
-    productsSubtotalCents,
     discountCents,
     amountCents,
     currency: 'BRL',
@@ -143,44 +99,27 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
 }
 
 export function serializeCart(cart: CartWithItems): Cart {
-  const items: CartItem[] = cart.items.map((item) => {
-    const product: CartItemProduct | null = item.variant
-      ? {
-          productId: item.variant.product.id,
-          productTitle: item.variant.product.title,
-          productSlug: item.variant.product.slug,
-          variantId: item.variant.id,
-          variantName: item.variant.name,
-          variantSku: item.variant.sku,
-          unitPriceCents: item.variant.priceCents,
-          attributes: (item.variant.attributes as Record<string, unknown> | null) ?? null,
-        }
-      : null;
-
-    return {
-      id: item.id,
-      eventId: item.eventId,
-      tierId: item.tierId,
-      variantId: item.variantId,
-      source: item.source as 'purchase',
-      kind: item.kind as CartItem['kind'],
-      quantity: item.quantity,
-      requiresCar: item.tier?.requiresCar ?? false,
-      tickets: item.tickets as CartItem['tickets'],
-      extras: item.extras.map((e) => ({
-        extraId: e.extraId,
-        quantity: e.quantity,
-        unitPriceCents: e.unitPriceCents,
-        subtotalCents: e.subtotalCents,
-      })),
-      product,
-      amountCents: item.amountCents,
-      currency: item.currency,
-      reservationExpiresAt: item.reservationExpiresAt?.toISOString() ?? null,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
-    };
-  });
+  const items: CartItem[] = cart.items.map((item) => ({
+    id: item.id,
+    eventId: item.eventId,
+    tierId: item.tierId,
+    source: item.source as 'purchase',
+    kind: item.kind as CartItem['kind'],
+    quantity: item.quantity,
+    requiresCar: item.tier.requiresCar,
+    tickets: item.tickets as CartItem['tickets'],
+    extras: item.extras.map((e) => ({
+      extraId: e.extraId,
+      quantity: e.quantity,
+      unitPriceCents: e.unitPriceCents,
+      subtotalCents: e.subtotalCents,
+    })),
+    amountCents: item.amountCents,
+    currency: item.currency,
+    reservationExpiresAt: item.reservationExpiresAt?.toISOString() ?? null,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }));
 
   const totals = computeCartTotals(cart.items);
 
@@ -202,53 +141,6 @@ export async function evictStaleItems(cart: CartWithItems): Promise<EvictedCartI
   const idsToDelete: string[] = [];
 
   for (const item of cart.items) {
-    if (item.kind === 'product') {
-      if (!item.variantId) {
-        evicted.push({
-          itemId: item.id,
-          reason: 'variant_removed',
-          message: 'Variant is no longer available',
-        });
-        idsToDelete.push(item.id);
-        continue;
-      }
-      const variant = await prisma.variant.findUnique({
-        where: { id: item.variantId },
-        select: { id: true, active: true, quantityTotal: true, quantitySold: true },
-      });
-      if (!variant) {
-        evicted.push({
-          itemId: item.id,
-          reason: 'variant_removed',
-          message: 'Variant is no longer available',
-        });
-        idsToDelete.push(item.id);
-        continue;
-      }
-      if (!variant.active) {
-        evicted.push({
-          itemId: item.id,
-          reason: 'variant_inactive',
-          message: 'Variant is no longer active',
-        });
-        idsToDelete.push(item.id);
-        continue;
-      }
-      if (variant.quantityTotal - variant.quantitySold < item.quantity) {
-        evicted.push({
-          itemId: item.id,
-          reason: 'variant_sold_out',
-          message: 'Variant is sold out',
-        });
-        idsToDelete.push(item.id);
-      }
-      continue;
-    }
-
-    if (!item.eventId || !item.tierId) {
-      idsToDelete.push(item.id);
-      continue;
-    }
     const event = await prisma.event.findUnique({
       where: { id: item.eventId },
       select: { status: true },
@@ -333,38 +225,14 @@ function codedError(
   return Object.assign(new Error(message), { code, statusCode: status });
 }
 
-export type ValidatedCartItem =
-  | {
-      kind: 'ticket' | 'extras_only';
-      event: { id: string; maxTicketsPerUser: number };
-      tier: { id: string; priceCents: number; currency: string; requiresCar: boolean };
-      variant: null;
-    }
-  | {
-      kind: 'product';
-      event: null;
-      tier: null;
-      variant: {
-        id: string;
-        productId: string;
-        priceCents: number;
-        currency: string;
-      };
-    };
-
 export async function validateCartItem(
   input: CartItemInput,
   userId: string,
   excludeCartItemId?: string,
-): Promise<ValidatedCartItem> {
-  if (input.kind === 'product') {
-    return validateProductCartItem(input, excludeCartItemId);
-  }
-
-  if (!input.eventId || !input.tierId) {
-    throw codedError('eventId and tierId are required', 'EVENT_NOT_FOUND', 404);
-  }
-
+): Promise<{
+  event: { id: string; maxTicketsPerUser: number };
+  tier: { id: string; priceCents: number; currency: string; requiresCar: boolean };
+}> {
   const event = await prisma.event.findFirst({
     where: { id: input.eventId, status: 'published' },
     select: { id: true, maxTicketsPerUser: true },
@@ -476,61 +344,12 @@ export async function validateCartItem(
   }
 
   return {
-    kind: input.kind,
     event: { id: event.id, maxTicketsPerUser: event.maxTicketsPerUser },
     tier: {
       id: tier.id,
       priceCents: tier.priceCents,
       currency: tier.currency,
       requiresCar: tier.requiresCar,
-    },
-    variant: null,
-  };
-}
-
-async function validateProductCartItem(
-  input: CartItemInput,
-  excludeCartItemId?: string,
-): Promise<ValidatedCartItem> {
-  const variantId = input.variantId;
-  if (!variantId) {
-    throw codedError('variantId required for product items', 'VARIANT_NOT_FOUND', 404);
-  }
-
-  const variant = await prisma.variant.findUnique({
-    where: { id: variantId },
-    select: {
-      id: true,
-      productId: true,
-      priceCents: true,
-      quantityTotal: true,
-      quantitySold: true,
-      active: true,
-      product: { select: { id: true, status: true, currency: true } },
-    },
-  });
-  if (!variant) {
-    throw codedError('Variant not found', 'VARIANT_NOT_FOUND', 404);
-  }
-  if (!variant.active || variant.product.status !== 'active') {
-    throw codedError('Variant not available for sale', 'VARIANT_NOT_ACTIVE', 409);
-  }
-  void excludeCartItemId;
-
-  const available = variant.quantityTotal - variant.quantitySold;
-  if (available < input.quantity) {
-    throw codedError(`Only ${available} unit(s) remaining`, 'VARIANT_SOLD_OUT', 409);
-  }
-
-  return {
-    kind: 'product',
-    event: null,
-    tier: null,
-    variant: {
-      id: variant.id,
-      productId: variant.productId,
-      priceCents: variant.priceCents,
-      currency: variant.product.currency,
     },
   };
 }

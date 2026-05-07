@@ -516,7 +516,7 @@ describe('POST /abacatepay/webhook', () => {
         data: {
           userId: user.id,
           eventId: event.id,
-          tierId: order.tierId!,
+          tierId: order.tierId,
           source: 'comp',
           status: 'valid',
         },
@@ -616,7 +616,7 @@ describe('POST /abacatepay/webhook', () => {
           orderId: order.id,
           userId: user.id,
           eventId: event.id,
-          tierId: order.tierId!,
+          tierId: order.tierId,
           source: 'purchase',
           status: 'valid',
         },

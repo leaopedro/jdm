@@ -1,6 +1,6 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
@@ -80,20 +80,11 @@ export default function CartScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
-
   const handleRemove = useCallback(
     async (itemId: string) => {
       setRemovingId(itemId);
-      const ok = await removeItem(itemId);
+      await removeItem(itemId);
       setRemovingId(null);
-      if (!ok) {
-        showError(cartCopy.errors.remove);
-      }
     },
     [removeItem],
   );
@@ -104,10 +95,7 @@ export default function CartScreen() {
       cartCopy.actions.clearConfirm,
     );
     if (confirmed) {
-      const ok = await clear();
-      if (!ok) {
-        showError(cartCopy.errors.clear);
-      }
+      await clear();
     }
   }, [clear]);
 
@@ -158,10 +146,6 @@ export default function CartScreen() {
     setDrawerItem(item);
     setLoadingExtras(true);
     try {
-      if (!item.eventId) {
-        setDrawerExtras([]);
-        return;
-      }
       const event = await getEventCommerceById(item.eventId);
       setDrawerExtras(event.extras);
     } catch {
@@ -188,10 +172,7 @@ export default function CartScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.emptyText}>
-          {(() => {
-            const v = cartCopy.errors[error as keyof typeof cartCopy.errors];
-            return typeof v === 'string' ? v : cartCopy.errors.load;
-          })()}
+          {cartCopy.errors[error as keyof typeof cartCopy.errors] ?? cartCopy.errors.load}
         </Text>
         <View style={styles.ctaWrap}>
           <Button label={cartCopy.errors.retry} onPress={() => void refresh()} />
@@ -219,7 +200,6 @@ export default function CartScreen() {
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
 
   const openCarPlate = (item: CartItem) => {
-    if (!item.eventId || !item.tierId) return;
     const firstTicket = item.tickets[0];
     router.push({
       pathname: '/cart/car-plate',

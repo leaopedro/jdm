@@ -2,7 +2,6 @@ export const profileCopy = {
   profile: {
     title: 'Perfil',
     edit: 'Editar',
-    editDetails: 'Editar dados',
     save: 'Salvar',
     cancel: 'Cancelar',
     nameLabel: 'Nome',
@@ -13,14 +12,6 @@ export const profileCopy = {
     avatarUploading: 'Enviando foto…',
     saved: 'Perfil atualizado.',
     saveFailed: 'Não foi possível salvar.',
-    loadFailed: 'Não foi possível carregar o perfil.',
-  },
-  menu: {
-    subtitle: 'Gerencie seus dados e sua garagem.',
-    editHint: 'Atualize nome, bio e localização',
-    garage: 'Garagem',
-    garageHint: 'Veja e edite seus carros',
-    logoutHint: 'Encerrar sessão neste aparelho',
   },
   garage: {
     title: 'Garagem',

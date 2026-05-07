@@ -1,21 +1,35 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  type PublicProfile,
   BRAZIL_STATE_CODES,
   updateProfileSchema,
   type UpdateProfileInput,
 } from '@jdm/shared/profile';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { getProfile, updateProfile } from '~/api/profile';
+import { useAuth } from '~/auth/context';
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
+import { authCopy } from '~/copy/auth';
 import { profileCopy } from '~/copy/profile';
+import { pickAndUpload } from '~/lib/upload-image';
 import { theme } from '~/theme';
 
-export default function ProfileEditScreen() {
-  const [loading, setLoading] = useState(true);
+export default function ProfileScreen() {
+  const { logout } = useAuth();
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,32 +46,42 @@ export default function ProfileEditScreen() {
 
   useEffect(() => {
     void (async () => {
-      try {
-        const profile = await getProfile();
-        form.reset({
-          name: profile.name,
-          bio: profile.bio ?? '',
-          city: profile.city ?? '',
-          stateCode: (profile.stateCode as UpdateProfileInput['stateCode']) ?? undefined,
-        });
-      } catch {
-        showBanner(profileCopy.profile.loadFailed);
-      } finally {
-        setLoading(false);
-      }
+      const p = await getProfile();
+      setProfile(p);
+      form.reset({
+        name: p.name,
+        bio: p.bio ?? '',
+        city: p.city ?? '',
+        stateCode: (p.stateCode as UpdateProfileInput['stateCode']) ?? undefined,
+      });
     })();
   }, [form]);
 
   const onSave = form.handleSubmit(async (values) => {
     try {
-      await updateProfile(values);
+      const updated = await updateProfile(values);
+      setProfile(updated);
       showBanner(profileCopy.profile.saved);
     } catch {
       showBanner(profileCopy.profile.saveFailed);
     }
   });
 
-  if (loading) {
+  const onChangeAvatar = async () => {
+    setUploading(true);
+    try {
+      const up = await pickAndUpload('avatar');
+      if (!up) return;
+      const updated = await updateProfile({ avatarObjectKey: up.presign.objectKey });
+      setProfile(updated);
+    } catch {
+      showBanner(profileCopy.errors.unknown);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!profile) {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
@@ -67,6 +91,25 @@ export default function ProfileEditScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Pressable
+        onPress={() => void onChangeAvatar()}
+        style={styles.avatarBtn}
+        accessibilityRole="button"
+        accessibilityLabel={
+          uploading ? profileCopy.profile.avatarUploading : profileCopy.profile.avatarChange
+        }
+        accessibilityState={{ busy: uploading }}
+      >
+        {profile.avatarUrl ? (
+          <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} accessible={false} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]} />
+        )}
+        <Text style={styles.link}>
+          {uploading ? profileCopy.profile.avatarUploading : profileCopy.profile.avatarChange}
+        </Text>
+      </Pressable>
+
       <Controller
         control={form.control}
         name="name"
@@ -124,6 +167,7 @@ export default function ProfileEditScreen() {
 
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <Button label={profileCopy.profile.save} onPress={() => void onSave()} />
+      <Button label={authCopy.common.logout} variant="secondary" onPress={() => void logout()} />
     </ScrollView>
   );
 }
@@ -136,5 +180,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.bg,
   },
+  avatarBtn: { alignItems: 'center', gap: theme.spacing.xs },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
+  avatarPlaceholder: { backgroundColor: theme.colors.muted },
+  link: { color: theme.colors.fg, textDecorationLine: 'underline' },
   banner: { color: theme.colors.muted },
 });

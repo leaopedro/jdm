@@ -1,12 +1,23 @@
 import { prisma } from '@jdm/db';
 import type { Prisma } from '@prisma/client';
 
-import {
-  ORDER_EXPIRY_MS,
-  sweepExpiredOrdersForTier,
-  sweepExpiredOrdersForVariant,
-} from '../orders/expire.js';
+import { ORDER_EXPIRY_MS, sweepExpiredOrdersForTier } from '../orders/expire.js';
 import { reserveExtras, validateTickets } from '../orders/validate-tickets.js';
+
+type _CartItemWithExtras = Prisma.CartItemGetPayload<{
+  include: {
+    extras: true;
+    tier: {
+      select: {
+        priceCents: true;
+        currency: true;
+        requiresCar: true;
+        quantityTotal: true;
+        quantitySold: true;
+      };
+    };
+  };
+}>;
 
 type CartWithItems = Prisma.CartGetPayload<{
   include: {
@@ -22,18 +33,6 @@ type CartWithItems = Prisma.CartGetPayload<{
             quantitySold: true;
           };
         };
-        variant: {
-          select: {
-            id: true;
-            productId: true;
-            priceCents: true;
-            quantityTotal: true;
-            quantitySold: true;
-            active: true;
-            name: true;
-            product: { select: { id: true; title: true; status: true; currency: true } };
-          };
-        };
       };
     };
   };
@@ -41,13 +40,11 @@ type CartWithItems = Prisma.CartGetPayload<{
 
 export type CartOrder = {
   id: string;
-  eventId: string | null;
-  tierId: string | null;
-  variantId: string | null;
+  eventId: string;
+  tierId: string;
   amountCents: number;
   quantity: number;
-  kind: 'ticket' | 'extras_only' | 'product';
-  description: string;
+  kind: 'ticket' | 'extras_only';
 };
 
 export type CheckoutResult = {
@@ -69,18 +66,6 @@ const CART_CHECKOUT_INCLUDE = {
           requiresCar: true,
           quantityTotal: true,
           quantitySold: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          productId: true,
-          priceCents: true,
-          quantityTotal: true,
-          quantitySold: true,
-          active: true,
-          name: true,
-          product: { select: { id: true, title: true, status: true, currency: true } },
         },
       },
     },
@@ -128,32 +113,12 @@ export async function reserveAndCreateOrders(
       const orders: CartOrder[] = [];
 
       for (const item of cart.items) {
-        if (item.kind === 'product') {
-          const order = await reserveProductCartItem(
-            item,
-            cart.id,
-            userId,
-            method,
-            provider,
-            tx,
-            allExpiredRefs,
-          );
-          orders.push(order);
-          continue;
-        }
-
         const isExtrasOnly = item.kind === 'extras_only';
         const tickets = item.tickets as Array<{
           carId?: string;
           licensePlate?: string;
           extras?: string[];
         }>;
-
-        if (!item.tierId || !item.eventId) {
-          throw Object.assign(new Error('ticket cart item missing eventId/tierId'), {
-            code: 'CART_ITEM_INVALID',
-          });
-        }
 
         const tier = await tx.ticketTier.findUniqueOrThrow({
           where: { id: item.tierId },
@@ -201,11 +166,6 @@ export async function reserveAndCreateOrders(
 
         await reserveExtras(validation.extraStock, tx);
 
-        const event = await tx.event.findUniqueOrThrow({
-          where: { id: item.eventId },
-          select: { title: true },
-        });
-
         const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
         const order = await tx.order.create({
           data: {
@@ -235,42 +195,13 @@ export async function reserveAndCreateOrders(
           });
         }
 
-        if (!isExtrasOnly) {
-          const ticketSubtotal = tier.priceCents * item.quantity;
-          await tx.orderItem.create({
-            data: {
-              orderId: order.id,
-              kind: 'ticket',
-              tierId: tier.id,
-              quantity: item.quantity,
-              unitPriceCents: tier.priceCents,
-              subtotalCents: ticketSubtotal,
-            },
-          });
-        }
-
-        if (validation.extraEntries.length > 0) {
-          await tx.orderItem.createMany({
-            data: validation.extraEntries.map(({ extraId, priceCents, quantity }) => ({
-              orderId: order.id,
-              kind: 'extras' as const,
-              extraId,
-              quantity,
-              unitPriceCents: priceCents,
-              subtotalCents: priceCents * quantity,
-            })),
-          });
-        }
-
         orders.push({
           id: order.id,
           eventId: item.eventId,
           tierId: item.tierId,
-          variantId: null,
           amountCents: item.amountCents,
           quantity: item.quantity,
           kind: isExtrasOnly ? 'extras_only' : 'ticket',
-          description: event.title,
         });
       }
 
@@ -301,113 +232,23 @@ export async function reserveAndCreateOrders(
     };
   } catch (err) {
     const coded = err as Error & { code?: string };
-    if (
-      coded.code === 'TIER_SOLD_OUT' ||
-      coded.code === 'EXTRA_SOLD_OUT' ||
-      coded.code === 'VARIANT_SOLD_OUT' ||
-      coded.code === 'VARIANT_NOT_ACTIVE' ||
-      coded.code === 'CART_ALREADY_CHECKING_OUT' ||
-      coded.code === 'CART_ITEM_INVALID'
-    ) {
+    if (coded.code === 'TIER_SOLD_OUT') {
+      return { ok: false, status: 409, error: 'Conflict', message: coded.message };
+    }
+    if (coded.code === 'EXTRA_SOLD_OUT') {
+      return { ok: false, status: 409, error: 'Conflict', message: coded.message };
+    }
+    if (coded.code === 'CART_ALREADY_CHECKING_OUT') {
       return { ok: false, status: 409, error: 'Conflict', message: coded.message };
     }
     throw err;
   }
 }
 
-type ProductCartItem = CartWithItems['items'][number] & {
-  variant: NonNullable<CartWithItems['items'][number]['variant']>;
-};
-
-async function reserveProductCartItem(
-  item: CartWithItems['items'][number],
-  cartId: string,
-  userId: string,
-  method: CartCheckoutMethod,
-  provider: 'stripe' | 'abacatepay',
-  tx: Prisma.TransactionClient,
-  expiredRefs: string[],
-): Promise<CartOrder> {
-  if (!item.variantId || !item.variant) {
-    throw Object.assign(new Error('product cart item missing variant'), {
-      code: 'CART_ITEM_INVALID',
-    });
-  }
-  const productItem = item as ProductCartItem;
-  const variant = productItem.variant;
-
-  if (!variant.active || variant.product.status !== 'active') {
-    throw Object.assign(new Error(`variant ${variant.id} not active`), {
-      code: 'VARIANT_NOT_ACTIVE',
-    });
-  }
-
-  const sweep = await sweepExpiredOrdersForVariant(variant.id, tx);
-  expiredRefs.push(...sweep.expiredProviderRefs);
-
-  const reservation = await tx.variant.updateMany({
-    where: { id: variant.id, quantitySold: { lte: variant.quantityTotal - item.quantity } },
-    data: { quantitySold: { increment: item.quantity } },
-  });
-  if (reservation.count === 0) {
-    throw Object.assign(new Error(`variant ${variant.id} sold out`), {
-      code: 'VARIANT_SOLD_OUT',
-      variantId: variant.id,
-    });
-  }
-
-  const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
-  const order = await tx.order.create({
-    data: {
-      userId,
-      eventId: null,
-      tierId: null,
-      cartId,
-      kind: 'product',
-      amountCents: item.amountCents,
-      quantity: item.quantity,
-      currency: variant.product.currency,
-      method,
-      provider,
-      status: 'pending',
-      expiresAt,
-    },
-  });
-
-  await tx.orderItem.create({
-    data: {
-      orderId: order.id,
-      kind: 'product',
-      variantId: variant.id,
-      quantity: item.quantity,
-      unitPriceCents: variant.priceCents,
-      subtotalCents: variant.priceCents * item.quantity,
-    },
-  });
-
-  const description = `${variant.product.title} — ${variant.name}`;
-
-  return {
-    id: order.id,
-    eventId: null,
-    tierId: null,
-    variantId: variant.id,
-    amountCents: item.amountCents,
-    quantity: item.quantity,
-    kind: 'product',
-    description,
-  };
-}
-
 export async function rollbackCartCheckout(cartId: string, orders: CartOrder[]): Promise<void> {
   await prisma.$transaction(async (tx) => {
     for (const order of orders) {
-      if (order.kind === 'product' && order.variantId) {
-        await tx.variant.updateMany({
-          where: { id: order.variantId, quantitySold: { gte: order.quantity } },
-          data: { quantitySold: { decrement: order.quantity } },
-        });
-      } else if (order.kind === 'ticket' && order.tierId) {
+      if (order.kind !== 'extras_only') {
         await tx.ticketTier.updateMany({
           where: { id: order.tierId, quantitySold: { gte: order.quantity } },
           data: { quantitySold: { decrement: order.quantity } },
@@ -425,7 +266,6 @@ export async function rollbackCartCheckout(cartId: string, orders: CartOrder[]):
         });
       }
 
-      await tx.orderItem.deleteMany({ where: { orderId: order.id } });
       await tx.orderExtra.deleteMany({ where: { orderId: order.id } });
       await tx.order.delete({ where: { id: order.id } });
     }

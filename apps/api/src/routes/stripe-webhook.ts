@@ -44,7 +44,7 @@ const markRefundedAndReleaseReservation = async (orderId: string): Promise<void>
     if (updated.count !== 1) return;
 
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-    if (order.kind === 'ticket' && order.tierId) {
+    if (order.kind !== 'extras_only') {
       await tx.ticketTier.updateMany({
         where: { id: order.tierId, quantitySold: { gte: order.quantity } },
         data: { quantitySold: { decrement: order.quantity } },
@@ -166,7 +166,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
           data: { status: 'failed', failedAt: new Date() },
         });
 
-        if (order.kind === 'ticket' && order.tierId) {
+        if (order.kind !== 'extras_only') {
           await tx.ticketTier.updateMany({
             where: { id: order.tierId, quantitySold: { gte: order.quantity } },
             data: { quantitySold: { decrement: order.quantity } },
@@ -435,7 +435,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
           });
           if (updated.count === 1) {
             const order = await tx.order.findUniqueOrThrow({ where: { id: sessionOrderId } });
-            if (order.kind === 'ticket' && order.tierId) {
+            if (order.kind !== 'extras_only') {
               await tx.ticketTier.updateMany({
                 where: { id: order.tierId, quantitySold: { gte: order.quantity } },
                 data: { quantitySold: { decrement: order.quantity } },
@@ -470,7 +470,7 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         });
         if (updated.count === 1) {
           const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-          if (order.kind === 'ticket' && order.tierId) {
+          if (order.kind !== 'extras_only') {
             await tx.ticketTier.updateMany({
               where: { id: order.tierId, quantitySold: { gte: order.quantity } },
               data: { quantitySold: { decrement: order.quantity } },
