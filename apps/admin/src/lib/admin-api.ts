@@ -58,6 +58,11 @@ import {
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
 import { publicProfileSchema } from '@jdm/shared/profile';
+import {
+  storeSettingsSchema,
+  type StoreSettings,
+  type StoreSettingsUpdate,
+} from '@jdm/shared/store';
 import { z } from 'zod';
 
 import { apiFetch } from './api';
@@ -311,6 +316,15 @@ export const setAdminCollectionProducts = (id: string, productIds: string[]) =>
 export const lookupAdminStoreProducts = (): Promise<AdminStoreProductLookupResponse> =>
   apiFetch('/admin/store/products/lookup', { schema: adminStoreProductLookupResponseSchema });
 
+export const getAdminStoreSettings = (): Promise<StoreSettings> =>
+  apiFetch('/admin/store/settings', { schema: storeSettingsSchema });
+
+export const updateAdminStoreSettings = (input: StoreSettingsUpdate): Promise<StoreSettings> =>
+  apiFetch('/admin/store/settings', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+    schema: storeSettingsSchema,
+  });
 // ── Admin store: products / variants / photos ────────────────────────
 
 export const listAdminStoreProducts = () =>

@@ -34,6 +34,7 @@ export const adminAuditActionSchema = z.enum([
   'store.collection.delete',
   'store.collection.reorder',
   'store.collection.assign_products',
+  'store_settings.update',
   'store.product.create',
   'store.product.update',
   'store.product.archive',

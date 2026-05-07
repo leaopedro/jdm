@@ -13,6 +13,7 @@ export type RecordAuditInput = {
     | 'ticket_extra_item'
     | 'user'
     | 'store_collection'
+    | 'store_settings'
     | 'product'
     | 'variant'
     | 'product_type';
