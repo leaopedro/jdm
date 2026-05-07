@@ -22,6 +22,7 @@ import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
 import { meTicketsRoutes } from './routes/me-tickets.js';
 import { meRoutes } from './routes/me.js';
 import { orderRoutes } from './routes/orders.js';
+import { storeRoutes } from './routes/store.js';
 import { stripeWebhookRoutes } from './routes/stripe-webhook.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { buildAbacatePay, type AbacatePayClient } from './services/abacatepay/index.js';
@@ -94,6 +95,7 @@ export const buildApp = async (
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
+  await app.register(storeRoutes);
   await app.register(cartRoutes);
   await app.register(orderRoutes);
   await app.register(stripeWebhookRoutes);
