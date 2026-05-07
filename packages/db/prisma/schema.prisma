@@ -175,7 +175,7 @@ model Event {
   type              EventType
   status            EventStatus @default(draft)
   capacity          Int
-  maxTicketsPerUser Int         @default(1)
+  maxTicketsPerUser Int?
   publishedAt       DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt

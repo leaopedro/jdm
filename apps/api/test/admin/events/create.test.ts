@@ -114,7 +114,7 @@ describe('POST /admin/events', () => {
     expect(row.maxTicketsPerUser).toBe(3);
   });
 
-  it('defaults maxTicketsPerUser to 1 when omitted', async () => {
+  it('defaults maxTicketsPerUser to null (unlimited) when omitted', async () => {
     const { user } = await createUser({ email: 'o3@jdm.test', verified: true, role: 'organizer' });
     const res = await app.inject({
       method: 'POST',
@@ -123,18 +123,33 @@ describe('POST /admin/events', () => {
       payload: { ...validBody, slug: 'ev-default-max' },
     });
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ maxTicketsPerUser: number }>();
-    expect(body.maxTicketsPerUser).toBe(1);
+    const body = res.json<{ maxTicketsPerUser: number | null }>();
+    expect(body.maxTicketsPerUser).toBeNull();
   });
 
-  it('400 on maxTicketsPerUser > 10', async () => {
+  it('accepts maxTicketsPerUser above legacy cap of 10', async () => {
     const { user } = await createUser({ email: 'o4@jdm.test', verified: true, role: 'organizer' });
     const res = await app.inject({
       method: 'POST',
       url: '/admin/events',
       headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
-      payload: { ...validBody, slug: 'ev-too-many', maxTicketsPerUser: 11 },
+      payload: { ...validBody, slug: 'ev-many', maxTicketsPerUser: 250 },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ maxTicketsPerUser: number }>();
+    expect(body.maxTicketsPerUser).toBe(250);
+  });
+
+  it('accepts maxTicketsPerUser=null (explicit unlimited)', async () => {
+    const { user } = await createUser({ email: 'o5@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/events',
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { ...validBody, slug: 'ev-unlimited', maxTicketsPerUser: null },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ maxTicketsPerUser: number | null }>();
+    expect(body.maxTicketsPerUser).toBeNull();
   });
 });

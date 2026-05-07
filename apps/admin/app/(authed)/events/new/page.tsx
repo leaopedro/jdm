@@ -142,13 +142,12 @@ export default function NewEventPage() {
           defaultValue={v.capacity ?? ''}
         />
         <Field
-          label="Máx. ingressos por usuário"
+          label="Máx. ingressos por usuário (em branco = sem limite)"
           name="maxTicketsPerUser"
           type="number"
           min={1}
-          max={10}
-          required
-          defaultValue={v.maxTicketsPerUser ?? '1'}
+          placeholder="Sem limite"
+          defaultValue={v.maxTicketsPerUser ?? ''}
         />
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">

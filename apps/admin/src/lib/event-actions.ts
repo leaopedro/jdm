@@ -46,7 +46,12 @@ export const createEventAction = async (
     stateCode: fd.get('stateCode'),
     type: fd.get('type'),
     capacity: toNumber(fd.get('capacity')),
-    maxTicketsPerUser: toNumber(fd.get('maxTicketsPerUser')),
+    // Empty string -> null (unlimited tickets per user).
+    maxTicketsPerUser: (() => {
+      const v = fd.get('maxTicketsPerUser');
+      if (typeof v !== 'string' || v.trim() === '') return null;
+      return Number(v);
+    })(),
   });
   if (!parsed.success) {
     return {
@@ -79,9 +84,12 @@ export const updateEventAction = async (
   // stateCode: empty-string -> null so the user can clear a previously set value.
   const stateCode = fd.get('stateCode');
   if (typeof stateCode === 'string') raw.stateCode = stateCode === '' ? null : stateCode;
-  for (const key of ['capacity', 'maxTicketsPerUser']) {
-    const v = fd.get(key);
-    if (typeof v === 'string' && v !== '') raw[key] = Number(v);
+  const capacity = fd.get('capacity');
+  if (typeof capacity === 'string' && capacity !== '') raw.capacity = Number(capacity);
+  // maxTicketsPerUser: blank -> null (clear cap), value -> number.
+  const maxTickets = fd.get('maxTicketsPerUser');
+  if (typeof maxTickets === 'string') {
+    raw.maxTicketsPerUser = maxTickets.trim() === '' ? null : Number(maxTickets);
   }
   for (const key of ['startsAt', 'endsAt']) {
     const v = fd.get(key);

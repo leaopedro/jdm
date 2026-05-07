@@ -137,14 +137,44 @@ describe('PATCH /admin/events/:id', () => {
     expect(row.maxTicketsPerUser).toBe(4);
   });
 
-  it('400 on maxTicketsPerUser > 10 in PATCH', async () => {
+  it('accepts maxTicketsPerUser above legacy cap of 10 in PATCH', async () => {
     const event = await mkEvent();
     const { user } = await createUser({ email: 'o4@jdm.test', verified: true, role: 'organizer' });
     const res = await app.inject({
       method: 'PATCH',
       url: `/admin/events/${event.id}`,
       headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
-      payload: { maxTicketsPerUser: 99 },
+      payload: { maxTicketsPerUser: 250 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ maxTicketsPerUser: number }>();
+    expect(body.maxTicketsPerUser).toBe(250);
+  });
+
+  it('clears maxTicketsPerUser when patched with null (unlimited)', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o5@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { maxTicketsPerUser: null },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ maxTicketsPerUser: number | null }>();
+    expect(body.maxTicketsPerUser).toBeNull();
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.maxTicketsPerUser).toBeNull();
+  });
+
+  it('400 on maxTicketsPerUser < 1 in PATCH', async () => {
+    const event = await mkEvent();
+    const { user } = await createUser({ email: 'o6@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/events/${event.id}`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+      payload: { maxTicketsPerUser: 0 },
     });
     expect(res.statusCode).toBe(400);
   });

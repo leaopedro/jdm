@@ -336,7 +336,7 @@ function codedError(
 export type ValidatedCartItem =
   | {
       kind: 'ticket' | 'extras_only';
-      event: { id: string; maxTicketsPerUser: number };
+      event: { id: string; maxTicketsPerUser: number | null };
       tier: { id: string; priceCents: number; currency: string; requiresCar: boolean };
       variant: null;
     }
@@ -423,13 +423,15 @@ export async function validateCartItem(
   });
   const pendingQty = pendingCartItems._sum.quantity ?? 0;
 
-  const totalAfter = existingTickets + pendingQty + input.quantity;
-  if (totalAfter > event.maxTicketsPerUser) {
-    throw codedError(
-      `Exceeds max ${event.maxTicketsPerUser} ticket(s) per user for this event`,
-      'MAX_TICKETS_EXCEEDED',
-      409,
-    );
+  if (event.maxTicketsPerUser !== null) {
+    const totalAfter = existingTickets + pendingQty + input.quantity;
+    if (totalAfter > event.maxTicketsPerUser) {
+      throw codedError(
+        `Exceeds max ${event.maxTicketsPerUser} ticket(s) per user for this event`,
+        'MAX_TICKETS_EXCEEDED',
+        409,
+      );
+    }
   }
 
   if (input.tickets.length !== input.quantity) {

@@ -28,8 +28,9 @@ export const createOrderRequestSchema = z.object({
   quantity: z.number().int().positive().default(1),
   method: paymentMethodSchema,
   extrasOnly: z.boolean().default(false),
-  // Server enforces per-event maxTicketsPerUser; admin schema caps that at 10.
-  tickets: z.array(ticketInputSchema).min(1).max(10),
+  // Server enforces per-event maxTicketsPerUser (nullable = unlimited).
+  // Request-size safety cap only; not a per-user business limit.
+  tickets: z.array(ticketInputSchema).min(1).max(500),
 });
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 
