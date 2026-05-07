@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   adminStoreFulfillmentUpdateSchema,
   mixedOrderRequestSchema,
+  shippingAddressInputSchema,
+  shippingAddressRecordSchema,
   shippingAddressSchema,
+  shippingAddressUpdateSchema,
   storeProductListQuerySchema,
   storeProductSchema,
 } from '../src/store.js';
@@ -37,6 +40,52 @@ describe('shippingAddressSchema', () => {
         stateCode: 'PR',
       }),
     ).toThrow();
+  });
+});
+
+describe('shippingAddressInputSchema', () => {
+  it('accepts isDefault flag', () => {
+    const parsed = shippingAddressInputSchema.parse({
+      recipientName: 'Pedro Alves',
+      phone: '41999998888',
+      postalCode: '80000-000',
+      street: 'Rua das Oficinas',
+      number: '245',
+      neighborhood: 'Centro',
+      city: 'Curitiba',
+      stateCode: 'PR',
+      isDefault: true,
+    });
+    expect(parsed.isDefault).toBe(true);
+  });
+});
+
+describe('shippingAddressUpdateSchema', () => {
+  it('allows partial payloads', () => {
+    expect(() => shippingAddressUpdateSchema.parse({ isDefault: true })).not.toThrow();
+    expect(() => shippingAddressUpdateSchema.parse({ city: 'Curitiba' })).not.toThrow();
+  });
+});
+
+describe('shippingAddressRecordSchema', () => {
+  it('parses a stored shipping address record', () => {
+    expect(() =>
+      shippingAddressRecordSchema.parse({
+        id: 'addr_1',
+        recipientName: 'Pedro Alves',
+        phone: '41999998888',
+        postalCode: '80000-000',
+        street: 'Rua das Oficinas',
+        number: '245',
+        neighborhood: 'Centro',
+        city: 'Curitiba',
+        stateCode: 'PR',
+        countryCode: 'BR',
+        isDefault: true,
+        createdAt: '2026-05-07T12:00:00.000Z',
+        updatedAt: '2026-05-07T12:00:00.000Z',
+      }),
+    ).not.toThrow();
   });
 });
 
