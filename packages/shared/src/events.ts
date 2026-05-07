@@ -48,9 +48,8 @@ export const eventDetailPublicSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
-  // Optional during rollout: legacy API responses may omit this field.
-  // Server enforces the real per-event cap regardless.
-  maxTicketsPerUser: z.number().int().min(1).max(10).optional(),
+  // null = unlimited; legacy responses may omit. Server enforces the real cap.
+  maxTicketsPerUser: z.number().int().min(1).nullable().optional(),
 });
 export type EventDetailPublic = z.infer<typeof eventDetailPublicSchema>;
 

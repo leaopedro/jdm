@@ -39,11 +39,11 @@ export class TicketAlreadyExistsForEventError extends Error {
   constructor(
     public readonly userId: string,
     public readonly eventId: string,
-    public readonly maxTicketsPerUser: number,
+    public readonly maxTicketsPerUser: number | null,
     public readonly existingValidCount: number,
   ) {
     super(
-      `user ${userId} reached ticket limit (${existingValidCount}/${maxTicketsPerUser}) for event ${eventId}`,
+      `user ${userId} reached ticket limit (${existingValidCount}/${maxTicketsPerUser ?? '∞'}) for event ${eventId}`,
     );
     this.name = 'TicketAlreadyExistsForEventError';
   }
@@ -201,16 +201,18 @@ export const issueTicketForPaidOrder = async (
       throw new OrderNotPendingError(orderId, order.status);
     }
 
-    const existingValidCount = await tx.ticket.count({
-      where: { userId: order.userId, eventId, status: 'valid' },
-    });
-    if (existingValidCount + order.quantity > eventBundle.maxTicketsPerUser) {
-      throw new TicketAlreadyExistsForEventError(
-        order.userId,
-        eventId,
-        eventBundle.maxTicketsPerUser,
-        existingValidCount,
-      );
+    if (eventBundle.maxTicketsPerUser !== null) {
+      const existingValidCount = await tx.ticket.count({
+        where: { userId: order.userId, eventId, status: 'valid' },
+      });
+      if (existingValidCount + order.quantity > eventBundle.maxTicketsPerUser) {
+        throw new TicketAlreadyExistsForEventError(
+          order.userId,
+          eventId,
+          eventBundle.maxTicketsPerUser,
+          existingValidCount,
+        );
+      }
     }
 
     const ticketCount = order.quantity;

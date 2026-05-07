@@ -154,10 +154,13 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             name="maxTicketsPerUser"
             type="number"
             min={1}
-            max={10}
-            defaultValue={event.maxTicketsPerUser}
+            placeholder="Sem limite"
+            defaultValue={event.maxTicketsPerUser ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
+          <span className="text-xs text-[color:var(--color-muted)]">
+            Deixe em branco para não limitar.
+          </span>
         </label>
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2">

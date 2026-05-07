@@ -89,7 +89,8 @@ export const adminEventCreateSchema = z
     ),
     type: eventTypeSchema,
     capacity: z.number().int().nonnegative(),
-    maxTicketsPerUser: z.number().int().min(1).max(10).default(1),
+    // null = unlimited tickets per user; admins set whatever cap they want.
+    maxTicketsPerUser: z.number().int().min(1).nullable().default(null),
   })
   .refine((v) => new Date(v.endsAt) > new Date(v.startsAt), {
     message: 'endsAt must be after startsAt',
@@ -115,7 +116,7 @@ export const adminEventUpdateSchema = z
     ),
     type: eventTypeSchema,
     capacity: z.number().int().nonnegative(),
-    maxTicketsPerUser: z.number().int().min(1).max(10),
+    maxTicketsPerUser: z.number().int().min(1).nullable(),
   })
   .partial()
   .strict();
@@ -131,7 +132,7 @@ export type AdminTicketTier = z.infer<typeof adminTicketTierSchema>;
 export const adminEventDetailSchema = eventDetailCommerceSchema.omit({ tiers: true }).extend({
   status: eventStatusSchema,
   coverObjectKey: z.string().nullable(),
-  maxTicketsPerUser: z.number().int().min(1).max(10),
+  maxTicketsPerUser: z.number().int().min(1).nullable(),
   publishedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

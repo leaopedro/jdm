@@ -96,7 +96,11 @@ async function prepareOrder(
     }
   }
 
-  if (!isExtrasOnly && input.tickets.length > event.maxTicketsPerUser) {
+  if (
+    !isExtrasOnly &&
+    event.maxTicketsPerUser !== null &&
+    input.tickets.length > event.maxTicketsPerUser
+  ) {
     return {
       ok: false,
       status: 422,
