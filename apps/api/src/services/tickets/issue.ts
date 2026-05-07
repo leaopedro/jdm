@@ -155,10 +155,16 @@ export const issueTicketForPaidOrder = async (
     });
     if (!order) throw new OrderNotFoundError(orderId);
 
-    if (!order.eventId || !order.event) {
-      throw new Error(`order ${orderId} missing eventId/event for ticket issuance`);
+    if (order.kind === 'product' || order.kind === 'mixed') {
+      throw new Error(
+        `issueTicketForPaidOrder called on non-ticket order ${orderId} (kind=${order.kind})`,
+      );
+    }
+    if (!order.eventId || !order.tierId || !order.event) {
+      throw new Error(`order ${orderId} missing eventId/tierId/event for ticket issuance`);
     }
     const eventId = order.eventId;
+    const tierId = order.tierId;
     const eventBundle = order.event;
 
     await lockTicketTuple(tx, order.userId, eventId);
@@ -166,11 +172,6 @@ export const issueTicketForPaidOrder = async (
     if (order.kind === 'extras_only') {
       return issueExtrasOnly({ ...order, eventId, event: eventBundle }, providerRef, env, tx);
     }
-
-    if (!order.tierId) {
-      throw new Error(`order ${orderId} missing tierId for ticket issuance`);
-    }
-    const tierId = order.tierId;
 
     if (order.status === 'paid') {
       const existing = await tx.ticket.findMany({
