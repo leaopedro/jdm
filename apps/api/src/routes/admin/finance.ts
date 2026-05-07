@@ -5,7 +5,9 @@ import type { FastifyPluginAsync } from 'fastify';
 
 function buildWhere(query: unknown): Prisma.OrderWhereInput {
   const q = adminFinanceQuerySchema.parse(query);
-  const where: Prisma.OrderWhereInput = {};
+  const where: Prisma.OrderWhereInput = {
+    kind: { in: ['ticket', 'extras_only'] },
+  };
 
   if (q.statuses && q.statuses.length > 0) {
     where.status = { in: q.statuses };
@@ -78,42 +80,48 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/finance/by-event', async (request) => {
     const where = buildWhere(request.query);
+    const whereWithEvent: Prisma.OrderWhereInput = { ...where, eventId: { not: null } };
 
     const orders = await prisma.order.groupBy({
       by: ['eventId'],
-      where: { ...where, status: 'paid' },
+      where: { ...whereWithEvent, status: 'paid' },
       _sum: { amountCents: true },
       _count: { id: true },
     });
 
     const refunds = await prisma.order.groupBy({
       by: ['eventId'],
-      where: { ...where, status: 'refunded' },
+      where: { ...whereWithEvent, status: 'refunded' },
       _sum: { amountCents: true },
     });
 
-    const eventIds = orders.map((o) => o.eventId);
+    const eventIds = orders.map((o) => o.eventId).filter((id): id is string => id !== null);
     const events = await prisma.event.findMany({
       where: { id: { in: eventIds } },
       select: { id: true, title: true, startsAt: true, city: true, stateCode: true },
     });
     const eventMap = new Map(events.map((e) => [e.id, e]));
 
-    const refundMap = new Map(refunds.map((r) => [r.eventId, r._sum.amountCents ?? 0]));
+    const refundMap = new Map(
+      refunds
+        .filter((r): r is typeof r & { eventId: string } => r.eventId !== null)
+        .map((r) => [r.eventId, r._sum.amountCents ?? 0]),
+    );
 
     const ticketCounts = await prisma.ticket.groupBy({
       by: ['eventId'],
       where: {
         eventId: { in: eventIds },
-        order: where,
+        order: whereWithEvent,
         status: { in: ['valid', 'used'] },
       },
       _count: { id: true },
     });
-    const ticketMap = new Map(ticketCounts.map((t) => [t.eventId, t._count.id]));
+    const ticketMap = new Map(ticketCounts.map((t) => [t.eventId, t._count?.id ?? 0]));
 
     const items = orders
       .map((o) => {
+        if (!o.eventId) return null;
         const ev = eventMap.get(o.eventId);
         if (!ev) return null;
         return {
@@ -211,9 +219,9 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     const rows = orders.map((o) => {
       const cols = [
         o.id,
-        csvEscape(o.event.title),
-        csvEscape(o.event.city ?? ''),
-        o.event.stateCode ?? '',
+        csvEscape(o.event?.title ?? ''),
+        csvEscape(o.event?.city ?? ''),
+        o.event?.stateCode ?? '',
         csvEscape(o.user.name),
         csvEscape(o.user.email),
         o.amountCents,

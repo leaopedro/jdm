@@ -113,7 +113,7 @@ const flagManualRefund = (context: {
   orderId: string;
   providerRef: string;
   userId: string;
-  eventId: string;
+  eventId: string | null;
   reason: string;
 }) => {
   Sentry.withScope((scope) => {
