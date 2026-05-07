@@ -76,12 +76,12 @@ describe('cart reducer', () => {
     expect(next.cart).toBe(mockCart);
   });
 
-  it('MUTATE_ERROR clears adding and sets error', () => {
+  it('MUTATE_ERROR clears adding without overwriting cart load state', () => {
     const mutating: CartState = { ...initialState, adding: true };
     const next = reducer(mutating, { type: 'MUTATE_ERROR', error: 'remove' });
 
     expect(next.adding).toBe(false);
-    expect(next.error).toBe('remove');
+    expect(next.error).toBeNull();
   });
 
   it('full removeItem flow: MUTATE_START → FETCH_OK resets adding', () => {

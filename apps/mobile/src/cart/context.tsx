@@ -11,7 +11,7 @@ import { useAuth } from '~/auth/context';
 type CartContextValue = CartState & {
   itemCount: number;
   refresh: () => Promise<void>;
-  addItem: (item: CartItemInput) => Promise<boolean>;
+  addItem: (item: CartItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<boolean>;
   clear: () => Promise<boolean>;
 };
@@ -45,15 +45,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [auth.status, fetchCart]);
 
-  const addItem = useCallback(async (item: CartItemInput): Promise<boolean> => {
+  const addItem = useCallback(async (item: CartItemInput): Promise<void> => {
     dispatch({ type: 'MUTATE_START' });
     try {
       const res = await cartApi.upsertCartItem(item);
       dispatch({ type: 'MUTATE_OK', cart: res.cart });
-      return true;
-    } catch {
+    } catch (error: unknown) {
       dispatch({ type: 'MUTATE_ERROR', error: 'add' });
-      return false;
+      throw error;
     }
   }, []);
 

@@ -1,6 +1,6 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
@@ -80,11 +80,20 @@ export default function CartScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
 
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
   const handleRemove = useCallback(
     async (itemId: string) => {
       setRemovingId(itemId);
-      await removeItem(itemId);
+      const ok = await removeItem(itemId);
       setRemovingId(null);
+      if (!ok) {
+        showError(cartCopy.errors.remove);
+      }
     },
     [removeItem],
   );
@@ -95,7 +104,10 @@ export default function CartScreen() {
       cartCopy.actions.clearConfirm,
     );
     if (confirmed) {
-      await clear();
+      const ok = await clear();
+      if (!ok) {
+        showError(cartCopy.errors.clear);
+      }
     }
   }, [clear]);
 
