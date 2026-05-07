@@ -78,7 +78,7 @@ export type ExpireSingleOrderOutcome =
       order: {
         id: string;
         userId: string;
-        tierId: string;
+        tierId: string | null;
         kind: string;
         status: string;
         expiresAt: Date | null;
@@ -126,7 +126,7 @@ export const expireSingleOrder = async (
       where: { id: orderId, status: 'pending' },
       data: { status: 'expired' },
     });
-    if (order.kind !== 'extras_only') {
+    if (order.kind === 'ticket' && order.tierId) {
       await tx.ticketTier.updateMany({
         where: { id: order.tierId, quantitySold: { gt: 0 } },
         data: { quantitySold: { decrement: 1 } },
