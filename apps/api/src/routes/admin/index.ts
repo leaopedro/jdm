@@ -5,6 +5,7 @@ import { adminCheckInRoutes } from './check-in.js';
 import { adminEventRoutes } from './events.js';
 import { adminExtraRoutes } from './extras.js';
 import { adminFinanceRoutes } from './finance.js';
+import { adminStoreSettingsRoutes } from './store-settings.js';
 import { adminTicketRoutes } from './tickets.js';
 import { adminTierRoutes } from './tiers.js';
 import { adminUserMutationRoutes, adminUserRoutes } from './users.js';
@@ -27,6 +28,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminTicketRoutes);
     await scope.register(adminUserRoutes);
     await scope.register(adminFinanceRoutes);
+    await scope.register(adminStoreSettingsRoutes);
   });
 
   // User create/disable/enable: admin-only with tighter rate limit.

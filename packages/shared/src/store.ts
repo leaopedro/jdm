@@ -204,6 +204,35 @@ export const mixedOrderResponseSchema = z.object({
 });
 export type MixedOrderResponse = z.infer<typeof mixedOrderResponseSchema>;
 
+export const STORE_SETTINGS_SINGLETON_ID = 'store_default';
+
+export const storeSettingsSchema = z.object({
+  id: z.string().min(1),
+  defaultShippingFeeCents: z.number().int().nonnegative(),
+  lowStockThreshold: z.number().int().nonnegative(),
+  pickupDisplayLabel: z.string().nullable(),
+  supportPhone: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+});
+export type StoreSettings = z.infer<typeof storeSettingsSchema>;
+
+export const storeSettingsUpdateSchema = z
+  .object({
+    defaultShippingFeeCents: z.number().int().nonnegative().optional(),
+    lowStockThreshold: z.number().int().nonnegative().optional(),
+    pickupDisplayLabel: z.string().trim().max(140).nullable().optional(),
+    supportPhone: z.string().trim().max(20).nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.defaultShippingFeeCents !== undefined ||
+      value.lowStockThreshold !== undefined ||
+      value.pickupDisplayLabel !== undefined ||
+      value.supportPhone !== undefined,
+    { message: 'envie ao menos um campo para atualizar' },
+  );
+export type StoreSettingsUpdate = z.infer<typeof storeSettingsUpdateSchema>;
+
 export const adminStoreFulfillmentUpdateSchema = z
   .object({
     status: storeFulfillmentStatusSchema,

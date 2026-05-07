@@ -29,6 +29,7 @@ export const adminAuditActionSchema = z.enum([
   'user.create',
   'user.disable',
   'user.enable',
+  'store_settings.update',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
