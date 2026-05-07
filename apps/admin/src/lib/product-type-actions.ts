@@ -12,7 +12,7 @@ import { ApiError } from './api';
 
 export type ProductTypeFormState = { error: string | null };
 
-const TIPOS_PATH = '/store/tipos';
+const TIPOS_PATH = '/loja/tipos';
 
 export const createProductTypeAction = async (
   _prev: ProductTypeFormState,
