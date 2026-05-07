@@ -185,10 +185,11 @@ export const listAdminStoreOrders = async (
       })
     : [];
 
-  const trackingByOrder = new Map<string, string | null>();
+  const trackingByOrder = new Map<string, string>();
   for (const audit of lastTracking) {
     if (trackingByOrder.has(audit.entityId)) continue;
-    trackingByOrder.set(audit.entityId, trackingFromMetadata(audit.metadata));
+    const tracking = trackingFromMetadata(audit.metadata);
+    if (tracking) trackingByOrder.set(audit.entityId, tracking);
   }
 
   const items: AdminStoreOrderRow[] = orders.map((o) => ({

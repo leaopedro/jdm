@@ -231,6 +231,43 @@ describe('Admin store orders queue', () => {
       expect(body.items[0]!.customerEmail).toBe('pedido-target@jdm.test');
     });
 
+    it('preserves trackingCode in list after shipped → delivered transition', async () => {
+      const buyer = await createUser({ email: 'track-list@jdm.test', verified: true });
+      const order = await seedPaidProductOrder(buyer.user.id, {
+        fulfillmentMethod: 'ship',
+        fulfillmentStatus: 'packed',
+      });
+      const { header } = await orgAuth();
+
+      const ship = await app.inject({
+        method: 'PATCH',
+        url: `/admin/store/orders/${order.id}/fulfillment`,
+        headers: { authorization: header, 'content-type': 'application/json' },
+        payload: { status: 'shipped', trackingCode: 'BR987654321' },
+      });
+      expect(ship.statusCode).toBe(200);
+
+      const deliver = await app.inject({
+        method: 'PATCH',
+        url: `/admin/store/orders/${order.id}/fulfillment`,
+        headers: { authorization: header, 'content-type': 'application/json' },
+        payload: { status: 'delivered' },
+      });
+      expect(deliver.statusCode).toBe(200);
+
+      const list = await app.inject({
+        method: 'GET',
+        url: '/admin/store/orders',
+        headers: { authorization: header },
+      });
+      expect(list.statusCode).toBe(200);
+      const body = adminStoreOrderListResponseSchema.parse(list.json());
+      const row = body.items.find((i) => i.id === order.id);
+      expect(row).toBeDefined();
+      expect(row!.fulfillmentStatus).toBe('delivered');
+      expect(row!.trackingCode).toBe('BR987654321');
+    });
+
     it('rejects staff role', async () => {
       const { user } = await createUser({ email: 'staff@jdm.test', verified: true, role: 'staff' });
       const res = await app.inject({
