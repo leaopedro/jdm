@@ -5,6 +5,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
 import { createCar } from '~/api/cars';
+import { sanitizeNext } from '~/auth/redirect-intent';
 import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
@@ -13,7 +14,7 @@ import { theme } from '~/theme';
 export default function NewCar() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string }>();
-  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : null;
+  const returnTo = sanitizeNext(params.returnTo);
   const form = useForm<CarInput>({
     resolver: zodResolver(carInputSchema),
     defaultValues: {
