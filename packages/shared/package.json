@@ -58,6 +58,10 @@
       "types": "./src/push.ts",
       "default": "./dist/push.js"
     },
+    "./store": {
+      "types": "./src/store.ts",
+      "default": "./dist/store.js"
+    },
     "./tickets": {
       "types": "./src/tickets.ts",
       "default": "./dist/tickets.js"
