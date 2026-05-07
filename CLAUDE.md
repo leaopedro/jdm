@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Branch safety preflight
+
+- Before the first edit, run `git branch --show-current`.
+- If the output is `production`, STOP.
+- Do not edit files on `production`.
+- Do not commit on `production`.
+- Do not push on `production`.
+- Switch to `main` first.
+- Pull `main` with `git pull --ff-only origin main`.
+- Create the feature branch from `main`.
+- For isolated work, create a fresh worktree from `main`.
+- Never branch or create a worktree from `production`.
+
 ## Approach
 
 - Think before acting. Read existing files before writing code.
@@ -35,6 +48,8 @@ Hyphens map to standard grammar only.
 ## Git flow (load-bearing)
 
 - Branch from `main`.
+- Run the branch safety preflight first.
+- If you need a new worktree, create it from `main`.
 - Open PRs to `main` only.
 - Never commit to `production`.
 - Never push to `production`.

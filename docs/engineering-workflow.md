@@ -45,6 +45,12 @@ Non-negotiable constraints:
 - Never merge feature branches into `production`.
 - Never open PRs targeting `production`.
 
+The repo enforces the first two rules with local git hooks managed by
+`simple-git-hooks`. `pre-commit` rejects commits made while checked out on
+`production`, and `pre-push` rejects any refspec that targets
+`refs/heads/production`. If a fresh clone is missing those hooks, run
+`pnpm prepare`.
+
 If `production` is moved accidentally, stop immediately, notify the board on
 the owning issue, and wait for explicit rollback instructions.
 
