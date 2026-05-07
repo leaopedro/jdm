@@ -155,10 +155,22 @@ export const issueTicketForPaidOrder = async (
     });
     if (!order) throw new OrderNotFoundError(orderId);
 
-    await lockTicketTuple(tx, order.userId, order.eventId);
+    if (order.kind === 'product' || order.kind === 'mixed') {
+      throw new Error(
+        `issueTicketForPaidOrder called on non-ticket order ${orderId} (kind=${order.kind})`,
+      );
+    }
+    if (!order.eventId || !order.tierId || !order.event) {
+      throw new Error(`order ${orderId} missing eventId/tierId/event for ticket issuance`);
+    }
+    const eventId = order.eventId;
+    const tierId = order.tierId;
+    const eventBundle = order.event;
+
+    await lockTicketTuple(tx, order.userId, eventId);
 
     if (order.kind === 'extras_only') {
-      return issueExtrasOnly(order, providerRef, env, tx);
+      return issueExtrasOnly({ ...order, eventId, event: eventBundle }, providerRef, env, tx);
     }
 
     if (order.status === 'paid') {
@@ -181,7 +193,7 @@ export const issueTicketForPaidOrder = async (
         code: signTicketCode(first.id, env),
         userId: first.userId,
         eventId: first.eventId,
-        eventTitle: order.event.title,
+        eventTitle: eventBundle.title,
       };
     }
 
@@ -190,13 +202,13 @@ export const issueTicketForPaidOrder = async (
     }
 
     const existingValidCount = await tx.ticket.count({
-      where: { userId: order.userId, eventId: order.eventId, status: 'valid' },
+      where: { userId: order.userId, eventId, status: 'valid' },
     });
-    if (existingValidCount + order.quantity > order.event.maxTicketsPerUser) {
+    if (existingValidCount + order.quantity > eventBundle.maxTicketsPerUser) {
       throw new TicketAlreadyExistsForEventError(
         order.userId,
-        order.eventId,
-        order.event.maxTicketsPerUser,
+        eventId,
+        eventBundle.maxTicketsPerUser,
         existingValidCount,
       );
     }
@@ -210,8 +222,8 @@ export const issueTicketForPaidOrder = async (
         data: {
           orderId: order.id,
           userId: order.userId,
-          eventId: order.eventId,
-          tierId: order.tierId,
+          eventId,
+          tierId,
           source: 'purchase',
           status: 'valid',
           ...(meta?.carId ? { carId: meta.carId } : {}),
@@ -241,8 +253,8 @@ export const issueTicketForPaidOrder = async (
       ticketId: first.id,
       code: signTicketCode(first.id, env),
       userId: order.userId,
-      eventId: order.eventId,
-      eventTitle: order.event.title,
+      eventId,
+      eventTitle: eventBundle.title,
     };
   });
 };
