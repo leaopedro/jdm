@@ -1,7 +1,9 @@
 import { router, Tabs } from 'expo-router';
-import { CalendarDays, Car, Ticket, UserRound } from 'lucide-react-native';
+import { CalendarDays, Car, ShoppingCart, Ticket, UserRound } from 'lucide-react-native';
 
+import { useCart } from '~/cart/context';
 import { CartProvider } from '~/cart/context';
+import { cartCopy } from '~/copy/cart';
 
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
@@ -14,6 +16,9 @@ const TicketsIcon = ({ color }: { color: string }) => (
 );
 const GarageIcon = ({ color }: { color: string }) => (
   <Car color={color} size={22} strokeWidth={1.75} />
+);
+const CartIcon = ({ color }: { color: string }) => (
+  <ShoppingCart color={color} size={22} strokeWidth={1.75} />
 );
 const ProfileIcon = ({ color }: { color: string }) => (
   <UserRound color={color} size={22} strokeWidth={1.75} />
@@ -42,37 +47,67 @@ const screenOptions = {
   },
 } as const;
 
+function AppTabs() {
+  const { itemCount } = useCart();
+
+  return (
+    <Tabs screenOptions={screenOptions}>
+      <Tabs.Screen
+        name="events"
+        options={{ title: 'Eventos', tabBarIcon: EventsIcon }}
+        listeners={{
+          tabPress: (e) => {
+            // Default tab-press behavior on web preserves dynamic params
+            // (e.g. /events?eventSlug=...) which fails to pop deep routes
+            // like /events/buy/[eventSlug]. Force a clean replace to /events.
+            e.preventDefault();
+            router.replace('/events');
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="tickets"
+        options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.replace('/tickets');
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="garage"
+        options={{ href: null, title: 'Garagem', tabBarIcon: GarageIcon }}
+      />
+      <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: cartCopy.title,
+          tabBarIcon: CartIcon,
+          tabBarBadgeStyle: {
+            backgroundColor: ACTIVE,
+            color: '#F5F5F5',
+            fontFamily: 'Inter_700Bold',
+            fontSize: 10,
+          },
+          ...(itemCount > 0 ? { tabBarBadge: cartCopy.badge(itemCount) } : {}),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.replace('/cart');
+          },
+        }}
+      />
+    </Tabs>
+  );
+}
+
 export default function AppLayout() {
   return (
     <CartProvider>
-      <Tabs screenOptions={screenOptions}>
-        <Tabs.Screen
-          name="events"
-          options={{ title: 'Eventos', tabBarIcon: EventsIcon }}
-          listeners={{
-            tabPress: (e) => {
-              // Default tab-press behavior on web preserves dynamic params
-              // (e.g. /events?eventSlug=...) which fails to pop deep routes
-              // like /events/buy/[eventSlug]. Force a clean replace to /events.
-              e.preventDefault();
-              router.replace('/events');
-            },
-          }}
-        />
-        <Tabs.Screen
-          name="tickets"
-          options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }}
-          listeners={{
-            tabPress: (e) => {
-              e.preventDefault();
-              router.replace('/tickets');
-            },
-          }}
-        />
-        <Tabs.Screen name="garage" options={{ title: 'Garagem', tabBarIcon: GarageIcon }} />
-        <Tabs.Screen name="profile" options={{ title: 'Perfil', tabBarIcon: ProfileIcon }} />
-        <Tabs.Screen name="cart" options={{ href: null }} />
-      </Tabs>
+      <AppTabs />
     </CartProvider>
   );
 }
