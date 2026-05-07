@@ -69,6 +69,145 @@ const seedCartWithOrders = async (userId: string, opts?: { events?: number }) =>
   return { cart, orders, events };
 };
 
+const seedProductCartWithOrders = async (
+  userId: string,
+  opts?: { includeTicketOrder?: boolean; shippingFeeCents?: number },
+) => {
+  const productType = await prisma.productType.create({
+    data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+  });
+  const product = await prisma.product.create({
+    data: {
+      slug: `p-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Camiseta JDM',
+      description: 'Algodão premium',
+      productTypeId: productType.id,
+      basePriceCents: 9000,
+      currency: 'BRL',
+      status: 'active',
+      shippingFeeCents: opts?.shippingFeeCents ?? 1500,
+    },
+  });
+  const variant = await prisma.variant.create({
+    data: {
+      productId: product.id,
+      name: 'Preto — M',
+      sku: `SKU-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      priceCents: 9000,
+      quantityTotal: 10,
+      quantitySold: 1,
+      attributes: { size: 'M' },
+      active: true,
+    },
+  });
+  const cart = await prisma.cart.create({
+    data: { userId, status: 'checking_out' },
+  });
+  const address = await prisma.shippingAddress.create({
+    data: {
+      userId,
+      recipientName: 'Maria Santos',
+      line1: 'Rua das Flores',
+      line2: 'Apto 10',
+      number: '123',
+      district: 'Centro',
+      city: 'Curitiba',
+      stateCode: 'PR',
+      postalCode: '80000-000',
+      phone: '41999999999',
+      isDefault: true,
+    },
+  });
+
+  const orders = [
+    await prisma.order.create({
+      data: {
+        userId,
+        cartId: cart.id,
+        kind: 'product',
+        amountCents: 10_500,
+        quantity: 1,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        shippingAddressId: address.id,
+        shippingCents: 1500,
+        fulfillmentMethod: 'ship',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+        items: {
+          create: {
+            kind: 'product',
+            variantId: variant.id,
+            quantity: 1,
+            unitPriceCents: 9000,
+            subtotalCents: 9000,
+          },
+        },
+      },
+    }),
+  ];
+
+  if (opts?.includeTicketOrder) {
+    const event = await prisma.event.create({
+      data: {
+        slug: `e-${Math.random().toString(36).slice(2, 8)}`,
+        title: 'Evento Misto',
+        description: 'desc',
+        startsAt: new Date(Date.now() + 86_400_000),
+        endsAt: new Date(Date.now() + 90_000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'published',
+        capacity: 10,
+        maxTicketsPerUser: 5,
+        publishedAt: new Date(),
+      },
+    });
+    const tier = await prisma.ticketTier.create({
+      data: {
+        eventId: event.id,
+        name: 'Geral',
+        priceCents: 5000,
+        quantityTotal: 10,
+        quantitySold: 1,
+        sortOrder: 0,
+      },
+    });
+    orders.push(
+      await prisma.order.create({
+        data: {
+          userId,
+          eventId: event.id,
+          tierId: tier.id,
+          cartId: cart.id,
+          amountCents: 5000,
+          quantity: 1,
+          currency: 'BRL',
+          method: 'card',
+          provider: 'stripe',
+          status: 'pending',
+          expiresAt: new Date(Date.now() + 15 * 60_000),
+          items: {
+            create: {
+              kind: 'ticket',
+              tierId: tier.id,
+              quantity: 1,
+              unitPriceCents: 5000,
+              subtotalCents: 5000,
+            },
+          },
+        },
+      }),
+    );
+  }
+
+  return { cart, orders, variant };
+};
+
 describe('POST /stripe/webhook (cart checkout settlement)', () => {
   let app: FastifyInstance;
   let stripe: FakeStripe;
@@ -327,6 +466,90 @@ describe('POST /stripe/webhook (cart checkout settlement)', () => {
 
     const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
     expect(tickets).toHaveLength(orders.length);
+  });
+
+  it('payment_intent.succeeded settles product-only carts without issuing tickets', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, orders } = await seedProductCartWithOrders(user.id);
+
+    stripe.nextEvent = {
+      id: 'evt_cart_product_only',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_cart_product_only',
+          metadata: {
+            cartId: cart.id,
+            userId: user.id,
+            orderIds: JSON.stringify(orders.map((o) => o.id)),
+          },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const settled = await prisma.order.findMany({
+      where: { cartId: cart.id },
+      select: { status: true, shippingAddressId: true, shippingCents: true },
+    });
+    expect(settled).toEqual([
+      expect.objectContaining({
+        status: 'paid',
+        shippingCents: 1500,
+      }),
+    ]);
+
+    const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+    expect(tickets).toHaveLength(0);
+  });
+
+  it('payment_intent.succeeded settles mixed carts and only issues event tickets', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, orders } = await seedProductCartWithOrders(user.id, { includeTicketOrder: true });
+
+    stripe.nextEvent = {
+      id: 'evt_cart_mixed_1',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_cart_mixed_1',
+          metadata: {
+            cartId: cart.id,
+            userId: user.id,
+            orderIds: JSON.stringify(orders.map((o) => o.id)),
+          },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const updatedOrders = await prisma.order.findMany({
+      where: { cartId: cart.id },
+      select: { kind: true, status: true },
+    });
+    expect(updatedOrders.sort((a, b) => a.kind.localeCompare(b.kind))).toEqual([
+      { kind: 'product', status: 'paid' },
+      { kind: 'ticket', status: 'paid' },
+    ]);
+
+    const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+    expect(tickets).toHaveLength(1);
   });
 
   it('duplicate ticket in multi-order cart issues partial refund, not full PI refund', async () => {

@@ -1,6 +1,6 @@
 import { prisma } from '@jdm/db';
 import type { PushKind } from '@jdm/shared/push';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 import type { PushMessage, PushSender } from './types.js';
 
@@ -19,6 +19,19 @@ export type SendTransactionalPushResult = {
   invalidatedTokens: number;
 };
 
+const isUniqueConstraintError = (err: unknown): boolean => {
+  if (typeof err !== 'object' || err === null) {
+    return false;
+  }
+
+  const candidate = err as { code?: unknown; message?: unknown };
+  return (
+    candidate.code === 'P2002' ||
+    (typeof candidate.message === 'string' &&
+      candidate.message.includes('Unique constraint failed'))
+  );
+};
+
 export const sendTransactionalPush = async (
   input: SendTransactionalPushInput,
   deps: { sender: PushSender },
@@ -35,7 +48,7 @@ export const sendTransactionalPush = async (
       },
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueConstraintError(err)) {
       return { deduped: true, sent: 0, invalidatedTokens: 0 };
     }
     throw err;

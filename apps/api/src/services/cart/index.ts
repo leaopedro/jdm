@@ -26,7 +26,15 @@ type CartWithItems = Prisma.CartGetPayload<{
             active: true;
             quantityTotal: true;
             quantitySold: true;
-            product: { select: { id: true; slug: true; title: true; currency: true } };
+            product: {
+              select: {
+                id: true;
+                slug: true;
+                title: true;
+                currency: true;
+                shippingFeeCents: true;
+              };
+            };
           };
         };
       };
@@ -50,7 +58,15 @@ export const CART_INCLUDE_FOR_SERIALIZE = {
           active: true,
           quantityTotal: true,
           quantitySold: true,
-          product: { select: { id: true, slug: true, title: true, currency: true } },
+          product: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              currency: true,
+              shippingFeeCents: true,
+            },
+          },
         },
       },
     },
@@ -98,13 +114,17 @@ export async function getOrCreateCart(userId: string): Promise<CartWithItems> {
 }
 
 export function computeItemAmount(
-  pricing: { tierPriceCents?: number; variantPriceCents?: number },
+  pricing: {
+    tierPriceCents?: number;
+    variantPriceCents?: number;
+    shippingFeeCents?: number | null;
+  },
   quantity: number,
   extras: { subtotalCents: number }[],
   kind: 'ticket' | 'extras_only' | 'product' = 'ticket',
 ): number {
   if (kind === 'product') {
-    return (pricing.variantPriceCents ?? 0) * quantity;
+    return (pricing.variantPriceCents ?? 0) * quantity + (pricing.shippingFeeCents ?? 0);
   }
   const tierTotal = kind === 'ticket' ? (pricing.tierPriceCents ?? 0) * quantity : 0;
   const extrasTotal = extras.reduce((sum, e) => sum + e.subtotalCents, 0);
@@ -115,6 +135,7 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   let ticketSubtotalCents = 0;
   let extrasSubtotalCents = 0;
   let productsSubtotalCents = 0;
+  let shippingSubtotalCents = 0;
 
   for (const item of items) {
     if (item.kind === 'ticket' && item.tier) {
@@ -122,6 +143,7 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
     }
     if (item.kind === 'product' && item.variant) {
       productsSubtotalCents += item.variant.priceCents * item.quantity;
+      shippingSubtotalCents += item.variant.product.shippingFeeCents ?? 0;
     }
     for (const extra of item.extras) {
       extrasSubtotalCents += extra.subtotalCents;
@@ -130,12 +152,17 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
 
   const discountCents = 0;
   const amountCents =
-    ticketSubtotalCents + extrasSubtotalCents + productsSubtotalCents - discountCents;
+    ticketSubtotalCents +
+    extrasSubtotalCents +
+    productsSubtotalCents +
+    shippingSubtotalCents -
+    discountCents;
 
   return {
     ticketSubtotalCents,
     extrasSubtotalCents,
     productsSubtotalCents,
+    shippingSubtotalCents,
     discountCents,
     amountCents,
     currency: 'BRL',
@@ -153,6 +180,8 @@ export function serializeCart(cart: CartWithItems): Cart {
           variantName: item.variant.name,
           variantSku: item.variant.sku,
           unitPriceCents: item.variant.priceCents,
+          requiresShipping: item.variant.product.shippingFeeCents !== null,
+          shippingFeeCents: item.variant.product.shippingFeeCents,
           attributes: (item.variant.attributes as Record<string, unknown> | null) ?? null,
         }
       : null;
@@ -349,6 +378,7 @@ export type ValidatedCartItem =
         productId: string;
         priceCents: number;
         currency: string;
+        shippingFeeCents: number | null;
       };
     };
 
@@ -506,7 +536,7 @@ async function validateProductCartItem(
       quantityTotal: true,
       quantitySold: true,
       active: true,
-      product: { select: { id: true, status: true, currency: true } },
+      product: { select: { id: true, status: true, currency: true, shippingFeeCents: true } },
     },
   });
   if (!variant) {
@@ -531,6 +561,7 @@ async function validateProductCartItem(
       productId: variant.productId,
       priceCents: variant.priceCents,
       currency: variant.product.currency,
+      shippingFeeCents: variant.product.shippingFeeCents,
     },
   };
 }

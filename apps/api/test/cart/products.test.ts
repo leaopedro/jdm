@@ -48,6 +48,7 @@ const seedActiveProduct = async (opts?: {
   quantityTotal?: number;
   active?: boolean;
   productStatus?: 'draft' | 'active' | 'archived';
+  shippingFeeCents?: number | null;
 }) => {
   const productType = await prisma.productType.create({
     data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
@@ -61,6 +62,7 @@ const seedActiveProduct = async (opts?: {
       basePriceCents: opts?.variantPriceCents ?? 9000,
       currency: 'BRL',
       status: opts?.productStatus ?? 'active',
+      ...(opts?.shippingFeeCents !== undefined ? { shippingFeeCents: opts.shippingFeeCents } : {}),
     },
   });
   const variant = await prisma.variant.create({
@@ -77,6 +79,23 @@ const seedActiveProduct = async (opts?: {
   });
   return { product, variant };
 };
+
+const seedShippingAddress = async (userId: string) =>
+  prisma.shippingAddress.create({
+    data: {
+      userId,
+      recipientName: 'Maria Santos',
+      line1: 'Rua das Flores',
+      line2: 'Apto 10',
+      number: '123',
+      district: 'Centro',
+      city: 'Curitiba',
+      stateCode: 'PR',
+      postalCode: '80000-000',
+      phone: '41999999999',
+      isDefault: true,
+    },
+  });
 
 const addProductCartItem = async (
   app: FastifyInstance,
@@ -291,6 +310,67 @@ describe('cart product lines (JDMA-345)', () => {
       expect(payload.productName).toContain(product.title);
     });
 
+    it('requires shippingAddressId for shippable product carts', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ shippingFeeCents: 1500 });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('UnprocessableEntity');
+    });
+
+    it('adds shipping fee and fulfillment fields for shippable product checkout', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const address = await seedShippingAddress(user.id);
+      const { variant } = await seedActiveProduct({
+        variantPriceCents: 9000,
+        shippingFeeCents: 1500,
+      });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', shippingAddressId: address.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.cart.totals.shippingSubtotalCents).toBe(1500);
+      expect(body.cart.totals.amountCents).toBe(19_500);
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        include: { items: true },
+      });
+      expect(order.amountCents).toBe(19_500);
+      expect(order.shippingCents).toBe(1500);
+      expect(order.shippingAddressId).toBe(address.id);
+      expect(order.fulfillmentMethod).toBe('ship');
+      expect(order.items[0]!.subtotalCents).toBe(18_000);
+
+      const sessionCall = stripe.calls.find((c) => c.kind === 'createCheckoutSession');
+      expect(sessionCall).toBeDefined();
+      const payload = sessionCall!.payload as {
+        metadata: Record<string, string>;
+      };
+      expect(payload.metadata.shippingAddressId).toBe(address.id);
+      expect(payload.metadata.hasShippableItems).toBe('true');
+    });
+
     it('ticket-only checkout still writes ticket OrderItem rows', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
@@ -360,6 +440,49 @@ describe('cart product lines (JDMA-345)', () => {
       const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
       expect(tierAfter.quantitySold).toBe(1);
       expect(variantAfter.quantitySold).toBe(3);
+    });
+
+    it('mixed cart keeps shipping only on the product order', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const address = await seedShippingAddress(user.id);
+      const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
+      const { variant } = await seedActiveProduct({
+        variantPriceCents: 7000,
+        shippingFeeCents: 1200,
+      });
+
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', shippingAddressId: address.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.cart.totals.shippingSubtotalCents).toBe(1200);
+      expect(body.cart.totals.amountCents).toBe(12_200);
+
+      const orders = await prisma.order.findMany({
+        where: { id: { in: body.orderIds } },
+        include: { items: true },
+      });
+      const ticketOrder = orders.find((o) => o.kind === 'ticket')!;
+      const productOrder = orders.find((o) => o.kind === 'product')!;
+
+      expect(ticketOrder.shippingCents).toBe(0);
+      expect(ticketOrder.shippingAddressId).toBeNull();
+      expect(ticketOrder.fulfillmentMethod).toBe('pickup');
+
+      expect(productOrder.shippingCents).toBe(1200);
+      expect(productOrder.shippingAddressId).toBe(address.id);
+      expect(productOrder.fulfillmentMethod).toBe('ship');
+      expect(productOrder.amountCents).toBe(8200);
+      expect(productOrder.items[0]!.subtotalCents).toBe(7000);
     });
 
     it('rolls back variant reservation when Stripe session fails', async () => {

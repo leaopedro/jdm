@@ -138,6 +138,7 @@ export const cartTotalsSchema = z.object({
   ticketSubtotalCents: z.number().int().nonnegative(),
   extrasSubtotalCents: z.number().int().nonnegative(),
   productsSubtotalCents: z.number().int().nonnegative(),
+  shippingSubtotalCents: z.number().int().nonnegative(),
   discountCents: z.number().int().nonnegative(),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
@@ -152,6 +153,8 @@ export const cartItemProductSchema = z.object({
   variantName: z.string().min(1),
   variantSku: z.string().min(1).nullable(),
   unitPriceCents: z.number().int().nonnegative(),
+  requiresShipping: z.boolean(),
+  shippingFeeCents: z.number().int().nonnegative().nullable(),
   attributes: z.record(z.unknown()).nullable(),
 });
 export type CartItemProduct = z.infer<typeof cartItemProductSchema>;
@@ -218,6 +221,7 @@ export const beginCheckoutRequestSchema = z.object({
   paymentMethod: cartPaymentMethodSchema,
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
+  shippingAddressId: z.string().min(1).optional(),
 });
 export type BeginCheckoutRequest = z.infer<typeof beginCheckoutRequestSchema>;
 

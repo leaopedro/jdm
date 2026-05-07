@@ -31,6 +31,7 @@ const mockCart = {
     ticketSubtotalCents: 5000,
     extrasSubtotalCents: 0,
     productsSubtotalCents: 0,
+    shippingSubtotalCents: 0,
     discountCents: 0,
     amountCents: 5000,
     currency: 'BRL',
