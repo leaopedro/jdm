@@ -12,7 +12,11 @@ import {
   adminStoreCollectionDetailSchema,
   adminStoreCollectionListResponseSchema,
   adminStoreCollectionSchema,
+  adminStoreProductDetailSchema,
+  adminStoreProductListResponseSchema,
   adminStoreProductLookupResponseSchema,
+  adminStoreProductPhotoSchema,
+  adminStoreVariantSchema,
   adminUserCreatedSchema,
   adminUserDetailSchema,
   adminUserSearchResponseSchema,
@@ -31,7 +35,13 @@ import {
   type AdminFinanceTrendResponse,
   type AdminGrantTicket,
   type AdminStoreCollectionCreate,
+  type AdminStoreProductLookupResponse,
   type AdminStoreCollectionUpdate,
+  type AdminStoreProductCreate,
+  type AdminStoreProductPhotoCreate,
+  type AdminStoreProductUpdate,
+  type AdminStoreVariantCreate,
+  type AdminStoreVariantUpdate,
   type AdminTierCreate,
   type AdminTierUpdate,
   adminTicketTierSchema,
@@ -298,5 +308,63 @@ export const setAdminCollectionProducts = (id: string, productIds: string[]) =>
     schema: adminStoreCollectionDetailSchema,
   });
 
-export const lookupAdminStoreProducts = () =>
+export const lookupAdminStoreProducts = (): Promise<AdminStoreProductLookupResponse> =>
   apiFetch('/admin/store/products/lookup', { schema: adminStoreProductLookupResponseSchema });
+
+// ── Admin store: products / variants / photos ────────────────────────
+
+export const listAdminStoreProducts = () =>
+  apiFetch('/admin/store/products', { schema: adminStoreProductListResponseSchema });
+
+export const getAdminStoreProduct = (id: string) =>
+  apiFetch(`/admin/store/products/${id}`, { schema: adminStoreProductDetailSchema });
+
+export const createAdminStoreProduct = (input: AdminStoreProductCreate) =>
+  apiFetch('/admin/store/products', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminStoreProductDetailSchema,
+  });
+
+export const updateAdminStoreProduct = (id: string, input: AdminStoreProductUpdate) =>
+  apiFetch(`/admin/store/products/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminStoreProductDetailSchema,
+  });
+
+export const createAdminStoreVariant = (productId: string, input: AdminStoreVariantCreate) =>
+  apiFetch(`/admin/store/products/${productId}/variants`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminStoreVariantSchema,
+  });
+
+export const updateAdminStoreVariant = (variantId: string, input: AdminStoreVariantUpdate) =>
+  apiFetch(`/admin/store/variants/${variantId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminStoreVariantSchema,
+  });
+
+export const deleteAdminStoreVariant = (variantId: string) =>
+  apiFetch(`/admin/store/variants/${variantId}`, {
+    method: 'DELETE',
+    schema: adminStoreVariantSchema, // 200 on soft-disable, 204 on hard-delete
+  });
+
+export const createAdminStoreProductPhoto = (
+  productId: string,
+  input: AdminStoreProductPhotoCreate,
+) =>
+  apiFetch(`/admin/store/products/${productId}/photos`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: adminStoreProductPhotoSchema,
+  });
+
+export const deleteAdminStoreProductPhoto = (productId: string, photoId: string) =>
+  apiFetch(`/admin/store/products/${productId}/photos/${photoId}`, {
+    method: 'DELETE',
+    schema: adminStoreProductPhotoSchema,
+  });
