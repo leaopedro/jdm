@@ -5,7 +5,7 @@ import { licensePlateSchema } from './orders.js';
 export const cartStatusSchema = z.enum(['open', 'checking_out', 'converted', 'abandoned']);
 export type CartStatus = z.infer<typeof cartStatusSchema>;
 
-export const cartItemKindSchema = z.enum(['ticket', 'extras_only']);
+export const cartItemKindSchema = z.enum(['ticket', 'extras_only', 'product']);
 export type CartItemKind = z.infer<typeof cartItemKindSchema>;
 
 export const cartItemSourceSchema = z.literal('purchase');
@@ -27,20 +27,76 @@ export const cartItemTicketInputSchema = cartItemTicketSchema.extend({
 });
 export type CartItemTicketInput = z.infer<typeof cartItemTicketInputSchema>;
 
-export const cartItemInputSchema = z.object({
-  eventId: z.string().min(1),
-  tierId: z.string().min(1),
-  source: cartItemSourceSchema.default('purchase'),
-  kind: cartItemKindSchema.default('ticket'),
-  quantity: z.number().int().positive().default(1),
-  tickets: z.array(cartItemTicketInputSchema).min(1),
-  metadata: z
-    .object({
-      source: z.enum(['mobile', 'admin']).default('mobile'),
-      note: z.string().max(160).optional(),
-    })
-    .optional(),
-});
+export const cartItemInputSchema = z
+  .object({
+    eventId: z.string().min(1).optional(),
+    tierId: z.string().min(1).optional(),
+    variantId: z.string().min(1).optional(),
+    source: cartItemSourceSchema.default('purchase'),
+    kind: cartItemKindSchema.default('ticket'),
+    quantity: z.number().int().positive().max(20).default(1),
+    tickets: z.array(cartItemTicketInputSchema).default([]),
+    metadata: z
+      .object({
+        source: z.enum(['mobile', 'admin']).default('mobile'),
+        note: z.string().max(160).optional(),
+      })
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === 'product') {
+      if (!value.variantId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'variantId é obrigatório para itens de produto',
+          path: ['variantId'],
+        });
+      }
+      if (value.eventId || value.tierId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'itens de produto não devem informar eventId ou tierId',
+          path: ['eventId'],
+        });
+      }
+      if (value.tickets.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'itens de produto não usam tickets',
+          path: ['tickets'],
+        });
+      }
+    } else {
+      if (!value.eventId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'eventId é obrigatório',
+          path: ['eventId'],
+        });
+      }
+      if (!value.tierId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'tierId é obrigatório',
+          path: ['tierId'],
+        });
+      }
+      if (value.variantId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'variantId só é válido para itens de produto',
+          path: ['variantId'],
+        });
+      }
+      if (value.tickets.length < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'tickets deve conter ao menos um item',
+          path: ['tickets'],
+        });
+      }
+    }
+  });
 export type CartItemInput = z.infer<typeof cartItemInputSchema>;
 
 export const cartItemExtraSchema = z.object({
@@ -65,6 +121,9 @@ export const staleCartDropReasonSchema = z.enum([
   'tier_removed',
   'extra_removed',
   'extra_sold_out',
+  'variant_removed',
+  'variant_inactive',
+  'variant_sold_out',
 ]);
 export type StaleCartDropReason = z.infer<typeof staleCartDropReasonSchema>;
 
@@ -78,22 +137,37 @@ export type EvictedCartItem = z.infer<typeof evictedCartItemSchema>;
 export const cartTotalsSchema = z.object({
   ticketSubtotalCents: z.number().int().nonnegative(),
   extrasSubtotalCents: z.number().int().nonnegative(),
+  productsSubtotalCents: z.number().int().nonnegative(),
   discountCents: z.number().int().nonnegative(),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type CartTotals = z.infer<typeof cartTotalsSchema>;
 
+export const cartItemProductSchema = z.object({
+  productId: z.string().min(1),
+  productTitle: z.string().min(1),
+  productSlug: z.string().min(1),
+  variantId: z.string().min(1),
+  variantName: z.string().min(1),
+  variantSku: z.string().min(1).nullable(),
+  unitPriceCents: z.number().int().nonnegative(),
+  attributes: z.record(z.unknown()).nullable(),
+});
+export type CartItemProduct = z.infer<typeof cartItemProductSchema>;
+
 export const cartItemSchema = z.object({
   id: z.string().min(1),
   eventId: z.string().min(1).nullable(),
   tierId: z.string().min(1).nullable(),
+  variantId: z.string().min(1).nullable(),
   source: cartItemSourceSchema,
   kind: cartItemKindSchema,
   quantity: z.number().int().positive(),
   requiresCar: z.boolean(),
   tickets: z.array(cartItemTicketSchema),
   extras: z.array(cartItemExtraSchema),
+  product: cartItemProductSchema.nullable(),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
   reservationExpiresAt: z.string().datetime().nullable(),
