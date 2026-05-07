@@ -75,6 +75,8 @@ Living references; update these as features land.
 - **Loja admin — collections + catalog visibility** — §3.5 below
   (admin produto/coleção CRUD, disable-collection visibility gate,
   storefront wire check).
+- **Loja admin — Estoque (low-stock) page** — §3.6 below
+  (threshold-aware visibility, quick inventory edits, status filters).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
 - **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
@@ -588,6 +590,121 @@ cannot be exercised in the heartbeat.
 | Disabled coleção still surfaces products via slug query | Check `where.collections.some.collection.active = true` is still enforced on the public route. |
 | Admin list hides disabled coleções                      | Admin route must NOT inherit the active filter; otherwise admins cannot re-enable.             |
 | `AdminAudit` row missing after a mutation               | Verify the route still calls `recordAdminAudit` with the expected `entityType` + `action`.     |
+
+### 3.6 Loja admin — Estoque (low-stock) page (JDMA-363)
+
+Covers the Estoque admin surface that surfaces low and zero-stock
+variants and offers in-place inventory edits. Drives off
+`StoreSettings.lowStockThreshold` and the existing variant PATCH
+route.
+
+**Pre-requisites**
+
+- Same local stack as §3.5 (Postgres, API on `:4000`, admin on
+  `:3000`, an admin/organizer user).
+- At least one `Product` with `status != archived` and three
+  variants seeded for the threshold matrix below. Use Prisma Studio
+  or psql to set the variants directly:
+
+  ```sql
+  -- example: threshold = 5
+  -- v_ok      → quantityTotal=20, quantitySold=0   (available 20 → ok)
+  -- v_low     → quantityTotal=4,  quantitySold=0   (available 4  → low)
+  -- v_zero    → quantityTotal=2,  quantitySold=2   (available 0  → zero)
+  ```
+
+**Step 1 — Threshold + filters**
+
+1. Open `/loja/estoque` (via the `Estoque` tab in the Loja section).
+   Expect: header reads `Limite de estoque baixo: 5` (or whatever
+   the singleton holds) with an `ajustar` link to
+   `/loja/configuracoes`. Filter chips show `Todos (N)`, `Estoque
+baixo (N)`, `Esgotados (N)` with non-zero counts matching the
+   seeded matrix.
+2. Click `Estoque baixo`.
+   Expect: only `v_low` is listed. URL becomes
+   `/loja/estoque?status=low`.
+3. Click `Esgotados`.
+   Expect: only `v_zero` is listed.
+4. Click `Todos`.
+   Expect: the three seeded variants appear, sorted by
+   `available` ascending (zero, low, ok).
+
+**Step 2 — Status badges and visual cues**
+
+1. Confirm each row's badge matches the available column:
+   `Esgotado` (red) for `v_zero`, `Baixo` (amber) for `v_low`,
+   `OK` (green) for `v_ok`.
+2. Inactive or non-active products still appear when not archived;
+   verify via a `draft` product seeded with `available <= threshold`
+   that it shows up under `Estoque baixo` with a `draft` chip in the
+   product subtitle.
+
+**Step 3 — Quick inventory edit (happy path)**
+
+1. In the `v_low` row, change `Estoque total` from `4` to `12` and
+   click `Salvar`.
+   Expect: the form action settles and the row's `Disponível`
+   updates to `12 - quantitySold`. Refreshing the page persists the
+   change.
+2. Filter to `Estoque baixo`.
+   Expect: `v_low` is gone (now classified `ok`). Counts in the
+   chip header decrement accordingly.
+
+**Step 4 — Guard rail: cannot drop below `quantitySold`**
+
+1. Pick a variant with `quantitySold > 0` (seed sales by issuing a
+   paid `Order` against it, or set `quantitySold` directly via
+   psql for the smoke).
+2. Try setting `Estoque total` below the variant's `quantitySold`.
+   Expect: the input's `min` already prevents most submissions; if
+   forced via devtools, the API returns `409 Conflict` and the
+   row shows a PT-BR error message
+   (`quantityTotal cannot drop below quantitySold`).
+
+**Step 5 — Threshold awareness**
+
+1. Open `/loja/configuracoes`, change `lowStockThreshold` from `5`
+   to `10`, save.
+2. Return to `/loja/estoque` (one refresh).
+   Expect: variants previously labelled `OK` whose `available`
+   now sits within `[1, 10]` switch to the amber `Baixo` badge and
+   migrate into the `Estoque baixo (N)` filter count.
+3. Restore the threshold to `5` after the smoke.
+
+**Step 6 — Auth gates**
+
+1. Log in as a `staff` user.
+   Expect: the Loja section (and its Estoque tab) is not present in
+   the admin nav and a direct hit on `/loja/estoque` returns the
+   layout's role gate (or 403 if you `curl`
+   `/admin/store/inventory`).
+2. Curl `/admin/store/inventory` without a token.
+   Expect: `401`.
+
+**Pass criteria**
+
+- Filter chips reflect threshold-aware counts and switch the table
+  contents on click.
+- Quick edits persist via the existing variant PATCH route and the
+  row revalidates without a full reload.
+- The `quantityTotal < quantitySold` guard surfaces the PT-BR
+  conflict message rather than silently accepting the change.
+- Threshold changes propagate within one refresh.
+
+**Evidence to attach**
+
+- Screenshot of `/loja/estoque?status=low` with the seeded matrix.
+- Screenshot of a successful inventory edit (before/after).
+- Terminal capture of the `409 Conflict` from the guard rail step.
+- DB query showing `Variant.quantityTotal` mirrors the admin edit.
+
+**Until QA is hired**
+
+The implementing engineer runs steps 1–6 locally and attaches the
+evidence above to the PR. Wire-level coverage of the threshold and
+status filters is asserted by
+`apps/api/test/admin/store-inventory.test.ts`.
 
 ## 4. Roles
 

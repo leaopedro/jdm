@@ -12,6 +12,7 @@ import {
   adminStoreCollectionDetailSchema,
   adminStoreCollectionListResponseSchema,
   adminStoreCollectionSchema,
+  adminStoreInventoryListResponseSchema,
   adminStoreProductDetailSchema,
   adminStoreProductListResponseSchema,
   adminStoreProductLookupResponseSchema,
@@ -35,6 +36,8 @@ import {
   type AdminFinanceTrendResponse,
   type AdminGrantTicket,
   type AdminStoreCollectionCreate,
+  type AdminStoreInventoryFilter,
+  type AdminStoreInventoryListResponse,
   type AdminStoreProductLookupResponse,
   type AdminStoreCollectionUpdate,
   type AdminStoreProductCreate,
@@ -382,3 +385,12 @@ export const deleteAdminStoreProductPhoto = (productId: string, photoId: string)
     method: 'DELETE',
     schema: adminStoreProductPhotoSchema,
   });
+
+export const listAdminStoreInventory = (
+  filter: AdminStoreInventoryFilter = 'all',
+): Promise<AdminStoreInventoryListResponse> => {
+  const qs = filter === 'all' ? '' : `?status=${filter}`;
+  return apiFetch(`/admin/store/inventory${qs}`, {
+    schema: adminStoreInventoryListResponseSchema,
+  });
+};
