@@ -78,7 +78,7 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   let extrasSubtotalCents = 0;
 
   for (const item of items) {
-    if (item.kind === 'ticket') {
+    if (item.kind === 'ticket' && item.tier) {
       ticketSubtotalCents += item.tier.priceCents * item.quantity;
     }
     for (const extra of item.extras) {
@@ -106,7 +106,7 @@ export function serializeCart(cart: CartWithItems): Cart {
     source: item.source as 'purchase',
     kind: item.kind as CartItem['kind'],
     quantity: item.quantity,
-    requiresCar: item.tier.requiresCar,
+    requiresCar: item.tier?.requiresCar ?? false,
     tickets: item.tickets as CartItem['tickets'],
     extras: item.extras.map((e) => ({
       extraId: e.extraId,
@@ -141,6 +141,16 @@ export async function evictStaleItems(cart: CartWithItems): Promise<EvictedCartI
   const idsToDelete: string[] = [];
 
   for (const item of cart.items) {
+    if (!item.eventId || !item.tierId) {
+      evicted.push({
+        itemId: item.id,
+        reason: 'tier_removed',
+        message: 'Ticket tier is no longer available',
+      });
+      idsToDelete.push(item.id);
+      continue;
+    }
+
     const event = await prisma.event.findUnique({
       where: { id: item.eventId },
       select: { status: true },
