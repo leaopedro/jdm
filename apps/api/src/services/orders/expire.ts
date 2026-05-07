@@ -32,7 +32,7 @@ export const sweepExpiredOrdersForTier = async (
     where: { id: { in: expiredIds } },
     data: { status: 'expired' },
   });
-  const ticketOrderCount = expired.filter((o) => o.kind !== 'extras_only').length;
+  const ticketOrderCount = expired.filter((o) => o.kind === 'ticket').length;
   if (ticketOrderCount > 0) {
     await tx.ticketTier.updateMany({
       where: { id: tierId, quantitySold: { gte: ticketOrderCount } },
@@ -61,6 +61,62 @@ export const sweepExpiredOrdersForTier = async (
     message: `Swept ${expired.length} expired pending order(s) for tier ${tierId}`,
     level: 'info',
     data: { tierId, count: expired.length },
+  });
+
+  return {
+    count: expired.length,
+    expiredProviderRefs: expired.flatMap((o) => (o.providerRef ? [o.providerRef] : [])),
+  };
+};
+
+/**
+ * Within an existing transaction, expire all pending product orders whose linked
+ * `OrderItem(kind='product')` references `variantId` and whose `expiresAt` has passed,
+ * atomically decrementing `Variant.quantitySold` by the released quantity.
+ */
+export const sweepExpiredOrdersForVariant = async (
+  variantId: string,
+  tx: Prisma.TransactionClient,
+): Promise<SweepResult> => {
+  const now = new Date();
+  const expired = await tx.order.findMany({
+    where: {
+      status: 'pending',
+      kind: 'product',
+      expiresAt: { not: null, lt: now },
+      items: { some: { kind: 'product', variantId } },
+    },
+    select: {
+      id: true,
+      providerRef: true,
+      items: { where: { variantId }, select: { quantity: true } },
+    },
+  });
+
+  if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
+
+  const expiredIds = expired.map((o) => o.id);
+  await tx.order.updateMany({
+    where: { id: { in: expiredIds } },
+    data: { status: 'expired' },
+  });
+
+  const releaseQuantity = expired.reduce(
+    (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
+    0,
+  );
+  if (releaseQuantity > 0) {
+    await tx.variant.updateMany({
+      where: { id: variantId, quantitySold: { gte: releaseQuantity } },
+      data: { quantitySold: { decrement: releaseQuantity } },
+    });
+  }
+
+  Sentry.addBreadcrumb({
+    category: 'orders.sweep',
+    message: `Swept ${expired.length} expired pending product order(s) for variant ${variantId}`,
+    level: 'info',
+    data: { variantId, count: expired.length },
   });
 
   return {
@@ -131,6 +187,18 @@ export const expireSingleOrder = async (
         where: { id: order.tierId, quantitySold: { gt: 0 } },
         data: { quantitySold: { decrement: 1 } },
       });
+    } else if (order.kind === 'product') {
+      const productItems = await tx.orderItem.findMany({
+        where: { orderId, kind: 'product' },
+        select: { variantId: true, quantity: true },
+      });
+      for (const { variantId, quantity } of productItems) {
+        if (!variantId) continue;
+        await tx.variant.updateMany({
+          where: { id: variantId, quantitySold: { gte: quantity } },
+          data: { quantitySold: { decrement: quantity } },
+        });
+      }
     }
 
     // Release extras stock

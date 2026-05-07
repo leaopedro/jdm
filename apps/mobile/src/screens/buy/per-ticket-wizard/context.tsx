@@ -132,10 +132,12 @@ export function WizardProvider({
   children,
 }: WizardProviderProps) {
   const applicableSteps: WizardStepDefinition[] = useMemo(
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     () => steps.filter((s) => !s.appliesTo || s.appliesTo({ tier })),
     [steps, tier],
   );
 
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment */
   const initialState: WizardState = useMemo(
     () => ({
       eventId,
@@ -150,6 +152,7 @@ export function WizardProvider({
     }),
     [eventId, tier, quantity, applicableSteps, extrasOnly, method],
   );
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
   const [state, dispatch] = useReducer(wizardReducer, initialState);
 
