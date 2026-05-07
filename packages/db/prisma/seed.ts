@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -71,6 +71,204 @@ const events = [
   },
 ];
 
+const STORE_PRODUCT_TYPE_NAME = 'Vestuário e Acessórios';
+
+const STORE_COLLECTION = {
+  slug: 'colecao-jdm-2026',
+  name: 'Coleção JDM 2026',
+  description: 'Peças oficiais para os encontros JDM da temporada.',
+  sortOrder: 0,
+};
+
+type SeedVariant = {
+  name: string;
+  sku: string;
+  priceCents: number;
+  quantityTotal: number;
+  attributes: Prisma.InputJsonValue;
+};
+
+type SeedProduct = {
+  slug: string;
+  title: string;
+  description: string;
+  basePriceCents: number;
+  status: 'draft' | 'active' | 'archived';
+  shippingFeeCents: number | null;
+  variants: SeedVariant[];
+};
+
+const STORE_PRODUCTS: SeedProduct[] = [
+  {
+    slug: 'camiseta-jdm-classic',
+    title: 'Camiseta JDM Classic',
+    description:
+      'Camiseta de algodão pesado com estampa JDM Classic nas costas. Caimento regular, gola reforçada.',
+    basePriceCents: 12900,
+    status: 'active',
+    shippingFeeCents: null,
+    variants: [
+      {
+        name: 'Tamanho P',
+        sku: 'JDM-TEE-CLS-P',
+        priceCents: 12900,
+        quantityTotal: 30,
+        attributes: { size: 'P', color: 'Preto' },
+      },
+      {
+        name: 'Tamanho M',
+        sku: 'JDM-TEE-CLS-M',
+        priceCents: 12900,
+        quantityTotal: 50,
+        attributes: { size: 'M', color: 'Preto' },
+      },
+      {
+        name: 'Tamanho G',
+        sku: 'JDM-TEE-CLS-G',
+        priceCents: 12900,
+        quantityTotal: 40,
+        attributes: { size: 'G', color: 'Preto' },
+      },
+    ],
+  },
+  {
+    slug: 'adesivo-jdm-logo',
+    title: 'Adesivo JDM Logo',
+    description: 'Adesivo recortado em vinil resistente, 12x6 cm. Aplicação interna ou externa.',
+    basePriceCents: 1500,
+    status: 'active',
+    shippingFeeCents: 0,
+    variants: [
+      {
+        name: 'Único',
+        sku: 'JDM-STK-LOGO',
+        priceCents: 1500,
+        quantityTotal: 200,
+        attributes: { size: '12x6cm' },
+      },
+    ],
+  },
+];
+
+const seedStore = async (): Promise<void> => {
+  const productType = await prisma.productType.upsert({
+    where: { name: STORE_PRODUCT_TYPE_NAME },
+    update: { sortOrder: 0 },
+    create: { name: STORE_PRODUCT_TYPE_NAME, sortOrder: 0 },
+  });
+
+  const collection = await prisma.collection.upsert({
+    where: { slug: STORE_COLLECTION.slug },
+    update: {
+      name: STORE_COLLECTION.name,
+      description: STORE_COLLECTION.description,
+      sortOrder: STORE_COLLECTION.sortOrder,
+      active: true,
+    },
+    create: {
+      slug: STORE_COLLECTION.slug,
+      name: STORE_COLLECTION.name,
+      description: STORE_COLLECTION.description,
+      sortOrder: STORE_COLLECTION.sortOrder,
+      active: true,
+    },
+  });
+
+  for (const [index, product] of STORE_PRODUCTS.entries()) {
+    const upserted = await prisma.product.upsert({
+      where: { slug: product.slug },
+      update: {
+        title: product.title,
+        description: product.description,
+        basePriceCents: product.basePriceCents,
+        status: product.status,
+        shippingFeeCents: product.shippingFeeCents,
+        productTypeId: productType.id,
+      },
+      create: {
+        slug: product.slug,
+        title: product.title,
+        description: product.description,
+        basePriceCents: product.basePriceCents,
+        status: product.status,
+        shippingFeeCents: product.shippingFeeCents,
+        productTypeId: productType.id,
+      },
+    });
+
+    for (const variant of product.variants) {
+      const existing = await prisma.variant.findFirst({
+        where: { productId: upserted.id, name: variant.name },
+      });
+      if (existing) {
+        await prisma.variant.update({
+          where: { id: existing.id },
+          data: {
+            sku: variant.sku,
+            priceCents: variant.priceCents,
+            attributes: variant.attributes,
+            active: true,
+          },
+        });
+      } else {
+        await prisma.variant.create({
+          data: {
+            productId: upserted.id,
+            name: variant.name,
+            sku: variant.sku,
+            priceCents: variant.priceCents,
+            quantityTotal: variant.quantityTotal,
+            attributes: variant.attributes,
+            active: true,
+          },
+        });
+      }
+    }
+
+    await prisma.productCollection.upsert({
+      where: {
+        productId_collectionId: {
+          productId: upserted.id,
+          collectionId: collection.id,
+        },
+      },
+      update: { sortOrder: index },
+      create: {
+        productId: upserted.id,
+        collectionId: collection.id,
+        sortOrder: index,
+      },
+    });
+  }
+
+  const existingSettings = await prisma.storeSettings.findFirst();
+  if (existingSettings) {
+    await prisma.storeSettings.update({
+      where: { id: existingSettings.id },
+      data: {
+        defaultShippingFeeCents: 1990,
+        lowStockThreshold: 5,
+        pickupDisplayLabel: 'Retirada nos encontros JDM',
+        supportPhone: '+5511999999999',
+      },
+    });
+  } else {
+    await prisma.storeSettings.create({
+      data: {
+        defaultShippingFeeCents: 1990,
+        lowStockThreshold: 5,
+        pickupDisplayLabel: 'Retirada nos encontros JDM',
+        supportPhone: '+5511999999999',
+      },
+    });
+  }
+
+  const variantCount = STORE_PRODUCTS.reduce((sum, p) => sum + p.variants.length, 0);
+  console.log(
+    `Seeded store: 1 product type, 1 collection, ${STORE_PRODUCTS.length} products, ${variantCount} variants, store settings.`,
+  );
+};
+
 const main = async (): Promise<void> => {
   for (const e of events) {
     const { tiers, ...rest } = e;
@@ -93,6 +291,8 @@ const main = async (): Promise<void> => {
     });
   }
   console.log(`Seeded ${events.length} events.`);
+
+  await seedStore();
 };
 
 main()
