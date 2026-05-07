@@ -53,6 +53,75 @@ const seedTicket = async (status: 'valid' | 'used' | 'revoked' = 'valid') => {
   return { holder, event, tier, ticket, code: signTicketCode(ticket.id, env) };
 };
 
+const seedPickupOrderForTicket = async (
+  ticket: { id: string; userId: string; eventId: string },
+  opts?: {
+    status?: 'pending' | 'paid';
+    fulfillmentStatus?: 'unfulfilled' | 'pickup_ready' | 'picked_up';
+  },
+) => {
+  const productType = await prisma.productType.create({
+    data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+  });
+  const product = await prisma.product.create({
+    data: {
+      slug: `produto-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Moletom JDM',
+      description: 'Colecao limitada',
+      productTypeId: productType.id,
+      basePriceCents: 12_000,
+      currency: 'BRL',
+      status: 'active',
+    },
+  });
+  const variant = await prisma.variant.create({
+    data: {
+      productId: product.id,
+      name: 'Preto G',
+      sku: 'JDM-HOODIE-G',
+      priceCents: 12_000,
+      quantityTotal: 10,
+      quantitySold: 1,
+      attributes: { size: 'G', color: 'Preto' },
+      active: true,
+    },
+  });
+  const order = await prisma.order.create({
+    data: {
+      userId: ticket.userId,
+      kind: 'product',
+      amountCents: 24_000,
+      quantity: 2,
+      method: 'card',
+      provider: 'stripe',
+      status: opts?.status ?? 'paid',
+      paidAt: opts?.status === 'pending' ? null : new Date(),
+      fulfillmentMethod: 'pickup',
+      fulfillmentStatus: opts?.fulfillmentStatus ?? 'pickup_ready',
+      notes: JSON.stringify({
+        pickup: {
+          eventId: ticket.eventId,
+          ticketId: ticket.id,
+          pickedUpAt: opts?.fulfillmentStatus === 'picked_up' ? new Date().toISOString() : null,
+          pickedUpBy: opts?.fulfillmentStatus === 'picked_up' ? 'staff-existing' : null,
+        },
+      }),
+    },
+  });
+  await prisma.orderItem.create({
+    data: {
+      orderId: order.id,
+      kind: 'product',
+      variantId: variant.id,
+      quantity: 2,
+      unitPriceCents: 12_000,
+      subtotalCents: 24_000,
+    },
+  });
+
+  return { order, product, variant };
+};
+
 describe('POST /admin/tickets/check-in', () => {
   let app: FastifyInstance;
 
@@ -247,5 +316,111 @@ describe('POST /admin/tickets/check-in', () => {
     });
     expect(res.statusCode).toBe(409);
     expect(res.json<{ error: string }>().error).toBe('TicketRevoked');
+  });
+
+  it('claims assigned pickup orders from ticket QR without consuming the ticket', async () => {
+    const { event, code, holder, tier, ticket } = await seedTicket();
+    const { order, product, variant } = await seedPickupOrderForTicket(ticket);
+    const { user: actor } = await createUser({
+      email: 'pickup-staff@jdm.test',
+      verified: true,
+      role: 'staff',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/pickup',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      result: string;
+      ticket: {
+        id: string;
+        status: string;
+        checkedInAt: string | null;
+        tier: { name: string };
+        holder: { name: string };
+      };
+      pickups: Array<{
+        orderId: string;
+        fulfillmentStatus: string;
+        pickedUpAt: string | null;
+        items: Array<{
+          productTitle: string;
+          variantName: string;
+          variantSku: string | null;
+          quantity: number;
+          attributes: Record<string, unknown> | null;
+        }>;
+      }>;
+    }>();
+    expect(body.result).toBe('claimed');
+    expect(body.ticket.id).toBe(ticket.id);
+    expect(body.ticket.status).toBe('valid');
+    expect(body.ticket.checkedInAt).toBeNull();
+    expect(body.ticket.tier.name).toBe(tier.name);
+    expect(body.ticket.holder.name).toBe(holder.name);
+    expect(body.pickups).toHaveLength(1);
+    expect(body.pickups[0]!.orderId).toBe(order.id);
+    expect(body.pickups[0]!.fulfillmentStatus).toBe('picked_up');
+    expect(body.pickups[0]!.items).toHaveLength(1);
+    expect(body.pickups[0]!.items[0]!.productTitle).toBe(product.title);
+    expect(body.pickups[0]!.items[0]!.variantName).toBe(variant.name);
+    expect(body.pickups[0]!.items[0]!.variantSku).toBe(variant.sku);
+    expect(body.pickups[0]!.items[0]!.quantity).toBe(2);
+    expect(body.pickups[0]!.items[0]!.attributes).toEqual({ size: 'G', color: 'Preto' });
+
+    const orderAfter = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(orderAfter.fulfillmentStatus).toBe('picked_up');
+    const ticketAfter = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(ticketAfter.status).toBe('valid');
+  });
+
+  it('pickup scan is idempotent on duplicate scans', async () => {
+    const { event, code, ticket } = await seedTicket();
+    await seedPickupOrderForTicket(ticket, { fulfillmentStatus: 'picked_up' });
+    const { user: actor } = await createUser({
+      email: 'pickup-retry@jdm.test',
+      verified: true,
+      role: 'staff',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/pickup',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ result: string; pickups: Array<{ fulfillmentStatus: string }> }>();
+    expect(body.result).toBe('already_used');
+    expect(body.pickups[0]!.fulfillmentStatus).toBe('picked_up');
+  });
+
+  it('does not expose unpaid pickup intent as a claimable entitlement', async () => {
+    const { event, code, ticket } = await seedTicket();
+    await seedPickupOrderForTicket(ticket, {
+      status: 'pending',
+      fulfillmentStatus: 'unfulfilled',
+    });
+    const { user: actor } = await createUser({
+      email: 'pickup-pending@jdm.test',
+      verified: true,
+      role: 'staff',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/pickup',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: string }>().error).toBe('PickupEntitlementNotFound');
   });
 });

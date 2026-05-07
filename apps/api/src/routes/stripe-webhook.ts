@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
-  issueTicketForPaidOrder,
   OrderNotPendingError,
   TicketAlreadyExistsForEventError,
   TicketRevokedForExtrasOnlyError,
@@ -61,6 +61,18 @@ const markRefundedAndReleaseReservation = async (orderId: string): Promise<void>
         data: { quantitySold: { decrement: quantity } },
       });
     }
+
+    const productItems = await tx.orderItem.findMany({
+      where: { orderId, kind: 'product' },
+      select: { variantId: true, quantity: true },
+    });
+    for (const { variantId, quantity } of productItems) {
+      if (!variantId) continue;
+      await tx.variant.updateMany({
+        where: { id: variantId, quantitySold: { gte: quantity } },
+        data: { quantitySold: { decrement: quantity } },
+      });
+    }
   });
 };
 
@@ -94,9 +106,13 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true, ignored: true });
     }
 
+    let issuedAnyTicket = false;
     for (const order of orders) {
       try {
-        await issueTicketForPaidOrder(order.id, piId, app.env, { cartId });
+        const settled = await settlePaidOrder(order.id, piId, app.env, { cartId });
+        if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+          issuedAnyTicket = true;
+        }
       } catch (err) {
         if (err instanceof TicketAlreadyExistsForEventError) {
           await app.stripe.refund(piId, 'duplicate-ticket', order.amountCents);
@@ -123,12 +139,14 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     request.log.info({ cartId, piId, firstTime }, 'stripe webhook: cart checkout settled');
 
     try {
-      const userId = (
-        await prisma.order.findFirst({
-          where: { cartId },
-          select: { userId: true },
-        })
-      )?.userId;
+      const userId =
+        issuedAnyTicket &&
+        (
+          await prisma.order.findFirst({
+            where: { cartId },
+            select: { userId: true },
+          })
+        )?.userId;
       if (userId) {
         await sendTransactionalPush(
           {
@@ -183,6 +201,18 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
             data: { quantitySold: { decrement: quantity } },
           });
         }
+
+        const productItems = await tx.orderItem.findMany({
+          where: { orderId: order.id, kind: 'product' },
+          select: { variantId: true, quantity: true },
+        });
+        for (const { variantId, quantity } of productItems) {
+          if (!variantId) continue;
+          await tx.variant.updateMany({
+            where: { id: variantId, quantitySold: { gte: quantity } },
+            data: { quantitySold: { decrement: quantity } },
+          });
+        }
       }
 
       await tx.cart.update({
@@ -232,36 +262,42 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     if (event.type === 'payment_intent.succeeded' && orderId && intent.id) {
       try {
-        const issued = await issueTicketForPaidOrder(orderId, intent.id, app.env, intent.metadata);
+        const settled = await settlePaidOrder(orderId, intent.id, app.env, intent.metadata);
         const firstTime = await markProcessed(event.id, event);
         request.log.info(
           { orderId, paymentIntentId: intent.id, firstTime },
-          'stripe webhook: ticket issued',
+          'stripe webhook: order settled',
         );
-        try {
-          await sendTransactionalPush(
-            {
-              userId: issued.userId,
-              kind: 'ticket.confirmed',
-              dedupeKey: orderId,
-              title: 'Ingresso confirmado',
-              body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
-              data: { orderId, ticketId: issued.ticketId, eventId: issued.eventId },
-            },
-            { sender: app.push },
-          );
-        } catch (pushErr) {
-          request.log.warn(
-            { err: pushErr, orderId },
-            'stripe webhook: ticket-confirmed push failed',
-          );
-          Sentry.withScope((scope) => {
-            scope.setTag('kind', 'push-send-failure');
-            scope.setTag('push_kind', 'ticket.confirmed');
-            scope.setLevel('warning');
-            scope.setExtras({ orderId });
-            Sentry.captureException(pushErr);
-          });
+        if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+          try {
+            await sendTransactionalPush(
+              {
+                userId: settled.issued.userId,
+                kind: 'ticket.confirmed',
+                dedupeKey: orderId,
+                title: 'Ingresso confirmado',
+                body: `Seu ingresso para ${settled.issued.eventTitle} está pronto.`,
+                data: {
+                  orderId,
+                  ticketId: settled.issued.ticketId,
+                  eventId: settled.issued.eventId,
+                },
+              },
+              { sender: app.push },
+            );
+          } catch (pushErr) {
+            request.log.warn(
+              { err: pushErr, orderId },
+              'stripe webhook: ticket-confirmed push failed',
+            );
+            Sentry.withScope((scope) => {
+              scope.setTag('kind', 'push-send-failure');
+              scope.setTag('push_kind', 'ticket.confirmed');
+              scope.setLevel('warning');
+              scope.setExtras({ orderId });
+              Sentry.captureException(pushErr);
+            });
+          }
         }
         return reply.status(200).send({ ok: true, deduped: !firstTime });
       } catch (err) {
@@ -354,38 +390,35 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true, ignored: true });
       }
       try {
-        const issued = await issueTicketForPaidOrder(
-          sessionOrderId,
-          piId,
-          app.env,
-          session.metadata,
-        );
+        const settled = await settlePaidOrder(sessionOrderId, piId, app.env, session.metadata);
         const firstTime = await markProcessed(event.id, event);
         request.log.info(
           { orderId: sessionOrderId, sessionId: session.id, firstTime },
           'stripe webhook: checkout.session.completed settled order',
         );
-        try {
-          await sendTransactionalPush(
-            {
-              userId: issued.userId,
-              kind: 'ticket.confirmed',
-              dedupeKey: sessionOrderId,
-              title: 'Ingresso confirmado',
-              body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
-              data: {
-                orderId: sessionOrderId,
-                ticketId: issued.ticketId,
-                eventId: issued.eventId,
+        if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+          try {
+            await sendTransactionalPush(
+              {
+                userId: settled.issued.userId,
+                kind: 'ticket.confirmed',
+                dedupeKey: sessionOrderId,
+                title: 'Ingresso confirmado',
+                body: `Seu ingresso para ${settled.issued.eventTitle} está pronto.`,
+                data: {
+                  orderId: sessionOrderId,
+                  ticketId: settled.issued.ticketId,
+                  eventId: settled.issued.eventId,
+                },
               },
-            },
-            { sender: app.push },
-          );
-        } catch (pushErr) {
-          request.log.warn(
-            { err: pushErr, orderId: sessionOrderId },
-            'stripe webhook: ticket-confirmed push failed (checkout.session)',
-          );
+              { sender: app.push },
+            );
+          } catch (pushErr) {
+            request.log.warn(
+              { err: pushErr, orderId: sessionOrderId },
+              'stripe webhook: ticket-confirmed push failed (checkout.session)',
+            );
+          }
         }
         return reply.status(200).send({ ok: true, deduped: !firstTime });
       } catch (err) {

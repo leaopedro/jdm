@@ -5,11 +5,17 @@ import {
   extraClaimResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
+  ticketPickupClaimRequestSchema,
+  ticketPickupClaimResponseSchema,
 } from '@jdm/shared/check-in';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import {
+  claimTicketPickup,
+  PickupEntitlementNotFoundError,
+} from '../../services/store/pickup-entitlements.js';
 import {
   checkInTicket,
   InvalidTicketCodeError,
@@ -149,6 +155,60 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
       }
       if (err instanceof ExtraItemRevokedError) {
         return reply.status(409).send({ error: 'ExtraItemRevoked', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post('/tickets/pickup', async (request, reply) => {
+    const { sub: actorId } = requireUser(request);
+    const input = ticketPickupClaimRequestSchema.parse(request.body);
+
+    try {
+      const outcome = await claimTicketPickup({ ...input, actorId }, app.env);
+
+      const { car } = outcome.ticket;
+      return reply.send(
+        ticketPickupClaimResponseSchema.parse({
+          result: outcome.kind,
+          ticket: {
+            id: outcome.ticket.id,
+            status: outcome.ticket.status,
+            checkedInAt: outcome.ticket.usedAt?.toISOString() ?? null,
+            tier: {
+              id: outcome.ticket.tier.id,
+              name: outcome.ticket.tier.name,
+            },
+            holder: {
+              id: outcome.ticket.user.id,
+              name: outcome.ticket.user.name,
+            },
+            car: car ? { make: car.make, model: car.model, year: car.year } : null,
+            licensePlate: outcome.ticket.licensePlate,
+          },
+          pickups: outcome.pickups.map((pickup) => ({
+            orderId: pickup.orderId,
+            fulfillmentStatus: pickup.fulfillmentStatus,
+            pickedUpAt: pickup.pickedUpAt?.toISOString() ?? null,
+            items: pickup.items,
+          })),
+        }),
+      );
+    } catch (err) {
+      if (err instanceof InvalidTicketCodeError) {
+        return reply.status(400).send({ error: 'InvalidTicketCode', message: err.message });
+      }
+      if (err instanceof TicketNotFoundError) {
+        return reply.status(404).send({ error: 'TicketNotFound', message: err.message });
+      }
+      if (err instanceof TicketWrongEventError) {
+        return reply.status(409).send({ error: 'TicketWrongEvent', message: err.message });
+      }
+      if (err instanceof TicketRevokedError) {
+        return reply.status(409).send({ error: 'TicketRevoked', message: err.message });
+      }
+      if (err instanceof PickupEntitlementNotFoundError) {
+        return reply.status(404).send({ error: 'PickupEntitlementNotFound', message: err.message });
       }
       throw err;
     }

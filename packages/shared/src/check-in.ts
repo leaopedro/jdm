@@ -96,3 +96,56 @@ export const extraClaimResponseSchema = z.object({
   }),
 });
 export type ExtraClaimResponse = z.infer<typeof extraClaimResponseSchema>;
+
+export const ticketPickupClaimRequestSchema = z.object({
+  code: z.string().min(10).max(500),
+  eventId: z.string().min(1).max(64),
+});
+export type TicketPickupClaimRequest = z.infer<typeof ticketPickupClaimRequestSchema>;
+
+export const ticketPickupClaimResultSchema = z.enum(['claimed', 'already_used']);
+export type TicketPickupClaimResult = z.infer<typeof ticketPickupClaimResultSchema>;
+
+export const ticketPickupItemSchema = z.object({
+  orderId: z.string().min(1),
+  fulfillmentStatus: z.enum(['pickup_ready', 'picked_up']),
+  pickedUpAt: z.string().datetime().nullable(),
+  items: z.array(
+    z.object({
+      orderItemId: z.string().min(1),
+      quantity: z.number().int().positive(),
+      productTitle: z.string().min(1),
+      variantName: z.string().min(1),
+      variantSku: z.string().min(1).nullable(),
+      attributes: z.record(z.unknown()).nullable(),
+    }),
+  ),
+});
+export type TicketPickupItem = z.infer<typeof ticketPickupItemSchema>;
+
+export const ticketPickupClaimResponseSchema = z.object({
+  result: ticketPickupClaimResultSchema,
+  ticket: z.object({
+    id: z.string().min(1),
+    status: z.enum(['valid', 'used', 'revoked']),
+    checkedInAt: z.string().datetime().nullable(),
+    tier: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+    }),
+    holder: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+    }),
+    car: z
+      .object({
+        make: z.string().min(1),
+        model: z.string().min(1),
+        year: z.number().int(),
+      })
+      .nullable(),
+    licensePlate: z.string().nullable(),
+  }),
+  pickups: z.array(ticketPickupItemSchema).min(1),
+});
+export type TicketPickupClaimResponse = z.infer<typeof ticketPickupClaimResponseSchema>;

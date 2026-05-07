@@ -2,14 +2,14 @@ import { timingSafeEqual } from 'node:crypto';
 
 import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@jdm/db';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
+import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
-  issueTicketForPaidOrder,
   OrderNotPendingError,
   TicketAlreadyExistsForEventError,
   TicketRevokedForExtrasOnlyError,
@@ -22,6 +22,19 @@ const ACCEPTED_EVENTS = new Set([
   'transparent.lost',
 ]);
 
+const isUniqueConstraintError = (err: unknown): boolean => {
+  if (typeof err !== 'object' || err === null) {
+    return false;
+  }
+
+  const candidate = err as { code?: unknown; message?: unknown };
+  return (
+    candidate.code === 'P2002' ||
+    (typeof candidate.message === 'string' &&
+      candidate.message.includes('Unique constraint failed'))
+  );
+};
+
 const markProcessed = async (eventId: string, payload: unknown): Promise<boolean> => {
   try {
     await prisma.paymentWebhookEvent.create({
@@ -33,7 +46,7 @@ const markProcessed = async (eventId: string, payload: unknown): Promise<boolean
     });
     return true;
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueConstraintError(err)) {
       return false;
     }
     throw err;
@@ -281,11 +294,15 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           return reply.status(200).send({ ok: true, ignored: true });
         }
 
+        let issuedAnyTicket = false;
         for (const order of cartOrders) {
           try {
-            await issueTicketForPaidOrder(order.id, billingId, app.env, {
+            const settled = await settlePaidOrder(order.id, billingId, app.env, {
               cartId: metadataCartId,
             });
+            if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+              issuedAnyTicket = true;
+            }
           } catch (err) {
             if (err instanceof TicketAlreadyExistsForEventError) {
               flagManualRefund({
@@ -326,7 +343,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         );
 
         try {
-          const userId = cartOrders[0]?.userId;
+          const userId = issuedAnyTicket ? cartOrders[0]?.userId : undefined;
           if (userId) {
             await sendTransactionalPush(
               {
@@ -378,36 +395,42 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const issued = await issueTicketForPaidOrder(order.id, billingId, app.env);
+        const settled = await settlePaidOrder(order.id, billingId, app.env);
         const firstTime = await markProcessed(event.id, event);
         request.log.info(
           { orderId: order.id, billingId, firstTime },
-          'abacatepay webhook: ticket issued',
+          'abacatepay webhook: order settled',
         );
-        try {
-          await sendTransactionalPush(
-            {
-              userId: issued.userId,
-              kind: 'ticket.confirmed',
-              dedupeKey: order.id,
-              title: 'Pagamento confirmado',
-              body: `Seu ingresso para ${issued.eventTitle} está pronto.`,
-              data: { orderId: order.id, ticketId: issued.ticketId, eventId: issued.eventId },
-            },
-            { sender: app.push },
-          );
-        } catch (pushErr) {
-          request.log.warn(
-            { err: pushErr, orderId: order.id },
-            'abacatepay webhook: ticket-confirmed push failed',
-          );
-          Sentry.withScope((scope) => {
-            scope.setTag('kind', 'push-send-failure');
-            scope.setTag('push_kind', 'ticket.confirmed');
-            scope.setLevel('warning');
-            scope.setExtras({ orderId: order.id });
-            Sentry.captureException(pushErr);
-          });
+        if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+          try {
+            await sendTransactionalPush(
+              {
+                userId: settled.issued.userId,
+                kind: 'ticket.confirmed',
+                dedupeKey: order.id,
+                title: 'Pagamento confirmado',
+                body: `Seu ingresso para ${settled.issued.eventTitle} está pronto.`,
+                data: {
+                  orderId: order.id,
+                  ticketId: settled.issued.ticketId,
+                  eventId: settled.issued.eventId,
+                },
+              },
+              { sender: app.push },
+            );
+          } catch (pushErr) {
+            request.log.warn(
+              { err: pushErr, orderId: order.id },
+              'abacatepay webhook: ticket-confirmed push failed',
+            );
+            Sentry.withScope((scope) => {
+              scope.setTag('kind', 'push-send-failure');
+              scope.setTag('push_kind', 'ticket.confirmed');
+              scope.setLevel('warning');
+              scope.setExtras({ orderId: order.id });
+              Sentry.captureException(pushErr);
+            });
+          }
         }
         // M2: Don't leak internal state in response
         return reply.status(200).send({ ok: true });

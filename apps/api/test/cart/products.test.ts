@@ -1,0 +1,538 @@
+import { prisma } from '@jdm/db';
+import {
+  beginCheckoutResponseSchema,
+  getCartResponseSchema,
+  upsertCartItemResponseSchema,
+} from '@jdm/shared/cart';
+import type { FastifyInstance } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import { loadEnv } from '../../src/env.js';
+import type { FakeStripe } from '../../src/services/stripe/fake.js';
+import { bearer, createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js';
+
+const env = loadEnv();
+const errorSchema = z.object({ error: z.string(), message: z.string().optional() });
+
+const seedPublishedEvent = async (opts?: { priceCents?: number; quantityTotal?: number }) => {
+  const event = await prisma.event.create({
+    data: {
+      slug: `e-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Evento Teste',
+      description: 'Descrição',
+      startsAt: new Date(Date.now() + 86_400_000),
+      endsAt: new Date(Date.now() + 90_000_000),
+      type: 'meeting',
+      status: 'published',
+      publishedAt: new Date(),
+      capacity: 100,
+      maxTicketsPerUser: 5,
+    },
+  });
+  const tier = await prisma.ticketTier.create({
+    data: {
+      eventId: event.id,
+      name: 'Geral',
+      priceCents: opts?.priceCents ?? 5000,
+      currency: 'BRL',
+      quantityTotal: opts?.quantityTotal ?? 50,
+      quantitySold: 0,
+    },
+  });
+  return { event, tier };
+};
+
+const seedActiveProduct = async (opts?: {
+  variantPriceCents?: number;
+  quantityTotal?: number;
+  active?: boolean;
+  productStatus?: 'draft' | 'active' | 'archived';
+  shippingFeeCents?: number | null;
+}) => {
+  const productType = await prisma.productType.create({
+    data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+  });
+  const product = await prisma.product.create({
+    data: {
+      slug: `p-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Camiseta JDM',
+      description: 'Algodão premium',
+      productTypeId: productType.id,
+      basePriceCents: opts?.variantPriceCents ?? 9000,
+      currency: 'BRL',
+      status: opts?.productStatus ?? 'active',
+      ...(opts?.shippingFeeCents !== undefined ? { shippingFeeCents: opts.shippingFeeCents } : {}),
+    },
+  });
+  const variant = await prisma.variant.create({
+    data: {
+      productId: product.id,
+      name: 'Preto — M',
+      sku: `SKU-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      priceCents: opts?.variantPriceCents ?? 9000,
+      quantityTotal: opts?.quantityTotal ?? 20,
+      quantitySold: 0,
+      attributes: { size: 'M', color: 'Preto' },
+      active: opts?.active ?? true,
+    },
+  });
+  return { product, variant };
+};
+
+const seedShippingAddress = async (userId: string) =>
+  prisma.shippingAddress.create({
+    data: {
+      userId,
+      recipientName: 'Maria Santos',
+      line1: 'Rua das Flores',
+      line2: 'Apto 10',
+      number: '123',
+      district: 'Centro',
+      city: 'Curitiba',
+      stateCode: 'PR',
+      postalCode: '80000-000',
+      phone: '41999999999',
+      isDefault: true,
+    },
+  });
+
+const addProductCartItem = async (
+  app: FastifyInstance,
+  token: string,
+  opts: { variantId: string; quantity?: number },
+) => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/cart/items',
+    headers: { authorization: token },
+    payload: {
+      item: {
+        kind: 'product',
+        variantId: opts.variantId,
+        quantity: opts.quantity ?? 1,
+      },
+    },
+  });
+  return res;
+};
+
+const addTicketCartItem = async (
+  app: FastifyInstance,
+  token: string,
+  opts: { eventId: string; tierId: string; quantity?: number },
+) => {
+  const tickets = Array.from({ length: opts.quantity ?? 1 }, () => ({ extras: [] as string[] }));
+  const res = await app.inject({
+    method: 'POST',
+    url: '/cart/items',
+    headers: { authorization: token },
+    payload: {
+      item: {
+        kind: 'ticket',
+        eventId: opts.eventId,
+        tierId: opts.tierId,
+        quantity: opts.quantity ?? 1,
+        tickets,
+      },
+    },
+  });
+  return res;
+};
+
+describe('cart product lines (JDMA-345)', () => {
+  let app: FastifyInstance;
+  let stripe: FakeStripe;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    ({ app, stripe } = await makeAppWithFakeStripe());
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  describe('POST /cart/items kind=product', () => {
+    it('adds a product line and serializes product fields', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { product, variant } = await seedActiveProduct({ variantPriceCents: 9000 });
+
+      const res = await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+
+      expect(res.statusCode).toBe(200);
+      const body = upsertCartItemResponseSchema.parse(res.json());
+      expect(body.cart.items).toHaveLength(1);
+      const item = body.cart.items[0]!;
+      expect(item.kind).toBe('product');
+      expect(item.eventId).toBeNull();
+      expect(item.tierId).toBeNull();
+      expect(item.variantId).toBe(variant.id);
+      expect(item.tickets).toEqual([]);
+      expect(item.amountCents).toBe(18_000);
+      expect(item.product).not.toBeNull();
+      expect(item.product!.productId).toBe(product.id);
+      expect(item.product!.variantId).toBe(variant.id);
+      expect(item.product!.unitPriceCents).toBe(9000);
+      expect(body.cart.totals.productsSubtotalCents).toBe(18_000);
+      expect(body.cart.totals.amountCents).toBe(18_000);
+    });
+
+    it('rejects product items with eventId/tierId set', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      const { event, tier } = await seedPublishedEvent();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: token },
+        payload: {
+          item: {
+            kind: 'product',
+            variantId: variant.id,
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+          },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects ticket items missing tickets array', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { event, tier } = await seedPublishedEvent();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/items',
+        headers: { authorization: token },
+        payload: {
+          item: {
+            kind: 'ticket',
+            eventId: event.id,
+            tierId: tier.id,
+            quantity: 1,
+            tickets: [],
+          },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects when variant inactive', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ active: false });
+
+      const res = await addProductCartItem(app, token, { variantId: variant.id });
+      expect(res.statusCode).toBe(409);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('Conflict');
+    });
+
+    it('rejects when variant lacks stock', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ quantityTotal: 1 });
+
+      const res = await addProductCartItem(app, token, { variantId: variant.id, quantity: 5 });
+      expect(res.statusCode).toBe(409);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('SoldOut');
+    });
+
+    it('GET /cart evicts items whose variant became inactive', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      await addProductCartItem(app, token, { variantId: variant.id });
+
+      await prisma.variant.update({ where: { id: variant.id }, data: { active: false } });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/cart',
+        headers: { authorization: token },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = getCartResponseSchema.parse(res.json());
+      expect(body.evictedItems.map((e) => e.reason)).toContain('variant_inactive');
+    });
+  });
+
+  describe('POST /cart/checkout for product cart', () => {
+    it('product-only checkout reserves variant and writes OrderItem', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { product, variant } = await seedActiveProduct({
+        variantPriceCents: 9000,
+        quantityTotal: 5,
+      });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.orderIds).toHaveLength(1);
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        include: { items: true },
+      });
+      expect(order.kind).toBe('product');
+      expect(order.eventId).toBeNull();
+      expect(order.tierId).toBeNull();
+      expect(order.amountCents).toBe(18_000);
+      expect(order.items).toHaveLength(1);
+      expect(order.items[0]!.kind).toBe('product');
+      expect(order.items[0]!.variantId).toBe(variant.id);
+      expect(order.items[0]!.quantity).toBe(2);
+      expect(order.items[0]!.unitPriceCents).toBe(9000);
+      expect(order.items[0]!.subtotalCents).toBe(18_000);
+
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(2);
+
+      const sessionCall = stripe.calls.find((c) => c.kind === 'createCheckoutSession');
+      expect(sessionCall).toBeDefined();
+      const payload = sessionCall!.payload as { productName: string };
+      expect(payload.productName).toContain(product.title);
+    });
+
+    it('requires shippingAddressId for shippable product carts', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ shippingFeeCents: 1500 });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('UnprocessableEntity');
+    });
+
+    it('adds shipping fee and fulfillment fields for shippable product checkout', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const address = await seedShippingAddress(user.id);
+      const { variant } = await seedActiveProduct({
+        variantPriceCents: 9000,
+        shippingFeeCents: 1500,
+      });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', shippingAddressId: address.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.cart.totals.shippingSubtotalCents).toBe(1500);
+      expect(body.cart.totals.amountCents).toBe(19_500);
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        include: { items: true },
+      });
+      expect(order.amountCents).toBe(19_500);
+      expect(order.shippingCents).toBe(1500);
+      expect(order.shippingAddressId).toBe(address.id);
+      expect(order.fulfillmentMethod).toBe('ship');
+      expect(order.items[0]!.subtotalCents).toBe(18_000);
+
+      const sessionCall = stripe.calls.find((c) => c.kind === 'createCheckoutSession');
+      expect(sessionCall).toBeDefined();
+      const payload = sessionCall!.payload as {
+        metadata: Record<string, string>;
+      };
+      expect(payload.metadata.shippingAddressId).toBe(address.id);
+      expect(payload.metadata.hasShippableItems).toBe('true');
+    });
+
+    it('ticket-only checkout still writes ticket OrderItem rows', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { event, tier } = await seedPublishedEvent({ priceCents: 5000 });
+
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id, quantity: 2 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        include: { items: true },
+      });
+      expect(order.kind).toBe('ticket');
+      expect(order.items).toHaveLength(1);
+      expect(order.items[0]!.kind).toBe('ticket');
+      expect(order.items[0]!.tierId).toBe(tier.id);
+      expect(order.items[0]!.quantity).toBe(2);
+      expect(order.items[0]!.unitPriceCents).toBe(5000);
+      expect(order.items[0]!.subtotalCents).toBe(10_000);
+    });
+
+    it('mixed cart writes both ticket and product orders with line items', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
+      const { variant } = await seedActiveProduct({ variantPriceCents: 7000 });
+
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 3 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.orderIds).toHaveLength(2);
+
+      const orders = await prisma.order.findMany({
+        where: { id: { in: body.orderIds } },
+        include: { items: true },
+      });
+      const ticketOrder = orders.find((o) => o.kind === 'ticket')!;
+      const productOrder = orders.find((o) => o.kind === 'product')!;
+      expect(ticketOrder.eventId).toBe(event.id);
+      expect(ticketOrder.tierId).toBe(tier.id);
+      expect(ticketOrder.items).toHaveLength(1);
+      expect(ticketOrder.items[0]!.kind).toBe('ticket');
+
+      expect(productOrder.eventId).toBeNull();
+      expect(productOrder.amountCents).toBe(21_000);
+      expect(productOrder.items).toHaveLength(1);
+      expect(productOrder.items[0]!.variantId).toBe(variant.id);
+      expect(productOrder.items[0]!.quantity).toBe(3);
+
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(tierAfter.quantitySold).toBe(1);
+      expect(variantAfter.quantitySold).toBe(3);
+    });
+
+    it('mixed cart keeps shipping only on the product order', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const address = await seedShippingAddress(user.id);
+      const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
+      const { variant } = await seedActiveProduct({
+        variantPriceCents: 7000,
+        shippingFeeCents: 1200,
+      });
+
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', shippingAddressId: address.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.cart.totals.shippingSubtotalCents).toBe(1200);
+      expect(body.cart.totals.amountCents).toBe(12_200);
+
+      const orders = await prisma.order.findMany({
+        where: { id: { in: body.orderIds } },
+        include: { items: true },
+      });
+      const ticketOrder = orders.find((o) => o.kind === 'ticket')!;
+      const productOrder = orders.find((o) => o.kind === 'product')!;
+
+      expect(ticketOrder.shippingCents).toBe(0);
+      expect(ticketOrder.shippingAddressId).toBeNull();
+      expect(ticketOrder.fulfillmentMethod).toBe('pickup');
+
+      expect(productOrder.shippingCents).toBe(1200);
+      expect(productOrder.shippingAddressId).toBe(address.id);
+      expect(productOrder.fulfillmentMethod).toBe('ship');
+      expect(productOrder.amountCents).toBe(8200);
+      expect(productOrder.items[0]!.subtotalCents).toBe(7000);
+    });
+
+    it('rolls back variant reservation when Stripe session fails', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ quantityTotal: 5 });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+
+      stripe.createCheckoutSession = () => {
+        throw new Error('Stripe unavailable');
+      };
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(500);
+
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(0);
+      const cart = await prisma.cart.findFirst({ where: { userId: user.id } });
+      expect(cart!.status).toBe('open');
+    });
+
+    it('blocks oversell with concurrent variant checkout', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ quantityTotal: 1 });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      await prisma.variant.update({
+        where: { id: variant.id },
+        data: { quantitySold: 1 },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(409);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('Conflict');
+
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(1);
+    });
+  });
+});
