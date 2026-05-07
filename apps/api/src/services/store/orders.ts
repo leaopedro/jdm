@@ -420,23 +420,28 @@ export const updateAdminStoreFulfillment = async (
     );
   }
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { fulfillmentStatus: input.status },
-  });
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: order.id },
+      data: { fulfillmentStatus: input.status },
+    });
 
-  await recordAudit({
-    actorId: input.actorId,
-    action: 'store.order.fulfillment_update',
-    entityType: 'order',
-    entityId: order.id,
-    metadata: {
-      from: order.fulfillmentStatus,
-      to: input.status,
-      method: order.fulfillmentMethod,
-      trackingCode: input.trackingCode ?? null,
-      note: input.note ?? null,
-    },
+    await recordAudit(
+      {
+        actorId: input.actorId,
+        action: 'store.order.fulfillment_update',
+        entityType: 'order',
+        entityId: order.id,
+        metadata: {
+          from: order.fulfillmentStatus,
+          to: input.status,
+          method: order.fulfillmentMethod,
+          trackingCode: input.trackingCode ?? null,
+          note: input.note ?? null,
+        },
+      },
+      tx,
+    );
   });
 
   return getAdminStoreOrderDetail(order.id);

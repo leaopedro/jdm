@@ -22,8 +22,13 @@ export type RecordAuditInput = {
   metadata?: Record<string, unknown>;
 };
 
-export const recordAudit = async (input: RecordAuditInput): Promise<void> => {
-  await prisma.adminAudit.create({
+type AuditClient = Pick<typeof prisma, 'adminAudit'> | Prisma.TransactionClient;
+
+export const recordAudit = async (
+  input: RecordAuditInput,
+  client: AuditClient = prisma,
+): Promise<void> => {
+  await client.adminAudit.create({
     data: {
       actorId: input.actorId,
       action: input.action,

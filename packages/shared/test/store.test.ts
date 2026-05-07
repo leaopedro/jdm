@@ -146,10 +146,19 @@ describe('adminStoreFulfillmentUpdateSchema', () => {
       adminStoreFulfillmentUpdateSchema.parse({
         status: 'shipped',
         trackingCode: 'BR123456789',
-        trackingUrl: 'https://rastreamento.example.com/BR123456789',
-        shippedAt: '2026-05-07T13:00:00.000Z',
+        note: 'Enviado pelos Correios.',
       }),
     ).not.toThrow();
+  });
+
+  it('rejects unknown fields outside the approved contract', () => {
+    expect(() =>
+      adminStoreFulfillmentUpdateSchema.parse({
+        status: 'shipped',
+        trackingCode: 'BR123456789',
+        trackingUrl: 'https://rastreamento.example.com/BR123456789',
+      }),
+    ).toThrow();
   });
 });
 
