@@ -115,31 +115,25 @@ export const ProductForm = ({ product }: { product: AdminStoreProductDetail }) =
         <div className="col-span-2 flex gap-3">
           <Submit />
           {product.status !== 'archived' ? (
-            <form
-              action={() => {
+            <button
+              type="submit"
+              formAction={() => {
                 void archiveProductAction(product.id);
               }}
+              className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm"
             >
-              <button
-                type="submit"
-                className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm"
-              >
-                Arquivar
-              </button>
-            </form>
+              Arquivar
+            </button>
           ) : (
-            <form
-              action={() => {
+            <button
+              type="submit"
+              formAction={() => {
                 void activateProductAction(product.id);
               }}
+              className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm"
             >
-              <button
-                type="submit"
-                className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm"
-              >
-                Reativar
-              </button>
-            </form>
+              Reativar
+            </button>
           )}
         </div>
       </form>
