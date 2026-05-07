@@ -20,7 +20,8 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
+    "pre-commit": "sh ./scripts/guard-production-branch.sh pre-commit && pnpm lint-staged",
+    "pre-push": "sh ./scripts/guard-production-branch.sh pre-push"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
