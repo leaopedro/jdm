@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminStoreCollectionDetail, AdminStoreProductLookupItem } from '@jdm/shared/admin';
+import type { AdminStoreCollectionDetail } from '@jdm/shared/admin';
 import { useActionState, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -11,9 +11,16 @@ import {
   type CollectionFormState,
 } from '~/lib/collection-actions';
 
+type ProductPickerItem = {
+  id: string;
+  slug: string;
+  title: string;
+  status: 'draft' | 'active' | 'archived';
+};
+
 type Props = {
   collection: AdminStoreCollectionDetail;
-  availableProducts: AdminStoreProductLookupItem[];
+  availableProducts: ProductPickerItem[];
 };
 
 const initial: CollectionFormState = { error: null };
@@ -50,7 +57,7 @@ export const CollectionEditor = ({ collection, availableProducts }: Props) => {
     title: p.title,
     status: p.status,
   }));
-  const [assigned, setAssigned] = useState<AdminStoreProductLookupItem[]>(initialAssigned);
+  const [assigned, setAssigned] = useState<ProductPickerItem[]>(initialAssigned);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [pendingProducts, startProductsTransition] = useTransition();
   const [pendingDelete, startDeleteTransition] = useTransition();
@@ -58,7 +65,7 @@ export const CollectionEditor = ({ collection, availableProducts }: Props) => {
   const assignedIds = new Set(assigned.map((p) => p.id));
   const unassigned = availableProducts.filter((p) => !assignedIds.has(p.id));
 
-  const persistProducts = (next: AdminStoreProductLookupItem[]) => {
+  const persistProducts = (next: ProductPickerItem[]) => {
     setAssigned(next);
     setProductsError(null);
     startProductsTransition(async () => {

@@ -36,15 +36,6 @@ const loadCollectionProducts = async (collectionId: string) => {
 export const adminCollectionRoutes: FastifyPluginAsync = async (app) => {
   // Lightweight picker for the collection ↔ product assignment UI. The full
   // admin product CRUD (sibling JDMA-S2.1) will own /admin/store/products.
-  app.get('/store/products/lookup', async () => {
-    const products = await prisma.product.findMany({
-      select: { id: true, slug: true, title: true, status: true },
-      orderBy: [{ status: 'asc' }, { title: 'asc' }],
-      take: 200,
-    });
-    return { items: products };
-  });
-
   app.get('/store/collections', async () => {
     const collections = await prisma.collection.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
