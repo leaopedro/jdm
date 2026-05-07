@@ -6,7 +6,7 @@ import { PhotoGallery } from './photo-gallery';
 import { ProductForm } from './product-form';
 import { VariantList } from './variant-list';
 
-import { getAdminStoreProduct } from '~/lib/admin-api';
+import { getAdminStoreProduct, listAdminProductTypes } from '~/lib/admin-api';
 import { ApiError } from '~/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +20,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
+  const { items: productTypes } = await listAdminProductTypes();
 
   return (
     <section className="flex flex-col gap-8">
@@ -30,7 +31,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         </div>
         <ProductStatusBadge status={product.status} />
       </header>
-      <ProductForm product={product} />
+      <ProductForm product={product} productTypes={productTypes} />
       <VariantList productId={product.id} variants={product.variants} />
       <PhotoGallery productId={product.id} photos={product.photos} />
     </section>

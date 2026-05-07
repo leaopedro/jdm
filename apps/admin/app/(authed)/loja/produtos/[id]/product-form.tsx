@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminStoreProductDetail } from '@jdm/shared/admin';
+import type { AdminProductType, AdminStoreProductDetail } from '@jdm/shared/admin';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -50,21 +50,40 @@ const Field = ({
   </label>
 );
 
-export const ProductForm = ({ product }: { product: AdminStoreProductDetail }) => {
+export const ProductForm = ({
+  product,
+  productTypes,
+}: {
+  product: AdminStoreProductDetail;
+  productTypes: AdminProductType[];
+}) => {
   const update = updateProductAction.bind(null, product.id);
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
+  const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
 
   return (
     <div className="flex flex-col gap-4">
       <form action={action} className="grid grid-cols-2 gap-4">
         <Field label="Título" name="title" required defaultValue={v.title ?? product.title} />
-        <Field
-          label="ID do tipo de produto"
-          name="productTypeId"
-          required
-          defaultValue={v.productTypeId ?? product.productTypeId}
-        />
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-[color:var(--color-muted)]">Tipo de produto</span>
+          <select
+            name="productTypeId"
+            required
+            defaultValue={v.productTypeId ?? product.productTypeId}
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
+          >
+            {currentTypeMissing ? (
+              <option value={product.productTypeId}>(tipo removido — selecione outro)</option>
+            ) : null}
+            {productTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
