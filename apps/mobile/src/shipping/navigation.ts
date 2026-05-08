@@ -10,6 +10,9 @@ export function getShippingExitPath(returnTo: string | null): string {
 }
 
 export function getShippingSavePath(addressId: string, returnTo: string | null): string {
+  if (returnTo === '/cart') {
+    return `/cart?shippingAddressId=${encodeURIComponent(addressId)}`;
+  }
   return returnTo ?? `/profile/shipping/${addressId}`;
 }
 

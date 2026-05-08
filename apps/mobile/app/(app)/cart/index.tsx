@@ -1,6 +1,6 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -81,6 +81,9 @@ function getCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
+  const params = useLocalSearchParams<{ shippingAddressId?: string }>();
+  const requestedShippingAddressId =
+    typeof params.shippingAddressId === 'string' ? params.shippingAddressId : null;
   const requiresShipping =
     cart?.items.some((item) => isProductItem(item) && item.product.requiresShipping) ?? false;
   const {
@@ -118,12 +121,24 @@ export default function CartScreen() {
     }
 
     setSelectedShippingAddressId((current) => {
+      if (
+        requestedShippingAddressId &&
+        shippingAddresses.some((address) => address.id === requestedShippingAddressId)
+      ) {
+        return requestedShippingAddressId;
+      }
       if (current && shippingAddresses.some((address) => address.id === current)) {
         return current;
       }
       return shippingAddresses.find((address) => address.isDefault)?.id ?? shippingAddresses[0]!.id;
     });
-  }, [requiresShipping, shippingAddresses]);
+  }, [requiresShipping, requestedShippingAddressId, shippingAddresses]);
+
+  useEffect(() => {
+    if (!requestedShippingAddressId) return;
+    if (selectedShippingAddressId !== requestedShippingAddressId) return;
+    router.replace('/cart' as never);
+  }, [requestedShippingAddressId, router, selectedShippingAddressId]);
 
   const handleRemove = useCallback(
     async (itemId: string) => {

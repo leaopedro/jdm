@@ -26,7 +26,7 @@ describe('shipping navigation helpers', () => {
     expect(getShippingExitPath(null)).toBe('/profile');
     expect(getShippingListPath('/cart')).toBe('/cart');
     expect(getShippingListPath(null)).toBe('/profile/shipping');
-    expect(getShippingSavePath('addr_1', '/cart')).toBe('/cart');
+    expect(getShippingSavePath('addr_1', '/cart')).toBe('/cart?shippingAddressId=addr_1');
     expect(getShippingSavePath('addr_1', null)).toBe('/profile/shipping/addr_1');
   });
 });
