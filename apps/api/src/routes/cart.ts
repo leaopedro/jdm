@@ -435,19 +435,23 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     let shippingAddressId: string | null = null;
 
     if (requiresShipping) {
-      if (!input.shippingAddressId) {
-        return reply.status(422).send({
-          error: 'UnprocessableEntity',
-          message: 'shippingAddressId: endereço de entrega é obrigatório para produtos físicos',
-        });
-      }
-
-      const shippingAddress = await prisma.shippingAddress.findFirst({
-        where: { id: input.shippingAddressId, userId: sub },
-        select: { id: true },
-      });
+      const shippingAddress = input.shippingAddressId
+        ? await prisma.shippingAddress.findFirst({
+            where: { id: input.shippingAddressId, userId: sub },
+            select: { id: true },
+          })
+        : await prisma.shippingAddress.findFirst({
+            where: { userId: sub },
+            select: { id: true },
+            orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          });
       if (!shippingAddress) {
-        return reply.status(404).send({ error: 'NotFound', message: 'shipping address not found' });
+        return reply.status(input.shippingAddressId ? 404 : 422).send({
+          error: input.shippingAddressId ? 'NotFound' : 'UnprocessableEntity',
+          message: input.shippingAddressId
+            ? 'shipping address not found'
+            : 'shippingAddressId: endereço de entrega é obrigatório para produtos físicos',
+        });
       }
       shippingAddressId = shippingAddress.id;
     }

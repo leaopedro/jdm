@@ -1,8 +1,9 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
+import type { ShippingAddressRecord } from '@jdm/shared/store';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +21,7 @@ import { getEventCommerceById } from '~/api/events';
 import { useCart } from '~/cart/context';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
+import { useShippingAddresses } from '~/hooks/useShippingAddresses';
 import { formatBRL } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import { theme } from '~/theme';
@@ -76,21 +78,53 @@ function getCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
   };
 }
 
+function formatShippingAddress(address: ShippingAddressRecord): string {
+  return `${address.street}, ${address.number} · ${address.city}/${address.stateCode}`;
+}
+
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
+  const requiresShipping =
+    cart?.items.some((item) => isProductItem(item) && item.product.requiresShipping) ?? false;
+  const {
+    items: shippingAddresses,
+    loading: loadingShippingAddresses,
+    error: shippingAddressesError,
+    refresh: refreshShippingAddresses,
+  } = useShippingAddresses(requiresShipping);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [drawerItem, setDrawerItem] = useState<CartItem | null>(null);
   const [drawerExtras, setDrawerExtras] = useState<EventExtraPublic[]>([]);
   const [loadingExtras, setLoadingExtras] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
+  const [selectedShippingAddressId, setSelectedShippingAddressId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
     }, [refresh]),
   );
+
+  useEffect(() => {
+    if (!requiresShipping) {
+      setSelectedShippingAddressId(null);
+      return;
+    }
+
+    if (shippingAddresses.length === 0) {
+      setSelectedShippingAddressId(null);
+      return;
+    }
+
+    setSelectedShippingAddressId((current) => {
+      if (current && shippingAddresses.some((address) => address.id === current)) {
+        return current;
+      }
+      return shippingAddresses.find((address) => address.isDefault)?.id ?? shippingAddresses[0]!.id;
+    });
+  }, [requiresShipping, shippingAddresses]);
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -122,6 +156,7 @@ export default function CartScreen() {
     try {
       const result = await beginCheckout({
         paymentMethod,
+        ...(selectedShippingAddressId ? { shippingAddressId: selectedShippingAddressId } : {}),
         ...getCheckoutReturnUrls(),
       });
 
@@ -158,7 +193,7 @@ export default function CartScreen() {
     } finally {
       setCheckingOut(false);
     }
-  }, [paymentMethod, router]);
+  }, [paymentMethod, router, selectedShippingAddressId]);
 
   const openExtrasDrawer = useCallback(async (item: CartItem) => {
     setDrawerItem(item);
@@ -223,6 +258,7 @@ export default function CartScreen() {
     : null;
 
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
+  const blockedByShippingAddress = requiresShipping && !selectedShippingAddressId;
 
   const openCarPlate = (item: CartItem) => {
     if (!item.eventId || !item.tierId) return;
@@ -298,11 +334,6 @@ export default function CartScreen() {
                 <Text style={styles.cardExtras}>
                   {item.product.requiresShipping ? cartCopy.item.shipping : cartCopy.item.pickup}
                 </Text>
-                {item.product.shippingFeeCents ? (
-                  <Text style={styles.extrasAmount}>
-                    + {formatBRL(item.product.shippingFeeCents)}
-                  </Text>
-                ) : null}
               </View>
             ) : item.extras.length > 0 ? (
               <View style={styles.extrasRow}>
@@ -384,6 +415,58 @@ export default function CartScreen() {
           <Text style={styles.totalValue}>{formatBRL(cart.totals.amountCents)}</Text>
         </View>
 
+        {requiresShipping ? (
+          <View style={styles.shippingSection}>
+            <Text style={styles.shippingTitle}>{cartCopy.shipping.title}</Text>
+            <Text style={styles.shippingHint}>{cartCopy.shipping.choose}</Text>
+            {loadingShippingAddresses ? (
+              <Text style={styles.shippingHint}>{cartCopy.shipping.loading}</Text>
+            ) : shippingAddressesError ? (
+              <Pressable
+                onPress={() => {
+                  void refreshShippingAddresses();
+                }}
+                style={styles.shippingRetry}
+              >
+                <Text style={styles.shippingRetryText}>{cartCopy.shipping.retry}</Text>
+              </Pressable>
+            ) : shippingAddresses.length === 0 ? (
+              <Text style={styles.shippingBlocked}>{cartCopy.shipping.empty}</Text>
+            ) : (
+              <View style={styles.shippingAddressList}>
+                {shippingAddresses.map((address) => {
+                  const selected = selectedShippingAddressId === address.id;
+
+                  return (
+                    <Pressable
+                      key={address.id}
+                      onPress={() => setSelectedShippingAddressId(address.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={[
+                        styles.shippingAddressCard,
+                        selected && styles.shippingAddressCardSelected,
+                      ]}
+                    >
+                      <View style={styles.shippingAddressHeader}>
+                        <Text style={styles.shippingAddressName}>{address.recipientName}</Text>
+                        {address.isDefault ? (
+                          <Text style={styles.shippingAddressBadge}>
+                            {cartCopy.shipping.defaultBadge}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.shippingAddressBody}>
+                        {formatShippingAddress(address)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : null}
+
         {itemCount > 0 && (
           <View style={styles.methodRow}>
             <Pressable
@@ -417,10 +500,12 @@ export default function CartScreen() {
               <Button
                 label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
                 onPress={() => void handlePay()}
-                disabled={checkingOut || blockedByCarRequirement}
+                disabled={checkingOut || blockedByCarRequirement || blockedByShippingAddress}
               />
               {blockedByCarRequirement ? (
                 <Text style={styles.payBlocked}>{cartCopy.item.carRequired}</Text>
+              ) : blockedByShippingAddress ? (
+                <Text style={styles.payBlocked}>{cartCopy.shipping.blocked}</Text>
               ) : null}
             </>
           )}
@@ -513,6 +598,66 @@ const styles = StyleSheet.create({
   footerButtons: { marginTop: theme.spacing.sm, gap: theme.spacing.sm },
   clearBtn: { alignSelf: 'center', padding: theme.spacing.sm },
   clearText: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  shippingSection: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  shippingTitle: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+    fontWeight: '600',
+  },
+  shippingHint: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+  },
+  shippingBlocked: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+  },
+  shippingRetry: {
+    alignSelf: 'flex-start',
+    paddingVertical: theme.spacing.xs,
+  },
+  shippingRetryText: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  shippingAddressList: {
+    gap: theme.spacing.sm,
+  },
+  shippingAddressCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  shippingAddressCardSelected: {
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent + '12',
+  },
+  shippingAddressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  shippingAddressName: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  shippingAddressBadge: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  shippingAddressBody: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+  },
   carRow: {
     flexDirection: 'row',
     alignItems: 'center',

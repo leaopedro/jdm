@@ -128,4 +128,16 @@ describe('store purchase flow', () => {
     expect(getInitialVariantSelection(product)).toBe('var_1');
     expect(getNextQuantity(product, 'var_1', 5)).toBe(3);
   });
+
+  it('lets the detail quantity move before multi-variant selection by clamping against the first selectable variant', () => {
+    const product = buildProduct({
+      variants: [
+        { ...baseVariant, id: 'var_1', stockOnHand: 4 },
+        { ...baseVariant, id: 'var_2', stockOnHand: 2, title: 'M' },
+      ],
+    });
+
+    expect(getNextQuantity(product, null, 3)).toBe(3);
+    expect(getNextQuantity(product, null, 8)).toBe(4);
+  });
 });

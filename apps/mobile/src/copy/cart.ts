@@ -53,6 +53,15 @@ export const cartCopy = {
     card: 'Cartão',
     pix: 'Pix',
   },
+  shipping: {
+    title: 'Endereço de entrega',
+    choose: 'Selecione o endereço para receber os produtos.',
+    loading: 'Carregando endereços...',
+    empty: 'Cadastre um endereço de entrega para concluir esta compra.',
+    retry: 'Tentar novamente',
+    defaultBadge: 'Padrão',
+    blocked: 'Selecione um endereço de entrega para pagar.',
+  },
   errors: {
     load: 'Não foi possível carregar o carrinho.',
     add: 'Erro ao adicionar item ao carrinho.',
