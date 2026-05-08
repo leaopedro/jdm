@@ -2,7 +2,7 @@
 
 import type { AdminStoreVariant } from '@jdm/shared/admin';
 import React from 'react';
-import { useActionState, useTransition } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
@@ -107,6 +107,23 @@ const VariantRow = ({ productId, variant }: { productId: string; variant: AdminS
 
 const SIZE_PRESET = ['P', 'M', 'G', 'GG'] as const;
 
+export const createSizePreset = async (
+  productId: string,
+  productPriceCents: number,
+  createFn: (productId: string, prev: StoreFormState, fd: FormData) => Promise<StoreFormState>,
+): Promise<string | null> => {
+  for (const size of SIZE_PRESET) {
+    const fd = new FormData();
+    fd.append('name', size);
+    fd.append('priceCents', String(productPriceCents));
+    fd.append('quantityTotal', '0');
+    fd.append('attributes', JSON.stringify({ size }));
+    const result = await createFn(productId, initial, fd);
+    if (result.error) return result.error;
+  }
+  return null;
+};
+
 const SizePresetButton = ({
   productId,
   productPriceCents,
@@ -115,29 +132,28 @@ const SizePresetButton = ({
   productPriceCents: number;
 }) => {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const handleClick = () => {
+    setError(null);
     startTransition(async () => {
-      for (const size of SIZE_PRESET) {
-        const fd = new FormData();
-        fd.append('name', size);
-        fd.append('priceCents', String(productPriceCents));
-        fd.append('quantityTotal', '0');
-        fd.append('attributes', JSON.stringify({ size }));
-        await createVariantAction(productId, initial, fd);
-      }
+      const err = await createSizePreset(productId, productPriceCents, createVariantAction);
+      setError(err);
     });
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={pending}
-      className="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm disabled:opacity-50"
-    >
-      {pending ? '…' : 'Criar tamanhos (P-M-G-GG)'}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={pending}
+        className="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm disabled:opacity-50"
+      >
+        {pending ? '…' : 'Criar tamanhos (P-M-G-GG)'}
+      </button>
+      {error ? <span className="text-sm text-red-400">{error}</span> : null}
+    </>
   );
 };
 
