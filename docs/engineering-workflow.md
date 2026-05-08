@@ -13,12 +13,14 @@ plan in `plans/`. If anything here conflicts with `CLAUDE.md` or
 ```
 issue assigned
   → plan document on the issue (superpowers:writing-plans)
+  → issue comment linking the plan document + summary of scope
   → CTO approves plan
-  → branch + implement (superpowers:test-driven-development,
-                        superpowers:subagent-driven-development)
+  → branch + implement plan tasks (superpowers:subagent-driven-development,
+                                   plus superpowers:test-driven-development inside each task)
   → self-verify (superpowers:verification-before-completion)
   → request code review (superpowers:requesting-code-review)
   → CTO review
+  → if review feedback lands, handle it with superpowers:receiving-code-review
   → QA manual smoke (when user-facing)
   → merge to main
   → deploy (Railway / Vercel / EAS) — done as part of the merge, not a follow-up
@@ -89,7 +91,11 @@ If you discover work was made in root `main` anyway:
    issue, and the relevant `plans/phase-N-fM-*.md`.
 3. If the scope or success criteria are unclear, ask the CTO in a comment.
    Do not start coding against ambiguity.
-4. If the heartbeat opens in repo root on `main` and
+4. Before any non-trivial implementation work, invoke
+   `superpowers:writing-plans`, save the plan to the issue's `plan`
+   document, and post a comment linking that document so the thread shows
+   the intended execution path.
+5. If the heartbeat opens in repo root on `main` and
    `.claude/worktrees/<issue-id>` does not exist yet, create it with
    `./scripts/ensure-issue-worktree.sh <issue-id>`, switch into that
    worktree, and only then create your feature branch. Missing first-time
@@ -125,6 +131,10 @@ After writing the plan, post a comment linking the document and reassign the
 issue back to the CTO with status `in_review` for plan approval. Do not
 implement before the CTO accepts the plan revision.
 
+The thread comment is required even though the canonical plan lives in the
+issue document. Engineers should not make reviewers hunt through revisions to
+learn that planning happened.
+
 ## 4. Implementing
 
 Once the plan is accepted:
@@ -133,21 +143,26 @@ Once the plan is accepted:
    (`feat/f4b-pix-create-order`, `fix/auth-refresh-rotation`).
 2. Tick steps in the plan document as you complete them. The plan is a live
    log, not a frozen artifact.
-3. Use `superpowers:test-driven-development` for any feature or bug fix.
+3. Use `superpowers:subagent-driven-development` as the default execution
+   model for the accepted plan. Feed it the plan tasks in order and use its
+   review gates between tasks. If the work is too tightly coupled to use that
+   skill safely, stop and document the exception in the issue before falling
+   back to inline execution.
+4. Use `superpowers:test-driven-development` for any feature or bug fix.
    Write the failing test first; commit; make it pass; commit. Integration
    tests for the API hit a real Postgres (Testcontainers / preview DB) —
    never mock the DB. This rule has burned us before; do not relitigate it.
-4. Use `superpowers:subagent-driven-development` to parallelize independent
-   sub-pieces (e.g. schema + Zod + handler) when the steps fan out cleanly.
-   Do NOT parallelize tightly coupled changes.
-5. Use `superpowers:systematic-debugging` when something breaks unexpectedly.
+5. Within `superpowers:subagent-driven-development`, only parallelize
+   independent sub-pieces (e.g. schema + Zod + handler) when the steps fan
+   out cleanly. Do NOT parallelize tightly coupled changes.
+6. Use `superpowers:systematic-debugging` when something breaks unexpectedly.
    Find the root cause; do not chase symptoms.
-6. Commit in **logical commits as you go**, Conventional Commits, with the
+7. Commit in **logical commits as you go**, Conventional Commits, with the
    exact co-author trailer:
    ```
    Co-Authored-By: Paperclip <noreply@paperclip.ing>
    ```
-7. Comment on the Paperclip issue at meaningful checkpoints (every commit
+8. Comment on the Paperclip issue at meaningful checkpoints (every commit
    batch, or at the end of a heartbeat). State what changed, what's next,
    who owns the next step.
 
@@ -194,8 +209,9 @@ is evidence.
 
 ## 6. Requesting code review (hard handoff)
 
-Use `superpowers:requesting-code-review` to structure the request. Open a PR
-with:
+Run `superpowers:requesting-code-review` before every real review request.
+That applies to the PR handoff and to any deliberate checkpoint review inside
+the plan-execution loop. Open a PR with:
 
 - Conventional Commits title.
 - A short description: what changed, why, and the verification evidence.
@@ -223,6 +239,10 @@ Minimum comment content when handing off to CTO:
 When you receive review feedback, use `superpowers:receiving-code-review`.
 Verify before accepting; push back when feedback is wrong; address
 unambiguous issues without ceremony. Do not silently disagree.
+
+Treat any PR comment, "request changes", or implementation-review note as a
+review-feedback event. Do not start editing from reviewer instructions until
+`superpowers:receiving-code-review` has been invoked for that round.
 
 After pushing review fixes, repeat the exact handoff: re-request PR review,
 reassign the Paperclip issue to CTO with `in_review`, and add a fresh comment

@@ -34,11 +34,13 @@ Reviews happen at PR level only. The CTO does not review a loose branch,
 worktree, or "please inspect my latest commits" handoff. If there is no PR,
 there is no review request yet.
 
+Authors must run `superpowers:requesting-code-review` before they open that
+handoff. Review starts after a deliberate review request, not by osmosis.
+
 ## 2. The reviewer's job
 
-Use `superpowers:requesting-code-review`'s mirror skill on receipt — read
-the change, then read the issue and the plan document. Do not start with
-the diff; start with intent. A diff that perfectly implements the wrong
+Read the change, then read the issue and the plan document. Do not start
+with the diff; start with intent. A diff that perfectly implements the wrong
 thing should be sent back, not nit-picked.
 
 In order:
@@ -126,7 +128,9 @@ catch issues, not to demonstrate thoroughness with paragraphs of theory.
 
 ## 6. The author's job during review
 
-Use `superpowers:receiving-code-review`. In particular:
+Any time review feedback lands in the PR or in an implementation-review
+checkpoint, the author starts by invoking `superpowers:receiving-code-review`.
+In particular:
 
 - **Push back when the feedback is wrong.** Verify before accepting.
   Performative agreement creates technical debt.

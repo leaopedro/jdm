@@ -11,10 +11,15 @@ Direct pushes to `main` are not allowed.
 
 ```
 issue assigned
+  → write the issue plan with `superpowers:writing-plans`
+  → comment with the plan link and scope summary
   → branch off main (`feat/<slug>`, `fix/<slug>`, `chore/<slug>`)
+  → implement the accepted plan with `superpowers:subagent-driven-development`
   → commit logically and push the branch to origin
   → open a PR to `main` and link the Paperclip issue
+  → run `superpowers:requesting-code-review` and request review
   → reviewer (CTO today; peer engineer once the bench is hired) reviews
+  → if feedback lands, use `superpowers:receiving-code-review` before changing code
   → fix, re-request review, and reassign issue to CTO (`in_review`) until approved
   → merge to `main` (squash if commits are noisy)
   → deploy (Railway / Vercel / EAS) as part of the merge, not a follow-up
@@ -25,7 +30,8 @@ issue assigned
 The full lifecycle (planning, code review responsibilities, manual smoke
 test handoff, rollback plans) lives in [`docs/engineering-workflow.md`](docs/engineering-workflow.md)
 and [`docs/code-review.md`](docs/code-review.md). Read both before opening
-your first PR.
+your first PR. The short version above is not optional; those skill gates are
+the required path for non-trivial work.
 
 ## Branching
 
