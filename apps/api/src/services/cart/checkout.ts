@@ -138,6 +138,18 @@ export async function reserveAndCreateOrders(
   const method = options.method;
   const provider = PROVIDER_FOR_METHOD[method];
   const allExpiredRefs: string[] = [];
+  const primaryShippingCartItemId = cart.items.reduce<string | null>((selectedId, item) => {
+    if (item.kind !== 'product' || !item.variant) return selectedId;
+    const shippingFeeCents = item.variant.product.shippingFeeCents ?? 0;
+    if (shippingFeeCents <= 0) return selectedId;
+    if (!selectedId) return item.id;
+    const selectedItem = cart.items.find((candidate) => candidate.id === selectedId);
+    const selectedShippingFeeCents =
+      selectedItem?.kind === 'product' && selectedItem.variant
+        ? (selectedItem.variant.product.shippingFeeCents ?? 0)
+        : 0;
+    return shippingFeeCents > selectedShippingFeeCents ? item.id : selectedId;
+  }, null);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -145,6 +157,10 @@ export async function reserveAndCreateOrders(
 
       for (const item of cart.items) {
         if (item.kind === 'product') {
+          const appliedShippingCents =
+            item.id === primaryShippingCartItemId
+              ? (item.variant?.product.shippingFeeCents ?? 0)
+              : 0;
           const order = await reserveProductCartItem(
             item,
             cart.id,
@@ -152,6 +168,7 @@ export async function reserveAndCreateOrders(
             method,
             provider,
             options.shippingAddressId ?? null,
+            appliedShippingCents,
             tx,
             allExpiredRefs,
           );
@@ -343,6 +360,7 @@ async function reserveProductCartItem(
   method: CartCheckoutMethod,
   provider: 'stripe' | 'abacatepay',
   shippingAddressId: string | null,
+  appliedShippingCents: number,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
 ): Promise<CartOrder> {
@@ -375,8 +393,9 @@ async function reserveProductCartItem(
   }
 
   const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
-  const shippingCents = variant.product.shippingFeeCents ?? 0;
+  const shippingCents = variant.product.shippingFeeCents === null ? 0 : appliedShippingCents;
   const fulfillmentMethod = variant.product.shippingFeeCents === null ? 'pickup' : 'ship';
+  const amountCents = variant.priceCents * item.quantity + shippingCents;
   const order = await tx.order.create({
     data: {
       userId,
@@ -384,7 +403,7 @@ async function reserveProductCartItem(
       tierId: null,
       cartId,
       kind: 'product',
-      amountCents: item.amountCents,
+      amountCents,
       quantity: item.quantity,
       currency: variant.product.currency,
       method,
@@ -415,7 +434,7 @@ async function reserveProductCartItem(
     eventId: null,
     tierId: null,
     variantId: variant.id,
-    amountCents: item.amountCents,
+    amountCents,
     quantity: item.quantity,
     kind: 'product',
     description,

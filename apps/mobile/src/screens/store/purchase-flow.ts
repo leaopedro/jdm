@@ -79,4 +79,9 @@ export const getNextQuantity = (
   product: StoreProduct,
   selectedVariantId: string | null,
   nextQuantity: number,
-): number => clampProductQuantity(nextQuantity, getSelectedVariant(product, selectedVariantId));
+): number =>
+  clampProductQuantity(
+    nextQuantity,
+    getSelectedVariant(product, selectedVariantId) ??
+      getDefaultVariant(product.variants, selectedVariantId),
+  );

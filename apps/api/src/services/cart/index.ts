@@ -124,18 +124,23 @@ export function computeItemAmount(
   kind: 'ticket' | 'extras_only' | 'product' = 'ticket',
 ): number {
   if (kind === 'product') {
-    return (pricing.variantPriceCents ?? 0) * quantity + (pricing.shippingFeeCents ?? 0);
+    return (pricing.variantPriceCents ?? 0) * quantity;
   }
   const tierTotal = kind === 'ticket' ? (pricing.tierPriceCents ?? 0) * quantity : 0;
   const extrasTotal = extras.reduce((sum, e) => sum + e.subtotalCents, 0);
   return tierTotal + extrasTotal;
 }
 
+const getMaxShippingSubtotalCents = (items: CartWithItems['items']): number =>
+  items.reduce((max, item) => {
+    if (item.kind !== 'product' || !item.variant) return max;
+    return Math.max(max, item.variant.product.shippingFeeCents ?? 0);
+  }, 0);
+
 export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   let ticketSubtotalCents = 0;
   let extrasSubtotalCents = 0;
   let productsSubtotalCents = 0;
-  let shippingSubtotalCents = 0;
 
   for (const item of items) {
     if (item.kind === 'ticket' && item.tier) {
@@ -143,13 +148,13 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
     }
     if (item.kind === 'product' && item.variant) {
       productsSubtotalCents += item.variant.priceCents * item.quantity;
-      shippingSubtotalCents += item.variant.product.shippingFeeCents ?? 0;
     }
     for (const extra of item.extras) {
       extrasSubtotalCents += extra.subtotalCents;
     }
   }
 
+  const shippingSubtotalCents = getMaxShippingSubtotalCents(items);
   const discountCents = 0;
   const amountCents =
     ticketSubtotalCents +
@@ -186,6 +191,20 @@ export function serializeCart(cart: CartWithItems): Cart {
         }
       : null;
 
+    const amountCents = computeItemAmount(
+      item.variant
+        ? {
+            variantPriceCents: item.variant.priceCents,
+            shippingFeeCents: item.variant.product.shippingFeeCents,
+          }
+        : item.tier
+          ? { tierPriceCents: item.tier.priceCents }
+          : {},
+      item.quantity,
+      item.extras,
+      item.kind as CartItem['kind'],
+    );
+
     return {
       id: item.id,
       eventId: item.eventId,
@@ -203,7 +222,7 @@ export function serializeCart(cart: CartWithItems): Cart {
         subtotalCents: e.subtotalCents,
       })),
       product,
-      amountCents: item.amountCents,
+      amountCents,
       currency: item.currency,
       reservationExpiresAt: item.reservationExpiresAt?.toISOString() ?? null,
       createdAt: item.createdAt.toISOString(),

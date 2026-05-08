@@ -258,10 +258,15 @@ export default function StoreProductDetailScreen() {
         {purchaseMode === 'unavailable' ? (
           <Text style={styles.errorText}>{storeCopy.unavailable}</Text>
         ) : (
-          <View style={styles.cartHint}>
+          <Pressable
+            onPress={() => router.push('/cart' as never)}
+            accessibilityRole="button"
+            accessibilityLabel={cartCopy.title}
+            style={styles.cartHint}
+          >
             <ShoppingBag color={theme.colors.muted} size={16} strokeWidth={1.75} />
             <Text style={styles.cartHintText}>{cartCopy.title}</Text>
-          </View>
+          </Pressable>
         )}
       </View>
 
