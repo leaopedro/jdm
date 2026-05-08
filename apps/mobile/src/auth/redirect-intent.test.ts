@@ -20,13 +20,17 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/events/abc-123')).toBe(true);
   });
 
+  it('allows storefront browsing routes', () => {
+    expect(isPublicPath('/store')).toBe(true);
+    expect(isPublicPath('/store/colecao-jdm')).toBe(true);
+  });
+
   it('blocks event sub-routes (buy, etc.)', () => {
     expect(isPublicPath('/events/buy/track-day')).toBe(false);
     expect(isPublicPath('/events/track-day/extras')).toBe(false);
   });
 
   it('blocks protected paths', () => {
-    expect(isPublicPath('/store')).toBe(false);
     expect(isPublicPath('/cart')).toBe(false);
     expect(isPublicPath('/tickets')).toBe(false);
     expect(isPublicPath('/garage')).toBe(false);

@@ -23,8 +23,16 @@ export const storeCopy = {
     adding: 'Adicionando...',
     added: 'Produto adicionado ao carrinho.',
     soldOut: 'Esgotado',
+    confirmVariant: 'Adicionar variação',
+    cancelVariant: 'Agora não',
     retry: 'Tentar novamente',
     openCart: 'Abrir carrinho',
+  },
+  variantPicker: {
+    title: 'Escolha a variação',
+    subtitle: 'Selecione tamanho, modelo ou opção disponível antes de adicionar ao carrinho.',
+    label: 'Opções disponíveis',
+    confirmHint: 'Selecione uma opção para continuar.',
   },
   states: {
     loading: 'Carregando vitrine...',
@@ -35,5 +43,8 @@ export const storeCopy = {
   badges: {
     shipping: 'Entrega',
     pickup: 'Retirada',
+  },
+  pagination: {
+    loadingMore: 'Carregando mais produtos...',
   },
 };

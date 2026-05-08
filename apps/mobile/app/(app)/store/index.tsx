@@ -1,5 +1,6 @@
 import type {
   StoreCollection,
+  StoreProduct,
   StoreProductSummary,
   StoreProductType,
   StoreProductVariant,
@@ -13,6 +14,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -33,18 +35,22 @@ import { cartCopy } from '~/copy/cart';
 import { storeCopy } from '~/copy/store';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL } from '~/lib/format';
+import { resolveAddToCartVariantSelection } from '~/store/variant-selection';
 import { theme } from '~/theme';
 
 const BRAND_RED = '#E10600';
-
-const pickVariantForPurchase = (variants: StoreProductVariant[]): StoreProductVariant | null => {
-  return variants.find((variant) => variant.isActive && variant.stockOnHand > 0) ?? null;
-};
 
 const formatPriceRange = (product: StoreProductSummary): string => {
   const { minPriceCents, maxPriceCents } = product.priceRange;
   if (minPriceCents === maxPriceCents) return formatBRL(minPriceCents);
   return `${formatBRL(minPriceCents)} - ${formatBRL(maxPriceCents)}`;
+};
+
+const formatVariantPrice = (variant: StoreProductVariant): string => formatBRL(variant.priceCents);
+
+type VariantPickerState = {
+  product: StoreProduct;
+  variants: StoreProductVariant[];
 };
 
 export default function StoreIndex() {
@@ -60,7 +66,11 @@ export default function StoreIndex() {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
+  const [variantPicker, setVariantPicker] = useState<VariantPickerState | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const searchQuery = useDeferredValue(search.trim());
   const hasMountedRef = useRef(false);
   const requestIdRef = useRef(0);
@@ -79,28 +89,45 @@ export default function StoreIndex() {
     }
   }, []);
 
-  const loadProducts = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoadingProducts(true);
-    setError(false);
-    try {
-      const response = await listStoreProducts({
-        q: searchQuery.length > 0 ? searchQuery : undefined,
-        collectionSlug: collectionSlug ?? undefined,
-        productTypeSlug: productTypeSlug ?? undefined,
-      });
-      if (requestId !== requestIdRef.current) return;
-      setItems(response.items);
-    } catch {
-      if (requestId !== requestIdRef.current) return;
-      setItems([]);
-      setError(true);
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoadingProducts(false);
+  const loadProducts = useCallback(
+    async ({ cursor, append = false }: { cursor?: string; append?: boolean } = {}) => {
+      const requestId = append ? requestIdRef.current : ++requestIdRef.current;
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoadingProducts(true);
+        setError(false);
+        setNextCursor(null);
       }
-    }
-  }, [collectionSlug, productTypeSlug, searchQuery]);
+      try {
+        const response = await listStoreProducts({
+          q: searchQuery.length > 0 ? searchQuery : undefined,
+          collectionSlug: collectionSlug ?? undefined,
+          productTypeSlug: productTypeSlug ?? undefined,
+          cursor,
+        });
+        if (requestId !== requestIdRef.current) return;
+        setItems((current) => (append ? [...(current ?? []), ...response.items] : response.items));
+        setNextCursor(response.nextCursor);
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        if (!append) {
+          setItems([]);
+          setError(true);
+          setNextCursor(null);
+        }
+      } finally {
+        if (requestId === requestIdRef.current) {
+          if (append) {
+            setLoadingMore(false);
+          } else {
+            setLoadingProducts(false);
+          }
+        }
+      }
+    },
+    [collectionSlug, productTypeSlug, searchQuery],
+  );
 
   useEffect(() => {
     void loadFilters();
@@ -131,20 +158,12 @@ export default function StoreIndex() {
     }
   }, [loadFilters, loadProducts]);
 
-  const onAddToCart = useCallback(
-    async (product: StoreProductSummary) => {
-      if (adding || pendingProductId) return;
-      setPendingProductId(product.id);
+  const addVariantToCart = useCallback(
+    async (productId: string, variantId: string) => {
+      setPendingProductId(productId);
       try {
-        const detail = await getStoreProduct(product.slug);
-        const variant = pickVariantForPurchase(detail.product.variants);
-        if (!variant) {
-          showMessage(cartCopy.errors.variantSoldOut);
-          return;
-        }
-
         await addItem({
-          variantId: variant.id,
+          variantId,
           source: 'purchase',
           kind: 'product',
           quantity: 1,
@@ -152,13 +171,64 @@ export default function StoreIndex() {
           metadata: { source: 'mobile' },
         });
         showMessage(storeCopy.actions.added);
+      } finally {
+        setPendingProductId(null);
+      }
+    },
+    [addItem],
+  );
+
+  const closeVariantPicker = useCallback(() => {
+    if (pendingProductId) return;
+    setVariantPicker(null);
+    setSelectedVariantId(null);
+  }, [pendingProductId]);
+
+  const onConfirmVariant = useCallback(async () => {
+    if (!variantPicker || !selectedVariantId) {
+      showMessage(storeCopy.variantPicker.confirmHint);
+      return;
+    }
+
+    try {
+      await addVariantToCart(variantPicker.product.id, selectedVariantId);
+      setVariantPicker(null);
+      setSelectedVariantId(null);
+    } catch (error: unknown) {
+      showMessage(getCartAddErrorMessage(error));
+    }
+  }, [addVariantToCart, selectedVariantId, variantPicker]);
+
+  const onAddToCart = useCallback(
+    async (product: StoreProductSummary) => {
+      if (adding || pendingProductId) return;
+      setPendingProductId(product.id);
+      try {
+        const detail = await getStoreProduct(product.slug);
+        const selection = resolveAddToCartVariantSelection(detail.product.variants);
+
+        if (selection.kind === 'sold_out') {
+          showMessage(cartCopy.errors.variantSoldOut);
+          return;
+        }
+
+        if (selection.kind === 'requires_selection') {
+          setVariantPicker({
+            product: detail.product,
+            variants: selection.variants,
+          });
+          setSelectedVariantId(null);
+          return;
+        }
+
+        await addVariantToCart(detail.product.id, selection.variant.id);
       } catch (error: unknown) {
         showMessage(getCartAddErrorMessage(error));
       } finally {
         setPendingProductId(null);
       }
     },
-    [addItem, adding, pendingProductId],
+    [addVariantToCart, adding, pendingProductId],
   );
 
   const renderHero = () => (
@@ -258,7 +328,22 @@ export default function StoreIndex() {
           numColumns={2}
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.listContent}
+          onEndReached={() => {
+            if (loadingMore || loadingProducts || error || !nextCursor) return;
+            void loadProducts({ cursor: nextCursor, append: true });
+          }}
+          onEndReachedThreshold={0.45}
           ListHeaderComponent={listHeader}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.paginationFooter}>
+                <ActivityIndicator color={BRAND_RED} />
+                <Text variant="bodySm" tone="secondary" className="mt-3">
+                  {storeCopy.pagination.loadingMore}
+                </Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text variant="h3">{storeCopy.states.empty}</Text>
@@ -288,6 +373,18 @@ export default function StoreIndex() {
           )}
         />
       )}
+      <VariantPickerModal
+        visible={variantPicker !== null}
+        product={variantPicker?.product ?? null}
+        variants={variantPicker?.variants ?? []}
+        selectedVariantId={selectedVariantId}
+        adding={pendingProductId === variantPicker?.product.id}
+        onSelect={setSelectedVariantId}
+        onClose={closeVariantPicker}
+        onConfirm={() => {
+          void onConfirmVariant();
+        }}
+      />
     </View>
   );
 }
@@ -440,6 +537,90 @@ function ProductCard({
   );
 }
 
+function VariantPickerModal({
+  visible,
+  product,
+  variants,
+  selectedVariantId,
+  adding,
+  onSelect,
+  onClose,
+  onConfirm,
+}: {
+  visible: boolean;
+  product: StoreProduct | null;
+  variants: StoreProductVariant[];
+  selectedVariantId: string | null;
+  adding: boolean;
+  onSelect: (variantId: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={styles.modalScrim} onPress={onClose} />
+        <View style={styles.modalCard}>
+          <Text variant="h3">{storeCopy.variantPicker.title}</Text>
+          <Text variant="bodySm" tone="secondary" className="mt-2">
+            {storeCopy.variantPicker.subtitle}
+          </Text>
+          {product ? (
+            <Text variant="body" weight="bold" className="mt-4">
+              {product.title}
+            </Text>
+          ) : null}
+
+          <Text variant="caption" tone="secondary" className="mt-4 mb-2">
+            {storeCopy.variantPicker.label}
+          </Text>
+          <View style={styles.variantList}>
+            {variants.map((variant) => {
+              const selected = selectedVariantId === variant.id;
+
+              return (
+                <Pressable
+                  key={variant.id}
+                  onPress={() => onSelect(variant.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={[styles.variantOption, selected && styles.variantOptionSelected]}
+                >
+                  <View style={styles.variantOptionBody}>
+                    <Text variant="bodySm" weight="bold" tone={selected ? 'inverse' : 'primary'}>
+                      {variant.title}
+                    </Text>
+                    <Text variant="caption" tone={selected ? 'inverse' : 'secondary'}>
+                      {formatVariantPrice(variant)}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.modalActions}>
+            <Button
+              label={storeCopy.actions.cancelVariant}
+              onPress={onClose}
+              disabled={adding}
+              variant="secondary"
+              className="flex-1"
+            />
+            <Button
+              label={adding ? storeCopy.actions.adding : storeCopy.actions.confirmVariant}
+              onPress={onConfirm}
+              disabled={adding || !selectedVariantId}
+              loading={adding}
+              className="flex-1"
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -542,6 +723,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 120,
   },
+  paginationFooter: {
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xl,
+    alignItems: 'center',
+  },
   gridRow: {
     paddingHorizontal: theme.spacing.lg,
     gap: theme.spacing.md,
@@ -567,6 +753,51 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     padding: theme.spacing.md,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(10,10,10,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  modalScrim: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    backgroundColor: '#111116',
+    padding: theme.spacing.xl,
+  },
+  variantList: {
+    gap: theme.spacing.sm,
+  },
+  variantOption: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    backgroundColor: '#17171D',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  variantOptionSelected: {
+    borderColor: BRAND_RED,
+    backgroundColor: '#2D0603',
+  },
+  variantOptionBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xl,
   },
   cardMeta: {
     flexDirection: 'row',
