@@ -2,7 +2,7 @@
 
 set -eu
 
-project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+project_dir="$(pwd)"
 git_common_dir="$(git -C "$project_dir" rev-parse --git-common-dir 2>/dev/null || pwd)"
 
 case "$git_common_dir" in
