@@ -108,12 +108,10 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
     if (input.status === 'active' && existing.status !== 'active') {
       const photoCount = await prisma.productPhoto.count({ where: { productId: id } });
       if (photoCount === 0) {
-        return reply
-          .status(400)
-          .send({
-            error: 'BadRequest',
-            message: 'product requires at least one photo to activate',
-          });
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: 'product requires at least one photo to activate',
+        });
       }
     }
 
