@@ -1,0 +1,39 @@
+export const ordersCopy = {
+  title: 'Meus pedidos',
+  empty: 'Você ainda não tem pedidos da loja.',
+  emptySub: 'Quando um produto entrar no seu carrinho, ele aparece aqui.',
+  retry: 'Tentar novamente',
+  loadFailed: 'Não foi possível carregar seus pedidos.',
+  paymentStatus: {
+    pending: 'Pagamento pendente',
+    paid: 'Pago',
+    failed: 'Falhou',
+    refunded: 'Reembolsado',
+    expired: 'Expirado',
+  },
+  fulfillmentStatus: {
+    unfulfilled: 'Separando',
+    packed: 'Embalado',
+    shipped: 'Enviado',
+    delivered: 'Entregue',
+    pickup_ready: 'Pronto para retirada',
+    picked_up: 'Retirado',
+    cancelled: 'Cancelado',
+  },
+  fulfillmentMethod: {
+    ship: 'Entrega',
+    pickup: 'Retirada',
+  },
+  orderKind: {
+    ticket: 'Evento',
+    extras_only: 'Extras',
+    product: 'Loja',
+    mixed: 'Evento + loja',
+  },
+  summary: {
+    moreItems: (count: number) => `+${count} ${count === 1 ? 'item' : 'itens'}`,
+    shipping: 'Frete',
+    eventDate: 'Evento',
+    orderDate: 'Pedido em',
+  },
+};

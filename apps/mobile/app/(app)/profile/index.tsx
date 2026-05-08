@@ -1,6 +1,6 @@
 import type { PublicProfile } from '@jdm/shared/profile';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { CarFront, ChevronRight, LogOut, PencilLine } from 'lucide-react-native';
+import { CarFront, ChevronRight, LogOut, Package, PencilLine } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -157,6 +157,12 @@ export default function ProfileMenuScreen() {
           label={profileCopy.profile.editDetails}
           hint={profileCopy.menu.editHint}
           onPress={() => router.push('/profile/edit' as never)}
+        />
+        <MenuRow
+          icon={<Package color={theme.colors.fg} size={18} strokeWidth={1.75} />}
+          label={profileCopy.menu.orders}
+          hint={profileCopy.menu.ordersHint}
+          onPress={() => router.push('/profile/orders' as never)}
         />
         <MenuRow
           icon={<CarFront color={theme.colors.fg} size={18} strokeWidth={1.75} />}
