@@ -31,7 +31,7 @@ export async function fetchCep(cep: string, signal?: AbortSignal): Promise<CepLo
   if (digits.length !== 8) return { status: 'not_found' };
 
   try {
-    const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`, { signal });
+    const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`, signal ? { signal } : {});
 
     if (!res.ok) return { status: 'not_found' };
 
