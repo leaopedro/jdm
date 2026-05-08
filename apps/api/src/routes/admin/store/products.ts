@@ -105,6 +105,16 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) return reply.status(404).send({ error: 'NotFound' });
 
+    if (input.status === 'active' && existing.status !== 'active') {
+      const photoCount = await prisma.productPhoto.count({ where: { productId: id } });
+      if (photoCount === 0) {
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: 'product requires at least one photo to activate',
+        });
+      }
+    }
+
     if (input.productTypeId !== undefined && input.productTypeId !== existing.productTypeId) {
       const pt = await prisma.productType.findUnique({
         where: { id: input.productTypeId },
