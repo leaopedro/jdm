@@ -10,19 +10,9 @@ const inputCls =
 
 const labelCls = 'flex flex-col gap-1 text-sm';
 
-const formatCents = (cents: number) => (cents / 100).toFixed(2);
-
-const parseReais = (raw: string): number | null => {
-  const normalized = raw.replace(',', '.').trim();
-  if (normalized === '') return null;
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
-};
-
 export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
   const [storeEnabled, setStoreEnabled] = useState(initial.storeEnabled);
-  const [shippingFee, setShippingFee] = useState(formatCents(initial.defaultShippingFeeCents));
+  const [shippingFee, setShippingFee] = useState(String(initial.defaultShippingFeeCents));
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
   const [pickup, setPickup] = useState(initial.pickupDisplayLabel ?? '');
   const [phone, setPhone] = useState(initial.supportPhone ?? '');
@@ -36,9 +26,9 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
     setError(null);
     setSuccess(null);
 
-    const shippingCents = parseReais(shippingFee);
-    if (shippingCents === null) {
-      setError('Frete padrão inválido. Use um valor em reais (ex.: 19,90).');
+    const shippingCents = Number(shippingFee);
+    if (!Number.isInteger(shippingCents) || shippingCents < 0) {
+      setError('Frete padrão deve ser um inteiro em centavos maior ou igual a zero.');
       return;
     }
 
@@ -61,7 +51,7 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
       });
       if (result.ok) {
         setStoreEnabled(result.settings.storeEnabled);
-        setShippingFee(formatCents(result.settings.defaultShippingFeeCents));
+        setShippingFee(String(result.settings.defaultShippingFeeCents));
         setLowStock(String(result.settings.lowStockThreshold));
         setPickup(result.settings.pickupDisplayLabel ?? '');
         setPhone(result.settings.supportPhone ?? '');
@@ -93,14 +83,15 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
       </label>
 
       <label className={labelCls}>
-        <span className="font-medium">Frete padrão (R$)</span>
+        <span className="font-medium">Frete padrão (centavos)</span>
         <input
-          type="text"
-          inputMode="decimal"
+          type="number"
+          min={0}
+          step={1}
           value={shippingFee}
           onChange={(e) => setShippingFee(e.target.value)}
           className={inputCls}
-          aria-label="Frete padrão em reais"
+          aria-label="Frete padrão em centavos"
         />
         <span className="text-xs text-[color:var(--color-muted)]">
           Valor sugerido para envios físicos quando não houver tabela específica.
