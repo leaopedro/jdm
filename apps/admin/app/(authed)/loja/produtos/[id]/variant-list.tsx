@@ -107,7 +107,13 @@ const VariantRow = ({ productId, variant }: { productId: string; variant: AdminS
 
 const SIZE_PRESET = ['P', 'M', 'G', 'GG'] as const;
 
-const SizePresetButton = ({ productId }: { productId: string }) => {
+const SizePresetButton = ({
+  productId,
+  productPriceCents,
+}: {
+  productId: string;
+  productPriceCents: number;
+}) => {
   const [pending, startTransition] = useTransition();
 
   const handleClick = () => {
@@ -115,7 +121,7 @@ const SizePresetButton = ({ productId }: { productId: string }) => {
       for (const size of SIZE_PRESET) {
         const fd = new FormData();
         fd.append('name', size);
-        fd.append('priceCents', '0');
+        fd.append('priceCents', String(productPriceCents));
         fd.append('quantityTotal', '0');
         fd.append('attributes', JSON.stringify({ size }));
         await createVariantAction(productId, initial, fd);
@@ -135,7 +141,13 @@ const SizePresetButton = ({ productId }: { productId: string }) => {
   );
 };
 
-const NewVariantForm = ({ productId }: { productId: string }) => {
+const NewVariantForm = ({
+  productId,
+  productPriceCents,
+}: {
+  productId: string;
+  productPriceCents: number;
+}) => {
   const create = createVariantAction.bind(null, productId);
   const [state, action] = useActionState(create, initial);
   const v = state.values ?? {};
@@ -162,7 +174,7 @@ const NewVariantForm = ({ productId }: { productId: string }) => {
         type="number"
         min={0}
         placeholder="Preço (centavos)"
-        defaultValue={v.priceCents ?? ''}
+        defaultValue={v.priceCents ?? productPriceCents}
         required
         className="w-32"
       />
@@ -184,15 +196,17 @@ const NewVariantForm = ({ productId }: { productId: string }) => {
 
 export const VariantList = ({
   productId,
+  productPriceCents,
   variants,
 }: {
   productId: string;
+  productPriceCents: number;
   variants: AdminStoreVariant[];
 }) => (
   <div className="flex flex-col gap-2">
     <div className="flex items-center gap-3">
       <h2 className="text-lg font-semibold">Variantes</h2>
-      <SizePresetButton productId={productId} />
+      <SizePresetButton productId={productId} productPriceCents={productPriceCents} />
     </div>
     {variants.length > 0 ? (
       <table className="w-full border-collapse text-left">
@@ -211,6 +225,6 @@ export const VariantList = ({
     ) : (
       <p className="text-sm text-[color:var(--color-muted)]">Nenhuma variante ainda.</p>
     )}
-    <NewVariantForm productId={productId} />
+    <NewVariantForm productId={productId} productPriceCents={productPriceCents} />
   </div>
 );

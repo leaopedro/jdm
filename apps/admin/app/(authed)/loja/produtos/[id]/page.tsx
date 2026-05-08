@@ -32,7 +32,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <ProductStatusBadge status={product.status} />
       </header>
       <ProductForm product={product} productTypes={productTypes} />
-      <VariantList productId={product.id} variants={product.variants} />
+      <VariantList
+        productId={product.id}
+        productPriceCents={product.basePriceCents}
+        variants={product.variants}
+      />
       <PhotoGallery productId={product.id} photos={product.photos} />
     </section>
   );
