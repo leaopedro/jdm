@@ -97,6 +97,14 @@ const seedShippingAddress = async (userId: string) =>
     },
   });
 
+const disableStore = async () => {
+  await prisma.storeSettings.upsert({
+    where: { id: 'store_default' },
+    update: { storeEnabled: false },
+    create: { id: 'store_default', storeEnabled: false },
+  });
+};
+
 const addProductCartItem = async (
   app: FastifyInstance,
   token: string,
@@ -244,6 +252,18 @@ describe('cart product lines (JDMA-345)', () => {
       expect(res.statusCode).toBe(409);
       const body = errorSchema.parse(res.json());
       expect(body.error).toBe('SoldOut');
+    });
+
+    it('rejects new product cart items when the store killswitch is off', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      await disableStore();
+
+      const res = await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+      expect(res.statusCode).toBe(503);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('ServiceUnavailable');
     });
 
     it('GET /cart evicts items whose variant became inactive', async () => {
@@ -400,6 +420,25 @@ describe('cart product lines (JDMA-345)', () => {
       expect(order.items[0]!.subtotalCents).toBe(10_000);
     });
 
+    it('ticket-only checkout still works when the store killswitch is off', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { event, tier } = await seedPublishedEvent({ priceCents: 5000 });
+      await disableStore();
+
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      expect(body.orderIds).toHaveLength(1);
+    });
+
     it('mixed cart writes both ticket and product orders with line items', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
@@ -508,6 +547,30 @@ describe('cart product lines (JDMA-345)', () => {
       expect(variantAfter.quantitySold).toBe(0);
       const cart = await prisma.cart.findFirst({ where: { userId: user.id } });
       expect(cart!.status).toBe('open');
+    });
+
+    it('blocks product checkout when the store killswitch is off', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({ quantityTotal: 5 });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 2 });
+      await disableStore();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+      expect(res.statusCode).toBe(503);
+      const body = errorSchema.parse(res.json());
+      expect(body.error).toBe('ServiceUnavailable');
+
+      const orders = await prisma.order.findMany({ where: { userId: user.id } });
+      expect(orders).toHaveLength(0);
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(0);
     });
 
     it('blocks oversell with concurrent variant checkout', async () => {

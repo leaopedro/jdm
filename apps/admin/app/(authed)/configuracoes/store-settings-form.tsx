@@ -21,6 +21,7 @@ const parseReais = (raw: string): number | null => {
 };
 
 export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
+  const [storeEnabled, setStoreEnabled] = useState(initial.storeEnabled);
   const [shippingFee, setShippingFee] = useState(formatCents(initial.defaultShippingFeeCents));
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
   const [pickup, setPickup] = useState(initial.pickupDisplayLabel ?? '');
@@ -52,12 +53,14 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
 
     startTransition(async () => {
       const result = await updateAdminStoreSettingsAction({
+        storeEnabled,
         defaultShippingFeeCents: shippingCents,
         lowStockThreshold: lowStockNumber,
         pickupDisplayLabel: pickupTrimmed === '' ? null : pickupTrimmed,
         supportPhone: phoneTrimmed === '' ? null : phoneTrimmed,
       });
       if (result.ok) {
+        setStoreEnabled(result.settings.storeEnabled);
         setShippingFee(formatCents(result.settings.defaultShippingFeeCents));
         setLowStock(String(result.settings.lowStockThreshold));
         setPickup(result.settings.pickupDisplayLabel ?? '');
@@ -72,6 +75,23 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-xl flex-col gap-4">
+      <label className="flex items-start gap-3 rounded border border-[color:var(--color-border)] p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={storeEnabled}
+          onChange={(e) => setStoreEnabled(e.target.checked)}
+          className="mt-0.5"
+          aria-label="Loja pública habilitada"
+        />
+        <span className="flex flex-col gap-1">
+          <span className="font-medium">Loja pública habilitada</span>
+          <span className="text-xs text-[color:var(--color-muted)]">
+            Desative para bloquear novas compras e navegação pública da loja sem esconder pedidos já
+            existentes.
+          </span>
+        </span>
+      </label>
+
       <label className={labelCls}>
         <span className="font-medium">Frete padrão (R$)</span>
         <input

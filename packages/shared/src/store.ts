@@ -231,6 +231,7 @@ export const STORE_SETTINGS_SINGLETON_ID = 'store_default';
 
 export const storeSettingsSchema = z.object({
   id: z.string().min(1),
+  storeEnabled: z.boolean(),
   defaultShippingFeeCents: z.number().int().nonnegative(),
   lowStockThreshold: z.number().int().nonnegative(),
   pickupDisplayLabel: z.string().nullable(),
@@ -241,6 +242,7 @@ export type StoreSettings = z.infer<typeof storeSettingsSchema>;
 
 export const storeSettingsUpdateSchema = z
   .object({
+    storeEnabled: z.boolean().optional(),
     defaultShippingFeeCents: z.number().int().nonnegative().optional(),
     lowStockThreshold: z.number().int().nonnegative().optional(),
     pickupDisplayLabel: z.string().trim().max(140).nullable().optional(),
@@ -248,6 +250,7 @@ export const storeSettingsUpdateSchema = z
   })
   .refine(
     (value) =>
+      value.storeEnabled !== undefined ||
       value.defaultShippingFeeCents !== undefined ||
       value.lowStockThreshold !== undefined ||
       value.pickupDisplayLabel !== undefined ||

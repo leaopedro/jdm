@@ -88,6 +88,7 @@ export const serializeAdminExtra = (e: DbTicketExtra) => ({
 
 export const serializeAdminStoreSettings = (s: DbStoreSettings) => ({
   id: s.id,
+  storeEnabled: s.storeEnabled,
   defaultShippingFeeCents: s.defaultShippingFeeCents,
   lowStockThreshold: s.lowStockThreshold,
   pickupDisplayLabel: s.pickupDisplayLabel,

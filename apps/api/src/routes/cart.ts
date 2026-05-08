@@ -28,6 +28,7 @@ import {
 } from '../services/cart/index.js';
 import type { ValidatedCartItem } from '../services/cart/index.js';
 import { ORDER_EXPIRY_MS } from '../services/orders/expire.js';
+import { ensureStoreSettings } from '../services/store-settings.js';
 
 type ExtraRow = {
   extraId: string;
@@ -102,6 +103,11 @@ function priceFromValidation(validated: ValidatedCartItem): {
   return { unitPriceCents: validated.tier.priceCents, currency: validated.tier.currency };
 }
 
+async function storeDisabled(): Promise<boolean> {
+  const settings = await ensureStoreSettings();
+  return !settings.storeEnabled;
+}
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const cartRoutes: FastifyPluginAsync = async (app) => {
   // GET /cart
@@ -134,6 +140,12 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
   app.post('/cart/items', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
     const { item: input } = upsertCartItemRequestSchema.parse(request.body);
+
+    if (input.kind === 'product' && (await storeDisabled())) {
+      return reply
+        .status(503)
+        .send({ error: 'ServiceUnavailable', message: 'store is currently disabled' });
+    }
 
     let validated: ValidatedCartItem;
     try {
@@ -215,6 +227,12 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       const { sub } = requireUser(request);
       const { itemId } = request.params;
       const { item: input } = upsertCartItemRequestSchema.parse(request.body);
+
+      if (input.kind === 'product' && (await storeDisabled())) {
+        return reply
+          .status(503)
+          .send({ error: 'ServiceUnavailable', message: 'store is currently disabled' });
+      }
 
       const cart = await getActiveCart(sub);
       if (!cart) {
@@ -397,6 +415,12 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const { cart } = cartResult;
+
+    if (cart.items.some((item) => item.kind === 'product') && (await storeDisabled())) {
+      return reply
+        .status(503)
+        .send({ error: 'ServiceUnavailable', message: 'store is currently disabled' });
+    }
 
     if (cart.status !== 'open') {
       return reply.status(409).send({

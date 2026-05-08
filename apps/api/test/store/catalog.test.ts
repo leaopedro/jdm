@@ -133,6 +133,16 @@ describe('GET /store/product-types', () => {
     expect(body.items[0]?.slug).toBe('adesivos');
     expect(body.items[1]?.slug).toBe('bones');
   });
+
+  it('returns 503 when the store killswitch is off', async () => {
+    await prisma.storeSettings.create({
+      data: { id: 'store_default', storeEnabled: false },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/store/product-types' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ error: 'ServiceUnavailable' });
+  });
 });
 
 describe('GET /store/collections', () => {
@@ -440,5 +450,19 @@ describe('GET /store/products/:slug', () => {
 
     const res = await app.inject({ method: 'GET', url: '/store/products/sem-foto' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('blocks all public storefront reads when the store killswitch is off', async () => {
+    const type = await makeProductType();
+    await makeProduct(type.id, { slug: 'cam-jdm' });
+    await prisma.storeSettings.create({
+      data: { id: 'store_default', storeEnabled: false },
+    });
+
+    for (const url of ['/store/collections', '/store/products', '/store/products/cam-jdm']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(503);
+      expect(res.json()).toMatchObject({ error: 'ServiceUnavailable' });
+    }
   });
 });
