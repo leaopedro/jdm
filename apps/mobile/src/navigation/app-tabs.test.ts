@@ -3,10 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { APP_TAB_SPECS, getCartTabBadge } from './app-tabs';
 
 describe('APP_TAB_SPECS', () => {
-  it('keeps the approved bottom-nav order, hiding garage and cart from the static spec', () => {
+  it('keeps the approved bottom-nav order, hiding only garage from the static spec', () => {
     expect(
       APP_TAB_SPECS.filter((tab) => tab.visible).map((tab) => `${tab.name}:${tab.title}`),
-    ).toEqual(['events:Eventos', 'store:Loja', 'tickets:Ingressos', 'profile:Perfil']);
+    ).toEqual([
+      'events:Eventos',
+      'store:Loja',
+      'cart:Carrinho',
+      'tickets:Ingressos',
+      'profile:Perfil',
+    ]);
 
     expect(APP_TAB_SPECS.find((tab) => tab.name === 'garage')).toMatchObject({
       title: 'Garagem',
@@ -15,7 +21,7 @@ describe('APP_TAB_SPECS', () => {
 
     expect(APP_TAB_SPECS.find((tab) => tab.name === 'cart')).toMatchObject({
       title: 'Carrinho',
-      visible: false,
+      visible: true,
     });
   });
 });

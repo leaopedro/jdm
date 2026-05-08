@@ -20,14 +20,14 @@ const EventsIcon = ({ color }: { color: string }) => (
 const StoreIcon = ({ color }: { color: string }) => (
   <ShoppingBag color={color} size={22} strokeWidth={1.75} />
 );
+const CartIcon = ({ color }: { color: string }) => (
+  <ShoppingCart color={color} size={22} strokeWidth={1.75} />
+);
 const TicketsIcon = ({ color }: { color: string }) => (
   <Ticket color={color} size={22} strokeWidth={1.75} />
 );
 const GarageIcon = ({ color }: { color: string }) => (
   <Car color={color} size={22} strokeWidth={1.75} />
-);
-const CartIcon = ({ color }: { color: string }) => (
-  <ShoppingCart color={color} size={22} strokeWidth={1.75} />
 );
 const ProfileIcon = ({ color }: { color: string }) => (
   <UserRound color={color} size={22} strokeWidth={1.75} />
@@ -100,7 +100,21 @@ function AppTabs() {
       )}
       <Tabs.Screen
         name={APP_TAB_SPECS[2].name}
-        options={{ title: APP_TAB_SPECS[2].title, tabBarIcon: TicketsIcon }}
+        options={{
+          title: APP_TAB_SPECS[2].title,
+          tabBarIcon: CartIcon,
+          tabBarBadgeStyle: {
+            backgroundColor: ACTIVE,
+            color: '#F5F5F5',
+            fontFamily: 'Inter_700Bold',
+            fontSize: 10,
+          },
+          ...(cartBadge ? { tabBarBadge: cartBadge } : {}),
+        }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[3].name}
+        options={{ title: APP_TAB_SPECS[3].title, tabBarIcon: TicketsIcon }}
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
@@ -117,23 +131,8 @@ function AppTabs() {
         <Tabs.Screen name="store" options={{ href: null, title: 'Loja', tabBarIcon: StoreIcon }} />
       )}
       <Tabs.Screen
-        name={APP_TAB_SPECS[4].name}
-        options={{ title: APP_TAB_SPECS[4].title, tabBarIcon: ProfileIcon }}
-      />
-      <Tabs.Screen
         name={APP_TAB_SPECS[5].name}
-        options={{
-          href: null,
-          title: APP_TAB_SPECS[5].title,
-          tabBarIcon: CartIcon,
-          tabBarBadgeStyle: {
-            backgroundColor: ACTIVE,
-            color: '#F5F5F5',
-            fontFamily: 'Inter_700Bold',
-            fontSize: 10,
-          },
-          ...(cartBadge ? { tabBarBadge: cartBadge } : {}),
-        }}
+        options={{ title: APP_TAB_SPECS[5].title, tabBarIcon: ProfileIcon }}
       />
     </Tabs>
   );
