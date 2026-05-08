@@ -1,18 +1,22 @@
 export const cartCopy = {
   title: 'Carrinho',
   empty: 'Seu carrinho está vazio.',
-  emptySub: 'Explore os eventos e adicione ingressos.',
+  emptySub: 'Explore os eventos e produtos e adicione seus itens.',
   browseEvents: 'Ver eventos',
   item: {
     ticket: 'Ingresso',
+    product: 'Produto',
     extras: 'Extras',
     remove: 'Remover',
     quantity: (n: number) => `${n}x`,
     tapExtras: 'Toque para gerenciar extras',
+    viewProduct: 'Toque para ver o produto',
     selectCar: 'Selecionar carro',
     changeCar: 'Trocar carro',
     carRequired: 'Carro obrigatório',
     plate: (p: string) => `Placa ${p}`,
+    shipping: 'Entrega',
+    pickup: 'Retirada',
   },
   drawer: {
     title: 'Extras',
@@ -25,6 +29,8 @@ export const cartCopy = {
   },
   totals: {
     tickets: 'Ingressos',
+    products: 'Produtos',
+    shipping: 'Entrega',
     extras: 'Extras',
     discount: 'Desconto',
     total: 'Total',
