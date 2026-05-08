@@ -36,6 +36,12 @@ function firstTicketPlate(item: CartItem): string | undefined {
   return item.tickets[0]?.licensePlate;
 }
 
+function isProductItem(
+  item: CartItem,
+): item is CartItem & { kind: 'product'; product: NonNullable<CartItem['product']> } {
+  return item.kind === 'product' && item.product !== null;
+}
+
 function showError(message: string) {
   if (isWeb && typeof window !== 'undefined') {
     window.alert(message);
@@ -233,6 +239,14 @@ export default function CartScreen() {
     } as never);
   };
 
+  const openItem = (item: CartItem) => {
+    if (isProductItem(item)) {
+      router.push(`/store/${item.product.productSlug}` as never);
+      return;
+    }
+    void openExtrasDrawer(item);
+  };
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -242,16 +256,24 @@ export default function CartScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}
-            onPress={() => void openExtrasDrawer(item)}
+            onPress={() => openItem(item)}
             accessibilityRole="button"
-            accessibilityHint={cartCopy.item.tapExtras}
+            accessibilityHint={
+              isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras
+            }
           >
             <View style={styles.cardTop}>
               <View style={styles.cardInfo}>
                 <Text style={styles.cardTitle}>
-                  {cartCopy.item.quantity(item.quantity)} {cartCopy.item.ticket}
+                  {isProductItem(item)
+                    ? `${cartCopy.item.quantity(item.quantity)} ${item.product.productTitle}`
+                    : `${cartCopy.item.quantity(item.quantity)} ${cartCopy.item.ticket}`}
                 </Text>
-                <Text style={styles.cardSub}>{formatBRL(item.amountCents)}</Text>
+                <Text style={styles.cardSub}>
+                  {isProductItem(item)
+                    ? `${item.product.variantName} · ${formatBRL(item.product.unitPriceCents)}`
+                    : formatBRL(item.amountCents)}
+                </Text>
               </View>
               <View style={styles.cardActions}>
                 <Pressable
@@ -271,7 +293,18 @@ export default function CartScreen() {
                 <ChevronRight color={theme.colors.muted} size={16} strokeWidth={1.75} />
               </View>
             </View>
-            {item.extras.length > 0 ? (
+            {isProductItem(item) ? (
+              <View style={styles.productMetaRow}>
+                <Text style={styles.cardExtras}>
+                  {item.product.requiresShipping ? cartCopy.item.shipping : cartCopy.item.pickup}
+                </Text>
+                {item.product.shippingFeeCents ? (
+                  <Text style={styles.extrasAmount}>
+                    + {formatBRL(item.product.shippingFeeCents)}
+                  </Text>
+                ) : null}
+              </View>
+            ) : item.extras.length > 0 ? (
               <View style={styles.extrasRow}>
                 <Text style={styles.cardExtras}>
                   {item.extras.length} {cartCopy.item.extras.toLowerCase()}
@@ -281,7 +314,9 @@ export default function CartScreen() {
                 </Text>
               </View>
             ) : (
-              <Text style={styles.tapHint}>{cartCopy.item.tapExtras}</Text>
+              <Text style={styles.tapHint}>
+                {isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras}
+              </Text>
             )}
             {item.requiresCar && item.kind === 'ticket' ? (
               <Pressable
@@ -318,6 +353,18 @@ export default function CartScreen() {
           <Text style={styles.totalsLabel}>{cartCopy.totals.tickets}</Text>
           <Text style={styles.totalsValue}>{formatBRL(cart.totals.ticketSubtotalCents)}</Text>
         </View>
+        {cart.totals.productsSubtotalCents > 0 && (
+          <View style={styles.totalsRow}>
+            <Text style={styles.totalsLabel}>{cartCopy.totals.products}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(cart.totals.productsSubtotalCents)}</Text>
+          </View>
+        )}
+        {cart.totals.shippingSubtotalCents > 0 && (
+          <View style={styles.totalsRow}>
+            <Text style={styles.totalsLabel}>{cartCopy.totals.shipping}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(cart.totals.shippingSubtotalCents)}</Text>
+          </View>
+        )}
         {cart.totals.extrasSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.extras}</Text>
@@ -437,6 +484,11 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   cardExtras: { color: theme.colors.muted, fontSize: theme.font.size.sm },
   extrasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  productMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   extrasAmount: { color: theme.colors.muted, fontSize: theme.font.size.sm },
   tapHint: { color: theme.colors.muted, fontSize: theme.font.size.sm, fontStyle: 'italic' },
   removeBtn: { padding: theme.spacing.xs },
