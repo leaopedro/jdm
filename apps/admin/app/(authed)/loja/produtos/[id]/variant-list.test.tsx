@@ -27,7 +27,9 @@ const variant: AdminStoreVariant = {
 
 describe('VariantList', () => {
   it('does not render the backend-only variant attributes field', () => {
-    const html = renderToStaticMarkup(<VariantList productId="prod_1" variants={[variant]} />);
+    const html = renderToStaticMarkup(
+      <VariantList productId="prod_1" productPriceCents={9900} variants={[variant]} />,
+    );
 
     expect(html).not.toContain('Atributos da variante');
     expect(html).not.toContain('Use JSON com pares chave/valor, como tamanho e cor.');
