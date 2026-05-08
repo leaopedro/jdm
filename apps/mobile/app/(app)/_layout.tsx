@@ -48,6 +48,7 @@ const screenOptions = {
   tabBarLabelStyle: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.4,
     marginTop: 4,
   },
