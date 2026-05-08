@@ -9,7 +9,7 @@ import {
 } from 'lucide-react-native';
 
 import { CartProvider, useCart } from '~/cart/context';
-import { APP_TAB_SPECS, getCartTabBadge } from '~/navigation/app-tabs';
+import { APP_TAB_SPECS, getCartTabBadge, STORE_ENABLED } from '~/navigation/app-tabs';
 
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
@@ -75,16 +75,29 @@ function AppTabs() {
           },
         }}
       />
-      <Tabs.Screen
-        name={APP_TAB_SPECS[1].name}
-        options={{ title: APP_TAB_SPECS[1].title, tabBarIcon: StoreIcon }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.replace('/store');
-          },
-        }}
-      />
+      {STORE_ENABLED ? (
+        <Tabs.Screen
+          name="store"
+          options={{ title: 'Loja', tabBarIcon: StoreIcon }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              router.replace('/store');
+            },
+          }}
+        />
+      ) : (
+        <Tabs.Screen
+          name="garage"
+          options={{ title: 'Garagem', tabBarIcon: GarageIcon }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              router.replace('/garage');
+            },
+          }}
+        />
+      )}
       <Tabs.Screen
         name={APP_TAB_SPECS[2].name}
         options={{ title: APP_TAB_SPECS[2].title, tabBarIcon: TicketsIcon }}
@@ -95,19 +108,14 @@ function AppTabs() {
           },
         }}
       />
-      <Tabs.Screen
-        name={APP_TAB_SPECS[3].name}
-        options={{
-          title: APP_TAB_SPECS[3].title,
-          tabBarIcon: GarageIcon,
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.replace('/garage');
-          },
-        }}
-      />
+      {STORE_ENABLED ? (
+        <Tabs.Screen
+          name="garage"
+          options={{ href: null, title: 'Garagem', tabBarIcon: GarageIcon }}
+        />
+      ) : (
+        <Tabs.Screen name="store" options={{ href: null, title: 'Loja', tabBarIcon: StoreIcon }} />
+      )}
       <Tabs.Screen
         name={APP_TAB_SPECS[4].name}
         options={{ title: APP_TAB_SPECS[4].title, tabBarIcon: ProfileIcon }}
