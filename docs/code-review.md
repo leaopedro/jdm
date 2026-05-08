@@ -30,6 +30,10 @@ After the bench is hired:
 A PR without a reviewer assignment after 24 business hours pings the CTO
 automatically (Paperclip wakes the assignee on `in_review` comment).
 
+Reviews happen at PR level only. The CTO does not review a loose branch,
+worktree, or "please inspect my latest commits" handoff. If there is no PR,
+there is no review request yet.
+
 ## 2. The reviewer's job
 
 Use `superpowers:requesting-code-review`'s mirror skill on receipt — read
