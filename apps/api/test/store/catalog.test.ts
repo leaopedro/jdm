@@ -61,6 +61,9 @@ const makeProduct = async (
   }> = {},
 ) => {
   const variants = overrides.variants ?? [{}];
+  const photos = overrides.photos ?? [
+    { objectKey: `products/default/${Math.random().toString(36).slice(2, 8)}.jpg`, sortOrder: 0 },
+  ];
   const product = await prisma.product.create({
     data: {
       slug: overrides.slug ?? `p-${Math.random().toString(36).slice(2, 8)}`,
@@ -81,10 +84,10 @@ const makeProduct = async (
           attributes: {},
         })),
       },
-      ...(overrides.photos
+      ...(photos.length > 0
         ? {
             photos: {
-              create: overrides.photos.map((ph) => ({
+              create: photos.map((ph) => ({
                 objectKey: ph.objectKey,
                 sortOrder: ph.sortOrder,
               })),
@@ -168,6 +171,18 @@ describe('GET /store/collections', () => {
     expect(body.items.map((c) => c.slug)).toEqual(['verao']);
     expect(body.items[0]?.productCount).toBe(1);
   });
+
+  it('hides collections whose only members are products without photos', async () => {
+    const type = await makeProductType();
+    const photoless = await makeCollection({ slug: 'so-rascunhos', name: 'Só rascunhos' });
+
+    await makeProduct(type.id, { slug: 'sem-foto', photos: [], collectionIds: [photoless.id] });
+
+    const res = await app.inject({ method: 'GET', url: '/store/collections' });
+    expect(res.statusCode).toBe(200);
+    const body = storeCollectionListResponseSchema.parse(res.json());
+    expect(body.items.map((c) => c.slug)).toEqual([]);
+  });
 });
 
 describe('GET /store/products', () => {
@@ -198,6 +213,20 @@ describe('GET /store/products', () => {
     const body = storeProductListResponseSchema.parse(res.json());
     expect(body.items.map((p) => p.slug)).toEqual(['visivel']);
     expect(body.nextCursor).toBeNull();
+  });
+
+  it('hides active products that have zero photos', async () => {
+    const type = await makeProductType();
+    await makeProduct(type.id, {
+      slug: 'com-foto',
+      photos: [{ objectKey: 'products/com-foto/0.jpg', sortOrder: 0 }],
+    });
+    await makeProduct(type.id, { slug: 'sem-foto', photos: [] });
+
+    const res = await app.inject({ method: 'GET', url: '/store/products' });
+    expect(res.statusCode).toBe(200);
+    const body = storeProductListResponseSchema.parse(res.json());
+    expect(body.items.map((p) => p.slug)).toEqual(['com-foto']);
   });
 
   it('filters by collectionSlug and ignores disabled collections', async () => {
@@ -412,6 +441,14 @@ describe('GET /store/products/:slug', () => {
 
   it('returns 404 for unknown slug', async () => {
     const res = await app.inject({ method: 'GET', url: '/store/products/inexistente' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 for active products with zero photos', async () => {
+    const type = await makeProductType();
+    await makeProduct(type.id, { slug: 'sem-foto', photos: [] });
+
+    const res = await app.inject({ method: 'GET', url: '/store/products/sem-foto' });
     expect(res.statusCode).toBe(404);
   });
 

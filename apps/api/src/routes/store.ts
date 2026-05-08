@@ -276,16 +276,19 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/store/collections', async () => {
+    const visibleProductFilter = {
+      product: { status: 'active' as const, photos: { some: {} } },
+    };
     const rows = await prisma.collection.findMany({
       where: {
         active: true,
-        products: { some: { product: { status: 'active' } } },
+        products: { some: visibleProductFilter },
       },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: {
         _count: {
           select: {
-            products: { where: { product: { status: 'active' } } },
+            products: { where: visibleProductFilter },
           },
         },
       },
@@ -300,6 +303,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     const where: Prisma.ProductWhereInput = {
       status: 'active',
       variants: { some: { active: true } },
+      photos: { some: {} },
     };
 
     if (query.collectionSlug) {
@@ -369,7 +373,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
   app.get('/store/products/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const product = await prisma.product.findFirst({
-      where: { slug, status: 'active' },
+      where: { slug, status: 'active', photos: { some: {} } },
       include: {
         productType: true,
         variants: true,
@@ -387,7 +391,9 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
           include: {
             _count: {
               select: {
-                products: { where: { product: { status: 'active' } } },
+                products: {
+                  where: { product: { status: 'active', photos: { some: {} } } },
+                },
               },
             },
           },

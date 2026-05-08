@@ -61,6 +61,7 @@ export const ProductForm = ({
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
+  const hasPhotos = product.photos.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -126,9 +127,16 @@ export const ProductForm = ({
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
             <option value="draft">Rascunho</option>
-            <option value="active">Ativo</option>
+            <option value="active" disabled={!hasPhotos && product.status !== 'active'}>
+              Ativo
+            </option>
             <option value="archived">Arquivado</option>
           </select>
+          {!hasPhotos && product.status !== 'active' ? (
+            <span className="text-xs text-[color:var(--color-muted)]">
+              Adicione pelo menos uma foto para ativar o produto.
+            </span>
+          ) : null}
         </label>
         {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
         <div className="col-span-2 flex gap-3">
@@ -149,7 +157,9 @@ export const ProductForm = ({
               formAction={() => {
                 void activateProductAction(product.id);
               }}
-              className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm"
+              disabled={!hasPhotos}
+              title={!hasPhotos ? 'Adicione pelo menos uma foto antes de ativar.' : undefined}
+              className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm disabled:opacity-50"
             >
               Reativar
             </button>
