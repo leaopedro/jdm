@@ -41,6 +41,8 @@ export const profileCopy = {
     neighborhoodLabel: 'Bairro',
     cityLabel: 'Cidade',
     stateCodeLabel: 'Estado (UF)',
+    cepLookupNotFound: 'CEP não encontrado. Preencha o endereço manualmente.',
+    cepLookupError: 'Erro ao buscar CEP. Verifique sua conexão.',
     defaultLabel: 'Usar como endereço padrão',
     defaultBadge: 'Padrão',
     save: 'Salvar',

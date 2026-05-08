@@ -64,7 +64,7 @@ export default function NewShippingAddressScreen() {
           ),
         }}
       />
-      <ShippingAddressFormFields control={form.control} />
+      <ShippingAddressFormFields control={form.control} setValue={form.setValue} mode="new" />
       <Button label={profileCopy.shipping.save} onPress={() => void onSave()} />
     </ScrollView>
   );
