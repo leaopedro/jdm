@@ -20,6 +20,7 @@ import { View } from 'react-native';
 import { AuthProvider, useAuth } from '~/auth/context';
 import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
 import { initSentry } from '~/lib/sentry';
+import { ToastHost } from '~/lib/toast';
 import { theme } from '~/theme';
 
 // Override @react-navigation default light bg ('rgb(242,242,242)') so the
@@ -105,6 +106,7 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="light" />
           <Gate />
+          <ToastHost />
         </AuthProvider>
       </StripeProvider>
     </ThemeProvider>

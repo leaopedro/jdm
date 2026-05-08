@@ -366,6 +366,9 @@ export default function StoreIndex() {
             <ProductCard
               product={item}
               adding={pendingProductId === item.id}
+              onPress={() => {
+                router.push(`/store/${item.slug}` as never);
+              }}
               onAdd={() => {
                 void onAddToCart(item);
               }}
@@ -479,45 +482,51 @@ function Chip({ active, label, onPress }: { active: boolean; label: string; onPr
 function ProductCard({
   product,
   adding,
+  onPress,
   onAdd,
 }: {
   product: StoreProductSummary;
   adding: boolean;
+  onPress: () => void;
   onAdd: () => void;
 }) {
   return (
     <View style={styles.card}>
-      {product.coverImageUrl ? (
-        <Image
-          source={{ uri: product.coverImageUrl }}
-          style={styles.cardImage}
-          accessible={false}
-        />
-      ) : (
-        <View style={[styles.cardImage, styles.cardImagePlaceholder]} />
-      )}
-      <View style={styles.cardBody}>
-        <View style={styles.cardMeta}>
-          <Badge
-            label={product.requiresShipping ? storeCopy.badges.shipping : storeCopy.badges.pickup}
-            tone="neutral"
-            size="sm"
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={product.title}>
+        {product.coverImageUrl ? (
+          <Image
+            source={{ uri: product.coverImageUrl }}
+            style={styles.cardImage}
+            accessible={false}
           />
-          <Text variant="caption" tone="muted">
-            {product.productType.name}
+        ) : (
+          <View style={[styles.cardImage, styles.cardImagePlaceholder]} />
+        )}
+        <View style={styles.cardBody}>
+          <View style={styles.cardMeta}>
+            <Badge
+              label={product.requiresShipping ? storeCopy.badges.shipping : storeCopy.badges.pickup}
+              tone="neutral"
+              size="sm"
+            />
+            <Text variant="caption" tone="muted">
+              {product.productType.name}
+            </Text>
+          </View>
+          <Text variant="body" weight="bold" numberOfLines={2}>
+            {product.title}
+          </Text>
+          {product.shortDescription ? (
+            <Text variant="bodySm" tone="secondary" numberOfLines={2} className="mt-1">
+              {product.shortDescription}
+            </Text>
+          ) : null}
+          <Text variant="bodyLg" weight="bold" className="mt-3">
+            {formatPriceRange(product)}
           </Text>
         </View>
-        <Text variant="body" weight="bold" numberOfLines={2}>
-          {product.title}
-        </Text>
-        {product.shortDescription ? (
-          <Text variant="bodySm" tone="secondary" numberOfLines={2} className="mt-1">
-            {product.shortDescription}
-          </Text>
-        ) : null}
-        <Text variant="bodyLg" weight="bold" className="mt-3">
-          {formatPriceRange(product)}
-        </Text>
+      </Pressable>
+      <View style={styles.cardActions}>
         <Button
           label={
             !product.inStock
@@ -753,6 +762,10 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     padding: theme.spacing.md,
+  },
+  cardActions: {
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
   },
   modalBackdrop: {
     flex: 1,
