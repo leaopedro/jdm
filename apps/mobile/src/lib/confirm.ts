@@ -1,14 +1,11 @@
 import { Alert, Platform } from 'react-native';
 
+import { showToast } from './toast';
+
 const isWeb = Platform.OS === 'web';
 
 export function showMessage(message: string) {
-  if (isWeb && typeof window !== 'undefined') {
-    window.alert(message);
-    return;
-  }
-
-  Alert.alert(message);
+  showToast(message);
 }
 
 export function confirmDestructive(

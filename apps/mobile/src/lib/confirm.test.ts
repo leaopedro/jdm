@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const alertSpy = vi.fn();
 const platform = { OS: 'web' };
+const showToast = vi.fn();
 
 vi.mock('react-native', () => ({
   Alert: {
@@ -10,9 +11,14 @@ vi.mock('react-native', () => ({
   Platform: platform,
 }));
 
+vi.mock('./toast', () => ({
+  showToast,
+}));
+
 describe('confirm helpers', () => {
   beforeEach(() => {
     alertSpy.mockReset();
+    showToast.mockReset();
     vi.resetModules();
     vi.unstubAllGlobals();
     platform.OS = 'web';
@@ -40,7 +46,7 @@ describe('confirm helpers', () => {
     const [, , buttons] = alertSpy.mock.calls[0] as [
       string,
       string,
-      Array<{ onPress?: () => void; text: string; style?: string }>,
+      { onPress?: () => void; text: string; style?: string }[],
     ];
 
     buttons[1]?.onPress?.();
@@ -50,14 +56,11 @@ describe('confirm helpers', () => {
     expect(buttons[1]).toMatchObject({ text: 'Excluir', style: 'destructive' });
   });
 
-  it('shows a web alert on web', async () => {
-    const alert = vi.fn();
-    vi.stubGlobal('window', { alert, confirm: vi.fn() });
-
+  it('shows a toast instead of a blocking alert', async () => {
     const { showMessage } = await import('./confirm');
 
     showMessage('Algo deu errado.');
-    expect(alert).toHaveBeenCalledWith('Algo deu errado.');
+    expect(showToast).toHaveBeenCalledWith('Algo deu errado.');
     expect(alertSpy).not.toHaveBeenCalled();
   });
 });
