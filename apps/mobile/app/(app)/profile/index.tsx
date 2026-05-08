@@ -168,7 +168,7 @@ export default function ProfileMenuScreen() {
           icon={<CarFront color={theme.colors.fg} size={18} strokeWidth={1.75} />}
           label={profileCopy.menu.garage}
           hint={profileCopy.menu.garageHint}
-          onPress={() => router.push('/garage' as never)}
+          onPress={() => router.push('/profile/garage' as never)}
         />
         <MenuRow
           icon={<LogOut color={theme.colors.accent} size={18} strokeWidth={1.75} />}
