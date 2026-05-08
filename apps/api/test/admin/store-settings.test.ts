@@ -37,6 +37,7 @@ describe('admin store settings', () => {
     expect(res.statusCode).toBe(200);
     const body = storeSettingsSchema.parse(res.json());
     expect(body.id).toBe(STORE_SETTINGS_SINGLETON_ID);
+    expect(body.storeEnabled).toBe(true);
     expect(body.defaultShippingFeeCents).toBe(0);
     expect(body.lowStockThreshold).toBe(5);
     expect(body.pickupDisplayLabel).toBeNull();
@@ -63,12 +64,14 @@ describe('admin store settings', () => {
       url: '/admin/store/settings',
       headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
       payload: {
+        storeEnabled: false,
         defaultShippingFeeCents: 1990,
         pickupDisplayLabel: 'Retirada na sede',
       },
     });
     expect(res.statusCode).toBe(200);
     const body = storeSettingsSchema.parse(res.json());
+    expect(body.storeEnabled).toBe(false);
     expect(body.defaultShippingFeeCents).toBe(1990);
     expect(body.pickupDisplayLabel).toBe('Retirada na sede');
     expect(body.lowStockThreshold).toBe(5);
@@ -76,6 +79,7 @@ describe('admin store settings', () => {
     const persisted = await prisma.storeSettings.findUniqueOrThrow({
       where: { id: STORE_SETTINGS_SINGLETON_ID },
     });
+    expect(persisted.storeEnabled).toBe(false);
     expect(persisted.defaultShippingFeeCents).toBe(1990);
     expect(persisted.pickupDisplayLabel).toBe('Retirada na sede');
   });

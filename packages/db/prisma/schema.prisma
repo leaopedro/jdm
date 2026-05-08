@@ -434,6 +434,7 @@ model ShippingAddress {
 
 model StoreSettings {
   id                      String   @id @default(cuid())
+  storeEnabled            Boolean  @default(true)
   defaultShippingFeeCents Int      @default(0)
   lowStockThreshold       Int      @default(5)
   pickupDisplayLabel      String?  @db.VarChar(140)

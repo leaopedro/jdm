@@ -5,21 +5,14 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import { ensureStoreSettings } from '../../services/store-settings.js';
 
 import { serializeAdminStoreSettings } from './serializers.js';
-
-const ensureSingleton = async () => {
-  return prisma.storeSettings.upsert({
-    where: { id: STORE_SETTINGS_SINGLETON_ID },
-    update: {},
-    create: { id: STORE_SETTINGS_SINGLETON_ID },
-  });
-};
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminStoreSettingsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/store/settings', async () => {
-    const settings = await ensureSingleton();
+    const settings = await ensureStoreSettings();
     return serializeAdminStoreSettings(settings);
   });
 
@@ -27,9 +20,12 @@ export const adminStoreSettingsRoutes: FastifyPluginAsync = async (app) => {
     const { sub } = requireUser(request);
     const input = storeSettingsUpdateSchema.parse(request.body);
 
-    await ensureSingleton();
+    await ensureStoreSettings();
 
     const data: Prisma.StoreSettingsUpdateInput = {};
+    if (input.storeEnabled !== undefined) {
+      data.storeEnabled = input.storeEnabled;
+    }
     if (input.defaultShippingFeeCents !== undefined) {
       data.defaultShippingFeeCents = input.defaultShippingFeeCents;
     }

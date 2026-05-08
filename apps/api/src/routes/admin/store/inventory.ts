@@ -5,9 +5,10 @@ import {
   type AdminStoreInventoryRow,
   type AdminStoreInventoryStatus,
 } from '@jdm/shared/admin';
-import { STORE_SETTINGS_SINGLETON_ID } from '@jdm/shared/store';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+
+import { ensureStoreSettings } from '../../../services/store-settings.js';
 
 const querySchema = z.object({
   status: adminStoreInventoryFilterSchema.optional(),
@@ -25,11 +26,7 @@ export const adminStoreInventoryRoutes: FastifyPluginAsync = async (app) => {
     const query = querySchema.parse(request.query);
     const filter = query.status ?? 'all';
 
-    const settings = await prisma.storeSettings.upsert({
-      where: { id: STORE_SETTINGS_SINGLETON_ID },
-      update: {},
-      create: { id: STORE_SETTINGS_SINGLETON_ID },
-    });
+    const settings = await ensureStoreSettings();
     const threshold = settings.lowStockThreshold;
 
     const variants = await prisma.variant.findMany({

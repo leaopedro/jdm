@@ -23,6 +23,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { ensureStoreSettings } from '../services/store-settings.js';
 import type { Uploads } from '../services/uploads/index.js';
 
 type ProductWithRelations = DbProduct & {
@@ -257,6 +258,14 @@ const fetchInStockPage = async (
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const storeRoutes: FastifyPluginAsync = async (app) => {
+  app.addHook('preHandler', async (_request, reply) => {
+    const settings = await ensureStoreSettings();
+    if (settings.storeEnabled) return;
+    return reply
+      .status(503)
+      .send({ error: 'ServiceUnavailable', message: 'store is currently disabled' });
+  });
+
   app.get('/store/product-types', async () => {
     const rows = await prisma.productType.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
