@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { eventSummarySchema } from './events.js';
+
 export const paymentMethodSchema = z.enum(['card', 'pix']);
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
@@ -8,6 +10,26 @@ export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
 
 export const orderStatusSchema = z.enum(['pending', 'paid', 'failed', 'refunded', 'expired']);
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
+
+export const orderKindSchema = z.enum(['ticket', 'extras_only', 'product', 'mixed']);
+export type OrderKind = z.infer<typeof orderKindSchema>;
+
+export const fulfillmentMethodSchema = z.enum(['ship', 'pickup']);
+export type FulfillmentMethod = z.infer<typeof fulfillmentMethodSchema>;
+
+export const fulfillmentStatusSchema = z.enum([
+  'unfulfilled',
+  'packed',
+  'shipped',
+  'delivered',
+  'pickup_ready',
+  'picked_up',
+  'cancelled',
+]);
+export type FulfillmentStatus = z.infer<typeof fulfillmentStatusSchema>;
+
+export const orderItemKindSchema = z.enum(['ticket', 'product', 'extras']);
+export type OrderItemKind = z.infer<typeof orderItemKindSchema>;
 
 // Brazilian plate: old style ABC-1234 or new Mercosul ABC1D23 (dash optional)
 export const licensePlateSchema = z
@@ -88,3 +110,40 @@ export const getOrderResponseSchema = z.object({
   ticketId: z.string().min(1).optional(),
 });
 export type GetOrderResponse = z.infer<typeof getOrderResponseSchema>;
+
+export const myOrderLineItemSchema = z.object({
+  id: z.string().min(1),
+  kind: orderItemKindSchema,
+  title: z.string().min(1),
+  detail: z.string().min(1).nullable(),
+  quantity: z.number().int().positive(),
+  unitPriceCents: z.number().int().nonnegative(),
+  subtotalCents: z.number().int().nonnegative(),
+});
+export type MyOrderLineItem = z.infer<typeof myOrderLineItemSchema>;
+
+export const myOrderSchema = z.object({
+  id: z.string().min(1),
+  kind: orderKindSchema,
+  status: orderStatusSchema,
+  provider: paymentProviderSchema,
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+  quantity: z.number().int().nonnegative(),
+  shippingCents: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  paidAt: z.string().datetime().nullable(),
+  expiresAt: z.string().datetime().nullable(),
+  containsTickets: z.boolean(),
+  containsStoreItems: z.boolean(),
+  fulfillmentMethod: fulfillmentMethodSchema.nullable(),
+  fulfillmentStatus: fulfillmentStatusSchema.nullable(),
+  event: eventSummarySchema.nullable(),
+  items: z.array(myOrderLineItemSchema),
+});
+export type MyOrder = z.infer<typeof myOrderSchema>;
+
+export const myOrdersResponseSchema = z.object({
+  items: z.array(myOrderSchema),
+});
+export type MyOrdersResponse = z.infer<typeof myOrdersResponseSchema>;

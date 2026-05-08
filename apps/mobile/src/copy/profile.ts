@@ -18,6 +18,8 @@ export const profileCopy = {
   menu: {
     subtitle: 'Gerencie seus dados e sua garagem.',
     editHint: 'Atualize nome, bio e localização',
+    orders: 'Meus pedidos',
+    ordersHint: 'Acompanhe compras da loja e pedidos mistos',
     garage: 'Garagem',
     garageHint: 'Veja e edite seus carros',
     logoutHint: 'Encerrar sessão neste aparelho',

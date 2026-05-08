@@ -1,21 +1,13 @@
 import { z } from 'zod';
 
 import { cartPaymentMethodSchema } from './cart.js';
-import { ticketInputSchema } from './orders.js';
+import { fulfillmentStatusSchema, ticketInputSchema } from './orders.js';
 import { stateCodeSchema } from './profile.js';
 
 export const storeProductStatusSchema = z.enum(['draft', 'active', 'archived']);
 export type StoreProductStatus = z.infer<typeof storeProductStatusSchema>;
 
-export const storeFulfillmentStatusSchema = z.enum([
-  'unfulfilled',
-  'packed',
-  'shipped',
-  'delivered',
-  'pickup_ready',
-  'picked_up',
-  'cancelled',
-]);
+export const storeFulfillmentStatusSchema = fulfillmentStatusSchema;
 export type StoreFulfillmentStatus = z.infer<typeof storeFulfillmentStatusSchema>;
 
 export const storeSortSchema = z.enum(['featured', 'newest', 'price_asc', 'price_desc']);
