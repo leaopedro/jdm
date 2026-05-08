@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminStoreVariant } from '@jdm/shared/admin';
+import React from 'react';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -12,6 +13,9 @@ import {
 } from '~/lib/store-actions';
 
 const initial: StoreFormState = { error: null };
+const fieldCls =
+  'rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm';
+const labelCls = 'flex flex-col gap-1 text-xs text-[color:var(--color-muted)]';
 
 const Submit = ({ label }: { label: string }) => {
   const { pending } = useFormStatus();
@@ -26,7 +30,16 @@ const Submit = ({ label }: { label: string }) => {
   );
 };
 
-const fmtAttrs = (attrs: Record<string, string>): string => JSON.stringify(attrs ?? {}, null, 0);
+const Field = ({
+  label,
+  className,
+  ...props
+}: { label: string; className?: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
+  <label className={labelCls}>
+    <span>{label}</span>
+    <input {...props} className={className ? `${fieldCls} ${className}` : fieldCls} />
+  </label>
+);
 
 const VariantRow = ({ productId, variant }: { productId: string; variant: AdminStoreVariant }) => {
   const update = updateVariantAction.bind(null, productId, variant.id);
@@ -34,47 +47,40 @@ const VariantRow = ({ productId, variant }: { productId: string; variant: AdminS
   return (
     <tr className="border-b border-[color:var(--color-border)]">
       <td className="py-2">
-        <form action={action} className="flex flex-wrap items-center gap-2">
-          <input
-            name="name"
-            defaultValue={variant.name}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
-          />
-          <input
+        <form action={action} className="flex flex-wrap items-end gap-3">
+          <Field label="Variante" name="name" defaultValue={variant.name} className="w-40" />
+          <Field
+            label="SKU"
             name="sku"
             defaultValue={variant.sku ?? ''}
             placeholder="SKU"
-            className="w-28 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+            className="w-28"
           />
-          <input
+          <Field
+            label="Preco (centavos)"
             name="priceCents"
             type="number"
             min={0}
             defaultValue={variant.priceCents}
-            className="w-28 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+            className="w-28"
           />
-          <input
+          <Field
+            label="Estoque total"
             name="quantityTotal"
             type="number"
             min={variant.quantitySold}
             defaultValue={variant.quantityTotal}
-            className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
-          />
-          <input
-            name="attributes"
-            defaultValue={fmtAttrs(variant.attributes ?? {})}
-            placeholder='{"size":"M"}'
-            className="w-40 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+            className="w-24"
           />
           <select
             name="active"
             defaultValue={variant.active ? 'true' : 'false'}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+            className={fieldCls}
           >
             <option value="true">Ativo</option>
             <option value="false">Inativo</option>
           </select>
-          <span className="text-xs text-[color:var(--color-muted)]">
+          <span className="self-end pb-2 text-xs text-[color:var(--color-muted)]">
             vendidos: {variant.quantitySold}
           </span>
           <Submit label="Salvar" />
@@ -104,43 +110,41 @@ const NewVariantForm = ({ productId }: { productId: string }) => {
   const [state, action] = useActionState(create, initial);
   const v = state.values ?? {};
   return (
-    <form action={action} className="mt-4 flex flex-wrap items-center gap-2">
-      <input
+    <form action={action} className="mt-4 flex flex-wrap items-end gap-3">
+      <Field
+        label="Variante"
         name="name"
         placeholder="Variante (ex: Preto — M)"
         defaultValue={v.name ?? ''}
         required
-        className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+        className="w-40"
       />
-      <input
+      <Field
+        label="SKU"
         name="sku"
         placeholder="SKU (opcional)"
         defaultValue={v.sku ?? ''}
-        className="w-28 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+        className="w-28"
       />
-      <input
+      <Field
+        label="Preco (centavos)"
         name="priceCents"
         type="number"
         min={0}
         placeholder="Preço (centavos)"
         defaultValue={v.priceCents ?? ''}
         required
-        className="w-32 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+        className="w-32"
       />
-      <input
+      <Field
+        label="Estoque"
         name="quantityTotal"
         type="number"
         min={0}
         placeholder="Estoque"
         defaultValue={v.quantityTotal ?? ''}
         required
-        className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
-      />
-      <input
-        name="attributes"
-        placeholder='{"size":"M","color":"Preto"}'
-        defaultValue={v.attributes ?? '{}'}
-        className="w-56 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+        className="w-24"
       />
       <Submit label="Adicionar variante" />
       {state.error ? <span className="text-sm text-red-400">{state.error}</span> : null}
