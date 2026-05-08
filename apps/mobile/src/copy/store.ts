@@ -62,7 +62,7 @@ export const storeCopy = {
   description: 'Descrição',
   shipping: 'Entrega',
   pickup: 'Retirada no evento',
-  addToCart: 'Adicionar ao carrinho',
+  addToCart: 'Adicionar',
   adding: 'Adicionando...',
   added: 'Produto adicionado ao carrinho.',
   soldOut: 'Selecione uma variação disponível',

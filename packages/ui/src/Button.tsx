@@ -38,7 +38,7 @@ const containerBySize: Record<ButtonSize, string> = {
 const labelBase = 'font-sans text-base';
 
 const labelByVariant: Record<ButtonVariant, string> = {
-  primary: 'text-fg-inverse font-bold',
+  primary: 'text-fg font-bold',
   secondary: 'text-fg font-semibold',
   ghost: 'text-fg-secondary font-medium',
   danger: 'text-fg font-bold',
@@ -86,7 +86,7 @@ export const Button = forwardRef<View, ButtonProps>(
         {...rest}
       >
         {loading ? (
-          <ActivityIndicator color={variant === 'primary' ? '#0A0A0A' : '#F5F5F5'} />
+          <ActivityIndicator color="#F5F5F5" />
         ) : (
           <>
             {iconLeft}
