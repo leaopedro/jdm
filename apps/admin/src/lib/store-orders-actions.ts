@@ -7,18 +7,21 @@ import { updateAdminStoreOrderFulfillment } from './admin-api';
 import { ApiError } from './api';
 import type { StoreFormState } from './store-actions';
 
+const blankToUndefined = (value: FormDataEntryValue | null): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
 export const updateOrderFulfillmentAction = async (
   orderId: string,
   _prev: StoreFormState,
   fd: FormData,
 ): Promise<StoreFormState> => {
-  const status = fd.get('status');
-  const trackingCode = fd.get('trackingCode');
-  const note = fd.get('note');
   const parsed = adminStoreFulfillmentUpdateSchema.safeParse({
-    status,
-    trackingCode: typeof trackingCode === 'string' ? trackingCode : undefined,
-    note: typeof note === 'string' ? note : undefined,
+    status: fd.get('status'),
+    trackingCode: blankToUndefined(fd.get('trackingCode')),
+    note: blankToUndefined(fd.get('note')),
   });
   if (!parsed.success) {
     return {
