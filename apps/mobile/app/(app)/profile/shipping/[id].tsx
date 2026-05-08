@@ -144,7 +144,7 @@ export default function ShippingAddressDetailScreen() {
           ),
         }}
       />
-      <ShippingAddressFormFields control={form.control} />
+      <ShippingAddressFormFields control={form.control} setValue={form.setValue} mode="edit" />
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <Button label={profileCopy.shipping.save} onPress={() => void onSave()} disabled={deleting} />
       <Button
