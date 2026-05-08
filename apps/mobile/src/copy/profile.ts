@@ -26,6 +26,7 @@ export const profileCopy = {
   },
   garage: {
     title: 'Garagem',
+    newTitle: 'Novo Carro',
     empty: 'Você ainda não cadastrou carros.',
     add: 'Adicionar carro',
     makeLabel: 'Marca',
