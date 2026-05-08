@@ -58,6 +58,8 @@ export const cartCopy = {
     choose: 'Selecione o endereço para receber os produtos.',
     loading: 'Carregando endereços...',
     empty: 'Cadastre um endereço de entrega para concluir esta compra.',
+    add: 'Adicionar endereço',
+    manage: 'Gerenciar endereços',
     retry: 'Tentar novamente',
     defaultBadge: 'Padrão',
     blocked: 'Selecione um endereço de entrega para pagar.',

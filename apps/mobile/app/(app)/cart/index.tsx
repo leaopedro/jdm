@@ -1,6 +1,5 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
-import type { ShippingAddressRecord } from '@jdm/shared/store';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -24,6 +23,7 @@ import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
 import { formatBRL } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
+import { formatShippingAddress } from '~/shipping/format-address';
 import { theme } from '~/theme';
 
 const isWeb = Platform.OS === 'web';
@@ -78,10 +78,6 @@ function getCheckoutReturnUrls(): { successUrl?: string; cancelUrl?: string } {
   };
 }
 
-function formatShippingAddress(address: ShippingAddressRecord): string {
-  return `${address.street}, ${address.number} · ${address.city}/${address.stateCode}`;
-}
-
 export default function CartScreen() {
   const { cart, loading, error, itemCount, removeItem, clear, refresh } = useCart();
   const router = useRouter();
@@ -104,7 +100,10 @@ export default function CartScreen() {
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh]),
+      if (requiresShipping) {
+        void refreshShippingAddresses();
+      }
+    }, [refresh, refreshShippingAddresses, requiresShipping]),
   );
 
   useEffect(() => {
@@ -259,6 +258,12 @@ export default function CartScreen() {
 
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
   const blockedByShippingAddress = requiresShipping && !selectedShippingAddressId;
+  const openShippingAddresses = () => {
+    router.push({
+      pathname: '/profile/shipping',
+      params: { returnTo: '/cart' },
+    } as never);
+  };
 
   const openCarPlate = (item: CartItem) => {
     if (!item.eventId || !item.tierId) return;
@@ -431,37 +436,47 @@ export default function CartScreen() {
                 <Text style={styles.shippingRetryText}>{cartCopy.shipping.retry}</Text>
               </Pressable>
             ) : shippingAddresses.length === 0 ? (
-              <Text style={styles.shippingBlocked}>{cartCopy.shipping.empty}</Text>
+              <View style={styles.shippingActions}>
+                <Text style={styles.shippingBlocked}>{cartCopy.shipping.empty}</Text>
+                <Button label={cartCopy.shipping.add} onPress={openShippingAddresses} />
+              </View>
             ) : (
-              <View style={styles.shippingAddressList}>
-                {shippingAddresses.map((address) => {
-                  const selected = selectedShippingAddressId === address.id;
+              <View style={styles.shippingActions}>
+                <View style={styles.shippingAddressList}>
+                  {shippingAddresses.map((address) => {
+                    const selected = selectedShippingAddressId === address.id;
 
-                  return (
-                    <Pressable
-                      key={address.id}
-                      onPress={() => setSelectedShippingAddressId(address.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      style={[
-                        styles.shippingAddressCard,
-                        selected && styles.shippingAddressCardSelected,
-                      ]}
-                    >
-                      <View style={styles.shippingAddressHeader}>
-                        <Text style={styles.shippingAddressName}>{address.recipientName}</Text>
-                        {address.isDefault ? (
-                          <Text style={styles.shippingAddressBadge}>
-                            {cartCopy.shipping.defaultBadge}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <Text style={styles.shippingAddressBody}>
-                        {formatShippingAddress(address)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                    return (
+                      <Pressable
+                        key={address.id}
+                        onPress={() => setSelectedShippingAddressId(address.id)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        style={[
+                          styles.shippingAddressCard,
+                          selected && styles.shippingAddressCardSelected,
+                        ]}
+                      >
+                        <View style={styles.shippingAddressHeader}>
+                          <Text style={styles.shippingAddressName}>{address.recipientName}</Text>
+                          {address.isDefault ? (
+                            <Text style={styles.shippingAddressBadge}>
+                              {cartCopy.shipping.defaultBadge}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.shippingAddressBody}>
+                          {formatShippingAddress(address)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Button
+                  label={cartCopy.shipping.manage}
+                  variant="secondary"
+                  onPress={openShippingAddresses}
+                />
               </View>
             )}
           </View>
@@ -625,6 +640,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   shippingAddressList: {
+    gap: theme.spacing.sm,
+  },
+  shippingActions: {
     gap: theme.spacing.sm,
   },
   shippingAddressCard: {
