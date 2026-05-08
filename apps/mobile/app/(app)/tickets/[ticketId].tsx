@@ -14,9 +14,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 
 import { listMyTickets, updateMyTicket } from '~/api/tickets';
+import { HiddenQR } from '~/components/HiddenQR';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
@@ -142,13 +142,12 @@ export default function TicketDetail() {
         </View>
       ) : (
         <>
-          <View
-            style={styles.qrBox}
-            accessible={true}
-            accessibilityRole="image"
-            accessibilityLabel={`QR code for ${ticket.event.title}`}
-          >
-            <QRCode value={ticket.code} size={240} />
+          <View style={styles.qrBox}>
+            <HiddenQR
+              value={ticket.code}
+              size={240}
+              accessibilityLabel={`QR code for ${ticket.event.title}`}
+            />
           </View>
           <Text style={styles.hint}>{ticketsCopy.detail.brightness}</Text>
         </>
@@ -182,13 +181,12 @@ export default function TicketDetail() {
                     <Text style={styles.qrUsedText}>{ticketsCopy.detail.qrUsed}</Text>
                   </View>
                 ) : (
-                  <View
-                    style={styles.extraQrBox}
-                    accessible={true}
-                    accessibilityRole="image"
-                    accessibilityLabel={`QR code for ${extra.extraName}`}
-                  >
-                    <QRCode value={extra.code} size={140} />
+                  <View style={styles.extraQrBox}>
+                    <HiddenQR
+                      value={extra.code}
+                      size={140}
+                      accessibilityLabel={`QR code for ${extra.extraName}`}
+                    />
                   </View>
                 )}
                 <Text style={[styles.extraStatus, isUsed && styles.textMuted]}>{extraLabel}</Text>
