@@ -9,6 +9,7 @@ import {
 } from './events.js';
 import { orderStatusSchema } from './orders.js';
 import { stateCodeSchema } from './profile.js';
+import { storeFulfillmentStatusSchema } from './store.js';
 import { ticketSourceSchema, ticketStatusSchema } from './tickets.js';
 
 // Actions recorded in AdminAudit.action — literal union, no free-form strings.
@@ -48,6 +49,7 @@ export const adminAuditActionSchema = z.enum([
   'product_type.create',
   'product_type.update',
   'product_type.delete',
+  'store.order.fulfillment_update',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
@@ -774,3 +776,136 @@ export const adminStoreInventoryListResponseSchema = z.object({
   items: z.array(adminStoreInventoryRowSchema),
 });
 export type AdminStoreInventoryListResponse = z.infer<typeof adminStoreInventoryListResponseSchema>;
+
+// --- Store admin orders queue (Pedidos) ---
+
+export const adminStoreOrderKindSchema = z.enum(['product', 'mixed']);
+export type AdminStoreOrderKind = z.infer<typeof adminStoreOrderKindSchema>;
+
+export const adminFulfillmentMethodSchema = z.enum(['ship', 'pickup']);
+export type AdminFulfillmentMethod = z.infer<typeof adminFulfillmentMethodSchema>;
+
+// Queue filter buckets — broader than raw status so the UI can group naturally.
+export const adminStoreOrderQueueFilterSchema = z.enum([
+  'all',
+  'open',
+  'unfulfilled',
+  'packed',
+  'shipped',
+  'delivered',
+  'pickup_ready',
+  'picked_up',
+  'cancelled',
+]);
+export type AdminStoreOrderQueueFilter = z.infer<typeof adminStoreOrderQueueFilterSchema>;
+
+const orderKindFilterSchema = z.enum(['all', 'product', 'mixed']);
+
+export const adminStoreOrderQuerySchema = z.object({
+  status: adminStoreOrderQueueFilterSchema.optional(),
+  kind: orderKindFilterSchema.optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+});
+export type AdminStoreOrderQuery = z.infer<typeof adminStoreOrderQuerySchema>;
+
+export const adminStoreOrderRowSchema = z.object({
+  id: z.string(),
+  shortId: z.string(),
+  kind: adminStoreOrderKindSchema,
+  paymentStatus: orderStatusSchema,
+  fulfillmentStatus: storeFulfillmentStatusSchema,
+  fulfillmentMethod: adminFulfillmentMethodSchema,
+  amountCents: z.number().int().nonnegative(),
+  shippingCents: z.number().int().nonnegative(),
+  currency: z.string(),
+  itemCount: z.number().int().nonnegative(),
+  customerName: z.string(),
+  customerEmail: z.string(),
+  trackingCode: z.string().nullable(),
+  hasShippingAddress: z.boolean(),
+  paidAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminStoreOrderRow = z.infer<typeof adminStoreOrderRowSchema>;
+
+export const adminStoreOrderQueueTotalsSchema = z.object({
+  all: z.number().int().nonnegative(),
+  open: z.number().int().nonnegative(),
+  unfulfilled: z.number().int().nonnegative(),
+  packed: z.number().int().nonnegative(),
+  shipped: z.number().int().nonnegative(),
+  delivered: z.number().int().nonnegative(),
+  pickup_ready: z.number().int().nonnegative(),
+  picked_up: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+});
+export type AdminStoreOrderQueueTotals = z.infer<typeof adminStoreOrderQueueTotalsSchema>;
+
+export const adminStoreOrderListResponseSchema = z.object({
+  totals: adminStoreOrderQueueTotalsSchema,
+  items: z.array(adminStoreOrderRowSchema),
+});
+export type AdminStoreOrderListResponse = z.infer<typeof adminStoreOrderListResponseSchema>;
+
+export const adminStoreOrderItemSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['product', 'ticket', 'extras']),
+  variantId: z.string().nullable(),
+  productId: z.string().nullable(),
+  productTitle: z.string().nullable(),
+  variantName: z.string().nullable(),
+  variantSku: z.string().nullable(),
+  variantAttributes: z.record(z.string()).nullable(),
+  tierId: z.string().nullable(),
+  tierName: z.string().nullable(),
+  extraId: z.string().nullable(),
+  extraLabel: z.string().nullable(),
+  quantity: z.number().int().positive(),
+  unitPriceCents: z.number().int().nonnegative(),
+  subtotalCents: z.number().int().nonnegative(),
+});
+export type AdminStoreOrderItem = z.infer<typeof adminStoreOrderItemSchema>;
+
+export const adminStoreOrderShippingAddressSchema = z.object({
+  recipientName: z.string(),
+  line1: z.string(),
+  line2: z.string().nullable(),
+  number: z.string(),
+  district: z.string(),
+  city: z.string(),
+  stateCode: z.string(),
+  postalCode: z.string(),
+  phone: z.string().nullable(),
+});
+export type AdminStoreOrderShippingAddress = z.infer<typeof adminStoreOrderShippingAddressSchema>;
+
+export const adminStoreOrderAuditEntrySchema = z.object({
+  id: z.string(),
+  actorName: z.string().nullable(),
+  actorEmail: z.string().nullable(),
+  action: adminAuditActionSchema,
+  metadata: z.record(z.unknown()).nullable(),
+  createdAt: z.string().datetime(),
+});
+export type AdminStoreOrderAuditEntry = z.infer<typeof adminStoreOrderAuditEntrySchema>;
+
+export const adminStoreOrderDetailSchema = adminStoreOrderRowSchema.extend({
+  provider: z.enum(['stripe', 'abacatepay']),
+  providerRef: z.string().nullable(),
+  notes: z.string().nullable(),
+  customer: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+  }),
+  shippingAddress: adminStoreOrderShippingAddressSchema.nullable(),
+  pickupEventId: z.string().nullable(),
+  pickupEventTitle: z.string().nullable(),
+  pickupTicketId: z.string().nullable(),
+  items: z.array(adminStoreOrderItemSchema),
+  history: z.array(adminStoreOrderAuditEntrySchema),
+});
+export type AdminStoreOrderDetail = z.infer<typeof adminStoreOrderDetailSchema>;
+
+// adminStoreFulfillmentUpdateSchema is exported from ./store.js — re-exported via index.

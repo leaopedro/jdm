@@ -13,6 +13,8 @@ import {
   adminStoreCollectionListResponseSchema,
   adminStoreCollectionSchema,
   adminStoreInventoryListResponseSchema,
+  adminStoreOrderDetailSchema,
+  adminStoreOrderListResponseSchema,
   adminStoreProductDetailSchema,
   adminStoreProductListResponseSchema,
   adminStoreProductLookupResponseSchema,
@@ -38,6 +40,9 @@ import {
   type AdminStoreCollectionCreate,
   type AdminStoreInventoryFilter,
   type AdminStoreInventoryListResponse,
+  type AdminStoreOrderDetail,
+  type AdminStoreOrderListResponse,
+  type AdminStoreOrderQuery,
   type AdminStoreProductLookupResponse,
   type AdminStoreCollectionUpdate,
   type AdminStoreProductCreate,
@@ -63,6 +68,7 @@ import {
 import { publicProfileSchema } from '@jdm/shared/profile';
 import {
   storeSettingsSchema,
+  type AdminStoreFulfillmentUpdate,
   type StoreSettings,
   type StoreSettingsUpdate,
 } from '@jdm/shared/store';
@@ -394,3 +400,29 @@ export const listAdminStoreInventory = (
     schema: adminStoreInventoryListResponseSchema,
   });
 };
+
+export const listAdminStoreOrders = (
+  query: AdminStoreOrderQuery = {},
+): Promise<AdminStoreOrderListResponse> => {
+  const params = new URLSearchParams();
+  if (query.status && query.status !== 'all') params.set('status', query.status);
+  if (query.kind && query.kind !== 'all') params.set('kind', query.kind);
+  if (query.q) params.set('q', query.q);
+  const qs = params.toString();
+  return apiFetch(`/admin/store/orders${qs ? `?${qs}` : ''}`, {
+    schema: adminStoreOrderListResponseSchema,
+  });
+};
+
+export const getAdminStoreOrder = (id: string): Promise<AdminStoreOrderDetail> =>
+  apiFetch(`/admin/store/orders/${id}`, { schema: adminStoreOrderDetailSchema });
+
+export const updateAdminStoreOrderFulfillment = (
+  id: string,
+  input: AdminStoreFulfillmentUpdate,
+): Promise<AdminStoreOrderDetail> =>
+  apiFetch(`/admin/store/orders/${id}/fulfillment`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+    schema: adminStoreOrderDetailSchema,
+  });

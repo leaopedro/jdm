@@ -12,6 +12,8 @@ export const storeFulfillmentStatusSchema = z.enum([
   'packed',
   'shipped',
   'delivered',
+  'pickup_ready',
+  'picked_up',
   'cancelled',
 ]);
 export type StoreFulfillmentStatus = z.infer<typeof storeFulfillmentStatusSchema>;
@@ -258,10 +260,9 @@ export const adminStoreFulfillmentUpdateSchema = z
   .object({
     status: storeFulfillmentStatusSchema,
     trackingCode: z.string().trim().min(1).max(120).nullable().optional(),
-    trackingUrl: z.string().url().nullable().optional(),
-    shippedAt: z.string().datetime().nullable().optional(),
     note: z.string().trim().max(500).nullable().optional(),
   })
+  .strict()
   .superRefine((value, ctx) => {
     if (value.status === 'shipped' && !value.trackingCode) {
       ctx.addIssue({
