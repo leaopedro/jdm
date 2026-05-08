@@ -36,7 +36,9 @@ function firstTicketPlate(item: CartItem): string | undefined {
   return item.tickets[0]?.licensePlate;
 }
 
-function isProductItem(item: CartItem): boolean {
+function isProductItem(
+  item: CartItem,
+): item is CartItem & { kind: 'product'; product: NonNullable<CartItem['product']> } {
   return item.kind === 'product' && item.product !== null;
 }
 

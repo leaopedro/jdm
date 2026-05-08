@@ -86,6 +86,7 @@ export default function StoreProductDetailScreen() {
 
     try {
       await addItem({
+        source: 'purchase',
         kind: 'product',
         variantId: selectedVariant.id,
         quantity,
