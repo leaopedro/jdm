@@ -28,13 +28,16 @@ export const HiddenQR = ({
   const toggle = () => setRevealed((prev) => !prev);
 
   return (
-    <View
-      style={[styles.wrapper, { width: size, height: size, backgroundColor }]}
-      accessible={true}
-      accessibilityRole="image"
-      accessibilityLabel={accessibilityLabel}
-    >
-      <QRCode value={value} size={size} backgroundColor={backgroundColor} />
+    <View style={[styles.wrapper, { width: size, height: size, backgroundColor }]}>
+      <View
+        accessible={revealed}
+        accessibilityRole="image"
+        accessibilityLabel={accessibilityLabel}
+        importantForAccessibility={revealed ? 'yes' : 'no-hide-descendants'}
+        aria-hidden={!revealed}
+      >
+        <QRCode value={value} size={size} backgroundColor={backgroundColor} />
+      </View>
       {!revealed ? (
         <Pressable
           style={styles.overlay}
