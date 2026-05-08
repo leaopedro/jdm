@@ -61,6 +61,8 @@ readonly_bash_allowed() {
     "printenv"* | \
     "which "* | \
     "date"* | \
+    "./scripts/ensure-issue-worktree.sh"* | \
+    "scripts/ensure-issue-worktree.sh"* | \
     "git checkout main"* | \
     "git switch main"* | \
     "git checkout feat/"* | \

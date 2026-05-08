@@ -34,6 +34,10 @@ your first PR.
 - Keep PRs small. One task from `roadmap.md` ≈ one PR.
 - Agent sessions are blocked from editing root `main` and `production` by the
   committed `CLAUDE.md` preflight plus `.claude/settings.json` hooks.
+- If a fresh Paperclip heartbeat lands in repo root on `main` and the assigned
+  issue has no worktree yet, create it with
+  `./scripts/ensure-issue-worktree.sh <issue-id>`, then switch into
+  `.claude/worktrees/<issue-id>` before creating your feature branch.
 - Local commits on `main` and `production` are blocked by the committed
   `pre-commit` hook. If you hit it, switch into the issue worktree or create a
   feature branch first.
