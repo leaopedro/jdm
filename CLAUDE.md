@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Do not push on `production`.
 - Switch to `main` first.
 - Pull `main` with `git pull --ff-only origin main`.
+- If the assigned issue has no worktree yet, run `./scripts/ensure-issue-worktree.sh <issue-id>` from root `main`.
 - Create the feature branch from `main`.
 - For isolated work, create a fresh worktree from `main`.
 - Never branch or create a worktree from `production`.

@@ -3,7 +3,7 @@
 set -eu
 
 mode="${1:-tool}"
-project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+project_dir="$(pwd)"
 repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null || pwd)"
 branch="$(git -C "$project_dir" branch --show-current 2>/dev/null || true)"
 
@@ -61,6 +61,8 @@ readonly_bash_allowed() {
     "printenv"* | \
     "which "* | \
     "date"* | \
+    "./scripts/ensure-issue-worktree.sh"* | \
+    "scripts/ensure-issue-worktree.sh"* | \
     "git checkout main"* | \
     "git switch main"* | \
     "git checkout feat/"* | \

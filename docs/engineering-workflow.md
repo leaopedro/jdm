@@ -54,6 +54,19 @@ branch-safety preflight in `CLAUDE.md` plus the committed
 repo root on `main` while the assigned issue already has a worktree under
 `.claude/worktrees/<issue-id>`.
 
+Fresh assignments are allowed to create that worktree from root `main` once,
+before any code edits. Use:
+
+```bash
+./scripts/ensure-issue-worktree.sh <issue-id>
+cd .claude/worktrees/<issue-id>
+git switch -c <branch-name>
+```
+
+`ensure-issue-worktree.sh` creates `.claude/worktrees/<issue-id>` at detached
+`main` only when it does not already exist. After that, leave root `main`,
+switch into the issue worktree, and create the real feature branch there.
+
 Local commits on `main` and `production` are blocked by the committed
 `pre-commit` hook before `lint-staged` runs. Treat that failure as a context
 error, not a hook to bypass.
@@ -76,6 +89,11 @@ If you discover work was made in root `main` anyway:
    issue, and the relevant `plans/phase-N-fM-*.md`.
 3. If the scope or success criteria are unclear, ask the CTO in a comment.
    Do not start coding against ambiguity.
+4. If the heartbeat opens in repo root on `main` and
+   `.claude/worktrees/<issue-id>` does not exist yet, create it with
+   `./scripts/ensure-issue-worktree.sh <issue-id>`, switch into that
+   worktree, and only then create your feature branch. Missing first-time
+   worktree is not a blocker by itself.
 
 ## 3. Planning the task (required)
 

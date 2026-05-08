@@ -2,6 +2,7 @@
 
 set -eu
 
-project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+project_dir="$(pwd)"
+repo_root="$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-"$project_dir"/scripts/guard-branch-context.sh tool
+"$repo_root"/scripts/guard-branch-context.sh tool
