@@ -48,6 +48,8 @@ export const storeCopy = {
     loadingMore: 'Carregando mais produtos...',
   },
   eyebrow: 'Loja JDM',
+  listTitle: 'Produtos oficiais',
+  listError: 'Não foi possível carregar os produtos da loja.',
   notFound: 'Não foi possível carregar este produto.',
   retry: 'Tentar novamente',
   collections: 'Coleções',

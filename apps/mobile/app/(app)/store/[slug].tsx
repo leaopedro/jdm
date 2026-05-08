@@ -21,11 +21,14 @@ import { useStoreProductDetail } from '~/hooks/useStoreProductDetail';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL } from '~/lib/format';
 import {
-  clampProductQuantity,
-  getDefaultVariant,
-  getVariantStockLabel,
-  isVariantSelectable,
-} from '~/screens/store/variant-selection';
+  buildProductCartItemInput,
+  getDetailPurchaseMode,
+  getInitialVariantSelection,
+  getNextQuantity,
+  getSelectedVariant,
+  selectVariantForPurchase,
+} from '~/screens/store/purchase-flow';
+import { getVariantStockLabel, isVariantSelectable } from '~/screens/store/variant-selection';
 import { theme } from '~/theme';
 
 export default function StoreProductDetailScreen() {
@@ -42,10 +45,8 @@ export default function StoreProductDetailScreen() {
 
   const selectedVariant = useMemo(() => {
     if (!product) return null;
-    if (!hasMultipleVariants) return getDefaultVariant(product.variants, selectedVariantId);
-    if (!selectedVariantId) return null;
-    return getDefaultVariant(product.variants, selectedVariantId);
-  }, [hasMultipleVariants, product, selectedVariantId]);
+    return getSelectedVariant(product, selectedVariantId);
+  }, [product, selectedVariantId]);
 
   useEffect(() => {
     if (!product) {
@@ -54,29 +55,28 @@ export default function StoreProductDetailScreen() {
       return;
     }
 
-    if (product.variants.length === 1) {
-      const nextVariant = getDefaultVariant(product.variants, selectedVariantId);
-      setSelectedVariantId(nextVariant?.id ?? null);
-      setQuantity((current) => clampProductQuantity(current, nextVariant));
-      return;
-    }
-
-    const currentVariant = selectedVariantId
-      ? (product.variants.find((variant) => variant.id === selectedVariantId) ?? null)
-      : null;
-    setQuantity((current) => clampProductQuantity(current, currentVariant));
+    const nextSelectedVariantId =
+      product.variants.length === 1 ? getInitialVariantSelection(product) : selectedVariantId;
+    setSelectedVariantId(nextSelectedVariantId);
+    setQuantity((current) => getNextQuantity(product, nextSelectedVariantId, current));
   }, [product, selectedVariantId]);
 
-  const canAddToCart = selectedVariant ? isVariantSelectable(selectedVariant) : false;
+  const purchaseMode = product ? getDetailPurchaseMode(product, selectedVariantId) : 'unavailable';
   const heroImage = product?.images[0]?.url ?? product?.coverImageUrl ?? null;
 
   const updateQuantity = (nextQuantity: number) => {
-    setQuantity(clampProductQuantity(nextQuantity, selectedVariant));
+    if (!product) return;
+    setQuantity(getNextQuantity(product, selectedVariantId, nextQuantity));
   };
 
   const handleAddToCart = async () => {
-    if (!product || !selectedVariant || !canAddToCart) {
-      if (hasMultipleVariants) {
+    if (!product) {
+      showMessage(storeCopy.soldOut);
+      return;
+    }
+
+    if (purchaseMode !== 'add' || !selectedVariant) {
+      if (purchaseMode === 'open_picker') {
         setVariantSheetOpen(true);
         return;
       }
@@ -85,14 +85,7 @@ export default function StoreProductDetailScreen() {
     }
 
     try {
-      await addItem({
-        source: 'purchase',
-        kind: 'product',
-        variantId: selectedVariant.id,
-        quantity,
-        tickets: [],
-        metadata: { source: 'mobile' },
-      });
+      await addItem(buildProductCartItemInput(selectedVariant.id, quantity));
       showMessage(storeCopy.added);
       router.push('/cart' as never);
     } catch (error: unknown) {
@@ -260,9 +253,9 @@ export default function StoreProductDetailScreen() {
         <Button
           label={adding ? storeCopy.adding : storeCopy.addToCart}
           onPress={() => void handleAddToCart()}
-          disabled={adding || !canAddToCart}
+          disabled={adding || purchaseMode === 'unavailable'}
         />
-        {!canAddToCart ? (
+        {purchaseMode === 'unavailable' ? (
           <Text style={styles.errorText}>{storeCopy.unavailable}</Text>
         ) : (
           <View style={styles.cartHint}>
@@ -300,10 +293,13 @@ export default function StoreProductDetailScreen() {
                   <Pressable
                     key={variant.id}
                     onPress={() => {
-                      setSelectedVariantId(variant.id);
-                      setQuantity((current) => clampProductQuantity(current, variant));
+                      const nextVariantId = selectVariantForPurchase(product, variant.id);
+                      if (!nextVariantId) return;
+                      setSelectedVariantId(nextVariantId);
+                      setQuantity((current) => getNextQuantity(product, nextVariantId, current));
                       setVariantSheetOpen(false);
                     }}
+                    disabled={!selectable}
                     style={[
                       styles.variantGridCard,
                       isSelected && styles.variantCardSelected,
