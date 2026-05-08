@@ -40,18 +40,33 @@ This repository uses one release flow:
 
 Non-negotiable constraints:
 
+- Never edit files on root `main`.
 - Never commit directly on `production`.
+- Never commit directly on `main`.
 - Never push directly to `production`.
 - Never merge feature branches into `production`.
 - Never open PRs targeting `production`.
 
-Agents are blocked from editing `production` by the branch-safety preflight
-in `CLAUDE.md` plus the committed `.claude/settings.json` PreToolUse hook.
-Those controls are agent-scoped on purpose so board-approved humans can still
-operate `production` manually from a normal terminal when needed.
+Agents are blocked from editing root `main` and `production` by the
+branch-safety preflight in `CLAUDE.md` plus the committed
+`.claude/settings.json` PreToolUse hook. The hook inspects
+`PAPERCLIP_WAKE_PAYLOAD_JSON` and fails fast when the session is running in the
+repo root on `main` while the assigned issue already has a worktree under
+`.claude/worktrees/<issue-id>`.
+
+Local commits on `main` and `production` are blocked by the committed
+`pre-commit` hook before `lint-staged` runs. Treat that failure as a context
+error, not a hook to bypass.
 
 If `production` is moved accidentally, stop immediately, notify the board on
 the owning issue, and wait for explicit rollback instructions.
+
+If you discover work was made in root `main` anyway:
+
+1. Stop editing root `main`.
+2. Copy or apply the leaked diff into the assigned issue worktree first.
+3. Verify the worktree now contains every modified and untracked file.
+4. Only then clean root `main` and document the recovery in the issue thread.
 
 ## 2. Picking up an issue
 

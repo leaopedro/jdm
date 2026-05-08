@@ -20,7 +20,7 @@
     "prepare": "sh ./scripts/sync-git-hooks.sh"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
+    "pre-commit": "./scripts/guard-branch-context.sh pre-commit && pnpm lint-staged"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

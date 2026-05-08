@@ -32,9 +32,11 @@ your first PR.
 - Branch off `main`. Use Conventional Commit prefixes for branch names too:
   `feat/ticketing-stripe`, `fix/auth-refresh-rotation`, etc.
 - Keep PRs small. One task from `roadmap.md` ≈ one PR.
-- Agent sessions are blocked from editing `production` by the committed
-  `CLAUDE.md` preflight and `.claude/settings.json` hooks. Human terminal
-  pushes are intentionally not blocked by repo git hooks.
+- Agent sessions are blocked from editing root `main` and `production` by the
+  committed `CLAUDE.md` preflight plus `.claude/settings.json` hooks.
+- Local commits on `main` and `production` are blocked by the committed
+  `pre-commit` hook. If you hit it, switch into the issue worktree or create a
+  feature branch first.
 
 ## Commits
 
