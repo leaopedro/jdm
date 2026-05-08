@@ -1,7 +1,9 @@
 import type { StoreProductListQuery, StoreProductSummary } from '@jdm/shared/store';
 import { useCallback, useEffect, useState } from 'react';
 
-import { listStoreProducts } from '~/api/store';
+import { listStoreProducts } from '../api/store';
+
+const EMPTY_QUERY: Partial<StoreProductListQuery> = {};
 
 type UseStoreProductsResult = {
   items: StoreProductSummary[];
@@ -11,9 +13,8 @@ type UseStoreProductsResult = {
   refresh: () => Promise<void>;
 };
 
-export function useStoreProducts(
-  query: Partial<StoreProductListQuery> = {},
-): UseStoreProductsResult {
+export function useStoreProducts(query?: Partial<StoreProductListQuery>): UseStoreProductsResult {
+  const resolvedQuery = query ?? EMPTY_QUERY;
   const [items, setItems] = useState<StoreProductSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,7 @@ export function useStoreProducts(
     setLoading(true);
     setError(false);
     try {
-      const response = await listStoreProducts(query);
+      const response = await listStoreProducts(resolvedQuery);
       setItems(response.items);
       setNextCursor(response.nextCursor);
     } catch {
@@ -31,7 +32,7 @@ export function useStoreProducts(
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [resolvedQuery]);
 
   useEffect(() => {
     void refresh();
