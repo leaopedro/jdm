@@ -1,8 +1,14 @@
 import { router, Tabs } from 'expo-router';
-import { CalendarDays, Car, ShoppingCart, Ticket, UserRound } from 'lucide-react-native';
+import {
+  CalendarDays,
+  Car,
+  ShoppingBag,
+  ShoppingCart,
+  Ticket,
+  UserRound,
+} from 'lucide-react-native';
 
-import { useCart } from '~/cart/context';
-import { CartProvider } from '~/cart/context';
+import { CartProvider, useCart } from '~/cart/context';
 import { APP_TAB_SPECS, getCartTabBadge } from '~/navigation/app-tabs';
 
 const ACTIVE = '#E10600';
@@ -10,6 +16,9 @@ const INACTIVE = '#8A8A93';
 
 const EventsIcon = ({ color }: { color: string }) => (
   <CalendarDays color={color} size={22} strokeWidth={1.75} />
+);
+const StoreIcon = ({ color }: { color: string }) => (
+  <ShoppingBag color={color} size={22} strokeWidth={1.75} />
 );
 const TicketsIcon = ({ color }: { color: string }) => (
   <Ticket color={color} size={22} strokeWidth={1.75} />
@@ -68,7 +77,17 @@ function AppTabs() {
       />
       <Tabs.Screen
         name={APP_TAB_SPECS[1].name}
-        options={{ title: APP_TAB_SPECS[1].title, tabBarIcon: TicketsIcon }}
+        options={{ title: APP_TAB_SPECS[1].title, tabBarIcon: StoreIcon }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.replace('/store');
+          },
+        }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[2].name}
+        options={{ title: APP_TAB_SPECS[2].title, tabBarIcon: TicketsIcon }}
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
@@ -77,9 +96,27 @@ function AppTabs() {
         }}
       />
       <Tabs.Screen
-        name={APP_TAB_SPECS[2].name}
+        name={APP_TAB_SPECS[3].name}
         options={{
-          title: APP_TAB_SPECS[2].title,
+          title: APP_TAB_SPECS[3].title,
+          tabBarIcon: GarageIcon,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.replace('/garage');
+          },
+        }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[4].name}
+        options={{ title: APP_TAB_SPECS[4].title, tabBarIcon: ProfileIcon }}
+      />
+      <Tabs.Screen
+        name={APP_TAB_SPECS[5].name}
+        options={{
+          href: null,
+          title: APP_TAB_SPECS[5].title,
           tabBarIcon: CartIcon,
           tabBarBadgeStyle: {
             backgroundColor: ACTIVE,
@@ -89,20 +126,6 @@ function AppTabs() {
           },
           ...(cartBadge ? { tabBarBadge: cartBadge } : {}),
         }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.replace('/cart');
-          },
-        }}
-      />
-      <Tabs.Screen
-        name={APP_TAB_SPECS[3].name}
-        options={{ title: APP_TAB_SPECS[3].title, tabBarIcon: ProfileIcon }}
-      />
-      <Tabs.Screen
-        name={APP_TAB_SPECS[4].name}
-        options={{ href: null, title: APP_TAB_SPECS[4].title, tabBarIcon: GarageIcon }}
       />
     </Tabs>
   );

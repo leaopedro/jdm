@@ -3,14 +3,24 @@
 
 const PUBLIC_EXACT = new Set<string>(['/', '/welcome', '/events']);
 const EVENTS_DETAIL_RE = /^\/events\/[^/]+$/;
+const STORE_PUBLIC_RE = /^\/store(?:\/[^/]+)?$/;
 
-const NEXT_ALLOWED_PREFIXES = ['/welcome', '/events', '/cart', '/tickets', '/garage', '/profile'];
+const NEXT_ALLOWED_PREFIXES = [
+  '/welcome',
+  '/events',
+  '/store',
+  '/cart',
+  '/tickets',
+  '/garage',
+  '/profile',
+];
 
 export const DEFAULT_POST_AUTH = '/welcome';
 
 export const isPublicPath = (path: string): boolean => {
   if (PUBLIC_EXACT.has(path)) return true;
   if (EVENTS_DETAIL_RE.test(path)) return true;
+  if (STORE_PUBLIC_RE.test(path)) return true;
   return false;
 };
 

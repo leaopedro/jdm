@@ -20,6 +20,11 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/events/abc-123')).toBe(true);
   });
 
+  it('allows storefront browsing routes', () => {
+    expect(isPublicPath('/store')).toBe(true);
+    expect(isPublicPath('/store/colecao-jdm')).toBe(true);
+  });
+
   it('blocks event sub-routes (buy, etc.)', () => {
     expect(isPublicPath('/events/buy/track-day')).toBe(false);
     expect(isPublicPath('/events/track-day/extras')).toBe(false);
@@ -39,6 +44,7 @@ describe('sanitizeNext', () => {
     expect(sanitizeNext('/events')).toBe('/events');
     expect(sanitizeNext('/events/track-day')).toBe('/events/track-day');
     expect(sanitizeNext('/events/track-day?tierId=t1')).toBe('/events/track-day?tierId=t1');
+    expect(sanitizeNext('/store')).toBe('/store');
     expect(sanitizeNext('/cart')).toBe('/cart');
     expect(sanitizeNext('/cart/car-plate')).toBe('/cart/car-plate');
     expect(sanitizeNext('/tickets')).toBe('/tickets');
