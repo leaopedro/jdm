@@ -16,7 +16,6 @@ const initial: StoreFormState = { error: null };
 const fieldCls =
   'rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm';
 const labelCls = 'flex flex-col gap-1 text-xs text-[color:var(--color-muted)]';
-const variantAttributesHelpText = 'Use JSON com pares chave/valor, como tamanho e cor.';
 
 const Submit = ({ label }: { label: string }) => {
   const { pending } = useFormStatus();
@@ -31,8 +30,6 @@ const Submit = ({ label }: { label: string }) => {
   );
 };
 
-const fmtAttrs = (attrs: Record<string, string>): string => JSON.stringify(attrs ?? {}, null, 0);
-
 const Field = ({
   label,
   className,
@@ -41,19 +38,6 @@ const Field = ({
   <label className={labelCls}>
     <span>{label}</span>
     <input {...props} className={className ? `${fieldCls} ${className}` : fieldCls} />
-  </label>
-);
-
-const AttributesField = ({ defaultValue }: { defaultValue: string }) => (
-  <label className={`${labelCls} min-w-56`}>
-    <span>Atributos da variante</span>
-    <input
-      name="attributes"
-      defaultValue={defaultValue}
-      placeholder='Ex.: {"tamanho":"M","cor":"Preto"}'
-      className={`${fieldCls} w-full`}
-    />
-    <span>{variantAttributesHelpText}</span>
   </label>
 );
 
@@ -88,7 +72,6 @@ const VariantRow = ({ productId, variant }: { productId: string; variant: AdminS
             defaultValue={variant.quantityTotal}
             className="w-24"
           />
-          <AttributesField defaultValue={fmtAttrs(variant.attributes ?? {})} />
           <select
             name="active"
             defaultValue={variant.active ? 'true' : 'false'}
@@ -163,7 +146,6 @@ const NewVariantForm = ({ productId }: { productId: string }) => {
         required
         className="w-24"
       />
-      <AttributesField defaultValue={v.attributes ?? '{}'} />
       <Submit label="Adicionar variante" />
       {state.error ? <span className="text-sm text-red-400">{state.error}</span> : null}
     </form>
