@@ -1,13 +1,15 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
+import type { ShippingAddressRecord } from '@jdm/shared/store';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Car as CarIcon, ChevronRight, Trash2 } from 'lucide-react-native';
+import { Car as CarIcon, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Linking,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -27,6 +29,122 @@ import { formatShippingAddress } from '~/shipping/format-address';
 import { theme } from '~/theme';
 
 const isWeb = Platform.OS === 'web';
+
+type ShippingAddressRowProps = {
+  loading: boolean;
+  error: boolean;
+  addresses: ShippingAddressRecord[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onRetry: () => void;
+  onOpenAddresses: () => void;
+};
+
+function ShippingAddressRow({
+  loading,
+  error,
+  addresses,
+  selectedId,
+  onSelect,
+  onRetry,
+  onOpenAddresses,
+}: ShippingAddressRowProps) {
+  const [open, setOpen] = useState(false);
+  const selected = addresses.find((a) => a.id === selectedId) ?? null;
+
+  let right: React.ReactNode;
+  if (loading) {
+    right = <Text style={styles.shippingHint}>{cartCopy.shipping.loading}</Text>;
+  } else if (error) {
+    right = (
+      <Pressable onPress={onRetry} hitSlop={8}>
+        <Text style={styles.shippingRetryText}>{cartCopy.shipping.retry}</Text>
+      </Pressable>
+    );
+  } else if (addresses.length === 0) {
+    right = (
+      <Pressable
+        onPress={onOpenAddresses}
+        accessibilityRole="button"
+        accessibilityLabel={cartCopy.shipping.add}
+        style={styles.shippingAddBtn}
+        hitSlop={8}
+      >
+        <Text style={styles.shippingAddText}>{cartCopy.shipping.add}</Text>
+        <Plus color={theme.colors.accent} size={14} strokeWidth={2} />
+      </Pressable>
+    );
+  } else {
+    right = (
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={cartCopy.shipping.placeholder}
+        style={styles.shippingDropdownTrigger}
+        hitSlop={8}
+      >
+        <Text style={styles.shippingDropdownText} numberOfLines={1}>
+          {selected ? selected.recipientName : cartCopy.shipping.placeholder}
+        </Text>
+        <ChevronDown color={theme.colors.muted} size={14} strokeWidth={1.75} />
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.shippingRow}>
+      <Text style={styles.shippingTitle}>{cartCopy.shipping.title}</Text>
+      <View style={styles.shippingRight}>{right}</View>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.shippingModalBackdrop} onPress={() => setOpen(false)}>
+          <View style={styles.shippingModalCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.shippingModalLabel}>{cartCopy.shipping.placeholder}</Text>
+            {addresses.map((address) => {
+              const isSelected = selectedId === address.id;
+              return (
+                <Pressable
+                  key={address.id}
+                  onPress={() => {
+                    onSelect(address.id);
+                    setOpen(false);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[styles.shippingModalItem, isSelected && styles.shippingModalItemSelected]}
+                >
+                  <View style={styles.shippingModalItemHeader}>
+                    <Text style={styles.shippingModalItemName} numberOfLines={1}>
+                      {address.recipientName}
+                    </Text>
+                    {address.isDefault ? (
+                      <Text style={styles.shippingAddressBadge}>
+                        {cartCopy.shipping.defaultBadge}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.shippingModalItemBody} numberOfLines={2}>
+                    {formatShippingAddress(address)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => {
+                setOpen(false);
+                onOpenAddresses();
+              }}
+              style={styles.shippingModalAddNew}
+              accessibilityRole="button"
+            >
+              <Plus color={theme.colors.accent} size={14} strokeWidth={2} />
+              <Text style={styles.shippingModalAddNewText}>{cartCopy.shipping.addNew}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 
 function itemNeedsCar(item: CartItem): boolean {
   if (!item.requiresCar || item.kind !== 'ticket') return false;
@@ -400,10 +518,12 @@ export default function CartScreen() {
       />
 
       <View style={styles.footer}>
-        <View style={styles.totalsRow}>
-          <Text style={styles.totalsLabel}>{cartCopy.totals.tickets}</Text>
-          <Text style={styles.totalsValue}>{formatBRL(cart.totals.ticketSubtotalCents)}</Text>
-        </View>
+        {cart.totals.ticketSubtotalCents > 0 && (
+          <View style={styles.totalsRow}>
+            <Text style={styles.totalsLabel}>{cartCopy.totals.tickets}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(cart.totals.ticketSubtotalCents)}</Text>
+          </View>
+        )}
         {cart.totals.productsSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.products}</Text>
@@ -436,65 +556,15 @@ export default function CartScreen() {
         </View>
 
         {requiresShipping ? (
-          <View style={styles.shippingSection}>
-            <Text style={styles.shippingTitle}>{cartCopy.shipping.title}</Text>
-            <Text style={styles.shippingHint}>{cartCopy.shipping.choose}</Text>
-            {loadingShippingAddresses ? (
-              <Text style={styles.shippingHint}>{cartCopy.shipping.loading}</Text>
-            ) : shippingAddressesError ? (
-              <Pressable
-                onPress={() => {
-                  void refreshShippingAddresses();
-                }}
-                style={styles.shippingRetry}
-              >
-                <Text style={styles.shippingRetryText}>{cartCopy.shipping.retry}</Text>
-              </Pressable>
-            ) : shippingAddresses.length === 0 ? (
-              <View style={styles.shippingActions}>
-                <Text style={styles.shippingBlocked}>{cartCopy.shipping.empty}</Text>
-                <Button label={cartCopy.shipping.add} onPress={openShippingAddresses} />
-              </View>
-            ) : (
-              <View style={styles.shippingActions}>
-                <View style={styles.shippingAddressList}>
-                  {shippingAddresses.map((address) => {
-                    const selected = selectedShippingAddressId === address.id;
-
-                    return (
-                      <Pressable
-                        key={address.id}
-                        onPress={() => setSelectedShippingAddressId(address.id)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected }}
-                        style={[
-                          styles.shippingAddressCard,
-                          selected && styles.shippingAddressCardSelected,
-                        ]}
-                      >
-                        <View style={styles.shippingAddressHeader}>
-                          <Text style={styles.shippingAddressName}>{address.recipientName}</Text>
-                          {address.isDefault ? (
-                            <Text style={styles.shippingAddressBadge}>
-                              {cartCopy.shipping.defaultBadge}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Text style={styles.shippingAddressBody}>
-                          {formatShippingAddress(address)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Button
-                  label={cartCopy.shipping.manage}
-                  variant="secondary"
-                  onPress={openShippingAddresses}
-                />
-              </View>
-            )}
-          </View>
+          <ShippingAddressRow
+            loading={loadingShippingAddresses}
+            error={shippingAddressesError}
+            addresses={shippingAddresses}
+            selectedId={selectedShippingAddressId}
+            onSelect={setSelectedShippingAddressId}
+            onRetry={() => void refreshShippingAddresses()}
+            onOpenAddresses={openShippingAddresses}
+          />
         ) : null}
 
         {itemCount > 0 && (
@@ -573,7 +643,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
   },
-  list: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  list: { padding: theme.spacing.md, gap: theme.spacing.sm },
   emptyTitle: {
     color: theme.colors.fg,
     fontSize: theme.font.size.lg,
@@ -589,7 +659,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.colors.border,
     borderRadius: theme.radii.lg,
-    padding: theme.spacing.lg,
+    padding: theme.spacing.md,
     gap: theme.spacing.xs,
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -610,8 +680,10 @@ const styles = StyleSheet.create({
   footer: {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+    gap: theme.spacing.xs,
   },
   totalsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   totalsLabel: { color: theme.colors.muted, fontSize: theme.font.size.md },
@@ -620,65 +692,126 @@ const styles = StyleSheet.create({
   totalBorder: {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.xs,
     marginTop: theme.spacing.xs,
   },
   totalLabel: { color: theme.colors.fg, fontSize: theme.font.size.lg, fontWeight: '700' },
   totalValue: { color: theme.colors.fg, fontSize: theme.font.size.lg, fontWeight: '700' },
-  footerButtons: { marginTop: theme.spacing.sm, gap: theme.spacing.sm },
-  clearBtn: { alignSelf: 'center', padding: theme.spacing.sm },
+  footerButtons: { marginTop: theme.spacing.xs, gap: theme.spacing.xs },
+  clearBtn: { alignSelf: 'center', paddingVertical: theme.spacing.xs },
   clearText: { color: theme.colors.muted, fontSize: theme.font.size.sm },
-  shippingSection: {
+  shippingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
   },
   shippingTitle: {
     color: theme.colors.fg,
     fontSize: theme.font.size.md,
     fontWeight: '600',
+    flexShrink: 0,
+  },
+  shippingRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
   shippingHint: {
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
-  },
-  shippingBlocked: {
-    color: theme.colors.accent,
-    fontSize: theme.font.size.sm,
-  },
-  shippingRetry: {
-    alignSelf: 'flex-start',
-    paddingVertical: theme.spacing.xs,
   },
   shippingRetryText: {
     color: theme.colors.accent,
     fontSize: theme.font.size.sm,
     fontWeight: '600',
   },
-  shippingAddressList: {
+  shippingAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+  },
+  shippingAddText: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  shippingDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    maxWidth: '70%',
+  },
+  shippingDropdownText: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    flexShrink: 1,
+  },
+  shippingModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  shippingModalCard: {
+    backgroundColor: theme.colors.bg,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: theme.spacing.md,
     gap: theme.spacing.sm,
   },
-  shippingActions: {
-    gap: theme.spacing.sm,
+  shippingModalLabel: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
   },
-  shippingAddressCard: {
+  shippingModalItem: {
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radii.md,
-    padding: theme.spacing.md,
-    gap: theme.spacing.xs,
+    padding: theme.spacing.sm,
+    gap: 2,
   },
-  shippingAddressCardSelected: {
+  shippingModalItemSelected: {
     borderColor: theme.colors.accent,
     backgroundColor: theme.colors.accent + '12',
   },
-  shippingAddressHeader: {
+  shippingModalItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
   },
-  shippingAddressName: {
+  shippingModalItemName: {
     color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  shippingModalItemBody: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+  },
+  shippingModalAddNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  shippingModalAddNewText: {
+    color: theme.colors.accent,
     fontSize: theme.font.size.sm,
     fontWeight: '600',
   },
@@ -686,10 +819,6 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontSize: theme.font.size.sm,
     fontWeight: '600',
-  },
-  shippingAddressBody: {
-    color: theme.colors.muted,
-    fontSize: theme.font.size.sm,
   },
   carRow: {
     flexDirection: 'row',
@@ -715,11 +844,11 @@ const styles = StyleSheet.create({
   methodRow: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
   },
   methodBtn: {
     flex: 1,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
     borderRadius: theme.radii.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
