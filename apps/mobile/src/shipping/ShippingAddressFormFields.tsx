@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Controller, useWatch, type Control, type UseFormSetValue } from 'react-hook-form';
+import { Controller, type Control, type UseFormSetValue } from 'react-hook-form';
 import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
 import type { ShippingAddressFormValues } from '~/shipping/form';
-import { useCepLookup } from '~/shipping/useCepLookup';
+import { stripCepDigits, useCepLookup } from '~/shipping/useCepLookup';
 import { theme } from '~/theme';
 
 type Props = {
@@ -14,18 +14,11 @@ type Props = {
   mode?: 'new' | 'edit';
 };
 
+const AUTOFILL_FIELDS = ['street', 'neighborhood', 'city', 'stateCode'] as const;
+
 export function ShippingAddressFormFields({ control, setValue, mode = 'new' }: Props) {
   const { state, lookup } = useCepLookup();
   const [addressRevealed, setAddressRevealed] = useState(mode === 'edit');
-
-  const postalCode = useWatch({ control, name: 'postalCode' });
-
-  useEffect(() => {
-    const digits = postalCode?.replace(/\D/g, '') ?? '';
-    if (digits.length === 8) {
-      void lookup(postalCode);
-    }
-  }, [postalCode, lookup]);
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -35,6 +28,9 @@ export function ShippingAddressFormFields({ control, setValue, mode = 'new' }: P
       setValue('stateCode', state.data.stateCode.toUpperCase(), { shouldDirty: true });
       setAddressRevealed(true);
     } else if (state.status === 'not_found' || state.status === 'error') {
+      for (const field of AUTOFILL_FIELDS) {
+        setValue(field, '', { shouldDirty: true });
+      }
       setAddressRevealed(true);
     }
   }, [state, setValue]);
@@ -81,7 +77,12 @@ export function ShippingAddressFormFields({ control, setValue, mode = 'new' }: P
             <TextField
               label={profileCopy.shipping.postalCodeLabel}
               value={field.value ?? ''}
-              onChangeText={field.onChange}
+              onChangeText={(value) => {
+                field.onChange(value);
+                if (stripCepDigits(value).length === 8) {
+                  void lookup(value);
+                }
+              }}
               error={fieldState.error?.message ?? cepError}
               keyboardType="number-pad"
               maxLength={9}

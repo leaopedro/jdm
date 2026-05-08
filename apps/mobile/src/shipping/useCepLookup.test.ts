@@ -98,4 +98,35 @@ describe('fetchCep', () => {
       expect.any(Object),
     );
   });
+
+  // Regression: CEP B lookup fails after CEP A succeeded — must return not_found, not cached data
+  it('returns not_found on second call when second CEP is invalid', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          logradouro: 'Rua A',
+          bairro: 'Bairro A',
+          localidade: 'Cidade A',
+          uf: 'SP',
+        }),
+    });
+    const first = await fetchCep('01310100');
+    expect(first.status).toBe('success');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ erro: true }),
+    });
+    const second = await fetchCep('99999999');
+    expect(second.status).toBe('not_found');
+  });
+
+  // Regression: lookup must not fire for partial CEP (< 8 digits) — edit mode load safety
+  it('does not call fetch when CEP has 7 digits', async () => {
+    const result = await fetchCep('0131010');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.status).toBe('not_found');
+  });
 });
