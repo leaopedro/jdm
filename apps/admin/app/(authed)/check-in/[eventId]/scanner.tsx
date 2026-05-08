@@ -1,12 +1,13 @@
 'use client';
 
-import type { CheckInExtraItem } from '@jdm/shared/check-in';
+import type { CheckInExtraItem, StorePickupOrder } from '@jdm/shared/check-in';
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { useEffect, useRef, useState } from 'react';
 
 import {
   submitCheckIn,
   submitExtraClaim,
+  submitPickupCollect,
   type CheckInActionResult,
   type ExtraClaimActionResult,
 } from '~/lib/check-in-actions';
@@ -207,6 +208,10 @@ function TicketResultCard({
 
       {extras.length > 0 && <ExtrasPanel extras={extras} onClaim={handleClaim} />}
 
+      {data.storePickup.length > 0 && (
+        <StorePickupPanel ticketId={data.ticketId} initialOrders={data.storePickup} />
+      )}
+
       <div className="mt-3 flex gap-2">
         <button
           type="button"
@@ -340,6 +345,89 @@ function ExtraResultCard({
           Escanear próximo
         </button>
       </div>
+    </div>
+  );
+}
+
+function StorePickupPanel({
+  ticketId,
+  initialOrders,
+}: {
+  ticketId: string;
+  initialOrders: StorePickupOrder[];
+}) {
+  const [orders, setOrders] = useState<StorePickupOrder[]>(initialOrders);
+  const [collecting, setCollecting] = useState(false);
+  const [collectError, setCollectError] = useState<string | null>(null);
+
+  const allDone = orders.every(
+    (o) => o.fulfillmentStatus === 'picked_up' || o.fulfillmentStatus === 'cancelled',
+  );
+
+  const handleCollect = async () => {
+    setCollecting(true);
+    setCollectError(null);
+    const result = await submitPickupCollect(ticketId);
+    if (result.ok) {
+      setOrders(result.orders);
+    } else {
+      setCollectError(result.message);
+    }
+    setCollecting(false);
+  };
+
+  return (
+    <div className="mt-3 border-t border-[color:var(--color-border)] pt-3">
+      <p className="mb-2 text-sm font-semibold">Retirada na loja</p>
+      {orders.map((order) => (
+        <div key={order.orderId} className="mb-3">
+          <p className="mb-1 text-xs opacity-70">
+            Pedido #{order.shortId}
+            {order.fulfillmentStatus === 'picked_up' && (
+              <span className="ml-2 font-semibold text-green-600">Coletado</span>
+            )}
+            {order.fulfillmentStatus === 'cancelled' && (
+              <span className="ml-2 font-semibold text-red-500">Cancelado</span>
+            )}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {order.items.map((item) => (
+              <li key={item.id} className="text-sm">
+                <span className="font-medium">{item.productTitle ?? 'Produto'}</span>
+                {item.variantName ? (
+                  <span className="ml-1 opacity-70"> — {item.variantName}</span>
+                ) : null}
+                {item.variantSku ? (
+                  <span className="ml-1 text-xs opacity-50">SKU: {item.variantSku}</span>
+                ) : null}
+                {item.variantAttributes
+                  ? Object.entries(item.variantAttributes).map(([k, v]) => (
+                      <span key={k} className="ml-1 text-xs opacity-60">
+                        {k}: {v}
+                      </span>
+                    ))
+                  : null}
+                <span className="ml-2 opacity-60">× {item.quantity}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {collectError ? (
+        <p className="mt-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
+          {collectError}
+        </p>
+      ) : null}
+      {!allDone ? (
+        <button
+          type="button"
+          disabled={collecting}
+          onClick={() => void handleCollect()}
+          className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {collecting ? '…' : 'Marcar coletado'}
+        </button>
+      ) : null}
     </div>
   );
 }

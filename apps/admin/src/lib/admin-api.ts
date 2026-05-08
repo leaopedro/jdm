@@ -58,10 +58,14 @@ import {
   checkInEventsResponseSchema,
   extraClaimRequestSchema,
   extraClaimResponseSchema,
+  pickupCollectRequestSchema,
+  pickupCollectResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
   type ExtraClaimRequest,
   type ExtraClaimResponse,
+  type PickupCollectRequest,
+  type PickupCollectResponse,
   type TicketCheckInRequest,
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
@@ -195,6 +199,13 @@ export const claimExtraItem = (input: ExtraClaimRequest): Promise<ExtraClaimResp
     method: 'POST',
     body: JSON.stringify(extraClaimRequestSchema.parse(input)),
     schema: extraClaimResponseSchema,
+  });
+
+export const collectPickupOrder = (input: PickupCollectRequest): Promise<PickupCollectResponse> =>
+  apiFetch('/admin/store/pickup/collect', {
+    method: 'POST',
+    body: JSON.stringify(pickupCollectRequestSchema.parse(input)),
+    schema: pickupCollectResponseSchema,
   });
 
 // ── Admin users ────────────────────────────────────────────────────

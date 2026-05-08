@@ -249,3 +249,242 @@ describe('POST /admin/tickets/check-in', () => {
     expect(res.json<{ error: string }>().error).toBe('TicketRevoked');
   });
 });
+
+// ── Store pickup helpers ──────────────────────────────────────────────
+
+const seedPickupOrder = async (ticketId: string, eventId: string, userId: string) => {
+  const productType = await prisma.productType.upsert({
+    where: { name: 'Vestuário' },
+    update: {},
+    create: { name: 'Vestuário' },
+  });
+  const product = await prisma.product.create({
+    data: {
+      slug: `prod-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Camiseta JDM',
+      description: 'desc',
+      basePriceCents: 9900,
+      productTypeId: productType.id,
+      status: 'active',
+    },
+  });
+  const variant = await prisma.variant.create({
+    data: {
+      productId: product.id,
+      name: 'P / Preto',
+      sku: 'JDM-P-PTO',
+      priceCents: 9900,
+      quantityTotal: 5,
+      attributes: { tamanho: 'P', cor: 'Preto' },
+    },
+  });
+  const order = await prisma.order.create({
+    data: {
+      userId,
+      kind: 'product',
+      amountCents: 9900,
+      method: 'card',
+      provider: 'stripe',
+      providerRef: `pi_test_${Math.random().toString(36).slice(2)}`,
+      status: 'paid',
+      paidAt: new Date(),
+      fulfillmentMethod: 'pickup',
+      fulfillmentStatus: 'unfulfilled',
+      notes: JSON.stringify({ pickupEventId: eventId, pickupTicketId: ticketId }),
+    },
+  });
+  await prisma.orderItem.create({
+    data: {
+      orderId: order.id,
+      kind: 'product',
+      variantId: variant.id,
+      quantity: 1,
+      unitPriceCents: 9900,
+      subtotalCents: 9900,
+    },
+  });
+  return { order, product, variant };
+};
+
+describe('storePickup in POST /admin/tickets/check-in', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it('returns empty storePickup when ticket has no pickup order', async () => {
+    const { event, code } = await seedTicket();
+    const { user: actor } = await createUser({
+      email: 'a@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/check-in',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ storePickup: unknown[] }>().storePickup).toEqual([]);
+  });
+
+  it('returns storePickup items when ticket has a paid pickup order', async () => {
+    const { event, code, ticket, holder } = await seedTicket();
+    await seedPickupOrder(ticket.id, event.id, holder.id);
+    const { user: actor } = await createUser({
+      email: 'b@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/check-in',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      storePickup: {
+        orderId: string;
+        fulfillmentStatus: string;
+        items: { productTitle: string }[];
+      }[];
+    }>();
+    expect(body.storePickup).toHaveLength(1);
+    expect(body.storePickup[0]!.fulfillmentStatus).toBe('unfulfilled');
+    expect(body.storePickup[0]!.items[0]!.productTitle).toBe('Camiseta JDM');
+  });
+});
+
+describe('POST /admin/store/pickup/collect', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it('401 without auth', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      payload: { ticketId: 'abc123' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns empty orders array when ticket has no pickup orders', async () => {
+    const { ticket } = await seedTicket();
+    const { user: actor } = await createUser({
+      email: 'c@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { ticketId: ticket.id },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ orders: unknown[] }>().orders).toEqual([]);
+  });
+
+  it('transitions pickup order to picked_up and returns collected: true', async () => {
+    const { event, ticket, holder } = await seedTicket();
+    const { order } = await seedPickupOrder(ticket.id, event.id, holder.id);
+    const { user: actor } = await createUser({
+      email: 'd@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { ticketId: ticket.id },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      orders: { orderId: string; collected: boolean; fulfillmentStatus: string }[];
+    }>();
+    expect(body.orders).toHaveLength(1);
+    expect(body.orders[0]!.collected).toBe(true);
+    expect(body.orders[0]!.fulfillmentStatus).toBe('picked_up');
+
+    const updated = await prisma.order.findUnique({ where: { id: order.id } });
+    expect(updated!.fulfillmentStatus).toBe('picked_up');
+  });
+
+  it('idempotent: second collect returns collected: false but picked_up status', async () => {
+    const { event, ticket, holder } = await seedTicket();
+    await seedPickupOrder(ticket.id, event.id, holder.id);
+    const { user: actor } = await createUser({
+      email: 'e@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    const auth = { authorization: bearer(env, actor.id, 'staff') };
+    await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      headers: auth,
+      payload: { ticketId: ticket.id },
+    });
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      headers: auth,
+      payload: { ticketId: ticket.id },
+    });
+    expect(res2.statusCode).toBe(200);
+    const body = res2.json<{
+      orders: { collected: boolean; fulfillmentStatus: string }[];
+    }>();
+    expect(body.orders[0]!.collected).toBe(false);
+    expect(body.orders[0]!.fulfillmentStatus).toBe('picked_up');
+  });
+
+  it('writes a fulfillment_update audit row on collect', async () => {
+    const { event, ticket, holder } = await seedTicket();
+    const { order } = await seedPickupOrder(ticket.id, event.id, holder.id);
+    const { user: actor } = await createUser({
+      email: 'f@jdm.test',
+      role: 'staff',
+      verified: true,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/collect',
+      headers: { authorization: bearer(env, actor.id, 'staff') },
+      payload: { ticketId: ticket.id },
+    });
+    const audit = await prisma.adminAudit.findFirst({
+      where: { action: 'store.order.fulfillment_update', entityId: order.id },
+    });
+    expect(audit).not.toBeNull();
+    expect((audit!.metadata as Record<string, unknown>).to).toBe('picked_up');
+    expect((audit!.metadata as Record<string, unknown>).source).toBe('check_in_scan');
+  });
+});
