@@ -1,4 +1,6 @@
 import {
+  shippingAddressInputSchema,
+  shippingAddressRecordSchema,
   storeCollectionListResponseSchema,
   storeProductDetailResponseSchema,
   storeProductListResponseSchema,
@@ -8,8 +10,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('expo-constants', () => ({ default: { expoConfig: { extra: {} } } }));
 
-const { getStoreProduct, listStoreCollections, listStoreProductTypes, listStoreProducts } =
-  await import('../store');
+const {
+  createShippingAddress,
+  deleteShippingAddress,
+  getStoreProduct,
+  listShippingAddresses,
+  listStoreCollections,
+  listStoreProductTypes,
+  listStoreProducts,
+  registerTokenProvider,
+  updateShippingAddress,
+} = await import('../store');
 
 describe('mobile store API client', () => {
   const fetchMock = vi.fn();
@@ -18,6 +29,11 @@ describe('mobile store API client', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
+    registerTokenProvider({
+      getAccessToken: () => 'token-123',
+      refresh: vi.fn().mockResolvedValue('token-123'),
+      onSignOut: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   afterEach(() => {
@@ -170,5 +186,141 @@ describe('mobile store API client', () => {
       headers: { 'content-type': 'application/json' },
       method: 'GET',
     });
+  });
+
+  it('uses authenticated shipping address endpoints for list, create, update, and delete', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              shippingAddressRecordSchema.parse({
+                id: 'addr_1',
+                recipientName: 'Pedro',
+                phone: '11999999999',
+                postalCode: '01001-000',
+                street: 'Rua A',
+                number: '10',
+                complement: null,
+                neighborhood: 'Centro',
+                city: 'São Paulo',
+                stateCode: 'SP',
+                countryCode: 'BR',
+                isDefault: true,
+                createdAt: '2026-05-01T10:00:00.000Z',
+                updatedAt: '2026-05-01T10:00:00.000Z',
+              }),
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            shippingAddressRecordSchema.parse({
+              id: 'addr_2',
+              ...shippingAddressInputSchema.parse({
+                recipientName: 'Maria',
+                phone: '11988888888',
+                postalCode: '01310-100',
+                street: 'Av. Paulista',
+                number: '1000',
+                complement: 'Ap 12',
+                neighborhood: 'Bela Vista',
+                city: 'São Paulo',
+                stateCode: 'SP',
+                countryCode: 'BR',
+              }),
+              isDefault: false,
+              createdAt: '2026-05-02T10:00:00.000Z',
+              updatedAt: '2026-05-02T10:00:00.000Z',
+            }),
+          ),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            shippingAddressRecordSchema.parse({
+              id: 'addr_2',
+              recipientName: 'Maria Silva',
+              phone: '11988888888',
+              postalCode: '01310-100',
+              street: 'Av. Paulista',
+              number: '1000',
+              complement: 'Ap 12',
+              neighborhood: 'Bela Vista',
+              city: 'São Paulo',
+              stateCode: 'SP',
+              countryCode: 'BR',
+              isDefault: true,
+              createdAt: '2026-05-02T10:00:00.000Z',
+              updatedAt: '2026-05-03T10:00:00.000Z',
+            }),
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const createInput = {
+      recipientName: 'Maria',
+      phone: '11988888888',
+      postalCode: '01310-100',
+      street: 'Av. Paulista',
+      number: '1000',
+      complement: 'Ap 12',
+      neighborhood: 'Bela Vista',
+      city: 'São Paulo',
+      stateCode: 'SP' as const,
+      countryCode: 'BR' as const,
+    };
+
+    const listed = await listShippingAddresses();
+    const created = await createShippingAddress(createInput);
+    const updated = await updateShippingAddress('addr_2', {
+      recipientName: 'Maria Silva',
+      isDefault: true,
+    });
+    const deleted = await deleteShippingAddress('addr_2');
+
+    expect(listed.items).toHaveLength(1);
+    expect(created.id).toBe('addr_2');
+    expect(updated.recipientName).toBe('Maria Silva');
+    expect(deleted).toBeUndefined();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:4000/me/shipping-addresses', {
+      headers: { authorization: 'Bearer token-123' },
+      method: 'GET',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:4000/me/shipping-addresses', {
+      body: JSON.stringify(createInput),
+      headers: {
+        authorization: 'Bearer token-123',
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:4000/me/shipping-addresses/addr_2',
+      {
+        body: JSON.stringify({ recipientName: 'Maria Silva', isDefault: true }),
+        headers: {
+          authorization: 'Bearer token-123',
+          'content-type': 'application/json',
+        },
+        method: 'PATCH',
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://localhost:4000/me/shipping-addresses/addr_2',
+      {
+        headers: { authorization: 'Bearer token-123' },
+        method: 'DELETE',
+      },
+    );
   });
 });

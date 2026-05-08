@@ -3,15 +3,21 @@
 import type {
   CheckInExtraItem,
   ExtraClaimResponse,
+  StorePickupOrder,
   TicketCheckInResponse,
 } from '@jdm/shared/check-in';
 
-import { checkInTicket as apiCheckInTicket, claimExtraItem as apiClaimExtra } from './admin-api';
+import {
+  checkInTicket as apiCheckInTicket,
+  claimExtraItem as apiClaimExtra,
+  collectPickupOrder as apiCollectPickup,
+} from './admin-api';
 import { ApiError } from './api';
 
 export type CheckInActionResult =
   | {
       ok: true;
+      ticketId: string;
       result: 'admitted' | 'already_used';
       holder: string;
       tier: string;
@@ -19,6 +25,7 @@ export type CheckInActionResult =
       car: { make: string; model: string; year: number } | null;
       licensePlate: string | null;
       extras: CheckInExtraItem[];
+      storePickup: StorePickupOrder[];
     }
   | { ok: false; error: string; message: string };
 
@@ -30,6 +37,7 @@ export const submitCheckIn = async (
     const res: TicketCheckInResponse = await apiCheckInTicket({ code, eventId });
     return {
       ok: true,
+      ticketId: res.ticket.id,
       result: res.result,
       holder: res.ticket.holder.name,
       tier: res.ticket.tier.name,
@@ -37,6 +45,7 @@ export const submitCheckIn = async (
       car: res.ticket.car ?? null,
       licensePlate: res.ticket.licensePlate ?? null,
       extras: res.ticket.extras,
+      storePickup: res.storePickup,
     };
   } catch (err) {
     if (err instanceof ApiError) {
@@ -70,6 +79,33 @@ export const submitExtraClaim = async (
       holder: res.item.holder.name,
       tier: res.item.tier.name,
       usedAt: res.item.usedAt,
+    };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return { ok: false, error: err.code, message: err.message };
+    }
+    return { ok: false, error: 'Unknown', message: 'erro inesperado' };
+  }
+};
+
+export type PickupCollectActionResult =
+  | {
+      ok: true;
+      orders: StorePickupOrder[];
+    }
+  | { ok: false; error: string; message: string };
+
+export const submitPickupCollect = async (ticketId: string): Promise<PickupCollectActionResult> => {
+  try {
+    const res = await apiCollectPickup({ ticketId });
+    return {
+      ok: true,
+      orders: res.orders.map((o) => ({
+        orderId: o.orderId,
+        shortId: o.shortId,
+        fulfillmentStatus: o.fulfillmentStatus,
+        items: o.items,
+      })),
     };
   } catch (err) {
     if (err instanceof ApiError) {

@@ -22,6 +22,44 @@ export const checkInExtraItemSchema = z.object({
 });
 export type CheckInExtraItem = z.infer<typeof checkInExtraItemSchema>;
 
+// ── Store pickup (JDMA-393 check-in extension) ────────────────────────
+
+export const storePickupItemSchema = z.object({
+  id: z.string().min(1),
+  productTitle: z.string().nullable(),
+  variantName: z.string().nullable(),
+  variantSku: z.string().nullable(),
+  variantAttributes: z.record(z.string()).nullable(),
+  quantity: z.number().int().positive(),
+});
+export type StorePickupItem = z.infer<typeof storePickupItemSchema>;
+
+export const storePickupOrderSchema = z.object({
+  orderId: z.string().min(1),
+  shortId: z.string().min(1),
+  fulfillmentStatus: z.enum(['unfulfilled', 'pickup_ready', 'picked_up', 'cancelled']),
+  items: z.array(storePickupItemSchema),
+});
+export type StorePickupOrder = z.infer<typeof storePickupOrderSchema>;
+
+export const pickupCollectRequestSchema = z.object({
+  ticketId: z.string().min(1).max(64),
+});
+export type PickupCollectRequest = z.infer<typeof pickupCollectRequestSchema>;
+
+export const pickupCollectResponseSchema = z.object({
+  orders: z.array(
+    z.object({
+      orderId: z.string().min(1),
+      shortId: z.string().min(1),
+      collected: z.boolean(),
+      fulfillmentStatus: z.enum(['unfulfilled', 'pickup_ready', 'picked_up', 'cancelled']),
+      items: z.array(storePickupItemSchema),
+    }),
+  ),
+});
+export type PickupCollectResponse = z.infer<typeof pickupCollectResponseSchema>;
+
 export const ticketCheckInResponseSchema = z.object({
   result: checkInResultSchema,
   ticket: z.object({
@@ -46,6 +84,7 @@ export const ticketCheckInResponseSchema = z.object({
     licensePlate: z.string().nullable(),
     extras: z.array(checkInExtraItemSchema),
   }),
+  storePickup: z.array(storePickupOrderSchema),
 });
 export type TicketCheckInResponse = z.infer<typeof ticketCheckInResponseSchema>;
 

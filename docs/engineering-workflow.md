@@ -208,6 +208,11 @@ Reassign the Paperclip issue to the CTO with status `in_review`. Add a
 comment with the PR link. This handoff is mandatory and is what wakes the
 CTO; if you leave the issue assigned to yourself, review can stall.
 
+Do not request review before the PR exists. Branch-only review requests are
+invalid because the reviewer needs the PR diff, description, checklist, and
+verification evidence in one place. If the branch is not ready for a PR, keep
+the issue assigned to yourself in `in_progress` and keep implementing.
+
 Minimum comment content when handing off to CTO:
 
 - PR link.

@@ -94,7 +94,6 @@ export const NewProductForm = ({ productTypes }: { productTypes: AdminProductTyp
         required
         defaultValue={v.basePriceCents ?? ''}
       />
-      <Field label="Moeda" name="currency" maxLength={3} defaultValue={v.currency ?? 'BRL'} />
       <Field
         label="Frete fixo (centavos, opcional)"
         name="shippingFeeCents"

@@ -2,9 +2,9 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 
 import { Button } from '~/components/Button';
+import { HiddenQR } from '~/components/HiddenQR';
 import { pixCopy } from '~/copy/pix';
 import { useOrderStatus } from '~/hooks/useOrderStatus';
 import { formatBRL } from '~/lib/format';
@@ -113,7 +113,7 @@ export default function CheckoutPixScreen() {
       </Text>
 
       <View style={styles.qrContainer}>
-        <QRCode value={brCode} size={220} backgroundColor="#FFFFFF" />
+        <HiddenQR value={brCode} size={220} accessibilityLabel={pixCopy.scanQr} />
       </View>
 
       <Text style={styles.hint}>{pixCopy.scanQr}</Text>

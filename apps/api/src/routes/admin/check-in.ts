@@ -3,6 +3,8 @@ import {
   checkInEventsResponseSchema,
   extraClaimRequestSchema,
   extraClaimResponseSchema,
+  pickupCollectRequestSchema,
+  pickupCollectResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
 } from '@jdm/shared/check-in';
@@ -10,6 +12,10 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import {
+  collectPickupOrders,
+  getPickupOrdersForTicket,
+} from '../../services/store/pickup-collect.js';
 import {
   checkInTicket,
   InvalidTicketCodeError,
@@ -55,6 +61,8 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
         orderBy: { extra: { sortOrder: 'asc' } },
       });
 
+      const storePickup = await getPickupOrdersForTicket(outcome.ticket.id);
+
       const { car } = outcome.ticket;
       return reply.send(
         ticketCheckInResponseSchema.parse({
@@ -82,6 +90,7 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
               usedAt: ei.usedAt?.toISOString() ?? null,
             })),
           },
+          storePickup,
         }),
       );
     } catch (err) {
@@ -152,6 +161,15 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
       }
       throw err;
     }
+  });
+
+  app.post('/store/pickup/collect', async (request, reply) => {
+    const { sub: actorId } = requireUser(request);
+    const input = pickupCollectRequestSchema.parse(request.body);
+
+    const orders = await collectPickupOrders(input.ticketId, actorId);
+
+    return reply.send(pickupCollectResponseSchema.parse({ orders }));
   });
 
   app.get('/check-in/events', async (_request, reply) => {

@@ -52,6 +52,8 @@ Hyphens map to standard grammar only.
 - Run the branch safety preflight first.
 - If you need a new worktree, create it from `main`.
 - Open PRs to `main` only.
+- Request review only after the PR exists.
+- Do not ask for review on a branch alone.
 - Never commit to `production`.
 - Never push to `production`.
 - `production` is updated only by manual merge from `main` by local-board.

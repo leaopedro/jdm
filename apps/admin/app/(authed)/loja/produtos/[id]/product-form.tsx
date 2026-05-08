@@ -104,12 +104,6 @@ export const ProductForm = ({
           defaultValue={v.basePriceCents ?? String(product.basePriceCents)}
         />
         <Field
-          label="Moeda"
-          name="currency"
-          maxLength={3}
-          defaultValue={v.currency ?? product.currency}
-        />
-        <Field
           label="Frete fixo (centavos, vazio = padrão da loja)"
           name="shippingFeeCents"
           type="number"
