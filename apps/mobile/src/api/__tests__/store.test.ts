@@ -1,0 +1,174 @@
+import {
+  storeCollectionListResponseSchema,
+  storeProductDetailResponseSchema,
+  storeProductListResponseSchema,
+  storeProductTypeListResponseSchema,
+} from '@jdm/shared/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('expo-constants', () => ({ default: { expoConfig: { extra: {} } } }));
+
+const { getStoreProduct, listStoreCollections, listStoreProductTypes, listStoreProducts } =
+  await import('../store');
+
+describe('mobile store API client', () => {
+  const fetchMock = vi.fn();
+  const original = globalThis.fetch;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = original;
+  });
+
+  it('lists storefront collections and product types over the public API', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            storeCollectionListResponseSchema.parse({
+              items: [
+                {
+                  id: 'col_1',
+                  slug: 'colecao-jdm',
+                  title: 'Colecao JDM',
+                  description: null,
+                  heroImageUrl: null,
+                  sortOrder: 0,
+                  productCount: 2,
+                },
+              ],
+            }),
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            storeProductTypeListResponseSchema.parse({
+              items: [
+                {
+                  id: 'type_1',
+                  slug: 'vestuario-acessorios',
+                  name: 'Vestuário e Acessórios',
+                  description: null,
+                },
+              ],
+            }),
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const collections = await listStoreCollections();
+    const productTypes = await listStoreProductTypes();
+
+    expect(collections.items).toHaveLength(1);
+    expect(productTypes.items).toHaveLength(1);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:4000/store/collections', {
+      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:4000/store/product-types', {
+      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+    });
+  });
+
+  it('serializes product list query params against the shared store schema', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          storeProductListResponseSchema.parse({
+            items: [],
+            nextCursor: 'cursor_2',
+          }),
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const response = await listStoreProducts({
+      q: 'camiseta',
+      collectionSlug: 'drops-jdm',
+      productTypeSlug: 'vestuario',
+      inStock: true,
+      sort: 'price_desc',
+      cursor: 'cursor_1',
+      limit: 12,
+    });
+
+    expect(response.nextCursor).toBe('cursor_2');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4000/store/products?q=camiseta&collectionSlug=drops-jdm&productTypeSlug=vestuario&inStock=true&sort=price_desc&cursor=cursor_1&limit=12',
+      {
+        headers: { 'content-type': 'application/json' },
+        method: 'GET',
+      },
+    );
+  });
+
+  it('fetches a single storefront product by slug', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          storeProductDetailResponseSchema.parse({
+            product: {
+              id: 'prod_1',
+              slug: 'camiseta-jdm',
+              title: 'Camiseta JDM',
+              description: 'Malha pesada',
+              shortDescription: 'Malha',
+              status: 'active',
+              requiresShipping: true,
+              coverImageUrl: 'https://cdn.example.com/p1.jpg',
+              collectionIds: ['col_1'],
+              productType: {
+                id: 'type_1',
+                slug: 'vestuario',
+                name: 'Vestuário',
+                description: null,
+              },
+              variants: [
+                {
+                  id: 'var_1',
+                  sku: 'SKU-1',
+                  title: 'M',
+                  priceCents: 9900,
+                  compareAtPriceCents: null,
+                  currency: 'BRL',
+                  stockOnHand: 5,
+                  isActive: true,
+                },
+              ],
+              images: [
+                {
+                  id: 'img_1',
+                  url: 'https://cdn.example.com/p1.jpg',
+                  alt: null,
+                  sortOrder: 0,
+                },
+              ],
+              createdAt: '2026-05-01T10:00:00.000Z',
+              updatedAt: '2026-05-02T10:00:00.000Z',
+            },
+            collections: [],
+          }),
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const response = await getStoreProduct('camiseta jdm');
+
+    expect(response.product.slug).toBe('camiseta-jdm');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4000/store/products/camiseta%20jdm', {
+      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+    });
+  });
+});

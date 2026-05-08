@@ -4,7 +4,15 @@
 const PUBLIC_EXACT = new Set<string>(['/', '/welcome', '/events']);
 const EVENTS_DETAIL_RE = /^\/events\/[^/]+$/;
 
-const NEXT_ALLOWED_PREFIXES = ['/welcome', '/events', '/cart', '/tickets', '/garage', '/profile'];
+const NEXT_ALLOWED_PREFIXES = [
+  '/welcome',
+  '/events',
+  '/store',
+  '/cart',
+  '/tickets',
+  '/garage',
+  '/profile',
+];
 
 export const DEFAULT_POST_AUTH = '/welcome';
 

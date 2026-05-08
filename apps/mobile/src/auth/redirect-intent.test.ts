@@ -26,6 +26,7 @@ describe('isPublicPath', () => {
   });
 
   it('blocks protected paths', () => {
+    expect(isPublicPath('/store')).toBe(false);
     expect(isPublicPath('/cart')).toBe(false);
     expect(isPublicPath('/tickets')).toBe(false);
     expect(isPublicPath('/garage')).toBe(false);
@@ -39,6 +40,7 @@ describe('sanitizeNext', () => {
     expect(sanitizeNext('/events')).toBe('/events');
     expect(sanitizeNext('/events/track-day')).toBe('/events/track-day');
     expect(sanitizeNext('/events/track-day?tierId=t1')).toBe('/events/track-day?tierId=t1');
+    expect(sanitizeNext('/store')).toBe('/store');
     expect(sanitizeNext('/cart')).toBe('/cart');
     expect(sanitizeNext('/cart/car-plate')).toBe('/cart/car-plate');
     expect(sanitizeNext('/tickets')).toBe('/tickets');
