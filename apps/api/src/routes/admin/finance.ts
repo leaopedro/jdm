@@ -307,6 +307,7 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
         paidAt: true,
         createdAt: true,
         quantity: true,
+        kind: true,
         event: { select: { title: true, city: true, stateCode: true } },
         user: { select: { name: true, email: true } },
       },
@@ -314,8 +315,26 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       take: 10_000,
     });
 
+    const exportOrderIds = orders.map((o) => o.id);
+    const productRows =
+      exportOrderIds.length > 0
+        ? await prisma.$queryRaw<Array<{ orderId: string; productTitles: string }>>(Prisma.sql`
+        SELECT oi."orderId", STRING_AGG(DISTINCT p."title", '; ' ORDER BY p."title") AS "productTitles"
+        FROM "OrderItem" oi
+        JOIN "Variant" v ON oi."variantId" = v."id"
+        JOIN "Product" p ON v."productId" = p."id"
+        WHERE oi."orderId" IN (${Prisma.join(exportOrderIds)})
+          AND oi."kind" = 'product'::"OrderItemKind"
+          AND oi."variantId" IS NOT NULL
+        GROUP BY oi."orderId"
+      `)
+        : ([] as Array<{ orderId: string; productTitles: string }>);
+    const productsByOrderId = new Map<string, string>(
+      productRows.map((r) => [r.orderId, r.productTitles]),
+    );
+
     const header =
-      'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at';
+      'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at,kind,product_or_collection';
     const rows = orders.map((o) => {
       const cols = [
         o.id,
@@ -332,6 +351,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
         o.quantity,
         o.paidAt?.toISOString() ?? '',
         o.createdAt.toISOString(),
+        o.kind,
+        csvEscape(productsByOrderId.get(o.id) ?? ''),
       ];
       return cols.join(',');
     });

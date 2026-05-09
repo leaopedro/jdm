@@ -768,7 +768,7 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const lines = res.body.split('\n');
       expect(lines[0]).toBe(
-        'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at',
+        'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at,kind,product_or_collection',
       );
       expect(lines).toHaveLength(2); // header + 1 row
       expect(lines[1]).toContain('10000');
@@ -821,6 +821,74 @@ describe('Admin Finance Endpoints', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('"User, With Comma"');
+    });
+
+    it('includes kind and product_or_collection for product orders', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event = await seedEvent('meet-sp');
+      const tier = await seedTier(event.id);
+      const extra = await seedExtra(event.id, 1500);
+
+      const productType = await prisma.productType.create({
+        data: { name: 'Tipo', sortOrder: 0 },
+      });
+      const product = await prisma.product.create({
+        data: {
+          slug: 'camiseta-test',
+          title: 'Camiseta JDM',
+          description: 'desc',
+          productTypeId: productType.id,
+          basePriceCents: 3000,
+          status: 'active',
+        },
+      });
+      const variant = await prisma.variant.create({
+        data: {
+          productId: product.id,
+          name: 'M',
+          priceCents: 3000,
+          quantityTotal: 10,
+          quantitySold: 0,
+          attributes: {},
+        },
+      });
+
+      await seedOrder(buyer.id, null, null, {
+        kind: 'product',
+        amountCents: 3000,
+        orderItems: [{ kind: 'product', variantId: variant.id, unitPriceCents: 3000 }],
+      });
+      await seedOrder(buyer.id, event.id, tier.id, {
+        kind: 'ticket',
+        amountCents: 5000,
+      });
+      await seedOrder(buyer.id, event.id, null, {
+        kind: 'extras_only',
+        amountCents: 1500,
+        orderItems: [{ kind: 'extras', extraId: extra.id, unitPriceCents: 1500 }],
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/export',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const lines = res.body.split('\n');
+      const productLine = lines.find((l) => l.includes(',product,'));
+      const ticketLine = lines.find((l) => l.includes(',ticket,'));
+      const extrasLine = lines.find((l) => l.includes(',extras_only,'));
+      expect(productLine).toBeDefined();
+      expect(ticketLine).toBeDefined();
+      expect(extrasLine).toBeDefined();
+      expect(productLine).toMatch(/Camiseta JDM$/);
+      expect(ticketLine).toMatch(/,ticket,$/);
+      expect(extrasLine).toMatch(/,extras_only,$/);
     });
   });
 });
