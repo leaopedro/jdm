@@ -249,6 +249,7 @@ export const expireSingleOrderInTransaction = async (
       currency: true,
       provider: true,
       providerRef: true,
+      brCode: true,
     },
   });
   if (!order) return { kind: 'not_found' };

@@ -6,6 +6,10 @@ import {
   sweepExpiredOrdersForTier,
   sweepExpiredOrdersForVariant,
 } from '../orders/expire.js';
+import {
+  PendingTicketOrderForEventError,
+  findPendingTicketOrderForEvent,
+} from '../orders/pending-guard.js';
 import { reserveExtras, validateTickets } from '../orders/validate-tickets.js';
 
 type CartWithItems = Prisma.CartGetPayload<{
@@ -170,7 +174,8 @@ export async function reserveAndCreateOrders(
     pickupEventId?: string | null;
   } = { method: 'card' },
 ): Promise<
-  { ok: true; data: CheckoutResult } | { ok: false; status: number; error: string; message: string }
+  | { ok: true; data: CheckoutResult }
+  | { ok: false; status: number; error: string; message: string; code?: string }
 > {
   const method = options.method;
   const provider = PROVIDER_FOR_METHOD[method];
@@ -314,6 +319,15 @@ export async function reserveAndCreateOrders(
       },
     };
   } catch (err) {
+    if (err instanceof PendingTicketOrderForEventError) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Conflict',
+        code: 'PENDING_TICKET_ORDER_FOR_EVENT',
+        message: 'already have a pending ticket order for this event',
+      };
+    }
     const coded = err as Error & { code?: string };
     if (
       coded.code === 'TIER_SOLD_OUT' ||
@@ -433,6 +447,13 @@ async function prepareTicketCartItem(
 
   const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
   expiredRefs.push(...sweep.expiredProviderRefs);
+
+  if (!isExtrasOnly) {
+    const pending = await findPendingTicketOrderForEvent(tx, userId, item.eventId);
+    if (pending) {
+      throw new PendingTicketOrderForEventError(userId, item.eventId, pending.id);
+    }
+  }
 
   if (!isExtrasOnly) {
     const reservation = await tx.ticketTier.updateMany({

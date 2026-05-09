@@ -491,6 +491,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(reserveResult.status).send({
         error: reserveResult.error,
         message: reserveResult.message,
+        ...(reserveResult.code ? { code: reserveResult.code } : {}),
       });
     }
     const { data } = reserveResult;

@@ -20,6 +20,10 @@ import {
   ORDER_EXPIRY_MS,
   sweepExpiredOrdersForTier,
 } from '../services/orders/expire.js';
+import {
+  PendingTicketOrderForEventError,
+  findPendingTicketOrderForEvent,
+} from '../services/orders/pending-guard.js';
 import { reserveExtras, validateTickets } from '../services/orders/validate-tickets.js';
 
 type PreparedOrder = {
@@ -45,7 +49,7 @@ async function prepareOrder(
   },
 ): Promise<
   | { ok: true; data: PreparedOrder }
-  | { ok: false; status: number; body: { error: string; message: string } }
+  | { ok: false; status: number; body: { error: string; message: string; code?: string } }
 > {
   if (input.method !== 'card' && input.method !== 'pix') {
     return {
@@ -140,6 +144,13 @@ async function prepareOrder(
       const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
 
       if (!isExtrasOnly) {
+        const pending = await findPendingTicketOrderForEvent(tx, sub, event.id);
+        if (pending) {
+          throw new PendingTicketOrderForEventError(sub, event.id, pending.id);
+        }
+      }
+
+      if (!isExtrasOnly) {
         const ticketCount = input.tickets.length;
         const reservation = await tx.ticketTier.updateMany({
           where: { id: tier.id, quantitySold: { lte: tier.quantityTotal - ticketCount } },
@@ -162,6 +173,17 @@ async function prepareOrder(
     expiredProviderRefs = txResult.expiredProviderRefs;
     reserved = !isExtrasOnly;
   } catch (err) {
+    if (err instanceof PendingTicketOrderForEventError) {
+      return {
+        ok: false,
+        status: 409,
+        body: {
+          error: 'Conflict',
+          code: 'PENDING_TICKET_ORDER_FOR_EVENT',
+          message: 'already have a pending ticket order for this event',
+        },
+      };
+    }
     const coded = err as Error & { code?: string };
     if (
       coded.code === 'MISSING_CAR_ID' ||

@@ -94,6 +94,8 @@ export const cartCopy = {
     salesClosed: 'As vendas para este ingresso foram encerradas.',
     extraSoldOut: 'Um dos extras selecionados está esgotado.',
     variantSoldOut: 'Este produto está esgotado.',
+    pendingTicketOrderForEvent:
+      'Você já tem um pedido de ingresso pendente para este evento. Conclua o pagamento ou aguarde expirar.',
   },
   badge: (n: number) => (n > 9 ? '9+' : `${n}`),
   stockWarning: {

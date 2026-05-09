@@ -35,6 +35,9 @@ export const buyCopy = {
     submitting: 'Processando...',
     errorTitle: 'Erro',
     errorBody: 'Não conseguimos criar seu pedido. Tente novamente.',
+    pendingOrderTitle: 'Pedido pendente',
+    pendingOrderBody:
+      'Você já tem um pedido de ingresso pendente para este evento. Conclua o pagamento ou aguarde expirar para tentar novamente.',
   },
   confirmed: {
     title: 'Pagamento confirmado!',

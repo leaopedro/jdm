@@ -147,6 +147,12 @@ describe('GET /orders/:id/resume', () => {
         expiresAt: new Date(Date.now() - 1000),
       },
     });
+    // Lazy expiry releases the legacy /orders tier reservation; mirror the
+    // route invariant (tier is incremented when the Order row is created).
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
 
     const res = await app.inject({
       method: 'GET',
