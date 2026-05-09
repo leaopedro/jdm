@@ -32,9 +32,13 @@ function buildWhere(query: unknown): Prisma.OrderWhereInput {
   }
 
   if (q.from || q.to) {
-    where.paidAt = {};
-    if (q.from) where.paidAt.gte = new Date(`${q.from}T00:00:00.000Z`);
-    if (q.to) where.paidAt.lte = new Date(`${q.to}T23:59:59.999Z`);
+    const dateFilter: Prisma.DateTimeNullableFilter<'Order'> = {};
+    if (q.from) dateFilter.gte = new Date(`${q.from}T00:00:00.000Z`);
+    if (q.to) dateFilter.lte = new Date(`${q.to}T23:59:59.999Z`);
+    where.OR = [
+      { status: 'paid', paidAt: dateFilter },
+      { status: 'refunded', refundedAt: dateFilter },
+    ];
   }
 
   if (q.provider) where.provider = q.provider;

@@ -594,7 +594,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             data:
               targetStatus === 'failed'
                 ? { status: 'failed', failedAt: new Date() }
-                : { status: 'refunded' },
+                : { status: 'refunded', refundedAt: new Date() },
           });
           releasedCount = updated.count;
           if (updated.count > 0) {

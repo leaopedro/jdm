@@ -474,6 +474,7 @@ model Order {
   status            OrderStatus       @default(pending)
   paidAt            DateTime?
   failedAt          DateTime?
+  refundedAt        DateTime?
   expiresAt         DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -491,6 +492,7 @@ model Order {
   @@index([userId, createdAt])
   @@index([eventId, status])
   @@index([status, createdAt])
+  @@index([status, refundedAt])
   @@index([tierId, status, expiresAt])
   @@index([cartId])
   @@index([fulfillmentStatus, paidAt])
