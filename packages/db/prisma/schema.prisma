@@ -465,6 +465,7 @@ model Order {
   method            PaymentMethod
   provider          PaymentProvider
   providerRef       String?           @db.VarChar(200)
+  brCode            String?           @db.Text
   quantity          Int               @default(1)
   shippingAddressId String?
   shippingCents     Int               @default(0)
