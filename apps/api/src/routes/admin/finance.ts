@@ -172,9 +172,11 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const avgOrderCents = orderCount > 0 ? Math.round(totalRevenueCents / orderCount) : 0;
+    const netRevenueCents = totalRevenueCents - refundedCents;
 
     return {
       totalRevenueCents,
+      netRevenueCents,
       orderCount,
       avgOrderCents,
       ticketCount,
