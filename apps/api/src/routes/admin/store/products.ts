@@ -125,6 +125,22 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    if (
+      existing.status === 'active' &&
+      (input.allowPickup !== undefined || input.shippingFeeCents !== undefined)
+    ) {
+      const nextAllowPickup =
+        input.allowPickup !== undefined ? input.allowPickup : existing.allowPickup;
+      const nextShippingFeeCents =
+        input.shippingFeeCents !== undefined ? input.shippingFeeCents : existing.shippingFeeCents;
+      if (!nextAllowPickup && nextShippingFeeCents === null) {
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: 'active product must keep at least one fulfillment method',
+        });
+      }
+    }
+
     if (input.productTypeId !== undefined && input.productTypeId !== existing.productTypeId) {
       const pt = await prisma.productType.findUnique({
         where: { id: input.productTypeId },

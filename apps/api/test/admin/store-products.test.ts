@@ -117,6 +117,30 @@ describe('PATCH /admin/store/products/:id activation guard', () => {
     expect(refreshed?.title).toBe('Camiseta Preta v2');
   });
 
+  it('rejects removing both fulfillment methods from an active product', async () => {
+    const product = await seedDraftProduct('camiseta-roxa');
+    await prisma.productPhoto.create({
+      data: { productId: product.id, objectKey: 'store/products/x/photo.jpg', sortOrder: 0 },
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { status: 'active', allowPickup: true },
+    });
+    const header = await orgAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/store/products/${product.id}`,
+      headers: { authorization: header },
+      payload: { allowPickup: false },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'BadRequest' });
+    const refreshed = await prisma.product.findUnique({ where: { id: product.id } });
+    expect(refreshed?.allowPickup).toBe(true);
+  });
+
   it('does not re-check the guard when product is already active', async () => {
     const product = await seedDraftProduct('camiseta-rosa');
     const photo = await prisma.productPhoto.create({
