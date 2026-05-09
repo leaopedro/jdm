@@ -18,7 +18,7 @@ export type SweepResult = {
  * `extras_only`, and `mixed` uniformly. Caller is responsible for first
  * flipping the orders to `expired`.
  */
-const releaseAllReservationsForOrders = async (
+export const releaseAllReservationsForOrders = async (
   tx: Prisma.TransactionClient,
   orderIds: string[],
 ): Promise<void> => {

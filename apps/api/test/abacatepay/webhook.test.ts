@@ -50,6 +50,33 @@ const makeTransparentCompletedPayload = (
     },
   });
 
+type FailureEventType = 'transparent.lost' | 'transparent.refunded' | 'transparent.disputed';
+
+const makeV2FailurePayload = (
+  eventType: FailureEventType,
+  billingId: string,
+  eventId?: string,
+  extra?: { metadata?: Record<string, string>; updatedAt?: string },
+) =>
+  JSON.stringify({
+    id: eventId ?? `evt_${Date.now()}`,
+    event: eventType,
+    apiVersion: 2,
+    devMode: false,
+    data: {
+      transparent: {
+        id: billingId,
+        amount: 5000,
+        status: eventType === 'transparent.lost' ? 'EXPIRED' : 'REFUNDED',
+        frequency: 'ONE_TIME',
+        methods: ['PIX'],
+        createdAt: new Date().toISOString(),
+        updatedAt: extra?.updatedAt ?? new Date().toISOString(),
+        ...(extra?.metadata && { metadata: extra.metadata }),
+      },
+    },
+  });
+
 // Mirrors AbacatePay's actual v2 webhook payload for `transparent.completed`:
 // data is nested under `data.transparent`, not flat.
 // https://docs.abacatepay.com/pages/webhooks/events/transparent
@@ -1307,6 +1334,365 @@ describe('POST /abacatepay/webhook', () => {
       const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
       expect(tickets).toHaveLength(1);
       expect(push.captured).toHaveLength(1);
+    });
+  });
+
+  // JDMA-407: failure events must release inventory immediately rather than
+  // wait for the TTL sweep. `lost` mirrors Stripe payment_failed (pending Pix
+  // never paid); `refunded`/`disputed` map to OrderStatus.refunded.
+  describe('failure events (lost/refunded/disputed)', () => {
+    const seedTicketOrderWithExtras = async (userId: string, billingId: string) => {
+      const event = await prisma.event.create({
+        data: {
+          slug: `e-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'Evento Falha',
+          description: 'desc',
+          startsAt: new Date(Date.now() + 86_400_000),
+          endsAt: new Date(Date.now() + 90_000_000),
+          venueName: 'v',
+          venueAddress: 'a',
+          city: 'São Paulo',
+          stateCode: 'SP',
+          type: 'meeting',
+          status: 'published',
+          capacity: 5,
+          maxTicketsPerUser: 1,
+          publishedAt: new Date(),
+        },
+      });
+      const tier = await prisma.ticketTier.create({
+        data: {
+          eventId: event.id,
+          name: 'Geral',
+          priceCents: 5000,
+          quantityTotal: 5,
+          quantitySold: 1,
+          sortOrder: 0,
+        },
+      });
+      const extra = await prisma.ticketExtra.create({
+        data: { eventId: event.id, name: 'Camiseta', priceCents: 2000, quantitySold: 1 },
+      });
+      const order = await prisma.order.create({
+        data: {
+          userId,
+          eventId: event.id,
+          tierId: tier.id,
+          amountCents: 7000,
+          quantity: 1,
+          method: 'pix',
+          provider: 'abacatepay',
+          providerRef: billingId,
+          status: 'pending',
+        },
+      });
+      await prisma.orderExtra.create({
+        data: { orderId: order.id, extraId: extra.id, quantity: 1 },
+      });
+      return { event, tier, extra, order };
+    };
+
+    const seedMixedCart = async (userId: string, billingId: string) => {
+      const productType = await prisma.productType.create({
+        data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+      });
+      const product = await prisma.product.create({
+        data: {
+          slug: `p-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'Camiseta JDM',
+          description: 'd',
+          productTypeId: productType.id,
+          basePriceCents: 9000,
+          currency: 'BRL',
+          status: 'active',
+          shippingFeeCents: 1500,
+        },
+      });
+      const variant = await prisma.variant.create({
+        data: {
+          productId: product.id,
+          name: 'Preto — M',
+          sku: `SKU-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          priceCents: 9000,
+          quantityTotal: 10,
+          quantitySold: 1,
+          attributes: { size: 'M' },
+          active: true,
+        },
+      });
+      const event = await prisma.event.create({
+        data: {
+          slug: `ev-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'Evento Misto',
+          description: 'desc',
+          startsAt: new Date(Date.now() + 86_400_000),
+          endsAt: new Date(Date.now() + 90_000_000),
+          venueName: 'v',
+          venueAddress: 'a',
+          city: 'São Paulo',
+          stateCode: 'SP',
+          type: 'meeting',
+          status: 'published',
+          capacity: 5,
+          maxTicketsPerUser: 5,
+          publishedAt: new Date(),
+        },
+      });
+      const tier = await prisma.ticketTier.create({
+        data: {
+          eventId: event.id,
+          name: 'Geral',
+          priceCents: 5000,
+          quantityTotal: 5,
+          quantitySold: 1,
+          sortOrder: 0,
+        },
+      });
+      const cart = await prisma.cart.create({
+        data: { userId, status: 'checking_out', expiresAt: new Date(Date.now() + 600_000) },
+      });
+      const address = await prisma.shippingAddress.create({
+        data: {
+          userId,
+          recipientName: 'Maria',
+          line1: 'R',
+          number: '1',
+          district: 'C',
+          city: 'C',
+          stateCode: 'PR',
+          postalCode: '80000-000',
+          phone: '41999999999',
+          isDefault: true,
+        },
+      });
+      const order = await prisma.order.create({
+        data: {
+          userId,
+          cartId: cart.id,
+          kind: 'mixed',
+          amountCents: 15_500,
+          quantity: 2,
+          method: 'pix',
+          provider: 'abacatepay',
+          providerRef: billingId,
+          shippingAddressId: address.id,
+          shippingCents: 1500,
+          fulfillmentMethod: 'ship',
+          status: 'pending',
+          items: {
+            create: [
+              {
+                kind: 'product',
+                variantId: variant.id,
+                quantity: 1,
+                unitPriceCents: 9000,
+                subtotalCents: 9000,
+              },
+              {
+                kind: 'ticket',
+                tierId: tier.id,
+                eventId: event.id,
+                quantity: 1,
+                unitPriceCents: 5000,
+                subtotalCents: 5000,
+              },
+            ],
+          },
+        },
+      });
+      return { cart, order, tier, variant, event };
+    };
+
+    const post = (payload: string) =>
+      app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: { 'content-type': 'application/json', 'x-webhook-signature': 'valid-sig' },
+        payload,
+      });
+
+    it('transparent.lost releases ticket-only order: tier+extras stock, status=failed', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_lost_ticket_${Date.now()}`;
+      const { tier, extra, order } = await seedTicketOrderWithExtras(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.lost', billingId, 'evt_lost_ticket_1', {
+          metadata: { orderId: order.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('failed');
+      expect(updated.failedAt).not.toBeNull();
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+      const extraAfter = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+      expect(extraAfter.quantitySold).toBe(0);
+    });
+
+    it('transparent.refunded releases ticket-only pending order: status=refunded', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_refunded_ticket_${Date.now()}`;
+      const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.refunded', billingId, 'evt_refunded_ticket_1', {
+          metadata: { orderId: order.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('refunded');
+      expect(updated.failedAt).toBeNull();
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+    });
+
+    it('transparent.disputed releases ticket-only pending order: status=refunded', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_disputed_ticket_${Date.now()}`;
+      const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.disputed', billingId, 'evt_disputed_ticket_1', {
+          metadata: { orderId: order.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('refunded');
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+    });
+
+    it('transparent.lost on product-only cart releases variant stock and reopens cart', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_lost_product_${Date.now()}`;
+      const { cart, orders } = await seedProductCartOrders(user.id, billingId);
+      const variantId = (
+        await prisma.orderItem.findFirstOrThrow({
+          where: { orderId: orders[0]!.id, kind: 'product' },
+          select: { variantId: true },
+        })
+      ).variantId!;
+
+      const res = await post(
+        makeV2FailurePayload('transparent.lost', billingId, 'evt_lost_product_1', {
+          metadata: { cartId: cart.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: orders[0]!.id } });
+      expect(updatedOrder.status).toBe('failed');
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variantId } });
+      expect(variantAfter.quantitySold).toBe(0);
+      const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+      expect(cartAfter.status).toBe('open');
+    });
+
+    it('transparent.lost on mixed cart releases tier+variant+extras and reopens cart', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_lost_mixed_${Date.now()}`;
+      const { cart, order, tier, variant } = await seedMixedCart(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.lost', billingId, 'evt_lost_mixed_1', {
+          metadata: { cartId: cart.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('failed');
+      expect(updated.failedAt).not.toBeNull();
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(0);
+      const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+      expect(cartAfter.status).toBe('open');
+    });
+
+    it('transparent.refunded on mixed cart releases stock; cart status unchanged', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_refunded_mixed_${Date.now()}`;
+      const { cart, order, tier, variant } = await seedMixedCart(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.refunded', billingId, 'evt_refunded_mixed_1', {
+          metadata: { cartId: cart.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('refunded');
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+      const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+      expect(variantAfter.quantitySold).toBe(0);
+      const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+      expect(cartAfter.status).toBe('checking_out');
+    });
+
+    it('replay of transparent.lost does not double-release stock', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_lost_replay_${Date.now()}`;
+      const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
+
+      const payload = makeV2FailurePayload('transparent.lost', billingId, 'evt_lost_replay_1', {
+        metadata: { orderId: order.id },
+      });
+
+      const first = await post(payload);
+      expect(first.statusCode).toBe(200);
+      const second = await post(payload);
+      expect(second.statusCode).toBe(200);
+
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('failed');
+    });
+
+    it('transparent.refunded on already-paid order is a no-op (no stock change)', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_refunded_paid_${Date.now()}`;
+      const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
+      await prisma.order.update({ where: { id: order.id }, data: { status: 'paid' } });
+
+      const res = await post(
+        makeV2FailurePayload('transparent.refunded', billingId, 'evt_refunded_paid_1', {
+          metadata: { orderId: order.id },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('paid');
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(1);
+    });
+
+    it('transparent.lost falls back to providerRef lookup when metadata missing', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_lost_fallback_${Date.now()}`;
+      const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
+
+      const res = await post(
+        makeV2FailurePayload('transparent.lost', billingId, 'evt_lost_fallback_1'),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('failed');
+      const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(tierAfter.quantitySold).toBe(0);
     });
   });
 });
