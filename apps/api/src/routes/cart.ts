@@ -475,10 +475,13 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (input.paymentMethod === 'pix') {
-      const hasTicketOrder = data.orders.some(
-        (o) => o.kind === 'ticket' || o.kind === 'extras_only',
+      // Derive label flags from cart items, not Order.kind: a multi-line cart
+      // is a single Order with kind='mixed' (see reserveAndCreateOrders), which
+      // would otherwise hide ticket/product mix from this prefix logic.
+      const hasTicketOrder = cart.items.some(
+        (item) => item.kind === 'ticket' || item.kind === 'extras_only',
       );
-      const hasProductOrder = data.orders.some((o) => o.kind === 'product');
+      const hasProductOrder = cart.items.some((item) => item.kind === 'product');
       const labels = data.orders.map((o) => o.description);
       const prefix =
         hasTicketOrder && hasProductOrder ? 'Pedido' : hasProductOrder ? 'Loja' : 'Ingressos';

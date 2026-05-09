@@ -146,7 +146,7 @@ describe('POST /cart/checkout', () => {
     expect(order!.amountCents).toBe(5000);
   });
 
-  it('creates one order per cart item for multiple events', async () => {
+  it('creates a single mixed-event order with one OrderItem per ticket cart item', async () => {
     const { user } = await createUser({ verified: true });
     const token = bearer(env, user.id);
     const { event: ev1, tier: tier1 } = await seedPublishedEvent({ priceCents: 3000 });
@@ -164,16 +164,30 @@ describe('POST /cart/checkout', () => {
 
     expect(res.statusCode).toBe(201);
     const body = beginCheckoutResponseSchema.parse(res.json());
-    expect(body.orderIds).toHaveLength(2);
+    expect(body.orderIds).toHaveLength(1);
 
-    const orders = await prisma.order.findMany({
-      where: { id: { in: body.orderIds } },
-      orderBy: { amountCents: 'asc' },
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: body.orderIds[0]! },
+      include: { items: { orderBy: { subtotalCents: 'asc' } } },
     });
-    expect(orders[0]!.amountCents).toBe(3000);
-    expect(orders[1]!.amountCents).toBe(7000);
-    expect(orders[0]!.cartId).toBe(body.checkoutId);
-    expect(orders[1]!.cartId).toBe(body.checkoutId);
+    expect(order.cartId).toBe(body.checkoutId);
+    expect(order.amountCents).toBe(10_000);
+    // Multi-line carts use kind='mixed' so settlement routes through the
+    // multi-item issuer and reads scope from OrderItem rows (a homogeneous
+    // 'ticket' kind would require Order.eventId/tierId to be pinned).
+    expect(order.kind).toBe('mixed');
+    // Multi-line order does not pin Order.eventId/tierId
+    expect(order.eventId).toBeNull();
+    expect(order.tierId).toBeNull();
+
+    expect(order.items).toHaveLength(2);
+    expect(order.items[0]!.kind).toBe('ticket');
+    expect(order.items[0]!.eventId).toBe(ev1.id);
+    expect(order.items[0]!.tierId).toBe(tier1.id);
+    expect(order.items[0]!.subtotalCents).toBe(3000);
+    expect(order.items[1]!.eventId).toBe(ev2.id);
+    expect(order.items[1]!.tierId).toBe(tier2.id);
+    expect(order.items[1]!.subtotalCents).toBe(7000);
   });
 
   it('includes extras in order amount', async () => {
@@ -496,7 +510,7 @@ describe('POST /cart/checkout — pix', () => {
     expect(body.checkoutUrl).toBeNull();
     expect(body.clientSecret).toBeNull();
     expect(body.providerRef).toBe('pix_cart_test');
-    expect(body.orderIds).toHaveLength(2);
+    expect(body.orderIds).toHaveLength(1);
 
     const billingCall = abacatepay.calls.find((c) => c.method === 'createPixBilling');
     expect(billingCall).toBeDefined();
@@ -505,16 +519,17 @@ describe('POST /cart/checkout — pix', () => {
     expect(input.metadata.cartId).toBe(body.checkoutId);
     expect(input.metadata.userId).toBe(user.id);
 
-    const orders = await prisma.order.findMany({ where: { id: { in: body.orderIds } } });
-    expect(orders).toHaveLength(2);
-    for (const order of orders) {
-      expect(order.method).toBe('pix');
-      expect(order.provider).toBe('abacatepay');
-      expect(order.status).toBe('pending');
-      expect(order.cartId).toBe(body.checkoutId);
-    }
-    const withRef = orders.filter((o) => o.providerRef === 'pix_cart_test');
-    expect(withRef).toHaveLength(1);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: body.orderIds[0]! },
+      include: { items: true },
+    });
+    expect(order.method).toBe('pix');
+    expect(order.provider).toBe('abacatepay');
+    expect(order.status).toBe('pending');
+    expect(order.cartId).toBe(body.checkoutId);
+    expect(order.providerRef).toBe('pix_cart_test');
+    expect(order.amountCents).toBe(10_000);
+    expect(order.items).toHaveLength(2);
   });
 
   it('returns 503 when abacatepay is not configured', async () => {

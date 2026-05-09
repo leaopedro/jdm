@@ -461,7 +461,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(body.orderIds).toHaveLength(1);
     });
 
-    it('mixed cart writes both ticket and product orders with line items', async () => {
+    it('mixed cart groups ticket and product items into a single mixed order', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
       const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
@@ -478,24 +478,29 @@ describe('cart product lines (JDMA-345)', () => {
       });
       expect(res.statusCode).toBe(201);
       const body = beginCheckoutResponseSchema.parse(res.json());
-      expect(body.orderIds).toHaveLength(2);
+      expect(body.orderIds).toHaveLength(1);
 
-      const orders = await prisma.order.findMany({
-        where: { id: { in: body.orderIds } },
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
         include: { items: true },
       });
-      const ticketOrder = orders.find((o) => o.kind === 'ticket')!;
-      const productOrder = orders.find((o) => o.kind === 'product')!;
-      expect(ticketOrder.eventId).toBe(event.id);
-      expect(ticketOrder.tierId).toBe(tier.id);
-      expect(ticketOrder.items).toHaveLength(1);
-      expect(ticketOrder.items[0]!.kind).toBe('ticket');
+      expect(order.kind).toBe('mixed');
+      // Mixed order does not pin Order.eventId/tierId; ticket scoping moves to OrderItem
+      expect(order.eventId).toBeNull();
+      expect(order.tierId).toBeNull();
+      expect(order.amountCents).toBe(25_000);
+      expect(order.items).toHaveLength(2);
 
-      expect(productOrder.eventId).toBeNull();
-      expect(productOrder.amountCents).toBe(21_000);
-      expect(productOrder.items).toHaveLength(1);
-      expect(productOrder.items[0]!.variantId).toBe(variant.id);
-      expect(productOrder.items[0]!.quantity).toBe(3);
+      const ticketItem = order.items.find((i) => i.kind === 'ticket')!;
+      const productItem = order.items.find((i) => i.kind === 'product')!;
+      expect(ticketItem.eventId).toBe(event.id);
+      expect(ticketItem.tierId).toBe(tier.id);
+      expect(ticketItem.quantity).toBe(1);
+      expect(ticketItem.subtotalCents).toBe(4000);
+
+      expect(productItem.variantId).toBe(variant.id);
+      expect(productItem.quantity).toBe(3);
+      expect(productItem.subtotalCents).toBe(21_000);
 
       const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
       const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
@@ -503,7 +508,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(variantAfter.quantitySold).toBe(3);
     });
 
-    it('mixed cart keeps shipping only on the product order', async () => {
+    it('mixed cart attaches shipping to the single grouped order, scoped to product fulfillment', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
       const address = await seedShippingAddress(user.id);
@@ -527,26 +532,27 @@ describe('cart product lines (JDMA-345)', () => {
       const body = beginCheckoutResponseSchema.parse(res.json());
       expect(body.cart.totals.shippingSubtotalCents).toBe(1200);
       expect(body.cart.totals.amountCents).toBe(12_200);
+      expect(body.orderIds).toHaveLength(1);
 
-      const orders = await prisma.order.findMany({
-        where: { id: { in: body.orderIds } },
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
         include: { items: true },
       });
-      const ticketOrder = orders.find((o) => o.kind === 'ticket')!;
-      const productOrder = orders.find((o) => o.kind === 'product')!;
+      expect(order.kind).toBe('mixed');
+      // The cart has at least one shippable item, so the grouped order is 'ship' for the address
+      expect(order.shippingCents).toBe(1200);
+      expect(order.shippingAddressId).toBe(address.id);
+      expect(order.fulfillmentMethod).toBe('ship');
+      expect(order.amountCents).toBe(12_200);
 
-      expect(ticketOrder.shippingCents).toBe(0);
-      expect(ticketOrder.shippingAddressId).toBeNull();
-      expect(ticketOrder.fulfillmentMethod).toBe('pickup');
-
-      expect(productOrder.shippingCents).toBe(1200);
-      expect(productOrder.shippingAddressId).toBe(address.id);
-      expect(productOrder.fulfillmentMethod).toBe('ship');
-      expect(productOrder.amountCents).toBe(8200);
-      expect(productOrder.items[0]!.subtotalCents).toBe(7000);
+      const ticketItem = order.items.find((i) => i.kind === 'ticket')!;
+      const productItem = order.items.find((i) => i.kind === 'product')!;
+      expect(ticketItem.subtotalCents).toBe(4000);
+      expect(productItem.variantId).toBe(variant.id);
+      expect(productItem.subtotalCents).toBe(7000);
     });
 
-    it('charges only the most expensive shipping fee across multiple shippable product orders', async () => {
+    it('charges only the most expensive shipping fee on the single grouped order', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
       const address = await seedShippingAddress(user.id);
@@ -574,18 +580,30 @@ describe('cart product lines (JDMA-345)', () => {
       expect(body.cart.totals.productsSubtotalCents).toBe(24_980);
       expect(body.cart.totals.shippingSubtotalCents).toBe(2_500);
       expect(body.cart.totals.amountCents).toBe(27_480);
+      expect(body.orderIds).toHaveLength(1);
 
-      const orders = await prisma.order.findMany({
-        where: { id: { in: body.orderIds } },
-        orderBy: { createdAt: 'asc' },
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        include: { items: true },
       });
-      expect(orders).toHaveLength(2);
-      expect(orders.map((order) => order.shippingCents).sort((a, b) => a - b)).toEqual([0, 2_500]);
-      expect(orders.every((order) => order.shippingAddressId === address.id)).toBe(true);
-      expect(orders.every((order) => order.fulfillmentMethod === 'ship')).toBe(true);
-      expect(orders.map((order) => order.amountCents).sort((a, b) => a - b)).toEqual([
-        7_990, 19_490,
+      // Multi-line carts always collapse to kind='mixed' so settlement reads
+      // scope from OrderItem rows; a multi-product cart has two product
+      // OrderItems and is no longer treated as a homogeneous 'product' Order.
+      expect(order.kind).toBe('mixed');
+      expect(order.shippingCents).toBe(2_500);
+      expect(order.shippingAddressId).toBe(address.id);
+      expect(order.fulfillmentMethod).toBe('ship');
+      expect(order.amountCents).toBe(27_480);
+
+      expect(order.items).toHaveLength(2);
+      expect(order.items.map((item) => item.subtotalCents).sort((a, b) => a - b)).toEqual([
+        7_990, 16_990,
       ]);
+      expect(
+        order.items.every(
+          (item) => item.variantId === first.variant.id || item.variantId === second.variant.id,
+        ),
+      ).toBe(true);
     });
 
     it('rolls back variant reservation when Stripe session fails', async () => {

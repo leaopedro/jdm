@@ -300,7 +300,11 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             const settled = await settlePaidOrder(order.id, billingId, app.env, {
               cartId: metadataCartId,
             });
-            if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+            if (
+              settled.kind === 'ticket' ||
+              settled.kind === 'extras_only' ||
+              (settled.kind === 'mixed' && (settled.issued?.length ?? 0) > 0)
+            ) {
               issuedAnyTicket = true;
             }
           } catch (err) {

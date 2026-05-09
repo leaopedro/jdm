@@ -180,11 +180,12 @@ model Event {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  tiers     TicketTier[]
-  extras    TicketExtra[]
-  orders    Order[]
-  tickets   Ticket[]
-  cartItems CartItem[]
+  tiers      TicketTier[]
+  extras     TicketExtra[]
+  orders     Order[]
+  tickets    Ticket[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -542,18 +543,22 @@ model OrderItem {
   variantId      String?
   tierId         String?
   extraId        String?
+  eventId        String?
   quantity       Int
   unitPriceCents Int
   subtotalCents  Int
+  tickets        Json?
   createdAt      DateTime      @default(now())
 
   order   Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant Variant?     @relation(fields: [variantId], references: [id], onDelete: Restrict)
   tier    TicketTier?  @relation(fields: [tierId], references: [id], onDelete: Restrict)
   extra   TicketExtra? @relation(fields: [extraId], references: [id], onDelete: Restrict)
+  event   Event?       @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([variantId])
+  @@index([eventId])
 }
 
 enum TicketExtraItemStatus {

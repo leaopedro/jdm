@@ -1116,6 +1116,159 @@ describe('POST /abacatepay/webhook', () => {
       expect(push.captured).toHaveLength(0);
     });
 
+    const seedSingleMixedOrderCart = async (userId: string, billingId: string) => {
+      const productType = await prisma.productType.create({
+        data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+      });
+      const product = await prisma.product.create({
+        data: {
+          slug: `p-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'Camiseta JDM',
+          description: 'Algodão premium',
+          productTypeId: productType.id,
+          basePriceCents: 9000,
+          currency: 'BRL',
+          status: 'active',
+          shippingFeeCents: 1500,
+        },
+      });
+      const variant = await prisma.variant.create({
+        data: {
+          productId: product.id,
+          name: 'Preto — M',
+          sku: `SKU-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          priceCents: 9000,
+          quantityTotal: 10,
+          quantitySold: 1,
+          attributes: { size: 'M' },
+          active: true,
+        },
+      });
+      const event = await prisma.event.create({
+        data: {
+          slug: `ev-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'Evento Misto',
+          description: 'desc',
+          startsAt: new Date(Date.now() + 86_400_000),
+          endsAt: new Date(Date.now() + 90_000_000),
+          venueName: 'v',
+          venueAddress: 'a',
+          city: 'São Paulo',
+          stateCode: 'SP',
+          type: 'meeting',
+          status: 'published',
+          capacity: 5,
+          maxTicketsPerUser: 5,
+          publishedAt: new Date(),
+        },
+      });
+      const tier = await prisma.ticketTier.create({
+        data: {
+          eventId: event.id,
+          name: 'Geral',
+          priceCents: 5000,
+          quantityTotal: 5,
+          quantitySold: 1,
+          sortOrder: 0,
+        },
+      });
+      const cart = await prisma.cart.create({
+        data: { userId, status: 'checking_out', expiresAt: new Date(Date.now() + 600_000) },
+      });
+      const address = await prisma.shippingAddress.create({
+        data: {
+          userId,
+          recipientName: 'Maria Santos',
+          line1: 'Rua das Flores',
+          number: '123',
+          district: 'Centro',
+          city: 'Curitiba',
+          stateCode: 'PR',
+          postalCode: '80000-000',
+          phone: '41999999999',
+          isDefault: true,
+        },
+      });
+      const order = await prisma.order.create({
+        data: {
+          userId,
+          cartId: cart.id,
+          kind: 'mixed',
+          amountCents: 15_500,
+          quantity: 2,
+          method: 'pix',
+          provider: 'abacatepay',
+          providerRef: billingId,
+          shippingAddressId: address.id,
+          shippingCents: 1500,
+          fulfillmentMethod: 'ship',
+          status: 'pending',
+          items: {
+            create: [
+              {
+                kind: 'product',
+                variantId: variant.id,
+                quantity: 1,
+                unitPriceCents: 9000,
+                subtotalCents: 9000,
+              },
+              {
+                kind: 'ticket',
+                tierId: tier.id,
+                eventId: event.id,
+                quantity: 1,
+                unitPriceCents: 5000,
+                subtotalCents: 5000,
+              },
+            ],
+          },
+        },
+      });
+      return { cart, order, event };
+    };
+
+    it('settles single mixed Order cart and fires ticket.confirmed push', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = 'pix_cart_mixed_single_push';
+      const { cart, order } = await seedSingleMixedOrderCart(user.id, billingId);
+      await prisma.deviceToken.create({
+        data: {
+          userId: user.id,
+          expoPushToken: 'ExponentPushToken[mixedSingle]',
+          platform: 'ios',
+        },
+      });
+
+      const payload = makeV2TransparentCompletedPayload(billingId, 'evt_cart_mixed_single_push', {
+        metadata: { cartId: cart.id, userId: user.id },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-signature': 'valid-sig',
+        },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updated.status).toBe('paid');
+      expect(updated.kind).toBe('mixed');
+
+      const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
+      expect(tickets).toHaveLength(1);
+
+      expect(push.captured).toHaveLength(1);
+      const notif = await prisma.notification.findFirstOrThrow({
+        where: { userId: user.id, kind: 'ticket.confirmed' },
+      });
+      expect(notif.dedupeKey).toBe(`cart_${cart.id}`);
+    });
+
     it('settles mixed cart orders and only issues tickets for event lines', async () => {
       const { user } = await createUser({ verified: true });
       const billingId = 'pix_cart_mixed_1';

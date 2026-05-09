@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 
 import {
   issueTicketForPaidOrder,
+  issueTicketsForMixedOrder,
   OrderNotFoundError,
   OrderNotPendingError,
   type IssueResult,
@@ -11,7 +12,7 @@ type IssueEnv = { readonly TICKET_CODE_SECRET: string };
 
 export type SettledOrderResult =
   | { kind: 'ticket' | 'extras_only'; issued: IssueResult }
-  | { kind: 'product' | 'mixed' };
+  | { kind: 'product' | 'mixed'; issued?: IssueResult[] };
 
 export const settlePaidOrder = async (
   orderId: string,
@@ -25,7 +26,18 @@ export const settlePaidOrder = async (
   });
   if (!order) throw new OrderNotFoundError(orderId);
 
-  if (order.kind === 'product' || order.kind === 'mixed') {
+  if (order.kind === 'mixed') {
+    if (order.status === 'paid') {
+      return { kind: 'mixed' };
+    }
+    if (order.status !== 'pending') {
+      throw new OrderNotPendingError(orderId, order.status);
+    }
+    const issued = await issueTicketsForMixedOrder(orderId, providerRef, env);
+    return { kind: 'mixed', issued };
+  }
+
+  if (order.kind === 'product') {
     if (order.status === 'paid') {
       return { kind: order.kind };
     }

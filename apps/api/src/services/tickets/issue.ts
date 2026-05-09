@@ -122,6 +122,8 @@ const upsertExtraItemsFromMeta = async (
 };
 
 // Fallback for single-ticket orders without metadata: read extras from OrderExtra rows.
+// Safe only for non-mixed orders (single event), where every OrderExtra belongs
+// to that event's ticket. For mixed orders, use upsertExtraItemsFromOrderItemsForEvent.
 const upsertExtraItemsFromOrder = async (
   orderId: string,
   ticketId: string,
@@ -138,6 +140,27 @@ const upsertExtraItemsFromOrder = async (
     env,
     tx,
   );
+};
+
+// Mixed-order safe extras fallback: read extras scoped to a single event from
+// OrderItem rows (kind='extras') so we never attach another event's extras
+// to this ticket.
+const upsertExtraItemsFromOrderItemsForEvent = async (
+  orderId: string,
+  eventId: string,
+  ticketId: string,
+  env: IssueEnv,
+  tx: Tx,
+): Promise<void> => {
+  const extraItems = await tx.orderItem.findMany({
+    where: { orderId, kind: 'extras', eventId },
+    select: { extraId: true },
+  });
+  const extraIds = extraItems
+    .map((row) => row.extraId)
+    .filter((id): id is string => typeof id === 'string');
+  if (extraIds.length === 0) return;
+  await upsertExtraItemsFromMeta(ticketId, extraIds, env, tx);
 };
 
 export const issueTicketForPaidOrder = async (
@@ -310,4 +333,158 @@ const issueExtrasOnly = async (
     eventId: order.eventId,
     eventTitle: order.event.title,
   };
+};
+
+function parseOrderItemTickets(raw: unknown): TicketMeta[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map((entry: unknown) => {
+    if (typeof entry !== 'object' || entry === null) return { extras: [] };
+    const obj = entry as Record<string, unknown>;
+    return {
+      extras: Array.isArray(obj['extras']) ? (obj['extras'] as string[]) : [],
+      carId: typeof obj['carId'] === 'string' ? obj['carId'] : undefined,
+      licensePlate: typeof obj['licensePlate'] === 'string' ? obj['licensePlate'] : undefined,
+      nickname: typeof obj['nickname'] === 'string' ? obj['nickname'] : undefined,
+    };
+  });
+}
+
+export const issueTicketsForMixedOrder = async (
+  orderId: string,
+  providerRef: string,
+  env: IssueEnv,
+): Promise<IssueResult[]> => {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, userId: true, status: true, cartId: true },
+    });
+    if (!order) throw new OrderNotFoundError(orderId);
+
+    if (order.status === 'paid') {
+      const existing = await tx.ticket.findMany({
+        where: { orderId },
+        include: { event: { select: { title: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      return existing.map((t) => ({
+        ticketId: t.id,
+        code: signTicketCode(t.id, env),
+        userId: t.userId,
+        eventId: t.eventId,
+        eventTitle: t.event.title,
+      }));
+    }
+
+    const ticketItems = await tx.orderItem.findMany({
+      where: { orderId, kind: 'ticket' },
+      select: {
+        id: true,
+        tierId: true,
+        eventId: true,
+        quantity: true,
+        tickets: true,
+        event: { select: { title: true, maxTicketsPerUser: true } },
+      },
+    });
+
+    const results: IssueResult[] = [];
+
+    for (const item of ticketItems) {
+      if (!item.tierId || !item.eventId || !item.event) continue;
+
+      const ticketsMeta = parseOrderItemTickets(item.tickets);
+
+      await lockTicketTuple(tx, order.userId, item.eventId);
+
+      if (item.event.maxTicketsPerUser !== null) {
+        const existingValidCount = await tx.ticket.count({
+          where: { userId: order.userId, eventId: item.eventId, status: 'valid' },
+        });
+        if (existingValidCount + item.quantity > item.event.maxTicketsPerUser) {
+          throw new TicketAlreadyExistsForEventError(
+            order.userId,
+            item.eventId,
+            item.event.maxTicketsPerUser,
+            existingValidCount,
+          );
+        }
+      }
+
+      for (let i = 0; i < item.quantity; i++) {
+        const meta = ticketsMeta[i];
+        const ticket = await tx.ticket.create({
+          data: {
+            orderId: order.id,
+            userId: order.userId,
+            eventId: item.eventId,
+            tierId: item.tierId,
+            source: 'purchase',
+            status: 'valid',
+            ...(meta?.carId ? { carId: meta.carId } : {}),
+            ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
+            ...(meta?.nickname ? { nickname: meta.nickname } : {}),
+          },
+        });
+
+        if (meta && meta.extras.length > 0) {
+          await upsertExtraItemsFromMeta(ticket.id, meta.extras, env, tx);
+        } else if (item.quantity === 1 && ticketsMeta.length === 0) {
+          await upsertExtraItemsFromOrderItemsForEvent(orderId, item.eventId, ticket.id, env, tx);
+        }
+
+        results.push({
+          ticketId: ticket.id,
+          code: signTicketCode(ticket.id, env),
+          userId: order.userId,
+          eventId: item.eventId,
+          eventTitle: item.event.title,
+        });
+      }
+    }
+
+    // Mixed orders may also carry extras_only cart items: standalone OrderItem(kind='extras')
+    // rows for an event with no paired ticket line in this order. Attach those extras to
+    // the user's existing valid ticket for that event, mirroring `issueExtrasOnly`.
+    const extrasItems = await tx.orderItem.findMany({
+      where: { orderId, kind: 'extras' },
+      select: { eventId: true, event: { select: { title: true } } },
+    });
+    const ticketEventIds = new Set(
+      ticketItems.map((i) => i.eventId).filter((id): id is string => id !== null),
+    );
+    const seenExtrasOnlyEvents = new Set<string>();
+    for (const ex of extrasItems) {
+      if (!ex.eventId || !ex.event) continue;
+      if (ticketEventIds.has(ex.eventId)) continue;
+      if (seenExtrasOnlyEvents.has(ex.eventId)) continue;
+      seenExtrasOnlyEvents.add(ex.eventId);
+
+      await lockTicketTuple(tx, order.userId, ex.eventId);
+
+      const ticket = await tx.ticket.findFirst({
+        where: { userId: order.userId, eventId: ex.eventId, status: 'valid' },
+      });
+      if (!ticket) {
+        throw new TicketRevokedForExtrasOnlyError(orderId, order.userId, ex.eventId);
+      }
+
+      await upsertExtraItemsFromOrderItemsForEvent(orderId, ex.eventId, ticket.id, env, tx);
+
+      results.push({
+        ticketId: ticket.id,
+        code: signTicketCode(ticket.id, env),
+        userId: order.userId,
+        eventId: ex.eventId,
+        eventTitle: ex.event.title,
+      });
+    }
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: { status: 'paid', paidAt: new Date(), ...(order.cartId ? {} : { providerRef }) },
+    });
+
+    return results;
+  });
 };

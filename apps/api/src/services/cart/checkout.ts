@@ -54,7 +54,7 @@ export type CartOrder = {
   variantId: string | null;
   amountCents: number;
   quantity: number;
-  kind: 'ticket' | 'extras_only' | 'product';
+  kind: 'ticket' | 'extras_only' | 'product' | 'mixed';
   description: string;
 };
 
@@ -128,6 +128,39 @@ const PROVIDER_FOR_METHOD: Record<CartCheckoutMethod, 'stripe' | 'abacatepay'> =
   pix: 'abacatepay',
 };
 
+type PreparedOrderItemRow = {
+  kind: 'ticket' | 'product' | 'extras';
+  eventId?: string | null;
+  tierId?: string | null;
+  variantId?: string | null;
+  extraId?: string | null;
+  quantity: number;
+  unitPriceCents: number;
+  subtotalCents: number;
+  tickets?: Prisma.InputJsonValue;
+};
+
+type PreparedOrderExtraRow = {
+  extraId: string;
+  quantity: number;
+};
+
+type PreparedCartItem = {
+  cartItemKind: 'ticket' | 'extras_only' | 'product';
+  orderItemRows: PreparedOrderItemRow[];
+  orderExtraRows: PreparedOrderExtraRow[];
+  amountCents: number;
+  quantity: number;
+  currency: string;
+  description: string;
+  eventId: string | null;
+  tierId: string | null;
+  variantId: string | null;
+  shippingCents: number;
+  shippingAddressId: string | null;
+  fulfillmentMethod: 'pickup' | 'ship';
+};
+
 export async function reserveAndCreateOrders(
   cart: CartWithItems,
   userId: string,
@@ -138,6 +171,7 @@ export async function reserveAndCreateOrders(
   const method = options.method;
   const provider = PROVIDER_FOR_METHOD[method];
   const allExpiredRefs: string[] = [];
+
   const primaryShippingCartItemId = cart.items.reduce<string | null>((selectedId, item) => {
     if (item.kind !== 'product' || !item.variant) return selectedId;
     const shippingFeeCents = item.variant.product.shippingFeeCents ?? 0;
@@ -152,161 +186,53 @@ export async function reserveAndCreateOrders(
   }, null);
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const orders: CartOrder[] = [];
+    const singleOrder = await prisma.$transaction(async (tx) => {
+      const preparedItems: PreparedCartItem[] = [];
 
       for (const item of cart.items) {
         if (item.kind === 'product') {
-          const appliedShippingCents =
-            item.id === primaryShippingCartItemId
-              ? (item.variant?.product.shippingFeeCents ?? 0)
-              : 0;
-          const order = await reserveProductCartItem(
+          const prepared = await prepareProductCartItem(
             item,
-            cart.id,
-            userId,
-            method,
-            provider,
+            item.id === primaryShippingCartItemId,
             options.shippingAddressId ?? null,
-            appliedShippingCents,
             tx,
             allExpiredRefs,
           );
-          orders.push(order);
+          preparedItems.push(prepared);
           continue;
         }
 
-        const isExtrasOnly = item.kind === 'extras_only';
-        const tickets = item.tickets as Array<{
-          carId?: string;
-          licensePlate?: string;
-          extras?: string[];
-        }>;
-
-        if (!item.tierId || !item.eventId) {
-          throw Object.assign(new Error('ticket cart item missing eventId/tierId'), {
-            code: 'CART_ITEM_INVALID',
-          });
-        }
-
-        const tier = await tx.ticketTier.findUniqueOrThrow({
-          where: { id: item.tierId },
-          select: {
-            id: true,
-            requiresCar: true,
-            quantityTotal: true,
-            quantitySold: true,
-            priceCents: true,
-            currency: true,
-            eventId: true,
-          },
-        });
-
-        const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
-        allExpiredRefs.push(...sweep.expiredProviderRefs);
-
-        if (!isExtrasOnly) {
-          const reservation = await tx.ticketTier.updateMany({
-            where: { id: tier.id, quantitySold: { lte: tier.quantityTotal - item.quantity } },
-            data: { quantitySold: { increment: item.quantity } },
-          });
-          if (reservation.count === 0) {
-            throw Object.assign(new Error(`tier ${tier.id} sold out`), {
-              code: 'TIER_SOLD_OUT',
-              tierId: tier.id,
-            });
-          }
-        }
-
-        const ticketInputs = tickets.map((t) => ({
-          extras: t.extras ?? [],
-          carId: t.carId,
-          licensePlate: t.licensePlate,
-        }));
-
-        const validation = await validateTickets(
-          ticketInputs,
-          { requiresCar: tier.requiresCar },
-          item.eventId,
-          tx,
-          userId,
-          { skipCarValidation: isExtrasOnly },
-        );
-
-        await reserveExtras(validation.extraStock, tx);
-
-        const event = await tx.event.findUniqueOrThrow({
-          where: { id: item.eventId },
-          select: { title: true },
-        });
-
-        const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
-        const order = await tx.order.create({
-          data: {
-            userId,
-            eventId: item.eventId,
-            tierId: item.tierId,
-            cartId: cart.id,
-            kind: isExtrasOnly ? 'extras_only' : 'ticket',
-            amountCents: item.amountCents,
-            quantity: item.quantity,
-            currency: tier.currency,
-            method,
-            provider,
-            status: 'pending',
-            expiresAt,
-          },
-        });
-
-        if (validation.extraEntries.length > 0) {
-          await tx.orderExtra.createMany({
-            data: validation.extraEntries.map(({ extraId, quantity }) => ({
-              orderId: order.id,
-              extraId,
-              quantity,
-            })),
-            skipDuplicates: true,
-          });
-        }
-
-        if (!isExtrasOnly) {
-          const ticketSubtotal = tier.priceCents * item.quantity;
-          await tx.orderItem.create({
-            data: {
-              orderId: order.id,
-              kind: 'ticket',
-              tierId: tier.id,
-              quantity: item.quantity,
-              unitPriceCents: tier.priceCents,
-              subtotalCents: ticketSubtotal,
-            },
-          });
-        }
-
-        if (validation.extraEntries.length > 0) {
-          await tx.orderItem.createMany({
-            data: validation.extraEntries.map(({ extraId, priceCents, quantity }) => ({
-              orderId: order.id,
-              kind: 'extras' as const,
-              extraId,
-              quantity,
-              unitPriceCents: priceCents,
-              subtotalCents: priceCents * quantity,
-            })),
-          });
-        }
-
-        orders.push({
-          id: order.id,
-          eventId: item.eventId,
-          tierId: item.tierId,
-          variantId: null,
-          amountCents: item.amountCents,
-          quantity: item.quantity,
-          kind: isExtrasOnly ? 'extras_only' : 'ticket',
-          description: event.title,
-        });
+        const prepared = await prepareTicketCartItem(item, userId, tx, allExpiredRefs);
+        preparedItems.push(prepared);
       }
+
+      // Order kind invariant: a homogeneous discriminator (`ticket` /
+      // `extras_only` / `product`) is reserved for single-line carts where
+      // `Order.eventId`/`tierId` (or `variantId`) can be pinned. Any cart with
+      // more than one prepared item must use `mixed` so settlement reads scope
+      // from `OrderItem` rows; otherwise multi-event ticket-only or extras-only
+      // carts reach `issueTicketForPaidOrder` with null eventId/tierId.
+      const orderKind: 'ticket' | 'extras_only' | 'product' | 'mixed' =
+        preparedItems.length === 1 ? preparedItems[0]!.cartItemKind : 'mixed';
+
+      const totalAmountCents = preparedItems.reduce((sum, p) => sum + p.amountCents, 0);
+      const totalQuantity = preparedItems.reduce((sum, p) => sum + p.quantity, 0);
+      const currency = preparedItems.find((p) => p.currency)?.currency ?? 'BRL';
+      const description = preparedItems.map((p) => p.description).join(' + ');
+
+      // For homogeneous single-item orders, carry forward the scoped ids
+      const isSingleTicketItem =
+        preparedItems.length === 1 && (orderKind === 'ticket' || orderKind === 'extras_only');
+      const isSingleProductItem = preparedItems.length === 1 && orderKind === 'product';
+      const singleEventId = isSingleTicketItem ? preparedItems[0]!.eventId : null;
+      const singleTierId = isSingleTicketItem ? preparedItems[0]!.tierId : null;
+      const singleVariantId = isSingleProductItem ? preparedItems[0]!.variantId : null;
+
+      // Shipping applies to the whole order (cart has one shipping address)
+      const shippingCents = preparedItems.reduce((sum, p) => sum + p.shippingCents, 0);
+      const hasShippable = preparedItems.some((p) => p.fulfillmentMethod === 'ship');
+      const cartFulfillmentMethod = hasShippable ? 'ship' : ('pickup' as const);
+      const cartShippingAddressId = hasShippable ? (options.shippingAddressId ?? null) : null;
 
       const cartGuard = await tx.cart.updateMany({
         where: { id: cart.id, status: 'open' },
@@ -318,17 +244,65 @@ export async function reserveAndCreateOrders(
         });
       }
 
-      return orders;
-    });
+      const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
+      const order = await tx.order.create({
+        data: {
+          userId,
+          eventId: singleEventId,
+          tierId: singleTierId,
+          cartId: cart.id,
+          kind: orderKind,
+          amountCents: totalAmountCents,
+          quantity: totalQuantity,
+          currency,
+          method,
+          provider,
+          shippingAddressId: cartShippingAddressId,
+          shippingCents,
+          fulfillmentMethod: cartFulfillmentMethod,
+          status: 'pending',
+          expiresAt,
+        },
+      });
 
-    const totalAmountCents = result.reduce((sum, o) => sum + o.amountCents, 0);
+      const allOrderItemRows: PreparedOrderItemRow[] = preparedItems.flatMap(
+        (p) => p.orderItemRows,
+      );
+      const allOrderExtraRows: PreparedOrderExtraRow[] = preparedItems.flatMap(
+        (p) => p.orderExtraRows,
+      );
+
+      if (allOrderItemRows.length > 0) {
+        await tx.orderItem.createMany({
+          data: allOrderItemRows.map((row) => ({ ...row, orderId: order.id })),
+        });
+      }
+
+      if (allOrderExtraRows.length > 0) {
+        await tx.orderExtra.createMany({
+          data: allOrderExtraRows.map((row) => ({ ...row, orderId: order.id })),
+          skipDuplicates: true,
+        });
+      }
+
+      return {
+        id: order.id,
+        eventId: singleEventId,
+        tierId: singleTierId,
+        variantId: singleVariantId,
+        amountCents: totalAmountCents,
+        quantity: totalQuantity,
+        kind: orderKind,
+        description,
+      } satisfies CartOrder;
+    });
 
     return {
       ok: true,
       data: {
         cartId: cart.id,
-        orders: result,
-        totalAmountCents,
+        orders: [singleOrder],
+        totalAmountCents: singleOrder.amountCents,
         currency: 'BRL',
         expiredProviderRefs: allExpiredRefs,
       },
@@ -353,17 +327,13 @@ type ProductCartItem = CartWithItems['items'][number] & {
   variant: NonNullable<CartWithItems['items'][number]['variant']>;
 };
 
-async function reserveProductCartItem(
+async function prepareProductCartItem(
   item: CartWithItems['items'][number],
-  cartId: string,
-  userId: string,
-  method: CartCheckoutMethod,
-  provider: 'stripe' | 'abacatepay',
+  isPrimaryShipping: boolean,
   shippingAddressId: string | null,
-  appliedShippingCents: number,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
-): Promise<CartOrder> {
+): Promise<PreparedCartItem> {
   if (!item.variantId || !item.variant) {
     throw Object.assign(new Error('product cart item missing variant'), {
       code: 'CART_ITEM_INVALID',
@@ -392,68 +362,173 @@ async function reserveProductCartItem(
     });
   }
 
-  const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
-  const shippingCents = variant.product.shippingFeeCents === null ? 0 : appliedShippingCents;
+  const appliedShippingCents = isPrimaryShipping ? (variant.product.shippingFeeCents ?? 0) : 0;
   const fulfillmentMethod = variant.product.shippingFeeCents === null ? 'pickup' : 'ship';
+  const shippingCents = variant.product.shippingFeeCents === null ? 0 : appliedShippingCents;
   const amountCents = variant.priceCents * item.quantity + shippingCents;
-  const order = await tx.order.create({
-    data: {
-      userId,
-      eventId: null,
-      tierId: null,
-      cartId,
-      kind: 'product',
-      amountCents,
-      quantity: item.quantity,
-      currency: variant.product.currency,
-      method,
-      provider,
-      shippingAddressId: fulfillmentMethod === 'ship' ? shippingAddressId : null,
-      shippingCents,
-      fulfillmentMethod,
-      status: 'pending',
-      expiresAt,
-    },
-  });
-
-  await tx.orderItem.create({
-    data: {
-      orderId: order.id,
-      kind: 'product',
-      variantId: variant.id,
-      quantity: item.quantity,
-      unitPriceCents: variant.priceCents,
-      subtotalCents: variant.priceCents * item.quantity,
-    },
-  });
-
-  const description = `${variant.product.title} — ${variant.name}`;
 
   return {
-    id: order.id,
+    cartItemKind: 'product',
+    orderItemRows: [
+      {
+        kind: 'product',
+        variantId: variant.id,
+        quantity: item.quantity,
+        unitPriceCents: variant.priceCents,
+        subtotalCents: variant.priceCents * item.quantity,
+      },
+    ],
+    orderExtraRows: [],
+    amountCents,
+    quantity: item.quantity,
+    currency: variant.product.currency,
+    description: `${variant.product.title} — ${variant.name}`,
     eventId: null,
     tierId: null,
     variantId: variant.id,
-    amountCents,
+    shippingCents,
+    shippingAddressId: fulfillmentMethod === 'ship' ? shippingAddressId : null,
+    fulfillmentMethod: fulfillmentMethod,
+  };
+}
+
+async function prepareTicketCartItem(
+  item: CartWithItems['items'][number],
+  userId: string,
+  tx: Prisma.TransactionClient,
+  expiredRefs: string[],
+): Promise<PreparedCartItem> {
+  const isExtrasOnly = item.kind === 'extras_only';
+  const tickets = item.tickets as Array<{
+    carId?: string;
+    licensePlate?: string;
+    extras?: string[];
+  }>;
+
+  if (!item.tierId || !item.eventId) {
+    throw Object.assign(new Error('ticket cart item missing eventId/tierId'), {
+      code: 'CART_ITEM_INVALID',
+    });
+  }
+
+  const tier = await tx.ticketTier.findUniqueOrThrow({
+    where: { id: item.tierId },
+    select: {
+      id: true,
+      requiresCar: true,
+      quantityTotal: true,
+      quantitySold: true,
+      priceCents: true,
+      currency: true,
+      eventId: true,
+    },
+  });
+
+  const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
+  expiredRefs.push(...sweep.expiredProviderRefs);
+
+  if (!isExtrasOnly) {
+    const reservation = await tx.ticketTier.updateMany({
+      where: { id: tier.id, quantitySold: { lte: tier.quantityTotal - item.quantity } },
+      data: { quantitySold: { increment: item.quantity } },
+    });
+    if (reservation.count === 0) {
+      throw Object.assign(new Error(`tier ${tier.id} sold out`), {
+        code: 'TIER_SOLD_OUT',
+        tierId: tier.id,
+      });
+    }
+  }
+
+  const ticketInputs = tickets.map((t) => ({
+    extras: t.extras ?? [],
+    carId: t.carId,
+    licensePlate: t.licensePlate,
+  }));
+
+  const validation = await validateTickets(
+    ticketInputs,
+    { requiresCar: tier.requiresCar },
+    item.eventId,
+    tx,
+    userId,
+    { skipCarValidation: isExtrasOnly },
+  );
+
+  await reserveExtras(validation.extraStock, tx);
+
+  const event = await tx.event.findUniqueOrThrow({
+    where: { id: item.eventId },
+    select: { title: true },
+  });
+
+  const orderItemRows: PreparedOrderItemRow[] = [];
+  const orderExtraRows: PreparedOrderExtraRow[] = [];
+
+  if (!isExtrasOnly) {
+    const ticketSubtotal = tier.priceCents * item.quantity;
+    orderItemRows.push({
+      kind: 'ticket',
+      eventId: item.eventId,
+      tierId: tier.id,
+      quantity: item.quantity,
+      unitPriceCents: tier.priceCents,
+      subtotalCents: ticketSubtotal,
+      ...(tickets.length > 0 ? { tickets: tickets as Prisma.InputJsonValue } : {}),
+    });
+  }
+
+  if (validation.extraEntries.length > 0) {
+    for (const { extraId, priceCents, quantity } of validation.extraEntries) {
+      orderItemRows.push({
+        kind: 'extras',
+        eventId: item.eventId,
+        extraId,
+        quantity,
+        unitPriceCents: priceCents,
+        subtotalCents: priceCents * quantity,
+      });
+      orderExtraRows.push({ extraId, quantity });
+    }
+  }
+
+  return {
+    cartItemKind: isExtrasOnly ? 'extras_only' : 'ticket',
+    orderItemRows,
+    orderExtraRows,
+    amountCents: item.amountCents,
     quantity: item.quantity,
-    kind: 'product',
-    description,
+    currency: tier.currency,
+    description: event.title,
+    eventId: item.eventId,
+    tierId: tier.id,
+    variantId: null,
+    shippingCents: 0,
+    shippingAddressId: null,
+    fulfillmentMethod: 'pickup',
   };
 }
 
 export async function rollbackCartCheckout(cartId: string, orders: CartOrder[]): Promise<void> {
   await prisma.$transaction(async (tx) => {
     for (const order of orders) {
-      if (order.kind === 'product' && order.variantId) {
-        await tx.variant.updateMany({
-          where: { id: order.variantId, quantitySold: { gte: order.quantity } },
-          data: { quantitySold: { decrement: order.quantity } },
-        });
-      } else if (order.kind === 'ticket' && order.tierId) {
-        await tx.ticketTier.updateMany({
-          where: { id: order.tierId, quantitySold: { gte: order.quantity } },
-          data: { quantitySold: { decrement: order.quantity } },
-        });
+      const items = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        select: { kind: true, tierId: true, variantId: true, quantity: true },
+      });
+
+      for (const item of items) {
+        if (item.kind === 'ticket' && item.tierId) {
+          await tx.ticketTier.updateMany({
+            where: { id: item.tierId, quantitySold: { gte: item.quantity } },
+            data: { quantitySold: { decrement: item.quantity } },
+          });
+        } else if (item.kind === 'product' && item.variantId) {
+          await tx.variant.updateMany({
+            where: { id: item.variantId, quantitySold: { gte: item.quantity } },
+            data: { quantitySold: { decrement: item.quantity } },
+          });
+        }
       }
 
       const orderExtras = await tx.orderExtra.findMany({
