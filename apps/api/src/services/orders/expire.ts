@@ -11,9 +11,12 @@ export type SweepResult = {
 
 /**
  * Releases every stock reservation held by `orderIds`: ticket tiers, product
- * variants, and ticket extras. Reads from `OrderItem` and `OrderExtra` so it
- * handles `ticket`, `product`, `extras_only`, and `mixed` orders uniformly.
- * Caller is responsible for first flipping the orders to `expired`.
+ * variants, and ticket extras. Cart orders use `OrderItem` rows; legacy
+ * `/orders` ticket purchases have no `OrderItem` and carry tier/quantity on
+ * the `Order` row itself, so this helper falls back to `Order.tierId` /
+ * `Order.quantity` for orders with no items. Handles `ticket`, `product`,
+ * `extras_only`, and `mixed` uniformly. Caller is responsible for first
+ * flipping the orders to `expired`.
  */
 const releaseAllReservationsForOrders = async (
   tx: Prisma.TransactionClient,
@@ -23,11 +26,22 @@ const releaseAllReservationsForOrders = async (
 
   const items = await tx.orderItem.findMany({
     where: { orderId: { in: orderIds } },
-    select: { kind: true, tierId: true, variantId: true, quantity: true },
+    select: { orderId: true, kind: true, tierId: true, variantId: true, quantity: true },
   });
+
+  const orderIdsWithItems = new Set(items.map((i) => i.orderId));
+  const legacyOrderIds = orderIds.filter((id) => !orderIdsWithItems.has(id));
+  const legacyOrders =
+    legacyOrderIds.length > 0
+      ? await tx.order.findMany({
+          where: { id: { in: legacyOrderIds } },
+          select: { kind: true, tierId: true, quantity: true },
+        })
+      : [];
 
   const tierReleases = new Map<string, number>();
   const variantReleases = new Map<string, number>();
+
   for (const it of items) {
     if (it.kind === 'ticket' && it.tierId) {
       tierReleases.set(it.tierId, (tierReleases.get(it.tierId) ?? 0) + it.quantity);
@@ -35,6 +49,15 @@ const releaseAllReservationsForOrders = async (
       variantReleases.set(it.variantId, (variantReleases.get(it.variantId) ?? 0) + it.quantity);
     }
   }
+  // Legacy /orders ticket purchases: no OrderItem, reservation tracked on Order columns.
+  // extras_only does not reserve tier stock; product orders predate the Order.variantId
+  // column and are not represented here.
+  for (const lo of legacyOrders) {
+    if (lo.kind === 'ticket' && lo.tierId) {
+      tierReleases.set(lo.tierId, (tierReleases.get(lo.tierId) ?? 0) + lo.quantity);
+    }
+  }
+
   for (const [tierId, qty] of tierReleases) {
     await tx.ticketTier.updateMany({
       where: { id: tierId, quantitySold: { gte: qty } },
@@ -80,7 +103,8 @@ export const sweepExpiredOrdersForTier = async (
     where: {
       status: 'pending',
       expiresAt: { not: null, lt: now },
-      items: { some: { kind: 'ticket', tierId } },
+      // Match cart-grouped orders via OrderItem and legacy /orders tickets via Order.tierId.
+      OR: [{ tierId }, { items: { some: { kind: 'ticket', tierId } } }],
     },
     select: { id: true, providerRef: true },
   });
