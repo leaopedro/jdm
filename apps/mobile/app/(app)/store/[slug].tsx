@@ -210,9 +210,7 @@ export default function StoreProductDetailScreen() {
               <Text style={styles.variantTitle}>{selectedVariant.title}</Text>
               <Text style={styles.variantPrice}>{formatBRL(selectedVariant.priceCents)}</Text>
             </View>
-            <Text style={styles.variantMeta}>
-              {getVariantStockLabel(selectedVariant)}
-            </Text>
+            <Text style={styles.variantMeta}>{getVariantStockLabel(selectedVariant)}</Text>
           </View>
         ) : null}
       </View>
