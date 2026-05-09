@@ -642,7 +642,7 @@ describe('Admin Finance Endpoints', () => {
           date: '2026-05-03',
           revenueCents: 16500,
           orderCount: 2,
-          ticketRevenueCents: 15000,
+          ticketRevenueCents: 16500,
           storeRevenueCents: 0,
         },
       ]);
