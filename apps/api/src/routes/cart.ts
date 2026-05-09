@@ -29,6 +29,10 @@ import {
 import type { ValidatedCartItem } from '../services/cart/index.js';
 import { withOrderIdParam } from '../services/cart/success-url.js';
 import { ORDER_EXPIRY_MS } from '../services/orders/expire.js';
+import {
+  EventPickupValidationError,
+  validateEventPickupSelection,
+} from '../services/store/event-pickup.js';
 import { ensureStoreSettings } from '../services/store-settings.js';
 
 type ExtraRow = {
@@ -430,6 +434,27 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    if (input.pickupEventId && input.shippingAddressId) {
+      return reply.status(422).send({
+        error: 'UnprocessableEntity',
+        message: 'pickupEventId: não combine retirada em evento com endereço de entrega',
+      });
+    }
+
+    if (input.pickupEventId) {
+      try {
+        await validateEventPickupSelection(sub, input.pickupEventId, cart);
+      } catch (err) {
+        if (err instanceof EventPickupValidationError) {
+          return reply.status(err.statusCode).send({
+            error: 'UnprocessableEntity',
+            message: `pickupEventId: ${err.message}`,
+          });
+        }
+        throw err;
+      }
+    }
+
     const requiresShipping = cart.items.some(
       (item) => item.kind === 'product' && item.variant?.product.shippingFeeCents !== null,
     );
@@ -460,6 +485,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const reserveResult = await reserveAndCreateOrders(cart, sub, {
       method: input.paymentMethod,
       shippingAddressId,
+      pickupEventId: input.pickupEventId ?? null,
     });
     if (!reserveResult.ok) {
       return reply.status(reserveResult.status).send({

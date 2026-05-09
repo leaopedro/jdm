@@ -91,6 +91,7 @@ export const serializeAdminStoreSettings = (s: DbStoreSettings) => ({
   storeEnabled: s.storeEnabled,
   defaultShippingFeeCents: s.defaultShippingFeeCents,
   lowStockThreshold: s.lowStockThreshold,
+  eventPickupEnabled: s.eventPickupEnabled,
   pickupDisplayLabel: s.pickupDisplayLabel,
   supportPhone: s.supportPhone,
   updatedAt: s.updatedAt.toISOString(),

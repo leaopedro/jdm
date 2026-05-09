@@ -7,6 +7,7 @@ import {
   storeProductDetailResponseSchema,
   storeProductListQuerySchema,
   storeProductListResponseSchema,
+  storeSettingsSchema,
   storeProductTypeListResponseSchema,
   type ShippingAddressInput,
   type ShippingAddressUpdate,
@@ -14,6 +15,7 @@ import {
   type StoreProductDetailResponse,
   type StoreProductListQuery,
   type StoreProductListResponse,
+  type StoreSettings,
   type StoreProductTypeListResponse,
 } from '@jdm/shared/store';
 import { z } from 'zod';
@@ -57,6 +59,9 @@ export const listStoreProducts = (
 
 export const getStoreProduct = (slug: string): Promise<StoreProductDetailResponse> =>
   request(`/store/products/${encodeURIComponent(slug)}`, storeProductDetailResponseSchema);
+
+export const getStoreSettings = (): Promise<StoreSettings> =>
+  request('/store/settings', storeSettingsSchema);
 
 export const listShippingAddresses = (): Promise<ShippingAddressListResponse> =>
   authedRequest<ShippingAddressListResponse>(

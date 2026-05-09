@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 
+import { assignEventPickupTicket } from '../store/event-pickup.js';
 import {
   issueTicketForPaidOrder,
   issueTicketsForMixedOrder,
@@ -39,6 +40,7 @@ export const settlePaidOrder = async (
 
   if (order.kind === 'product') {
     if (order.status === 'paid') {
+      await assignEventPickupTicket(orderId);
       return { kind: order.kind };
     }
     if (order.status !== 'pending') {
@@ -54,6 +56,7 @@ export const settlePaidOrder = async (
       },
     });
 
+    await assignEventPickupTicket(orderId);
     return { kind: order.kind };
   }
 

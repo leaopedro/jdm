@@ -335,9 +335,11 @@ export const getAdminStoreOrderDetail = async (orderId: string): Promise<AdminSt
   });
 
   const pickupRefs = pickupRefsFromNotes(order.notes);
-  const pickupEvent = pickupRefs.eventId
+  const pickupEventId = order.pickupEventId ?? pickupRefs.eventId;
+  const pickupTicketId = order.pickupTicketId ?? pickupRefs.ticketId;
+  const pickupEvent = pickupEventId
     ? await prisma.event.findUnique({
-        where: { id: pickupRefs.eventId },
+        where: { id: pickupEventId },
         select: { id: true, title: true },
       })
     : null;
@@ -372,9 +374,9 @@ export const getAdminStoreOrderDetail = async (orderId: string): Promise<AdminSt
           phone: order.shippingAddress.phone,
         }
       : null,
-    pickupEventId: pickupRefs.eventId,
+    pickupEventId,
     pickupEventTitle: pickupEvent?.title ?? null,
-    pickupTicketId: pickupRefs.ticketId,
+    pickupTicketId,
     items,
     history,
     trackingCode,

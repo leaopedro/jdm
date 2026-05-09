@@ -222,6 +222,7 @@ export const beginCheckoutRequestSchema = z.object({
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
   shippingAddressId: z.string().min(1).optional(),
+  pickupEventId: z.string().min(1).optional(),
 });
 export type BeginCheckoutRequest = z.infer<typeof beginCheckoutRequestSchema>;
 

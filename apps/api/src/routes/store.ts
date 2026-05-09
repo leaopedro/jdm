@@ -8,6 +8,7 @@ import {
   storeProductListResponseSchema,
   storeProductSchema,
   storeProductSummarySchema,
+  storeSettingsSchema,
   storeProductTypeListResponseSchema,
   storeProductTypeSchema,
   storeProductVariantSchema,
@@ -264,6 +265,20 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .status(503)
       .send({ error: 'ServiceUnavailable', message: 'store is currently disabled' });
+  });
+
+  app.get('/store/settings', async () => {
+    const settings = await ensureStoreSettings();
+    return storeSettingsSchema.parse({
+      id: settings.id,
+      storeEnabled: settings.storeEnabled,
+      defaultShippingFeeCents: settings.defaultShippingFeeCents,
+      lowStockThreshold: settings.lowStockThreshold,
+      eventPickupEnabled: settings.eventPickupEnabled,
+      pickupDisplayLabel: settings.pickupDisplayLabel,
+      supportPhone: settings.supportPhone,
+      updatedAt: settings.updatedAt.toISOString(),
+    });
   });
 
   app.get('/store/product-types', async () => {

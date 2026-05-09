@@ -74,8 +74,9 @@ const seedCartWithOrders = async (userId: string, opts?: { events?: number }) =>
 
 const seedProductCartWithOrders = async (
   userId: string,
-  opts?: { includeTicketOrder?: boolean; shippingFeeCents?: number },
+  opts?: { includeTicketOrder?: boolean; shippingFeeCents?: number | null },
 ) => {
+  const shippingFeeCents = opts?.shippingFeeCents === undefined ? 1500 : opts.shippingFeeCents;
   const productType = await prisma.productType.create({
     data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
   });
@@ -88,7 +89,7 @@ const seedProductCartWithOrders = async (
       basePriceCents: 9000,
       currency: 'BRL',
       status: 'active',
-      shippingFeeCents: opts?.shippingFeeCents ?? 1500,
+      shippingFeeCents,
     },
   });
   const variant = await prisma.variant.create({
@@ -128,14 +129,14 @@ const seedProductCartWithOrders = async (
         userId,
         cartId: cart.id,
         kind: 'product',
-        amountCents: 10_500,
+        amountCents: 9000 + (shippingFeeCents ?? 0),
         quantity: 1,
         currency: 'BRL',
         method: 'card',
         provider: 'stripe',
-        shippingAddressId: address.id,
-        shippingCents: 1500,
-        fulfillmentMethod: 'ship',
+        shippingAddressId: shippingFeeCents === null ? null : address.id,
+        shippingCents: shippingFeeCents ?? 0,
+        fulfillmentMethod: shippingFeeCents === null ? 'pickup' : 'ship',
         status: 'pending',
         expiresAt: new Date(Date.now() + 15 * 60_000),
         items: {
@@ -150,6 +151,8 @@ const seedProductCartWithOrders = async (
       },
     }),
   ];
+
+  let ticketEvent: { eventId: string; tierId: string } | undefined;
 
   if (opts?.includeTicketOrder) {
     const event = await prisma.event.create({
@@ -180,6 +183,7 @@ const seedProductCartWithOrders = async (
         sortOrder: 0,
       },
     });
+    ticketEvent = { eventId: event.id, tierId: tier.id };
     orders.push(
       await prisma.order.create({
         data: {
@@ -208,7 +212,7 @@ const seedProductCartWithOrders = async (
     );
   }
 
-  return { cart, orders, variant };
+  return { cart, orders, variant, ticketEvent };
 };
 
 const seedMixedSingleOrderCart = async (userId: string) => {
@@ -711,6 +715,59 @@ describe('POST /stripe/webhook (cart checkout settlement)', () => {
       where: { userId: user.id, kind: 'ticket.confirmed' },
     });
     expect(notif.dedupeKey).toBe(`cart_${cart.id}`);
+  });
+
+  it('payment_intent.succeeded assigns event pickup only after the ticket order is paid', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, orders, ticketEvent } = await seedProductCartWithOrders(user.id, {
+      includeTicketOrder: true,
+      shippingFeeCents: null,
+    });
+
+    await prisma.order.update({
+      where: { id: orders[0]!.id },
+      data: { pickupEventId: ticketEvent!.eventId },
+    });
+
+    const before = await prisma.order.findUniqueOrThrow({
+      where: { id: orders[0]!.id },
+      select: { pickupTicketId: true },
+    });
+    expect(before.pickupTicketId).toBeNull();
+
+    stripe.nextEvent = {
+      id: 'evt_cart_event_pickup_1',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_cart_event_pickup_1',
+          metadata: {
+            cartId: cart.id,
+            userId: user.id,
+            orderIds: JSON.stringify(orders.map((o) => o.id)),
+          },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const ticket = await prisma.ticket.findFirstOrThrow({
+      where: { userId: user.id, eventId: ticketEvent!.eventId },
+      select: { id: true },
+    });
+    const productOrder = await prisma.order.findUniqueOrThrow({
+      where: { id: orders[0]!.id },
+      select: { status: true, pickupTicketId: true },
+    });
+    expect(productOrder.status).toBe('paid');
+    expect(productOrder.pickupTicketId).toBe(ticket.id);
   });
 
   it('duplicate ticket in multi-order cart issues partial refund, not full PI refund', async () => {

@@ -10,6 +10,7 @@ import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
 import { releaseAllReservationsForOrders } from '../services/orders/expire.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
+import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
 import {
   OrderNotPendingError,
   TicketAlreadyExistsForEventError,
@@ -151,6 +152,12 @@ const constantTimeEquals = (a: string, b: string): boolean => {
   return timingSafeEqual(bufA, bufB);
 };
 
+const cartSettlementPriority = (kind: 'ticket' | 'extras_only' | 'product' | 'mixed') => {
+  if (kind === 'ticket') return 0;
+  if (kind === 'extras_only') return 1;
+  return 2;
+};
+
 export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
   await app.register(rateLimit, {
     max: 60,
@@ -279,7 +286,8 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       if (metadataCartId) {
         const cartOrders = await prisma.order.findMany({
           where: { cartId: metadataCartId, provider: 'abacatepay', status: 'pending' },
-          select: { id: true, userId: true, eventId: true, amountCents: true },
+          select: { id: true, userId: true, eventId: true, amountCents: true, kind: true },
+          orderBy: { createdAt: 'asc' },
         });
 
         if (cartOrders.length === 0) {
@@ -294,6 +302,8 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           await markProcessed(event.id, event);
           return reply.status(200).send({ ok: true, ignored: true });
         }
+
+        cartOrders.sort((a, b) => cartSettlementPriority(a.kind) - cartSettlementPriority(b.kind));
 
         let issuedAnyTicket = false;
         for (const order of cartOrders) {
@@ -330,6 +340,16 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
               continue;
             }
             if (err instanceof OrderNotPendingError) {
+              continue;
+            }
+            if (err instanceof EventPickupAssignmentUnavailableError) {
+              flagManualRefund({
+                orderId: order.id,
+                providerRef: billingId,
+                userId: order.userId,
+                eventId: order.eventId,
+                reason: 'pickup-ticket-unavailable',
+              });
               continue;
             }
             throw err;
@@ -467,6 +487,21 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           request.log.warn(
             { orderId: order.id, billingId },
             'abacatepay webhook: extras-only ticket revoked, manual refund flagged',
+          );
+          return reply.status(200).send({ ok: true });
+        }
+        if (err instanceof EventPickupAssignmentUnavailableError) {
+          flagManualRefund({
+            orderId: order.id,
+            providerRef: billingId,
+            userId: order.userId,
+            eventId: order.eventId,
+            reason: 'pickup-ticket-unavailable',
+          });
+          await markProcessed(event.id, event);
+          request.log.warn(
+            { orderId: order.id, billingId, pickupEventId: err.eventId },
+            'abacatepay webhook: event pickup assignment unavailable, manual refund flagged',
           );
           return reply.status(200).send({ ok: true });
         }

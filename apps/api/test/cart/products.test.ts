@@ -105,6 +105,14 @@ const disableStore = async () => {
   });
 };
 
+const enableEventPickup = async () => {
+  await prisma.storeSettings.upsert({
+    where: { id: 'store_default' },
+    update: { eventPickupEnabled: true },
+    create: { id: 'store_default', eventPickupEnabled: true },
+  });
+};
+
 const addProductCartItem = async (
   app: FastifyInstance,
   token: string,
@@ -286,6 +294,120 @@ describe('cart product lines (JDMA-345)', () => {
   });
 
   describe('POST /cart/checkout for product cart', () => {
+    it('rejects event pickup when the method is disabled', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      const { event, tier } = await seedPublishedEvent();
+
+      await prisma.ticket.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', pickupEventId: event.id },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const body = errorSchema.parse(res.json());
+      expect(body.message).toContain('pickupEventId');
+      expect(body.message).toContain('disabled');
+    });
+
+    it('rejects event pickup when no eligible ticket exists', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      const { event } = await seedPublishedEvent();
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', pickupEventId: event.id },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const body = errorSchema.parse(res.json());
+      expect(body.message).toContain('pickupEventId');
+      expect(body.message).toContain('eligible ticket');
+    });
+
+    it('accepts event pickup when the user already has a valid ticket', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      const { event, tier } = await seedPublishedEvent();
+
+      await prisma.ticket.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', pickupEventId: event.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        select: { pickupEventId: true, pickupTicketId: true },
+      });
+      expect(order.pickupEventId).toBe(event.id);
+      expect(order.pickupTicketId).toBeNull();
+    });
+
+    it('accepts event pickup when the cart also buys a ticket for that event', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct();
+      const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
+
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+      await addTicketCartItem(app, token, { eventId: event.id, tierId: tier.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', pickupEventId: event.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      const productOrder = await prisma.order.findFirstOrThrow({
+        where: { id: { in: body.orderIds }, kind: 'mixed' },
+        select: { pickupEventId: true, pickupTicketId: true },
+      });
+      expect(productOrder.pickupEventId).toBe(event.id);
+      expect(productOrder.pickupTicketId).toBeNull();
+    });
+
     it('product-only checkout reserves variant and writes OrderItem', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);

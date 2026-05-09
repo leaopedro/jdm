@@ -4,6 +4,7 @@ import {
   storeCollectionListResponseSchema,
   storeProductDetailResponseSchema,
   storeProductListResponseSchema,
+  storeSettingsSchema,
   storeProductTypeListResponseSchema,
 } from '@jdm/shared/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ const {
   createShippingAddress,
   deleteShippingAddress,
   getStoreProduct,
+  getStoreSettings,
   listShippingAddresses,
   listStoreCollections,
   listStoreProductTypes,
@@ -90,6 +92,34 @@ describe('mobile store API client', () => {
       method: 'GET',
     });
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:4000/store/product-types', {
+      headers: { 'content-type': 'application/json' },
+      method: 'GET',
+    });
+  });
+
+  it('loads public store settings for event pickup gating', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          storeSettingsSchema.parse({
+            id: 'store_default',
+            storeEnabled: true,
+            defaultShippingFeeCents: 0,
+            lowStockThreshold: 5,
+            eventPickupEnabled: true,
+            pickupDisplayLabel: 'Retirada no evento',
+            supportPhone: null,
+            updatedAt: '2026-05-09T10:00:00.000Z',
+          }),
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const settings = await getStoreSettings();
+
+    expect(settings.eventPickupEnabled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:4000/store/settings', {
       headers: { 'content-type': 'application/json' },
       method: 'GET',
     });

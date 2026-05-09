@@ -226,6 +226,7 @@ export const storeSettingsSchema = z.object({
   storeEnabled: z.boolean(),
   defaultShippingFeeCents: z.number().int().nonnegative(),
   lowStockThreshold: z.number().int().nonnegative(),
+  eventPickupEnabled: z.boolean(),
   pickupDisplayLabel: z.string().nullable(),
   supportPhone: z.string().nullable(),
   updatedAt: z.string().datetime(),
@@ -237,6 +238,7 @@ export const storeSettingsUpdateSchema = z
     storeEnabled: z.boolean().optional(),
     defaultShippingFeeCents: z.number().int().nonnegative().optional(),
     lowStockThreshold: z.number().int().nonnegative().optional(),
+    eventPickupEnabled: z.boolean().optional(),
     pickupDisplayLabel: z.string().trim().max(140).nullable().optional(),
     supportPhone: z.string().trim().max(20).nullable().optional(),
   })
@@ -245,6 +247,7 @@ export const storeSettingsUpdateSchema = z
       value.storeEnabled !== undefined ||
       value.defaultShippingFeeCents !== undefined ||
       value.lowStockThreshold !== undefined ||
+      value.eventPickupEnabled !== undefined ||
       value.pickupDisplayLabel !== undefined ||
       value.supportPhone !== undefined,
     { message: 'envie ao menos um campo para atualizar' },

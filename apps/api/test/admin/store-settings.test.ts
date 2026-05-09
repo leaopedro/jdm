@@ -40,6 +40,7 @@ describe('admin store settings', () => {
     expect(body.storeEnabled).toBe(true);
     expect(body.defaultShippingFeeCents).toBe(0);
     expect(body.lowStockThreshold).toBe(5);
+    expect(body.eventPickupEnabled).toBe(false);
     expect(body.pickupDisplayLabel).toBeNull();
     expect(body.supportPhone).toBeNull();
   });
@@ -66,6 +67,7 @@ describe('admin store settings', () => {
       payload: {
         storeEnabled: false,
         defaultShippingFeeCents: 1990,
+        eventPickupEnabled: true,
         pickupDisplayLabel: 'Retirada na sede',
       },
     });
@@ -73,6 +75,7 @@ describe('admin store settings', () => {
     const body = storeSettingsSchema.parse(res.json());
     expect(body.storeEnabled).toBe(false);
     expect(body.defaultShippingFeeCents).toBe(1990);
+    expect(body.eventPickupEnabled).toBe(true);
     expect(body.pickupDisplayLabel).toBe('Retirada na sede');
     expect(body.lowStockThreshold).toBe(5);
 
@@ -81,6 +84,7 @@ describe('admin store settings', () => {
     });
     expect(persisted.storeEnabled).toBe(false);
     expect(persisted.defaultShippingFeeCents).toBe(1990);
+    expect(persisted.eventPickupEnabled).toBe(true);
     expect(persisted.pickupDisplayLabel).toBe('Retirada na sede');
   });
 

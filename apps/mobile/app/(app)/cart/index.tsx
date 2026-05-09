@@ -18,18 +18,23 @@ import {
 } from 'react-native';
 
 import { beginCheckout } from '~/api/cart';
-import { getEventCommerceById } from '~/api/events';
+import { getEventById, getEventCommerceById } from '~/api/events';
+import { getStoreSettings } from '~/api/store';
+import { listMyTickets } from '~/api/tickets';
 import { useCart } from '~/cart/context';
 import { redirectToStripeCheckout } from '~/cart/web-stripe-redirect';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
-import { formatBRL } from '~/lib/format';
+import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
 import {
   buildCartSections,
+  buildPickupEventOptions,
+  collectCartTicketEventIds,
   formatProductAttributes,
   isProductItem,
+  type PickupEventOption,
 } from '~/screens/cart/presentation';
 import { formatShippingAddress } from '~/shipping/format-address';
 import { theme } from '~/theme';
@@ -44,6 +49,16 @@ type ShippingAddressRowProps = {
   onSelect: (id: string) => void;
   onRetry: () => void;
   onOpenAddresses: () => void;
+};
+
+type PickupEventRowProps = {
+  loading: boolean;
+  error: boolean;
+  enabled: boolean;
+  options: PickupEventOption[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onRetry: () => void;
 };
 
 function ShippingAddressRow({
@@ -152,6 +167,109 @@ function ShippingAddressRow({
   );
 }
 
+function PickupEventRow({
+  loading,
+  error,
+  enabled,
+  options,
+  selectedId,
+  onSelect,
+  onRetry,
+}: PickupEventRowProps) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.id === selectedId) ?? null;
+
+  let right: React.ReactNode;
+  if (loading) {
+    right = <Text style={styles.shippingHint}>{cartCopy.pickup.loading}</Text>;
+  } else if (error) {
+    right = (
+      <Pressable onPress={onRetry} hitSlop={8}>
+        <Text style={styles.shippingRetryText}>{cartCopy.pickup.retry}</Text>
+      </Pressable>
+    );
+  } else if (!enabled) {
+    right = <Text style={styles.pickupBlockedText}>{cartCopy.pickup.disabled}</Text>;
+  } else if (options.length === 0) {
+    right = <Text style={styles.pickupBlockedText}>{cartCopy.pickup.noEligible}</Text>;
+  } else {
+    right = (
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={cartCopy.pickup.placeholder}
+        style={styles.shippingDropdownTrigger}
+        hitSlop={8}
+      >
+        <Text style={styles.shippingDropdownText} numberOfLines={1}>
+          {selected ? selected.title : cartCopy.pickup.placeholder}
+        </Text>
+        <ChevronDown color={theme.colors.muted} size={14} strokeWidth={1.75} />
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.pickupRowWrap}>
+      <View style={styles.shippingRow}>
+        <Text style={styles.shippingTitle}>{cartCopy.pickup.title}</Text>
+        <View style={styles.shippingRight}>{right}</View>
+      </View>
+      {selected && enabled ? (
+        <View style={styles.pickupStatusCard}>
+          <Text style={styles.pickupEventDate}>
+            {formatEventDateRange(selected.startsAt, selected.endsAt)}
+          </Text>
+          <View style={styles.pickupBadgeRow}>
+            {selected.hasOwnedTicket ? (
+              <View style={styles.pickupBadge}>
+                <Text style={styles.pickupBadgeText}>{cartCopy.pickup.ownedBadge}</Text>
+              </View>
+            ) : null}
+            {selected.hasCartTicket ? (
+              <View style={styles.pickupBadge}>
+                <Text style={styles.pickupBadgeText}>{cartCopy.pickup.cartBadge}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.pickupStatusText}>
+            {selected.hasOwnedTicket ? cartCopy.pickup.ownedTicket : cartCopy.pickup.cartTicket}
+          </Text>
+        </View>
+      ) : null}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.shippingModalBackdrop} onPress={() => setOpen(false)}>
+          <View style={styles.shippingModalCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.shippingModalLabel}>{cartCopy.pickup.placeholder}</Text>
+            {options.map((option) => {
+              const isSelected = selectedId === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => {
+                    onSelect(option.id);
+                    setOpen(false);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[styles.shippingModalItem, isSelected && styles.shippingModalItemSelected]}
+                >
+                  <Text style={styles.shippingModalItemName} numberOfLines={1}>
+                    {option.title}
+                  </Text>
+                  <Text style={styles.shippingModalItemBody} numberOfLines={2}>
+                    {formatEventDateRange(option.startsAt, option.endsAt)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
 function itemNeedsCar(item: CartItem): boolean {
   if (!item.requiresCar || item.kind !== 'ticket') return false;
   if (item.tickets.length === 0) return true;
@@ -217,6 +335,16 @@ export default function CartScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
   const [selectedShippingAddressId, setSelectedShippingAddressId] = useState<string | null>(null);
+  const [eventPickupEnabled, setEventPickupEnabled] = useState(false);
+  const [pickupOptions, setPickupOptions] = useState<PickupEventOption[]>([]);
+  const [loadingPickupOptions, setLoadingPickupOptions] = useState(false);
+  const [pickupOptionsError, setPickupOptionsError] = useState(false);
+  const [selectedPickupEventId, setSelectedPickupEventId] = useState<string | null>(null);
+  const [pickupReloadToken, setPickupReloadToken] = useState(0);
+
+  const hasPickupProducts =
+    cart?.items.some((item) => isProductItem(item) && !item.product.requiresShipping) ?? false;
+  const needsEventPickup = hasPickupProducts && !requiresShipping;
 
   useFocusEffect(
     useCallback(() => {
@@ -258,6 +386,70 @@ export default function CartScreen() {
     router.replace('/cart' as never);
   }, [requestedShippingAddressId, router, selectedShippingAddressId]);
 
+  useEffect(() => {
+    if (!cart || !needsEventPickup) {
+      setEventPickupEnabled(false);
+      setPickupOptions([]);
+      setSelectedPickupEventId(null);
+      setPickupOptionsError(false);
+      setLoadingPickupOptions(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPickupOptions(true);
+    setPickupOptionsError(false);
+
+    void (async () => {
+      try {
+        const [settings, ticketsResponse] = await Promise.all([
+          getStoreSettings(),
+          listMyTickets(),
+        ]);
+        const cartEventIds = collectCartTicketEventIds(cart.items);
+        const ownedEventIds = new Set(
+          ticketsResponse.items
+            .filter((ticket) => ticket.status === 'valid')
+            .map((ticket) => ticket.event.id),
+        );
+        const missingCartEvents = await Promise.all(
+          cartEventIds
+            .filter((eventId) => !ownedEventIds.has(eventId))
+            .map(async (eventId) => {
+              const event = await getEventById(eventId);
+              return {
+                id: event.id,
+                title: event.title,
+                startsAt: event.startsAt,
+                endsAt: event.endsAt,
+              };
+            }),
+        );
+        if (cancelled) return;
+
+        const options = buildPickupEventOptions(ticketsResponse.items, missingCartEvents);
+        setEventPickupEnabled(settings.eventPickupEnabled);
+        setPickupOptions(options);
+        setSelectedPickupEventId((current) => {
+          if (!settings.eventPickupEnabled || options.length === 0) return null;
+          if (current && options.some((option) => option.id === current)) return current;
+          return options[0]!.id;
+        });
+      } catch {
+        if (cancelled) return;
+        setPickupOptionsError(true);
+      } finally {
+        if (!cancelled) {
+          setLoadingPickupOptions(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cart, needsEventPickup, pickupReloadToken]);
+
   const handleRemove = useCallback(
     async (itemId: string) => {
       setRemovingId(itemId);
@@ -289,6 +481,9 @@ export default function CartScreen() {
       const result = await beginCheckout({
         paymentMethod,
         ...(selectedShippingAddressId ? { shippingAddressId: selectedShippingAddressId } : {}),
+        ...(needsEventPickup && eventPickupEnabled && selectedPickupEventId
+          ? { pickupEventId: selectedPickupEventId }
+          : {}),
         ...getCheckoutReturnUrls(),
       });
 
@@ -328,7 +523,14 @@ export default function CartScreen() {
     } finally {
       setCheckingOut(false);
     }
-  }, [paymentMethod, router, selectedShippingAddressId]);
+  }, [
+    eventPickupEnabled,
+    needsEventPickup,
+    paymentMethod,
+    router,
+    selectedPickupEventId,
+    selectedShippingAddressId,
+  ]);
 
   const openExtrasDrawer = useCallback(async (item: CartItem) => {
     setDrawerItem(item);
@@ -395,6 +597,16 @@ export default function CartScreen() {
 
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
   const blockedByShippingAddress = requiresShipping && !selectedShippingAddressId;
+  const blockedByPickupConfiguration = needsEventPickup && !eventPickupEnabled;
+  const blockedByPickupOptions =
+    needsEventPickup && eventPickupEnabled && (loadingPickupOptions || pickupOptionsError);
+  const blockedByPickupTicket =
+    needsEventPickup && eventPickupEnabled && pickupOptions.length === 0 && !loadingPickupOptions;
+  const blockedByPickupSelection =
+    needsEventPickup &&
+    eventPickupEnabled &&
+    pickupOptions.length > 0 &&
+    selectedPickupEventId === null;
   const openShippingAddresses = () => {
     router.push({
       pathname: '/profile/shipping',
@@ -586,6 +798,18 @@ export default function CartScreen() {
           />
         ) : null}
 
+        {needsEventPickup ? (
+          <PickupEventRow
+            loading={loadingPickupOptions}
+            error={pickupOptionsError}
+            enabled={eventPickupEnabled}
+            options={pickupOptions}
+            selectedId={selectedPickupEventId}
+            onSelect={setSelectedPickupEventId}
+            onRetry={() => setPickupReloadToken((current) => current + 1)}
+          />
+        ) : null}
+
         {itemCount > 0 && (
           <View style={styles.methodRow}>
             <Pressable
@@ -619,12 +843,30 @@ export default function CartScreen() {
               <Button
                 label={checkingOut ? cartCopy.actions.paying : cartCopy.actions.pay}
                 onPress={() => void handlePay()}
-                disabled={checkingOut || blockedByCarRequirement || blockedByShippingAddress}
+                disabled={
+                  checkingOut ||
+                  blockedByCarRequirement ||
+                  blockedByShippingAddress ||
+                  blockedByPickupConfiguration ||
+                  blockedByPickupOptions ||
+                  blockedByPickupTicket ||
+                  blockedByPickupSelection
+                }
               />
               {blockedByCarRequirement ? (
                 <Text style={styles.payBlocked}>{cartCopy.item.carRequired}</Text>
               ) : blockedByShippingAddress ? (
                 <Text style={styles.payBlocked}>{cartCopy.shipping.blocked}</Text>
+              ) : blockedByPickupConfiguration ? (
+                <Text style={styles.payBlocked}>{cartCopy.pickup.disabled}</Text>
+              ) : blockedByPickupOptions ? (
+                <Text style={styles.payBlocked}>
+                  {pickupOptionsError ? cartCopy.pickup.retry : cartCopy.pickup.loading}
+                </Text>
+              ) : blockedByPickupTicket ? (
+                <Text style={styles.payBlocked}>{cartCopy.pickup.noEligible}</Text>
+              ) : blockedByPickupSelection ? (
+                <Text style={styles.payBlocked}>{cartCopy.pickup.blocked}</Text>
               ) : null}
             </>
           )}
@@ -738,6 +980,10 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
   },
+  pickupRowWrap: {
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+  },
   shippingTitle: {
     color: theme.colors.fg,
     fontSize: theme.font.size.md,
@@ -751,6 +997,11 @@ const styles = StyleSheet.create({
   shippingHint: {
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
+  },
+  pickupBlockedText: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    textAlign: 'right',
   },
   shippingRetryText: {
     color: theme.colors.accent,
@@ -850,6 +1101,39 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontSize: theme.font.size.sm,
     fontWeight: '600',
+  },
+  pickupStatusCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  pickupEventDate: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+  },
+  pickupBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  pickupBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: theme.colors.accent + '15',
+    borderWidth: 1,
+    borderColor: theme.colors.accent + '40',
+  },
+  pickupBadgeText: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  pickupStatusText: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
   },
   carRow: {
     flexDirection: 'row',
