@@ -443,6 +443,43 @@ export const issueTicketsForMixedOrder = async (
       }
     }
 
+    // Mixed orders may also carry extras_only cart items: standalone OrderItem(kind='extras')
+    // rows for an event with no paired ticket line in this order. Attach those extras to
+    // the user's existing valid ticket for that event, mirroring `issueExtrasOnly`.
+    const extrasItems = await tx.orderItem.findMany({
+      where: { orderId, kind: 'extras' },
+      select: { eventId: true, event: { select: { title: true } } },
+    });
+    const ticketEventIds = new Set(
+      ticketItems.map((i) => i.eventId).filter((id): id is string => id !== null),
+    );
+    const seenExtrasOnlyEvents = new Set<string>();
+    for (const ex of extrasItems) {
+      if (!ex.eventId || !ex.event) continue;
+      if (ticketEventIds.has(ex.eventId)) continue;
+      if (seenExtrasOnlyEvents.has(ex.eventId)) continue;
+      seenExtrasOnlyEvents.add(ex.eventId);
+
+      await lockTicketTuple(tx, order.userId, ex.eventId);
+
+      const ticket = await tx.ticket.findFirst({
+        where: { userId: order.userId, eventId: ex.eventId, status: 'valid' },
+      });
+      if (!ticket) {
+        throw new TicketRevokedForExtrasOnlyError(orderId, order.userId, ex.eventId);
+      }
+
+      await upsertExtraItemsFromOrderItemsForEvent(orderId, ex.eventId, ticket.id, env, tx);
+
+      results.push({
+        ticketId: ticket.id,
+        code: signTicketCode(ticket.id, env),
+        userId: order.userId,
+        eventId: ex.eventId,
+        eventTitle: ex.event.title,
+      });
+    }
+
     await tx.order.update({
       where: { id: order.id },
       data: { status: 'paid', paidAt: new Date(), ...(order.cartId ? {} : { providerRef }) },
