@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminProductType, AdminStoreProductDetail } from '@jdm/shared/admin';
+import { useState } from 'react';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -60,6 +61,9 @@ export const ProductForm = ({
   const update = updateProductAction.bind(null, product.id);
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
+  const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'ship'>(
+    product.shippingFeeCents === null ? 'pickup' : 'ship',
+  );
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
   const hasPhotos = product.photos.length > 0;
 
@@ -103,16 +107,31 @@ export const ProductForm = ({
           required
           defaultValue={v.basePriceCents ?? String(product.basePriceCents)}
         />
-        <Field
-          label="Frete fixo (centavos, vazio = padrão da loja)"
-          name="shippingFeeCents"
-          type="number"
-          min={0}
-          defaultValue={
-            v.shippingFeeCents ??
-            (product.shippingFeeCents == null ? '' : String(product.shippingFeeCents))
-          }
-        />
+        <label className="flex flex-col gap-1">
+          <span className="text-sm text-[color:var(--color-muted)]">Modo de entrega</span>
+          <select
+            value={fulfillmentMode}
+            onChange={(e) => setFulfillmentMode(e.target.value as 'pickup' | 'ship')}
+            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
+          >
+            <option value="pickup">Retirada no evento</option>
+            <option value="ship">Envio</option>
+          </select>
+        </label>
+        {fulfillmentMode === 'ship' ? (
+          <Field
+            label="Frete fixo (centavos)"
+            name="shippingFeeCents"
+            type="number"
+            min={0}
+            defaultValue={
+              v.shippingFeeCents ??
+              (product.shippingFeeCents == null ? '' : String(product.shippingFeeCents))
+            }
+          />
+        ) : (
+          <input type="hidden" name="shippingFeeCents" value="" />
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Status</span>
           <select
