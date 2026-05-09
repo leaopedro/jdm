@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('expo-constants', () => ({ default: { expoConfig: { extra: {} } } }));
 
-const { APP_TAB_SPECS, getCartTabBadge, getPrimaryTabName, getVisibleTabSpecs } =
-  await import('./app-tabs');
+const { APP_TAB_SPECS, getCartTabBadge, getPrimaryTabName } = await import('./app-tabs');
 
 describe('APP_TAB_SPECS', () => {
   it('keeps the approved bottom-nav order, hiding only garage from the static spec', () => {
@@ -30,23 +29,11 @@ describe('APP_TAB_SPECS', () => {
 
   it('restores Ingressos into the Loja slot when the runtime store killswitch is off', () => {
     expect(getPrimaryTabName(false)).toBe('tickets');
-    expect(getVisibleTabSpecs(false).map((tab) => `${tab.name}:${tab.title}`)).toEqual([
-      'events:Eventos',
-      'tickets:Ingressos',
-      'cart:Carrinho',
-      'profile:Perfil',
-    ]);
   });
 
-  it('keeps Loja plus the dedicated Ingressos tab when the runtime store is available', () => {
+  it('keeps Loja in slot 1 when the runtime store is available', () => {
     expect(getPrimaryTabName(true)).toBe('store');
-    expect(getVisibleTabSpecs(true).map((tab) => `${tab.name}:${tab.title}`)).toEqual([
-      'events:Eventos',
-      'store:Loja',
-      'cart:Carrinho',
-      'tickets:Ingressos',
-      'profile:Perfil',
-    ]);
+    expect(getPrimaryTabName(null)).toBe('store');
   });
 });
 

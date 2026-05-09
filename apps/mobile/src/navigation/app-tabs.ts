@@ -1,5 +1,5 @@
 import { cartCopy } from '../copy/cart';
-import { resolveStoreSlot, shouldShowTicketsTab } from '../store/runtime';
+import { resolveStoreSlot } from '../store/runtime';
 
 export const APP_TAB_SPECS = [
   { name: 'events', title: 'Eventos', visible: true },
@@ -16,18 +16,4 @@ export function getCartTabBadge(itemCount: number) {
 
 export function getPrimaryTabName(runtimeStoreEnabled: boolean | null): 'store' | 'tickets' {
   return resolveStoreSlot(runtimeStoreEnabled);
-}
-
-export function getVisibleTabSpecs(runtimeStoreEnabled: boolean | null) {
-  if (resolveStoreSlot(runtimeStoreEnabled) === 'tickets') {
-    return [APP_TAB_SPECS[0], APP_TAB_SPECS[3], APP_TAB_SPECS[2], APP_TAB_SPECS[5]] as const;
-  }
-
-  return APP_TAB_SPECS.filter((tab) => {
-    if (tab.name === 'tickets') {
-      return shouldShowTicketsTab(runtimeStoreEnabled);
-    }
-
-    return tab.visible;
-  });
 }

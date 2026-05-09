@@ -32,11 +32,3 @@ export function isStoreAvailable(runtimeStoreEnabled: boolean | null): boolean {
 export function resolveStoreSlot(runtimeStoreEnabled: boolean | null): 'store' | 'tickets' {
   return isStoreAvailable(runtimeStoreEnabled) ? 'store' : 'tickets';
 }
-
-export function shouldShowTicketsTab(runtimeStoreEnabled: boolean | null): boolean {
-  return isStoreAvailable(runtimeStoreEnabled);
-}
-
-export function canAccessStoreRoutes(runtimeStoreEnabled: boolean | null): boolean {
-  return isStoreAvailable(runtimeStoreEnabled);
-}

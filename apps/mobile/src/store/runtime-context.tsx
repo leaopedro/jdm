@@ -8,29 +8,24 @@ import {
   type ReactNode,
 } from 'react';
 
-import {
-  STORE_BUILD_ENABLED,
-  canAccessStoreRoutes,
-  isStoreAvailable,
-  isStoreDisabledError,
-} from './runtime';
+import { STORE_BUILD_ENABLED, isStoreAvailable, isStoreDisabledError } from './runtime';
 
 import { listStoreProductTypes } from '~/api/store';
 
 type StoreRuntimeContextValue = {
-  canAccessStore: boolean;
   runtimeStoreEnabled: boolean | null;
-  refresh: () => Promise<void>;
 };
 
 const StoreRuntimeContext = createContext<StoreRuntimeContextValue | null>(null);
 
 export function StoreRuntimeProvider({ children }: { children: ReactNode }) {
   const [runtimeStoreEnabled, setRuntimeStoreEnabled] = useState<boolean | null>(
+    // null = "not yet probed" → store shown optimistically.
+    // false = build flag hard-disables; no probe needed.
     STORE_BUILD_ENABLED ? null : false,
   );
 
-  const refresh = useCallback(async () => {
+  const probe = useCallback(async () => {
     if (!STORE_BUILD_ENABLED) {
       setRuntimeStoreEnabled(false);
       return;
@@ -40,6 +35,9 @@ export function StoreRuntimeProvider({ children }: { children: ReactNode }) {
       await listStoreProductTypes();
       setRuntimeStoreEnabled(true);
     } catch (error: unknown) {
+      // Only the specific 503 killswitch response disables the store.
+      // Network errors and other failures leave state unchanged so the
+      // store remains visible (optimistic default).
       if (isStoreDisabledError(error)) {
         setRuntimeStoreEnabled(false);
       }
@@ -47,16 +45,12 @@ export function StoreRuntimeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void probe();
+  }, [probe]);
 
   const value = useMemo<StoreRuntimeContextValue>(
-    () => ({
-      canAccessStore: canAccessStoreRoutes(runtimeStoreEnabled),
-      runtimeStoreEnabled,
-      refresh,
-    }),
-    [refresh, runtimeStoreEnabled],
+    () => ({ runtimeStoreEnabled }),
+    [runtimeStoreEnabled],
   );
 
   return <StoreRuntimeContext.Provider value={value}>{children}</StoreRuntimeContext.Provider>;

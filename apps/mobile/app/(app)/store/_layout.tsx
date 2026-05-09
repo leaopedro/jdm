@@ -8,7 +8,10 @@ export default function StoreLayout() {
   const storeAvailable = useStoreAvailability();
 
   if (!storeAvailable) {
-    return <Redirect href={(auth.status === 'authenticated' ? '/tickets' : '/events') as never} />;
+    if (auth.status === 'authenticated') {
+      return <Redirect href="/tickets" />;
+    }
+    return <Redirect href="/events" />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;

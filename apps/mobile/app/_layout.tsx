@@ -104,6 +104,9 @@ export default function RootLayout() {
         publishableKey={stripeKey}
         merchantIdentifier="merchant.com.jdmexperience.app"
       >
+        {/* StoreRuntimeProvider must wrap AuthProvider so the store probe fires
+            before auth state settles. The probe uses an unauthenticated endpoint;
+            do not move it inside AuthProvider without verifying the probe auth. */}
         <StoreRuntimeProvider>
           <AuthProvider>
             <StatusBar style="light" />
