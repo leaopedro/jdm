@@ -311,3 +311,108 @@ const issueExtrasOnly = async (
     eventTitle: order.event.title,
   };
 };
+
+export const issueTicketsForMixedOrder = async (
+  orderId: string,
+  providerRef: string,
+  env: IssueEnv,
+): Promise<IssueResult[]> => {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, userId: true, status: true, cartId: true },
+    });
+    if (!order) throw new OrderNotFoundError(orderId);
+
+    if (order.status === 'paid') {
+      const existing = await tx.ticket.findMany({
+        where: { orderId },
+        include: { event: { select: { title: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      return existing.map((t) => ({
+        ticketId: t.id,
+        code: signTicketCode(t.id, env),
+        userId: t.userId,
+        eventId: t.eventId,
+        eventTitle: t.event.title,
+      }));
+    }
+
+    const ticketItems = await tx.orderItem.findMany({
+      where: { orderId, kind: 'ticket' },
+      select: {
+        id: true,
+        tierId: true,
+        eventId: true,
+        quantity: true,
+        tickets: true,
+        event: { select: { title: true, maxTicketsPerUser: true } },
+      },
+    });
+
+    const results: IssueResult[] = [];
+
+    for (const item of ticketItems) {
+      if (!item.tierId || !item.eventId || !item.event) continue;
+
+      const ticketsMeta = parseTicketsMeta(
+        item.tickets ? { tickets: JSON.stringify(item.tickets) } : undefined,
+      );
+
+      await lockTicketTuple(tx, order.userId, item.eventId);
+
+      if (item.event.maxTicketsPerUser !== null) {
+        const existingValidCount = await tx.ticket.count({
+          where: { userId: order.userId, eventId: item.eventId, status: 'valid' },
+        });
+        if (existingValidCount + item.quantity > item.event.maxTicketsPerUser) {
+          throw new TicketAlreadyExistsForEventError(
+            order.userId,
+            item.eventId,
+            item.event.maxTicketsPerUser,
+            existingValidCount,
+          );
+        }
+      }
+
+      for (let i = 0; i < item.quantity; i++) {
+        const meta = ticketsMeta[i];
+        const ticket = await tx.ticket.create({
+          data: {
+            orderId: order.id,
+            userId: order.userId,
+            eventId: item.eventId,
+            tierId: item.tierId,
+            source: 'purchase',
+            status: 'valid',
+            ...(meta?.carId ? { carId: meta.carId } : {}),
+            ...(meta?.licensePlate ? { licensePlate: meta.licensePlate } : {}),
+            ...(meta?.nickname ? { nickname: meta.nickname } : {}),
+          },
+        });
+
+        if (meta && meta.extras.length > 0) {
+          await upsertExtraItemsFromMeta(ticket.id, meta.extras, env, tx);
+        } else if (item.quantity === 1 && ticketsMeta.length === 0) {
+          await upsertExtraItemsFromOrder(orderId, ticket.id, env, tx);
+        }
+
+        results.push({
+          ticketId: ticket.id,
+          code: signTicketCode(ticket.id, env),
+          userId: order.userId,
+          eventId: item.eventId,
+          eventTitle: item.event.title,
+        });
+      }
+    }
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: { status: 'paid', paidAt: new Date(), ...(order.cartId ? {} : { providerRef }) },
+    });
+
+    return results;
+  });
+};
