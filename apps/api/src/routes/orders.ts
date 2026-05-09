@@ -9,6 +9,7 @@ import {
   getOrderResponseSchema,
   type TicketInput,
 } from '@jdm/shared/orders';
+import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
@@ -298,6 +299,23 @@ const withReturnParams = (rawUrl: string, params: Record<string, string>): strin
   return url.toString();
 };
 
+const captureStripeCancelFailure = (
+  err: unknown,
+  context: {
+    route: 'create_order' | 'web_checkout' | 'get_order';
+    providerRef?: string;
+    orderId?: string;
+  },
+): void => {
+  Sentry.withScope((scope) => {
+    scope.setTag('stripe_operation', 'cancel_payment_intent');
+    scope.setTag('orders_route', context.route);
+    if (context.providerRef) scope.setTag('stripe_payment_intent_id', context.providerRef);
+    if (context.orderId) scope.setTag('order_id', context.orderId);
+    Sentry.captureException(err);
+  });
+};
+
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
@@ -381,6 +399,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           { err: cancelErr, providerRef: ref },
           'orders: stripe PI cancel failed after sweep',
         );
+        captureStripeCancelFailure(cancelErr, {
+          route: 'create_order',
+          providerRef: ref,
+        });
       });
     }
 
@@ -441,6 +463,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           { err: cancelErr, providerRef: ref },
           'orders: stripe PI cancel failed after sweep',
         );
+        captureStripeCancelFailure(cancelErr, {
+          route: 'web_checkout',
+          providerRef: ref,
+        });
       });
     }
 
@@ -527,6 +553,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             { err: cancelErr, orderId: id },
             'orders: stripe PI cancel failed after lazy expiry',
           );
+          captureStripeCancelFailure(cancelErr, {
+            route: 'get_order',
+            orderId: id,
+            ...(order.providerRef ? { providerRef: order.providerRef } : {}),
+          });
         });
       }
 
