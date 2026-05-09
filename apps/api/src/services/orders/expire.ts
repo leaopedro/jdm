@@ -10,8 +10,65 @@ export type SweepResult = {
 };
 
 /**
- * Within an existing transaction, expire all pending orders for `tierId` whose
- * `expiresAt` has passed, and atomically decrement `quantitySold` by the count.
+ * Releases every stock reservation held by `orderIds`: ticket tiers, product
+ * variants, and ticket extras. Reads from `OrderItem` and `OrderExtra` so it
+ * handles `ticket`, `product`, `extras_only`, and `mixed` orders uniformly.
+ * Caller is responsible for first flipping the orders to `expired`.
+ */
+const releaseAllReservationsForOrders = async (
+  tx: Prisma.TransactionClient,
+  orderIds: string[],
+): Promise<void> => {
+  if (orderIds.length === 0) return;
+
+  const items = await tx.orderItem.findMany({
+    where: { orderId: { in: orderIds } },
+    select: { kind: true, tierId: true, variantId: true, quantity: true },
+  });
+
+  const tierReleases = new Map<string, number>();
+  const variantReleases = new Map<string, number>();
+  for (const it of items) {
+    if (it.kind === 'ticket' && it.tierId) {
+      tierReleases.set(it.tierId, (tierReleases.get(it.tierId) ?? 0) + it.quantity);
+    } else if (it.kind === 'product' && it.variantId) {
+      variantReleases.set(it.variantId, (variantReleases.get(it.variantId) ?? 0) + it.quantity);
+    }
+  }
+  for (const [tierId, qty] of tierReleases) {
+    await tx.ticketTier.updateMany({
+      where: { id: tierId, quantitySold: { gte: qty } },
+      data: { quantitySold: { decrement: qty } },
+    });
+  }
+  for (const [variantId, qty] of variantReleases) {
+    await tx.variant.updateMany({
+      where: { id: variantId, quantitySold: { gte: qty } },
+      data: { quantitySold: { decrement: qty } },
+    });
+  }
+
+  const orderExtras = await tx.orderExtra.findMany({
+    where: { orderId: { in: orderIds } },
+    select: { extraId: true, quantity: true },
+  });
+  const extraReleases = new Map<string, number>();
+  for (const { extraId, quantity } of orderExtras) {
+    extraReleases.set(extraId, (extraReleases.get(extraId) ?? 0) + quantity);
+  }
+  for (const [extraId, count] of extraReleases) {
+    await tx.ticketExtra.updateMany({
+      where: { id: extraId, quantitySold: { gte: count } },
+      data: { quantitySold: { decrement: count } },
+    });
+  }
+};
+
+/**
+ * Within an existing transaction, expire all pending orders that hold a
+ * `ticket`-kind `OrderItem` for `tierId` and whose `expiresAt` has passed.
+ * Releases every reservation held by those orders (ticket tier, variant,
+ * extras), so mixed orders that pinned multiple kinds are fully unwound.
  * Returns provider refs so the caller can cancel the Stripe PIs after the tx.
  */
 export const sweepExpiredOrdersForTier = async (
@@ -20,8 +77,12 @@ export const sweepExpiredOrdersForTier = async (
 ): Promise<SweepResult> => {
   const now = new Date();
   const expired = await tx.order.findMany({
-    where: { tierId, status: 'pending', expiresAt: { not: null, lt: now } },
-    select: { id: true, providerRef: true, kind: true },
+    where: {
+      status: 'pending',
+      expiresAt: { not: null, lt: now },
+      items: { some: { kind: 'ticket', tierId } },
+    },
+    select: { id: true, providerRef: true },
   });
 
   if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
@@ -32,29 +93,8 @@ export const sweepExpiredOrdersForTier = async (
     where: { id: { in: expiredIds } },
     data: { status: 'expired' },
   });
-  const ticketOrderCount = expired.filter((o) => o.kind === 'ticket').length;
-  if (ticketOrderCount > 0) {
-    await tx.ticketTier.updateMany({
-      where: { id: tierId, quantitySold: { gte: ticketOrderCount } },
-      data: { quantitySold: { decrement: ticketOrderCount } },
-    });
-  }
 
-  // Release extras stock for all swept orders
-  const orderExtras = await tx.orderExtra.findMany({
-    where: { orderId: { in: expiredIds } },
-    select: { extraId: true, quantity: true },
-  });
-  const extraCounts = new Map<string, number>();
-  for (const { extraId, quantity } of orderExtras) {
-    extraCounts.set(extraId, (extraCounts.get(extraId) ?? 0) + quantity);
-  }
-  for (const [extraId, count] of extraCounts) {
-    await tx.ticketExtra.updateMany({
-      where: { id: extraId, quantitySold: { gte: count } },
-      data: { quantitySold: { decrement: count } },
-    });
-  }
+  await releaseAllReservationsForOrders(tx, expiredIds);
 
   Sentry.addBreadcrumb({
     category: 'orders.sweep',
@@ -70,9 +110,10 @@ export const sweepExpiredOrdersForTier = async (
 };
 
 /**
- * Within an existing transaction, expire all pending product orders whose linked
- * `OrderItem(kind='product')` references `variantId` and whose `expiresAt` has passed,
- * atomically decrementing `Variant.quantitySold` by the released quantity.
+ * Within an existing transaction, expire all pending orders that hold a
+ * `product`-kind `OrderItem` for `variantId` and whose `expiresAt` has passed.
+ * Releases every reservation held by those orders (variant, ticket tier,
+ * extras), so mixed orders that pinned multiple kinds are fully unwound.
  */
 export const sweepExpiredOrdersForVariant = async (
   variantId: string,
@@ -82,15 +123,10 @@ export const sweepExpiredOrdersForVariant = async (
   const expired = await tx.order.findMany({
     where: {
       status: 'pending',
-      kind: 'product',
       expiresAt: { not: null, lt: now },
       items: { some: { kind: 'product', variantId } },
     },
-    select: {
-      id: true,
-      providerRef: true,
-      items: { where: { variantId }, select: { quantity: true } },
-    },
+    select: { id: true, providerRef: true },
   });
 
   if (expired.length === 0) return { count: 0, expiredProviderRefs: [] };
@@ -101,16 +137,7 @@ export const sweepExpiredOrdersForVariant = async (
     data: { status: 'expired' },
   });
 
-  const releaseQuantity = expired.reduce(
-    (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
-    0,
-  );
-  if (releaseQuantity > 0) {
-    await tx.variant.updateMany({
-      where: { id: variantId, quantitySold: { gte: releaseQuantity } },
-      data: { quantitySold: { decrement: releaseQuantity } },
-    });
-  }
+  await releaseAllReservationsForOrders(tx, expiredIds);
 
   Sentry.addBreadcrumb({
     category: 'orders.sweep',
@@ -147,8 +174,10 @@ export type ExpireSingleOrderOutcome =
 
 /**
  * Atomically expire a single pending order if its TTL has passed, releasing
- * `quantitySold`. Returns a discriminated outcome so the caller can split
- * 404 (missing) from 403 (non-owner).
+ * every reservation it holds (ticket tier, variant, extras) regardless of
+ * `Order.kind` — mixed orders are unwound the same way as ticket/product
+ * orders. Returns a discriminated outcome so the caller can split 404
+ * (missing) from 403 (non-owner).
  */
 export const expireSingleOrder = async (
   orderId: string,
@@ -182,36 +211,8 @@ export const expireSingleOrder = async (
       where: { id: orderId, status: 'pending' },
       data: { status: 'expired' },
     });
-    if (order.kind === 'ticket' && order.tierId) {
-      await tx.ticketTier.updateMany({
-        where: { id: order.tierId, quantitySold: { gt: 0 } },
-        data: { quantitySold: { decrement: 1 } },
-      });
-    } else if (order.kind === 'product') {
-      const productItems = await tx.orderItem.findMany({
-        where: { orderId, kind: 'product' },
-        select: { variantId: true, quantity: true },
-      });
-      for (const { variantId, quantity } of productItems) {
-        if (!variantId) continue;
-        await tx.variant.updateMany({
-          where: { id: variantId, quantitySold: { gte: quantity } },
-          data: { quantitySold: { decrement: quantity } },
-        });
-      }
-    }
 
-    // Release extras stock
-    const orderExtras = await tx.orderExtra.findMany({
-      where: { orderId },
-      select: { extraId: true, quantity: true },
-    });
-    for (const { extraId, quantity } of orderExtras) {
-      await tx.ticketExtra.updateMany({
-        where: { id: extraId, quantitySold: { gte: quantity } },
-        data: { quantitySold: { decrement: quantity } },
-      });
-    }
+    await releaseAllReservationsForOrders(tx, [orderId]);
 
     return { kind: 'ok', wasExpired: true, order: { ...order, status: 'expired' } };
   });
