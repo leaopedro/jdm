@@ -223,9 +223,7 @@ function DashboardContent({ data }: { data: DashboardData }) {
         </div>
         <PaymentMix items={data.paymentMix.items} />
       </div>
-      {data.byProduct.items.length > 0 ? (
-        <ProductTable items={data.byProduct.items} />
-      ) : null}
+      {data.byProduct.items.length > 0 ? <ProductTable items={data.byProduct.items} /> : null}
     </div>
   );
 }
