@@ -28,28 +28,31 @@ export const HiddenQR = ({
   const toggle = () => setRevealed((prev) => !prev);
 
   return (
-    <View style={[styles.wrapper, { width: size, height: size, backgroundColor }]}>
-      <View
-        accessible={revealed}
-        accessibilityRole="image"
-        accessibilityLabel={accessibilityLabel}
-        importantForAccessibility={revealed ? 'yes' : 'no-hide-descendants'}
-        aria-hidden={!revealed}
-      >
-        <QRCode value={value} size={size} backgroundColor={backgroundColor} />
-      </View>
-      {!revealed ? (
-        <Pressable
-          style={styles.overlay}
-          onPress={toggle}
-          accessibilityRole="button"
-          accessibilityLabel={COPY.show}
-          accessibilityState={{ expanded: false }}
+    <View style={styles.container}>
+      <View style={[styles.wrapper, { width: size, height: size, backgroundColor }]}>
+        <View
+          accessible={revealed}
+          accessibilityRole="image"
+          accessibilityLabel={accessibilityLabel}
+          importantForAccessibility={revealed ? 'yes' : 'no-hide-descendants'}
+          aria-hidden={!revealed}
         >
-          <Eye color={theme.colors.fg} size={Math.min(48, Math.max(24, size * 0.2))} />
-          <Text style={styles.hint}>{COPY.hidden}</Text>
-        </Pressable>
-      ) : (
+          <QRCode value={value} size={size} backgroundColor={backgroundColor} />
+        </View>
+        {!revealed ? (
+          <Pressable
+            style={styles.overlay}
+            onPress={toggle}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.show}
+            accessibilityState={{ expanded: false }}
+          >
+            <Eye color={theme.colors.fg} size={Math.min(48, Math.max(24, size * 0.2))} />
+            <Text style={styles.hint}>{COPY.hidden}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {revealed ? (
         <Pressable
           style={styles.toggleButton}
           onPress={toggle}
@@ -59,13 +62,18 @@ export const HiddenQR = ({
           hitSlop={8}
         >
           <EyeOff color={theme.colors.fg} size={18} />
+          <Text style={styles.hideText}>{COPY.hide}</Text>
         </Pressable>
-      )}
+      ) : null}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
   wrapper: {
     position: 'relative',
     overflow: 'hidden',
@@ -86,14 +94,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   toggleButton: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  hideText: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
   },
 });
