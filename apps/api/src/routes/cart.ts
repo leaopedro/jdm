@@ -27,6 +27,7 @@ import {
   validateCartItem,
 } from '../services/cart/index.js';
 import type { ValidatedCartItem } from '../services/cart/index.js';
+import { withOrderIdParam } from '../services/cart/success-url.js';
 import { ORDER_EXPIRY_MS } from '../services/orders/expire.js';
 import { ensureStoreSettings } from '../services/store-settings.js';
 
@@ -544,8 +545,13 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
 
     const productName = data.orders.map((o) => o.description).join(' + ');
 
-    const successUrl = input.successUrl ?? 'https://app.jdmexperience.com.br/checkout/success';
+    const baseSuccessUrl = input.successUrl ?? 'https://app.jdmexperience.com.br/checkout/success';
     const cancelUrl = input.cancelUrl ?? 'https://app.jdmexperience.com.br/checkout/cancel';
+
+    const firstOrderId = data.orders[0]?.id;
+    const successUrl = firstOrderId
+      ? withOrderIdParam(baseSuccessUrl, firstOrderId)
+      : baseSuccessUrl;
 
     try {
       const session = await app.stripe.createCheckoutSession({
