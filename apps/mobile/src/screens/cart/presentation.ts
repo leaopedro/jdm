@@ -1,4 +1,5 @@
 import type { CartItem } from '@jdm/shared/cart';
+import type { MyTicket } from '@jdm/shared/tickets';
 
 import { cartCopy } from '../../copy/cart';
 
@@ -28,6 +29,62 @@ export function buildCartSections(items: CartItem[]): CartSection[] {
   }
 
   return sections;
+}
+
+export type PickupEventOption = {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  hasOwnedTicket: boolean;
+  hasCartTicket: boolean;
+};
+
+export function collectCartTicketEventIds(items: CartItem[]): string[] {
+  return [
+    ...new Set(
+      items
+        .filter((item) => !isProductItem(item))
+        .flatMap((item) => (item.eventId ? [item.eventId] : [])),
+    ),
+  ];
+}
+
+export function buildPickupEventOptions(
+  tickets: MyTicket[],
+  cartEvents: Array<{ id: string; title: string; startsAt: string; endsAt: string }>,
+): PickupEventOption[] {
+  const options = new Map<string, PickupEventOption>();
+
+  for (const ticket of tickets) {
+    if (ticket.status !== 'valid') continue;
+    options.set(ticket.event.id, {
+      id: ticket.event.id,
+      title: ticket.event.title,
+      startsAt: ticket.event.startsAt,
+      endsAt: ticket.event.endsAt,
+      hasOwnedTicket: true,
+      hasCartTicket: false,
+    });
+  }
+
+  for (const event of cartEvents) {
+    const existing = options.get(event.id);
+    if (existing) {
+      options.set(event.id, { ...existing, hasCartTicket: true });
+      continue;
+    }
+    options.set(event.id, {
+      id: event.id,
+      title: event.title,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      hasOwnedTicket: false,
+      hasCartTicket: true,
+    });
+  }
+
+  return [...options.values()].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
 
 export function formatProductAttributes(

@@ -1,7 +1,13 @@
 import type { CartItem } from '@jdm/shared/cart';
+import type { MyTicket } from '@jdm/shared/tickets';
 import { describe, expect, it } from 'vitest';
 
-import { buildCartSections, formatProductAttributes } from '../presentation';
+import {
+  buildCartSections,
+  buildPickupEventOptions,
+  collectCartTicketEventIds,
+  formatProductAttributes,
+} from '../presentation';
 
 const baseItem = (overrides: Partial<CartItem>): CartItem => ({
   id: 'item_1',
@@ -73,5 +79,96 @@ describe('cart presentation helpers', () => {
         Nested: { foo: 'bar' },
       }),
     ).toBe('Cor: Preto · Tamanho: G · Estoque: 5 · Inativo: false');
+  });
+
+  it('collects unique event ids from ticket cart items only', () => {
+    expect(
+      collectCartTicketEventIds([
+        baseItem({ id: 'ticket_1', eventId: 'evt_1' }),
+        baseItem({ id: 'ticket_2', eventId: 'evt_1' }),
+        baseItem({
+          id: 'product_1',
+          eventId: null,
+          tierId: null,
+          variantId: 'var_1',
+          kind: 'product',
+          product: {
+            productId: 'prod_1',
+            productTitle: 'Camiseta JDM',
+            productSlug: 'camiseta-jdm',
+            variantId: 'var_1',
+            variantName: 'Preto / G',
+            variantSku: 'SKU-1',
+            unitPriceCents: 9900,
+            requiresShipping: false,
+            shippingFeeCents: null,
+            attributes: null,
+          },
+        }),
+      ]),
+    ).toEqual(['evt_1']);
+  });
+
+  it('builds pickup options from owned tickets plus cart ticket events', () => {
+    const ticket = {
+      id: 'ticket_1',
+      code: 'qr_1',
+      status: 'valid',
+      source: 'purchase',
+      tierName: 'Geral',
+      nickname: null,
+      usedAt: null,
+      createdAt: '2026-05-01T10:00:00.000Z',
+      event: {
+        id: 'evt_1',
+        slug: 'evento-1',
+        title: 'Evento 1',
+        coverUrl: null,
+        startsAt: '2026-05-10T10:00:00.000Z',
+        endsAt: '2026-05-10T12:00:00.000Z',
+        venueName: 'Autódromo',
+        city: 'Curitiba',
+        stateCode: 'PR',
+        type: 'meeting',
+      },
+      extras: [],
+    } satisfies MyTicket;
+
+    expect(
+      buildPickupEventOptions(
+        [ticket],
+        [
+          {
+            id: 'evt_1',
+            title: 'Evento 1',
+            startsAt: '2026-05-10T10:00:00.000Z',
+            endsAt: '2026-05-10T12:00:00.000Z',
+          },
+          {
+            id: 'evt_2',
+            title: 'Evento 2',
+            startsAt: '2026-05-11T10:00:00.000Z',
+            endsAt: '2026-05-11T12:00:00.000Z',
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        id: 'evt_1',
+        title: 'Evento 1',
+        startsAt: '2026-05-10T10:00:00.000Z',
+        endsAt: '2026-05-10T12:00:00.000Z',
+        hasOwnedTicket: true,
+        hasCartTicket: true,
+      },
+      {
+        id: 'evt_2',
+        title: 'Evento 2',
+        startsAt: '2026-05-11T10:00:00.000Z',
+        endsAt: '2026-05-11T12:00:00.000Z',
+        hasOwnedTicket: false,
+        hasCartTicket: true,
+      },
+    ]);
   });
 });

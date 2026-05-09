@@ -164,7 +164,11 @@ type PreparedCartItem = {
 export async function reserveAndCreateOrders(
   cart: CartWithItems,
   userId: string,
-  options: { method: CartCheckoutMethod; shippingAddressId?: string | null } = { method: 'card' },
+  options: {
+    method: CartCheckoutMethod;
+    shippingAddressId?: string | null;
+    pickupEventId?: string | null;
+  } = { method: 'card' },
 ): Promise<
   { ok: true; data: CheckoutResult } | { ok: false; status: number; error: string; message: string }
 > {
@@ -195,6 +199,7 @@ export async function reserveAndCreateOrders(
             item,
             item.id === primaryShippingCartItemId,
             options.shippingAddressId ?? null,
+            options.pickupEventId ?? null,
             tx,
             allExpiredRefs,
           );
@@ -251,6 +256,7 @@ export async function reserveAndCreateOrders(
           eventId: singleEventId,
           tierId: singleTierId,
           cartId: cart.id,
+          pickupEventId: options.pickupEventId ?? null,
           kind: orderKind,
           amountCents: totalAmountCents,
           quantity: totalQuantity,
@@ -331,6 +337,7 @@ async function prepareProductCartItem(
   item: CartWithItems['items'][number],
   isPrimaryShipping: boolean,
   shippingAddressId: string | null,
+  pickupEventId: string | null,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
 ): Promise<PreparedCartItem> {

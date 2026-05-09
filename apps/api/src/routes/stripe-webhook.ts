@@ -5,6 +5,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
+import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
 import {
   OrderNotPendingError,
   TicketAlreadyExistsForEventError,
@@ -90,6 +91,12 @@ const markRefundedAndReleaseReservation = async (orderId: string): Promise<void>
   });
 };
 
+const cartSettlementPriority = (kind: 'ticket' | 'extras_only' | 'product' | 'mixed') => {
+  if (kind === 'ticket') return 0;
+  if (kind === 'extras_only') return 1;
+  return 2;
+};
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
@@ -105,7 +112,8 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
   ) => {
     const orders = await prisma.order.findMany({
       where: { cartId, status: 'pending' },
-      select: { id: true, amountCents: true },
+      select: { id: true, amountCents: true, kind: true },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (orders.length === 0) {
@@ -119,6 +127,8 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
       return reply.status(200).send({ ok: true, ignored: true });
     }
+
+    orders.sort((a, b) => cartSettlementPriority(a.kind) - cartSettlementPriority(b.kind));
 
     let issuedAnyTicket = false;
     for (const order of orders) {
@@ -142,6 +152,15 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
           continue;
         }
         if (err instanceof OrderNotPendingError) {
+          continue;
+        }
+        if (err instanceof EventPickupAssignmentUnavailableError) {
+          await app.stripe.refund(piId, 'pickup-ticket-unavailable', order.amountCents);
+          await markRefundedAndReleaseReservation(order.id);
+          request.log.warn(
+            { orderId: order.id, piId, pickupEventId: err.eventId },
+            'cart webhook: event pickup assignment unavailable, partial refund',
+          );
           continue;
         }
         throw err;
@@ -357,6 +376,18 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
           );
           return reply.status(200).send({ ok: true, refunded: true, reason: 'ticket-revoked' });
         }
+        if (err instanceof EventPickupAssignmentUnavailableError) {
+          await app.stripe.refund(intent.id, 'pickup-ticket-unavailable');
+          await markRefundedAndReleaseReservation(orderId);
+          await markProcessed(event.id, event);
+          request.log.warn(
+            { orderId, paymentIntentId: intent.id, pickupEventId: err.eventId },
+            'stripe webhook: event pickup assignment unavailable, refunded',
+          );
+          return reply
+            .status(200)
+            .send({ ok: true, refunded: true, reason: 'pickup-ticket-unavailable' });
+        }
         // Order expired between POST /orders and webhook delivery.
         // Customer paid but capacity was already released — refund immediately.
         if (err instanceof OrderNotPendingError) {
@@ -465,6 +496,14 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
           await markRefundedAndReleaseReservation(sessionOrderId);
           await markProcessed(event.id, event);
           return reply.status(200).send({ ok: true, refunded: true, reason: 'ticket-revoked' });
+        }
+        if (err instanceof EventPickupAssignmentUnavailableError) {
+          await app.stripe.refund(piId, 'pickup-ticket-unavailable');
+          await markRefundedAndReleaseReservation(sessionOrderId);
+          await markProcessed(event.id, event);
+          return reply
+            .status(200)
+            .send({ ok: true, refunded: true, reason: 'pickup-ticket-unavailable' });
         }
         if (err instanceof OrderNotPendingError) {
           const staleOrder = await prisma.order.findUnique({

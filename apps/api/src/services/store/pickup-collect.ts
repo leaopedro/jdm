@@ -53,7 +53,7 @@ const queryPickupOrders = async (ticketId: string) => {
     where: {
       fulfillmentMethod: 'pickup',
       status: 'paid',
-      notes: { contains: ticketId },
+      OR: [{ pickupTicketId: ticketId }, { notes: { contains: ticketId } }],
     },
     include: {
       items: {
@@ -71,7 +71,9 @@ const queryPickupOrders = async (ticketId: string) => {
       },
     },
   });
-  return candidates.filter((o) => parsePickupTicketId(o.notes) === ticketId);
+  return candidates.filter(
+    (o) => o.pickupTicketId === ticketId || parsePickupTicketId(o.notes) === ticketId,
+  );
 };
 
 export const getPickupOrdersForTicket = async (ticketId: string): Promise<StorePickupOrder[]> => {
