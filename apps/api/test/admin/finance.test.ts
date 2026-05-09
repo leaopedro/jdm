@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '@jdm/db';
 import {
   adminFinanceByEventResponseSchema,
+  adminFinanceByProductResponseSchema,
   adminFinancePaymentMixResponseSchema,
   adminFinanceSummarySchema,
   adminFinanceTrendResponseSchema,
@@ -285,6 +286,8 @@ describe('Admin Finance Endpoints', () => {
       expect(body.avgOrderCents).toBe(8000);
       expect(body.refundedCents).toBe(4500);
       expect(body.refundedCount).toBe(1);
+      expect(body.storeRevenueCents).toBe(5000);
+      expect(body.storeOrderCount).toBe(1);
     });
 
     it('filters by date range', async () => {
@@ -587,8 +590,20 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const body = adminFinanceTrendResponseSchema.parse(res.json());
       expect(body.points).toHaveLength(2);
-      expect(body.points[0]!).toEqual({ date: '2026-05-01', revenueCents: 15000, orderCount: 2 });
-      expect(body.points[1]!).toEqual({ date: '2026-05-02', revenueCents: 3000, orderCount: 1 });
+      expect(body.points[0]!).toEqual({
+        date: '2026-05-01',
+        revenueCents: 15000,
+        orderCount: 2,
+        ticketRevenueCents: 15000,
+        storeRevenueCents: 0,
+      });
+      expect(body.points[1]!).toEqual({
+        date: '2026-05-02',
+        revenueCents: 3000,
+        orderCount: 1,
+        ticketRevenueCents: 3000,
+        storeRevenueCents: 0,
+      });
     });
 
     it('uses order item subtotals in trend buckets', async () => {
@@ -622,7 +637,15 @@ describe('Admin Finance Endpoints', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = adminFinanceTrendResponseSchema.parse(res.json());
-      expect(body.points).toEqual([{ date: '2026-05-03', revenueCents: 16500, orderCount: 2 }]);
+      expect(body.points).toEqual([
+        {
+          date: '2026-05-03',
+          revenueCents: 16500,
+          orderCount: 2,
+          ticketRevenueCents: 15000,
+          storeRevenueCents: 0,
+        },
+      ]);
     });
   });
 
@@ -728,6 +751,137 @@ describe('Admin Finance Endpoints', () => {
         revenueCents: 6000,
         orderCount: 1,
       });
+    });
+  });
+
+  describe('GET /admin/finance/by-product', () => {
+    it('returns empty items when no product orders exist', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/by-product',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceByProductResponseSchema.parse(res.json());
+      expect(body.items).toEqual([]);
+    });
+
+    it('groups product revenue by product', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+
+      const productType = await prisma.productType.create({ data: { name: 'Camiseta' } });
+      const product1 = await prisma.product.create({
+        data: {
+          slug: 'camiseta-preta',
+          title: 'Camiseta Preta',
+          description: 'desc',
+          productTypeId: productType.id,
+          basePriceCents: 5000,
+          status: 'active',
+        },
+      });
+      const product2 = await prisma.product.create({
+        data: {
+          slug: 'bone-jdm',
+          title: 'Boné JDM',
+          description: 'desc',
+          productTypeId: productType.id,
+          basePriceCents: 3000,
+          status: 'active',
+        },
+      });
+      const variant1 = await prisma.variant.create({
+        data: {
+          productId: product1.id,
+          name: 'M',
+          priceCents: 5000,
+          quantityTotal: 10,
+          attributes: {},
+        },
+      });
+      const variant2 = await prisma.variant.create({
+        data: {
+          productId: product2.id,
+          name: 'Único',
+          priceCents: 3000,
+          quantityTotal: 10,
+          attributes: {},
+        },
+      });
+
+      await seedOrder(buyer.id, null, null, {
+        kind: 'product',
+        orderItems: [{ kind: 'product', variantId: variant1.id, unitPriceCents: 5000 }],
+      });
+      await seedOrder(buyer.id, null, null, {
+        kind: 'product',
+        orderItems: [
+          { kind: 'product', variantId: variant1.id, unitPriceCents: 5000 },
+          { kind: 'product', variantId: variant2.id, unitPriceCents: 3000 },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/by-product',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceByProductResponseSchema.parse(res.json());
+      expect(body.items).toHaveLength(2);
+
+      const shirt = body.items.find((i) => i.productId === product1.id);
+      const cap = body.items.find((i) => i.productId === product2.id);
+
+      expect(shirt).toMatchObject({
+        productTitle: 'Camiseta Preta',
+        orderCount: 2,
+        quantitySold: 2,
+        revenueCents: 10000,
+      });
+      expect(cap).toMatchObject({
+        productTitle: 'Boné JDM',
+        orderCount: 1,
+        quantitySold: 1,
+        revenueCents: 3000,
+      });
+    });
+
+    it('excludes ticket-only orders from by-product', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event = await seedEvent('meet-sp');
+      const tier = await seedTier(event.id);
+
+      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 10000 });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/by-product',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceByProductResponseSchema.parse(res.json());
+      expect(body.items).toEqual([]);
+    });
+
+    it('returns 401 without auth', async () => {
+      const res = await app.inject({ method: 'GET', url: '/admin/finance/by-product' });
+      expect(res.statusCode).toBe(401);
     });
   });
 

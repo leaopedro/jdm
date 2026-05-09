@@ -11,7 +11,7 @@ type FinanceOrderRecord = {
   method: PaymentMethod;
   status: OrderStatus;
   paidAt: Date | null;
-  items: Array<{ subtotalCents: number }>;
+  items: Array<{ subtotalCents: number; kind: 'ticket' | 'product' | 'extras' }>;
   event: null | {
     id: string;
     title: string;
@@ -66,6 +66,20 @@ function getFinanceOrderRevenueCents(
   return order.items.reduce((sum, item) => sum + item.subtotalCents, 0);
 }
 
+function getOrderItemRevenueCents(
+  order: Pick<FinanceOrderRecord, 'amountCents' | 'items'>,
+  kind: 'ticket' | 'product' | 'extras',
+): number {
+  if (order.items.length === 0) return kind === 'ticket' ? order.amountCents : 0;
+  return order.items
+    .filter((i) => i.kind === kind)
+    .reduce((sum, i) => sum + i.subtotalCents, 0);
+}
+
+function hasProductItems(order: Pick<FinanceOrderRecord, 'items'>): boolean {
+  return order.items.some((i) => i.kind === 'product');
+}
+
 async function findFinanceOrders(
   where: Prisma.OrderWhereInput,
   statuses: Array<'paid' | 'refunded'>,
@@ -98,17 +112,22 @@ async function findFinanceOrders(
   const orderIds = orders.map((order) => order.id);
   const orderItems =
     orderIds.length > 0
-      ? await prisma.$queryRaw<Array<{ orderId: string; subtotalCents: number }>>(Prisma.sql`
-          SELECT "orderId", "subtotalCents"
+      ? await prisma.$queryRaw<
+          Array<{ orderId: string; subtotalCents: number; kind: 'ticket' | 'product' | 'extras' }>
+        >(Prisma.sql`
+          SELECT "orderId", "subtotalCents", "kind"::"text" AS "kind"
           FROM "OrderItem"
           WHERE "orderId" IN (${Prisma.join(orderIds)})
         `)
       : [];
 
-  const itemsByOrderId = new Map<string, Array<{ subtotalCents: number }>>();
+  const itemsByOrderId = new Map<
+    string,
+    Array<{ subtotalCents: number; kind: 'ticket' | 'product' | 'extras' }>
+  >();
   for (const item of orderItems) {
     const bucket = itemsByOrderId.get(item.orderId) ?? [];
-    bucket.push({ subtotalCents: item.subtotalCents });
+    bucket.push({ subtotalCents: item.subtotalCents, kind: item.kind });
     itemsByOrderId.set(item.orderId, bucket);
   }
 
@@ -137,12 +156,17 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     let refundedCents = 0;
     let orderCount = 0;
     let refundedCount = 0;
+    let storeRevenueCents = 0;
+    let storeOrderCount = 0;
 
     for (const order of orders) {
       const revenueCents = getFinanceOrderRevenueCents(order);
       if (order.status === 'paid') {
         totalRevenueCents += revenueCents;
         orderCount += 1;
+        const storeRev = getOrderItemRevenueCents(order, 'product');
+        storeRevenueCents += storeRev;
+        if (hasProductItems(order)) storeOrderCount += 1;
       } else {
         refundedCents += revenueCents;
         refundedCount += 1;
@@ -158,6 +182,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       ticketCount,
       refundedCents,
       refundedCount,
+      storeRevenueCents,
+      storeOrderCount,
     };
   });
 
@@ -235,13 +261,23 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
     const orders = await findFinanceOrders(where, ['paid']);
 
-    const buckets = new Map<string, { revenueCents: number; orderCount: number }>();
+    const buckets = new Map<
+      string,
+      { revenueCents: number; orderCount: number; ticketRevenueCents: number; storeRevenueCents: number }
+    >();
     for (const o of orders) {
       if (!o.paidAt) continue;
       const date = o.paidAt.toISOString().slice(0, 10);
-      const bucket = buckets.get(date) ?? { revenueCents: 0, orderCount: 0 };
+      const bucket = buckets.get(date) ?? {
+        revenueCents: 0,
+        orderCount: 0,
+        ticketRevenueCents: 0,
+        storeRevenueCents: 0,
+      };
       bucket.revenueCents += getFinanceOrderRevenueCents(o);
       bucket.orderCount += 1;
+      bucket.ticketRevenueCents += getOrderItemRevenueCents(o, 'ticket');
+      bucket.storeRevenueCents += getOrderItemRevenueCents(o, 'product');
       buckets.set(date, bucket);
     }
 
@@ -290,6 +326,58 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
           totalRevenue > 0 ? Math.round((item.revenueCents / totalRevenue) * 10000) / 100 : 0,
       })),
     };
+  });
+
+  app.get('/finance/by-product', async (request) => {
+    const where = buildWhere(request.query);
+    const orders = await findFinanceOrders(where, ['paid']);
+
+    const productOrderIds = orders
+      .filter((o) => hasProductItems(o))
+      .map((o) => o.id);
+
+    if (productOrderIds.length === 0) return { items: [] };
+
+    const productItems = await prisma.orderItem.findMany({
+      where: { orderId: { in: productOrderIds }, kind: 'product' },
+      select: {
+        orderId: true,
+        quantity: true,
+        subtotalCents: true,
+        variant: {
+          select: {
+            product: { select: { id: true, title: true } },
+          },
+        },
+      },
+    });
+
+    const buckets = new Map<
+      string,
+      { productId: string; productTitle: string; quantitySold: number; revenueCents: number; orderIds: Set<string> }
+    >();
+
+    for (const item of productItems) {
+      if (!item.variant?.product) continue;
+      const { id: productId, title: productTitle } = item.variant.product;
+      const bucket = buckets.get(productId) ?? {
+        productId,
+        productTitle,
+        quantitySold: 0,
+        revenueCents: 0,
+        orderIds: new Set<string>(),
+      };
+      bucket.orderIds.add(item.orderId);
+      bucket.quantitySold += item.quantity;
+      bucket.revenueCents += item.subtotalCents;
+      buckets.set(productId, bucket);
+    }
+
+    const items = Array.from(buckets.values())
+      .map(({ orderIds, ...rest }) => ({ ...rest, orderCount: orderIds.size }))
+      .sort((a, b) => b.revenueCents - a.revenueCents);
+
+    return { items };
   });
 
   app.get('/finance/export', async (request, reply) => {

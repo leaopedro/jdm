@@ -5,6 +5,7 @@ import type { AdminFinanceQuery } from '@jdm/shared/admin';
 import {
   financeQs,
   getFinanceByEvent,
+  getFinanceByProduct,
   getFinancePaymentMix,
   getFinanceSummary,
   getFinanceTrends,
@@ -21,13 +22,14 @@ export async function fetchFinanceFilterEvents(): Promise<FinanceFilterEvent[]> 
 }
 
 export async function fetchFinanceDashboard(q?: AdminFinanceQuery) {
-  const [summary, byEvent, trends, paymentMix] = await Promise.all([
+  const [summary, byEvent, trends, paymentMix, byProduct] = await Promise.all([
     getFinanceSummary(q),
     getFinanceByEvent(q),
     getFinanceTrends(q),
     getFinancePaymentMix(q),
+    getFinanceByProduct(q),
   ]);
-  return { summary, byEvent, trends, paymentMix };
+  return { summary, byEvent, trends, paymentMix, byProduct };
 }
 
 export async function fetchFinanceExportCsv(q?: AdminFinanceQuery): Promise<string> {

@@ -456,6 +456,8 @@ export const adminFinanceSummarySchema = z.object({
   ticketCount: z.number().int().nonnegative(),
   refundedCents: z.number().int(),
   refundedCount: z.number().int().nonnegative(),
+  storeRevenueCents: z.number().int().nonnegative(),
+  storeOrderCount: z.number().int().nonnegative(),
 });
 export type AdminFinanceSummary = z.infer<typeof adminFinanceSummarySchema>;
 
@@ -481,6 +483,8 @@ export const adminFinanceTrendPointSchema = z.object({
   date: z.string(),
   revenueCents: z.number().int(),
   orderCount: z.number().int().nonnegative(),
+  ticketRevenueCents: z.number().int().nonnegative(),
+  storeRevenueCents: z.number().int().nonnegative(),
 });
 export type AdminFinanceTrendPoint = z.infer<typeof adminFinanceTrendPointSchema>;
 
@@ -488,6 +492,20 @@ export const adminFinanceTrendResponseSchema = z.object({
   points: z.array(adminFinanceTrendPointSchema),
 });
 export type AdminFinanceTrendResponse = z.infer<typeof adminFinanceTrendResponseSchema>;
+
+export const adminFinanceProductRowSchema = z.object({
+  productId: z.string().min(1),
+  productTitle: z.string(),
+  orderCount: z.number().int().nonnegative(),
+  quantitySold: z.number().int().nonnegative(),
+  revenueCents: z.number().int().nonnegative(),
+});
+export type AdminFinanceProductRow = z.infer<typeof adminFinanceProductRowSchema>;
+
+export const adminFinanceByProductResponseSchema = z.object({
+  items: z.array(adminFinanceProductRowSchema),
+});
+export type AdminFinanceByProductResponse = z.infer<typeof adminFinanceByProductResponseSchema>;
 
 export const adminFinancePaymentMixItemSchema = z.object({
   provider: z.string(),
