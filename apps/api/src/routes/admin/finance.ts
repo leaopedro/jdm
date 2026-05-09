@@ -276,7 +276,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       };
       bucket.revenueCents += getFinanceOrderRevenueCents(o);
       bucket.orderCount += 1;
-      bucket.ticketRevenueCents += getOrderItemRevenueCents(o, 'ticket');
+      bucket.ticketRevenueCents +=
+        getOrderItemRevenueCents(o, 'ticket') + getOrderItemRevenueCents(o, 'extras');
       bucket.storeRevenueCents += getOrderItemRevenueCents(o, 'product');
       buckets.set(date, bucket);
     }
