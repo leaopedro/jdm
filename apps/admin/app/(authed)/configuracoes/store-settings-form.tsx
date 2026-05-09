@@ -12,6 +12,7 @@ const labelCls = 'flex flex-col gap-1 text-sm';
 
 export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
   const [storeEnabled, setStoreEnabled] = useState(initial.storeEnabled);
+  const [eventPickupEnabled, setEventPickupEnabled] = useState(initial.eventPickupEnabled);
   const [shippingFee, setShippingFee] = useState(String(initial.defaultShippingFeeCents));
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
   const [pickup, setPickup] = useState(initial.pickupDisplayLabel ?? '');
@@ -44,6 +45,7 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
     startTransition(async () => {
       const result = await updateAdminStoreSettingsAction({
         storeEnabled,
+        eventPickupEnabled,
         defaultShippingFeeCents: shippingCents,
         lowStockThreshold: lowStockNumber,
         pickupDisplayLabel: pickupTrimmed === '' ? null : pickupTrimmed,
@@ -51,6 +53,7 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
       });
       if (result.ok) {
         setStoreEnabled(result.settings.storeEnabled);
+        setEventPickupEnabled(result.settings.eventPickupEnabled);
         setShippingFee(String(result.settings.defaultShippingFeeCents));
         setLowStock(String(result.settings.lowStockThreshold));
         setPickup(result.settings.pickupDisplayLabel ?? '');
@@ -78,6 +81,23 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
           <span className="text-xs text-[color:var(--color-muted)]">
             Desative para bloquear novas compras e navegação pública da loja sem esconder pedidos já
             existentes.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-3 rounded border border-[color:var(--color-border)] p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={eventPickupEnabled}
+          onChange={(e) => setEventPickupEnabled(e.target.checked)}
+          className="mt-0.5"
+          aria-label="Retirada no evento habilitada"
+        />
+        <span className="flex flex-col gap-1">
+          <span className="font-medium">Retirada no evento habilitada</span>
+          <span className="text-xs text-[color:var(--color-muted)]">
+            Permite que clientes escolham retirar produtos em eventos. Cada produto ainda precisa
+            ter a retirada habilitada individualmente.
           </span>
         </span>
       </label>
