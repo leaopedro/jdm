@@ -6,7 +6,6 @@ import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
-  activateProductAction,
   archiveProductAction,
   updateProductAction,
   type StoreFormState,
@@ -176,8 +175,9 @@ export const ProductForm = ({
           ) : (
             <button
               type="submit"
-              formAction={() => {
-                void activateProductAction(product.id);
+              formAction={async (fd: FormData) => {
+                fd.set('status', 'active');
+                await updateProductAction(product.id, initial, fd);
               }}
               disabled={!hasPhotos}
               title={!hasPhotos ? 'Adicione pelo menos uma foto antes de ativar.' : undefined}

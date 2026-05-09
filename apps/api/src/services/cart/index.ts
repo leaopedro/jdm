@@ -189,7 +189,7 @@ export function serializeCart(cart: CartWithItems): Cart {
           variantName: item.variant.name,
           variantSku: item.variant.sku,
           unitPriceCents: item.variant.priceCents,
-          requiresShipping: item.variant.product.allowShip,
+          requiresShipping: item.variant.product.allowShip && !item.variant.product.allowPickup,
           shippingFeeCents: item.variant.product.shippingFeeCents,
           attributes: (item.variant.attributes as Record<string, unknown> | null) ?? null,
         }
