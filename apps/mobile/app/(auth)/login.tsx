@@ -97,7 +97,7 @@ export default function LoginScreen() {
               accessibilityRole="alert"
               className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2"
             >
-              <Text variant="bodySm" className="text-red-200">
+              <Text variant="bodySm" className="text-white">
                 {flashMessage}
               </Text>
             </View>
