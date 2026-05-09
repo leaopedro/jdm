@@ -1,8 +1,18 @@
 import { prisma } from '@jdm/db';
 import { createWebCheckoutResponseSchema } from '@jdm/shared/orders';
+import * as Sentry from '@sentry/node';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
+vi.mock('@sentry/node', () => ({
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
+  init: vi.fn(),
+  withScope: vi.fn((callback: (scope: { setTag: (key: string, value: string) => void }) => void) =>
+    callback({ setTag: vi.fn() }),
+  ),
+}));
 
 import { loadEnv } from '../../src/env.js';
 import type { FakeStripe } from '../../src/services/stripe/fake.js';
@@ -71,6 +81,7 @@ describe('POST /orders/checkout', () => {
   });
 
   afterEach(async () => {
+    vi.clearAllMocks();
     await app.close();
   });
 
@@ -176,6 +187,55 @@ describe('POST /orders/checkout', () => {
     const body = errorResponseSchema.parse(res.json());
     expect(body.error).toBe('Conflict');
     expect(stripe.calls).toHaveLength(0);
+  });
+
+  it('captures Sentry when sweep-triggered Stripe cancel fails during checkout creation', async () => {
+    const cancelErr = new Error('stripe cancel failed');
+    stripe.cancelPaymentIntent = (paymentIntentId) => {
+      stripe.calls.push({ kind: 'cancelPaymentIntent', payload: { paymentIntentId } });
+      return Promise.reject(cancelErr);
+    };
+
+    const { user } = await createUser({ verified: true });
+    const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });
+    const { event, tier } = await seedPublishedEvent(1);
+
+    await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_checkout_abandoned',
+        status: 'pending',
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/checkout',
+      headers: { authorization: bearer(env, user2.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{}],
+        successUrl: 'https://app.jdm.com/success',
+        cancelUrl: 'https://app.jdm.com/cancel',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    await vi.waitFor(() => {
+      expect(Sentry.captureException).toHaveBeenCalledWith(cancelErr);
+    });
   });
 
   it('returns 401 for unauthenticated requests', async () => {
