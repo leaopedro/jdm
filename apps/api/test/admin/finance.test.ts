@@ -832,6 +832,7 @@ describe('Admin Finance Endpoints', () => {
       const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
+      const extra = await seedExtra(event.id, 1500);
 
       const productType = await prisma.productType.create({
         data: { name: 'Tipo', sortOrder: 0 },
@@ -866,6 +867,11 @@ describe('Admin Finance Endpoints', () => {
         kind: 'ticket',
         amountCents: 5000,
       });
+      await seedOrder(buyer.id, event.id, null, {
+        kind: 'extras_only',
+        amountCents: 1500,
+        orderItems: [{ kind: 'extras', extraId: extra.id, unitPriceCents: 1500 }],
+      });
 
       const res = await app.inject({
         method: 'GET',
@@ -876,10 +882,13 @@ describe('Admin Finance Endpoints', () => {
       const lines = res.body.split('\n');
       const productLine = lines.find((l) => l.includes(',product,'));
       const ticketLine = lines.find((l) => l.includes(',ticket,'));
+      const extrasLine = lines.find((l) => l.includes(',extras_only,'));
       expect(productLine).toBeDefined();
       expect(ticketLine).toBeDefined();
+      expect(extrasLine).toBeDefined();
       expect(productLine).toMatch(/Camiseta JDM$/);
       expect(ticketLine).toMatch(/,ticket,$/);
+      expect(extrasLine).toMatch(/,extras_only,$/);
     });
   });
 });
