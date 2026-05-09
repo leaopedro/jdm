@@ -6,6 +6,7 @@ import {
   createWebCheckoutResponseSchema,
   getOrderResponseSchema,
   myOrdersResponseSchema,
+  resumeOrderResponseSchema,
 } from '@jdm/shared/orders';
 import type {
   CreateOrderRequest,
@@ -15,6 +16,7 @@ import type {
   CreateWebCheckoutResponse,
   GetOrderResponse,
   MyOrdersResponse,
+  ResumeOrderResponse,
 } from '@jdm/shared/orders';
 
 import { authedRequest } from './client';
@@ -50,4 +52,8 @@ export const getOrder = (orderId: string): Promise<GetOrderResponse> => {
 
 export const listMyOrders = (): Promise<MyOrdersResponse> => {
   return authedRequest('/me/orders', myOrdersResponseSchema);
+};
+
+export const resumeOrder = (orderId: string): Promise<ResumeOrderResponse> => {
+  return authedRequest(`/orders/${orderId}/resume`, resumeOrderResponseSchema);
 };
