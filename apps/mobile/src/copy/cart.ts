@@ -35,6 +35,10 @@ export const cartCopy = {
     discount: 'Desconto',
     total: 'Total',
   },
+  sections: {
+    tickets: 'Ingressos',
+    products: 'Produtos',
+  },
   actions: {
     addToCart: 'Adicionar ao carrinho',
     adding: 'Adicionando...',
