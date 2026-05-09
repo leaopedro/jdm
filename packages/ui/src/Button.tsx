@@ -41,7 +41,7 @@ const labelByVariant: Record<ButtonVariant, string> = {
   primary: 'text-fg font-bold',
   secondary: 'text-fg font-semibold',
   ghost: 'text-fg-secondary font-medium',
-  danger: 'text-fg font-bold',
+  danger: 'text-fg-inverse font-bold',
 };
 
 const labelBySize: Record<ButtonSize, string> = {
