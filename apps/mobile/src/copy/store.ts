@@ -23,7 +23,7 @@ export const storeCopy = {
     adding: 'Adicionando...',
     added: 'Produto adicionado ao carrinho.',
     soldOut: 'Esgotado',
-    confirmVariant: 'Adicionar variação',
+    confirmVariant: 'Adicionar',
     cancelVariant: 'Agora não',
     retry: 'Tentar novamente',
     openCart: 'Abrir carrinho',

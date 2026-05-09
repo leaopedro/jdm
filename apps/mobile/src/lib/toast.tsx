@@ -55,7 +55,7 @@ export function ToastHost() {
   return (
     <View pointerEvents="none" style={styles.root}>
       <View style={styles.toast}>
-        <Text variant="bodySm" tone="inverse" weight="medium">
+        <Text variant="bodySm" tone="primary" weight="medium">
           {toast.message}
         </Text>
       </View>
