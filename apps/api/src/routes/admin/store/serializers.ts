@@ -51,6 +51,7 @@ export const serializeAdminProductDetail = (
     currency: p.currency,
     status: p.status,
     allowPickup: p.allowPickup,
+    allowShip: p.allowShip,
     shippingFeeCents: p.shippingFeeCents,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),

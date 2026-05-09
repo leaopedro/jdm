@@ -342,6 +342,7 @@ model Product {
   currency         String        @default("BRL") @db.VarChar(3)
   status           ProductStatus @default(draft)
   allowPickup      Boolean       @default(false)
+  allowShip        Boolean       @default(false)
   shippingFeeCents Int?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt

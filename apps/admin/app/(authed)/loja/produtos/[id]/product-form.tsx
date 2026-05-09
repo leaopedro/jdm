@@ -62,7 +62,7 @@ export const ProductForm = ({
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
   const [allowPickup, setAllowPickup] = useState(product.allowPickup);
-  const [allowShip, setAllowShip] = useState(product.shippingFeeCents !== null);
+  const [allowShip, setAllowShip] = useState(product.allowShip);
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
   const hasPhotos = product.photos.length > 0;
 
@@ -126,6 +126,7 @@ export const ProductForm = ({
           </label>
         </fieldset>
         <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+        <input type="hidden" name="allowShip" value={allowShip ? 'true' : 'false'} />
         {allowShip ? (
           <Field
             label="Frete fixo (centavos)"

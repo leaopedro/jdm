@@ -38,6 +38,7 @@ type CartWithItems = Prisma.CartGetPayload<{
                 status: true;
                 currency: true;
                 allowPickup: true;
+                allowShip: true;
                 shippingFeeCents: true;
               };
             };
@@ -96,6 +97,7 @@ const CART_CHECKOUT_INCLUDE = {
               status: true,
               currency: true,
               allowPickup: true,
+              allowShip: true,
               shippingFeeCents: true,
             },
           },
@@ -372,7 +374,7 @@ async function prepareProductCartItem(
   }
 
   const allowPickup = variant.product.allowPickup;
-  const allowShip = variant.product.shippingFeeCents !== null;
+  const allowShip = variant.product.allowShip;
   // Prefer ship when address provided and product allows it; fall back to pickup.
   const fulfillmentMethod: 'pickup' | 'ship' =
     allowShip && shippingAddressId ? 'ship' : allowPickup ? 'pickup' : 'ship';

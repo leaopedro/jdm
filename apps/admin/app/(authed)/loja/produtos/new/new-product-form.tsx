@@ -117,6 +117,7 @@ export const NewProductForm = ({ productTypes }: { productTypes: AdminProductTyp
         </label>
       </fieldset>
       <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+      <input type="hidden" name="allowShip" value={allowShip ? 'true' : 'false'} />
       {allowShip ? (
         <Field
           label="Frete fixo (centavos)"
