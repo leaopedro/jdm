@@ -1,8 +1,9 @@
 import type { MyOrder } from '@jdm/shared/orders';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -36,9 +37,21 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
 }
 
 function OrderCard({ order }: { order: MyOrder }) {
+  const router = useRouter();
   const eventDate = order.event
     ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
     : null;
+
+  const openTicket = (ticketIds: string[]) => {
+    if (ticketIds.length === 1) {
+      router.push({
+        pathname: '/tickets/[ticketId]',
+        params: { ticketId: ticketIds[0]! },
+      } as never);
+    } else {
+      router.push('/tickets');
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -83,17 +96,34 @@ function OrderCard({ order }: { order: MyOrder }) {
       </View>
 
       <View style={styles.items}>
-        {order.items.map((item) => (
-          <View key={item.id} style={styles.itemRow}>
-            <View style={styles.itemText}>
-              <Text style={styles.itemTitle}>
-                {item.quantity}x {item.title}
-              </Text>
-              {item.detail ? <Text style={styles.itemDetail}>{item.detail}</Text> : null}
+        {order.items.map((item) => {
+          const ticketIds =
+            item.kind === 'ticket' && order.status === 'paid' && item.ticketIds
+              ? item.ticketIds
+              : null;
+          return (
+            <View key={item.id} style={styles.itemRow}>
+              <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>
+                  {item.quantity}x {item.title}
+                </Text>
+                {item.detail ? <Text style={styles.itemDetail}>{item.detail}</Text> : null}
+                {ticketIds && ticketIds.length > 0 ? (
+                  <Pressable
+                    onPress={() => openTicket(ticketIds)}
+                    accessibilityRole="button"
+                    style={styles.ticketLink}
+                  >
+                    <Text style={styles.ticketLinkText}>
+                      {ticketIds.length === 1 ? ordersCopy.viewTicket : ordersCopy.viewTickets}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text style={styles.itemPrice}>{formatBRL(item.subtotalCents)}</Text>
             </View>
-            <Text style={styles.itemPrice}>{formatBRL(item.subtotalCents)}</Text>
-          </View>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.footerRow}>
@@ -300,6 +330,15 @@ const styles = StyleSheet.create({
   itemDetail: {
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
+  },
+  ticketLink: {
+    marginTop: theme.spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  ticketLinkText: {
+    color: theme.colors.accent,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
   },
   itemPrice: {
     color: theme.colors.fg,

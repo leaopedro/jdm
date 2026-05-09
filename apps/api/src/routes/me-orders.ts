@@ -25,6 +25,23 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
+    const paidOrderIds = orders.filter((o) => o.status === 'paid').map((o) => o.id);
+    const tickets = paidOrderIds.length
+      ? await prisma.ticket.findMany({
+          where: { orderId: { in: paidOrderIds }, userId: sub },
+          select: { id: true, orderId: true, tierId: true, eventId: true, createdAt: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      : [];
+    const ticketsByKey = new Map<string, string[]>();
+    for (const t of tickets) {
+      if (!t.orderId) continue;
+      const key = `${t.orderId}|${t.eventId}|${t.tierId}`;
+      const list = ticketsByKey.get(key) ?? [];
+      list.push(t.id);
+      ticketsByKey.set(key, list);
+    }
+
     return myOrdersResponseSchema.parse({
       items: orders.map((order) => {
         const containsTickets = order.items.some((item) => item.kind === 'ticket');
@@ -77,6 +94,11 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
             }
 
             if (item.kind === 'ticket') {
+              const eventId = item.eventId ?? order.eventId;
+              const tierId = item.tierId ?? order.tierId;
+              const key = eventId && tierId ? `${order.id}|${eventId}|${tierId}` : null;
+              const queue = key ? ticketsByKey.get(key) : undefined;
+              const ticketIds = queue ? queue.splice(0, item.quantity) : [];
               return {
                 id: item.id,
                 kind: item.kind,
@@ -85,6 +107,7 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
                 quantity: item.quantity,
                 unitPriceCents: item.unitPriceCents,
                 subtotalCents: item.subtotalCents,
+                ...(ticketIds.length > 0 ? { ticketIds } : {}),
               };
             }
 
