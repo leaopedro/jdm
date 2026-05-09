@@ -7,6 +7,7 @@ import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
+import { releaseAllReservationsForOrders } from '../services/orders/expire.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import {
@@ -510,6 +511,81 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         }
         throw err;
       }
+    }
+
+    // Failure events: release inventory immediately rather than waiting for TTL sweep.
+    // `lost` mirrors Stripe `payment_intent.payment_failed` / `checkout.session.expired`
+    // (pending Pix never paid). `refunded` and `disputed` may arrive on a previously
+    // paid order; current scope only releases pending-order reservations — paid-order
+    // ticket revocation belongs to a future refund flow (JDMA-S4b.3 / refund UI).
+    if (
+      event.event === 'transparent.lost' ||
+      event.event === 'transparent.refunded' ||
+      event.event === 'transparent.disputed'
+    ) {
+      const targetStatus: 'failed' | 'refunded' =
+        event.event === 'transparent.lost' ? 'failed' : 'refunded';
+
+      const metadataCartId = extractCartIdFromMetadata(event.data);
+      const metadataOrderId = extractOrderIdFromMetadata(event.data);
+      const billingId = extractBillingId(event.data);
+
+      let pendingOrderIds: string[] = [];
+      if (metadataCartId) {
+        const cartOrders = await prisma.order.findMany({
+          where: { cartId: metadataCartId, provider: 'abacatepay', status: 'pending' },
+          select: { id: true },
+        });
+        pendingOrderIds = cartOrders.map((o) => o.id);
+      } else if (metadataOrderId) {
+        const order = await prisma.order.findFirst({
+          where: { id: metadataOrderId, provider: 'abacatepay', status: 'pending' },
+          select: { id: true },
+        });
+        if (order) pendingOrderIds = [order.id];
+      } else if (billingId) {
+        const order = await prisma.order.findFirst({
+          where: { provider: 'abacatepay', providerRef: billingId, status: 'pending' },
+          select: { id: true },
+        });
+        if (order) pendingOrderIds = [order.id];
+      }
+
+      let releasedCount = 0;
+      if (pendingOrderIds.length > 0) {
+        await prisma.$transaction(async (tx) => {
+          const updated = await tx.order.updateMany({
+            where: { id: { in: pendingOrderIds }, status: 'pending' },
+            data:
+              targetStatus === 'failed'
+                ? { status: 'failed', failedAt: new Date() }
+                : { status: 'refunded' },
+          });
+          releasedCount = updated.count;
+          if (updated.count > 0) {
+            await releaseAllReservationsForOrders(tx, pendingOrderIds);
+          }
+          if (event.event === 'transparent.lost' && metadataCartId) {
+            await tx.cart.update({
+              where: { id: metadataCartId },
+              data: { status: 'open' },
+            });
+          }
+        });
+      }
+
+      const firstTime = await markProcessed(event.id, event);
+      request.log.info(
+        {
+          eventId: event.id,
+          eventType: event.event,
+          released: releasedCount,
+          orderIds: pendingOrderIds,
+          firstTime,
+        },
+        'abacatepay webhook: failure event processed',
+      );
+      return reply.status(200).send({ ok: true, deduped: !firstTime });
     }
 
     // Non-payment events: log and mark processed
