@@ -60,8 +60,8 @@ describe('PATCH /admin/store/products/:id activation guard', () => {
     expect(refreshed?.status).toBe('draft');
   });
 
-  it('allows activation once at least one photo exists', async () => {
-    const product = await seedDraftProduct('camiseta-verde');
+  it('rejects activation when product has photos but no fulfillment method', async () => {
+    const product = await seedDraftProduct('camiseta-amarela');
     await prisma.productPhoto.create({
       data: { productId: product.id, objectKey: 'store/products/x/photo.jpg', sortOrder: 0 },
     });
@@ -74,9 +74,30 @@ describe('PATCH /admin/store/products/:id activation guard', () => {
       payload: { status: 'active' },
     });
 
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'BadRequest' });
+    const refreshed = await prisma.product.findUnique({ where: { id: product.id } });
+    expect(refreshed?.status).toBe('draft');
+  });
+
+  it('allows activation once at least one photo and one fulfillment method exist', async () => {
+    const product = await seedDraftProduct('camiseta-verde');
+    await prisma.productPhoto.create({
+      data: { productId: product.id, objectKey: 'store/products/x/photo.jpg', sortOrder: 0 },
+    });
+    const header = await orgAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/store/products/${product.id}`,
+      headers: { authorization: header },
+      payload: { status: 'active', allowPickup: true },
+    });
+
     expect(res.statusCode).toBe(200);
     const refreshed = await prisma.product.findUnique({ where: { id: product.id } });
     expect(refreshed?.status).toBe('active');
+    expect(refreshed?.allowPickup).toBe(true);
   });
 
   it('allows non-status edits on a photo-less draft', async () => {
@@ -94,6 +115,30 @@ describe('PATCH /admin/store/products/:id activation guard', () => {
     const refreshed = await prisma.product.findUnique({ where: { id: product.id } });
     expect(refreshed?.status).toBe('draft');
     expect(refreshed?.title).toBe('Camiseta Preta v2');
+  });
+
+  it('rejects removing both fulfillment methods from an active product', async () => {
+    const product = await seedDraftProduct('camiseta-roxa');
+    await prisma.productPhoto.create({
+      data: { productId: product.id, objectKey: 'store/products/x/photo.jpg', sortOrder: 0 },
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { status: 'active', allowPickup: true },
+    });
+    const header = await orgAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/store/products/${product.id}`,
+      headers: { authorization: header },
+      payload: { allowPickup: false },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'BadRequest' });
+    const refreshed = await prisma.product.findUnique({ where: { id: product.id } });
+    expect(refreshed?.allowPickup).toBe(true);
   });
 
   it('does not re-check the guard when product is already active', async () => {

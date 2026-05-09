@@ -32,6 +32,8 @@ type CartWithItems = Prisma.CartGetPayload<{
                 slug: true;
                 title: true;
                 currency: true;
+                allowPickup: true;
+                allowShip: true;
                 shippingFeeCents: true;
               };
             };
@@ -64,6 +66,8 @@ export const CART_INCLUDE_FOR_SERIALIZE = {
               slug: true,
               title: true,
               currency: true,
+              allowPickup: true,
+              allowShip: true,
               shippingFeeCents: true,
             },
           },
@@ -185,7 +189,7 @@ export function serializeCart(cart: CartWithItems): Cart {
           variantName: item.variant.name,
           variantSku: item.variant.sku,
           unitPriceCents: item.variant.priceCents,
-          requiresShipping: item.variant.product.shippingFeeCents !== null,
+          requiresShipping: item.variant.product.allowShip && !item.variant.product.allowPickup,
           shippingFeeCents: item.variant.product.shippingFeeCents,
           attributes: (item.variant.attributes as Record<string, unknown> | null) ?? null,
         }

@@ -695,6 +695,8 @@ export const adminStoreProductDetailSchema = z.object({
   basePriceCents: z.number().int().nonnegative(),
   currency: z.string(),
   status: adminStoreProductStatusSchema,
+  allowPickup: z.boolean(),
+  allowShip: z.boolean(),
   shippingFeeCents: z.number().int().nonnegative().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -710,6 +712,8 @@ export const adminStoreProductCreateSchema = z.object({
   productTypeId: z.string().min(1),
   basePriceCents: z.number().int().nonnegative(),
   currency: z.string().length(3).default('BRL'),
+  allowPickup: z.boolean().default(false),
+  allowShip: z.boolean().default(false),
   shippingFeeCents: z
     .preprocess(
       (v) => (v === '' || v === null || v === undefined ? null : v),
@@ -726,6 +730,8 @@ export const adminStoreProductUpdateSchema = z
     productTypeId: z.string().min(1).optional(),
     basePriceCents: z.number().int().nonnegative().optional(),
     currency: z.string().length(3).optional(),
+    allowPickup: z.boolean().optional(),
+    allowShip: z.boolean().optional(),
     shippingFeeCents: z
       .preprocess(
         (v) => (v === '' || v === null || v === undefined ? null : v),

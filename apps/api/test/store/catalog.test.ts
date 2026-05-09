@@ -53,6 +53,7 @@ const makeProduct = async (
     description: string;
     basePriceCents: number;
     status: 'draft' | 'active' | 'archived';
+    allowShip: boolean;
     shippingFeeCents: number | null;
     variants: VariantSeed[];
     photos: { objectKey: string; sortOrder: number }[];
@@ -64,6 +65,8 @@ const makeProduct = async (
   const photos = overrides.photos ?? [
     { objectKey: `products/default/${Math.random().toString(36).slice(2, 8)}.jpg`, sortOrder: 0 },
   ];
+  const resolvedShippingFee =
+    overrides.shippingFeeCents === undefined ? 0 : overrides.shippingFeeCents;
   const product = await prisma.product.create({
     data: {
       slug: overrides.slug ?? `p-${Math.random().toString(36).slice(2, 8)}`,
@@ -72,7 +75,9 @@ const makeProduct = async (
       productTypeId,
       basePriceCents: overrides.basePriceCents ?? 5000,
       status: overrides.status ?? 'active',
-      shippingFeeCents: overrides.shippingFeeCents === undefined ? 0 : overrides.shippingFeeCents,
+      allowShip:
+        overrides.allowShip !== undefined ? overrides.allowShip : resolvedShippingFee != null,
+      shippingFeeCents: resolvedShippingFee,
       ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
       variants: {
         create: variants.map((v, idx) => ({
