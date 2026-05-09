@@ -172,9 +172,11 @@ describe('POST /cart/checkout', () => {
     });
     expect(order.cartId).toBe(body.checkoutId);
     expect(order.amountCents).toBe(10_000);
-    // Multi-event => kind=ticket only homogeneous; here both items are ticket-kind so order kind stays 'ticket'
-    expect(order.kind).toBe('ticket');
-    // Multi-event order does not pin Order.eventId/tierId
+    // Multi-line carts use kind='mixed' so settlement routes through the
+    // multi-item issuer and reads scope from OrderItem rows (a homogeneous
+    // 'ticket' kind would require Order.eventId/tierId to be pinned).
+    expect(order.kind).toBe('mixed');
+    // Multi-line order does not pin Order.eventId/tierId
     expect(order.eventId).toBeNull();
     expect(order.tierId).toBeNull();
 

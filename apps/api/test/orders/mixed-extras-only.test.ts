@@ -263,3 +263,166 @@ describe('issueTicketsForMixedOrder — extras_only mixed-cart coverage (JDMA-46
     expect(newTicketExtras).toHaveLength(0);
   });
 });
+
+// Regression coverage for the kind-routing fix on JDMA-462 PR #209: any cart
+// with multiple lines must produce a `mixed` Order so settlement reads scope
+// from `OrderItem` rows. Before the fix, multi-line ticket-only and
+// extras-only carts kept `kind='ticket'`/`'extras_only'` and reached
+// `issueTicketForPaidOrder` with null `eventId`/`tierId`, throwing
+// `missing eventId/tierId/event for ticket issuance`.
+describe('issueTicketsForMixedOrder — multi-line homogeneous carts (JDMA-462)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it('issues one ticket per ticket OrderItem when a single mixed Order spans two events', async () => {
+    const user = await seedUser();
+    const { event: ev1, tier: tier1 } = await seedPublishedEvent('Evento A');
+    const { event: ev2, tier: tier2 } = await seedPublishedEvent('Evento B');
+
+    const cart = await prisma.cart.create({
+      data: { userId: user.id, status: 'checking_out' },
+    });
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        cartId: cart.id,
+        eventId: null,
+        tierId: null,
+        kind: 'mixed',
+        amountCents: 10_000,
+        quantity: 2,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_multi_event_tickets',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+        fulfillmentMethod: 'pickup',
+      },
+    });
+    await prisma.orderItem.createMany({
+      data: [
+        {
+          orderId: order.id,
+          kind: 'ticket',
+          eventId: ev1.id,
+          tierId: tier1.id,
+          quantity: 1,
+          unitPriceCents: 5000,
+          subtotalCents: 5000,
+        },
+        {
+          orderId: order.id,
+          kind: 'ticket',
+          eventId: ev2.id,
+          tierId: tier2.id,
+          quantity: 1,
+          unitPriceCents: 5000,
+          subtotalCents: 5000,
+        },
+      ],
+    });
+
+    const results = await issueTicketsForMixedOrder(order.id, 'pi_multi_event_tickets', env);
+
+    expect(results).toHaveLength(2);
+    const eventIds = results.map((r) => r.eventId).sort();
+    expect(eventIds).toEqual([ev1.id, ev2.id].sort());
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('paid');
+
+    const tickets = await prisma.ticket.findMany({
+      where: { orderId: order.id, status: 'valid' },
+    });
+    expect(tickets).toHaveLength(2);
+    expect(new Set(tickets.map((t) => t.eventId))).toEqual(new Set([ev1.id, ev2.id]));
+  });
+
+  it('attaches extras to pre-existing tickets on each event when a single mixed Order has only extras lines spanning two events', async () => {
+    const user = await seedUser();
+    const { event: ev1, tier: tier1 } = await seedPublishedEvent('Evento C');
+    const { event: ev2, tier: tier2 } = await seedPublishedEvent('Evento D');
+    const extra1 = await seedExtra(ev1.id, 'Brinde A');
+    const extra2 = await seedExtra(ev2.id, 'Brinde B');
+
+    const ticket1 = await seedExistingTicket(user.id, ev1.id, tier1.id);
+    const ticket2 = await seedExistingTicket(user.id, ev2.id, tier2.id);
+
+    const cart = await prisma.cart.create({
+      data: { userId: user.id, status: 'checking_out' },
+    });
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        cartId: cart.id,
+        eventId: null,
+        tierId: null,
+        kind: 'mixed',
+        amountCents: 4000,
+        quantity: 2,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_multi_event_extras_only',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+        fulfillmentMethod: 'pickup',
+      },
+    });
+    await prisma.orderItem.createMany({
+      data: [
+        {
+          orderId: order.id,
+          kind: 'extras',
+          eventId: ev1.id,
+          extraId: extra1.id,
+          quantity: 1,
+          unitPriceCents: 2000,
+          subtotalCents: 2000,
+        },
+        {
+          orderId: order.id,
+          kind: 'extras',
+          eventId: ev2.id,
+          extraId: extra2.id,
+          quantity: 1,
+          unitPriceCents: 2000,
+          subtotalCents: 2000,
+        },
+      ],
+    });
+    await prisma.orderExtra.createMany({
+      data: [
+        { orderId: order.id, extraId: extra1.id, quantity: 1 },
+        { orderId: order.id, extraId: extra2.id, quantity: 1 },
+      ],
+    });
+
+    const results = await issueTicketsForMixedOrder(order.id, 'pi_multi_event_extras_only', env);
+
+    expect(results).toHaveLength(2);
+    const byEvent = new Map(results.map((r) => [r.eventId, r.ticketId]));
+    expect(byEvent.get(ev1.id)).toBe(ticket1.id);
+    expect(byEvent.get(ev2.id)).toBe(ticket2.id);
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('paid');
+
+    // Extras must be scoped per event so we never cross-attach.
+    const ticket1Extras = await prisma.ticketExtraItem.findMany({
+      where: { ticketId: ticket1.id },
+    });
+    expect(ticket1Extras.map((e) => e.extraId)).toEqual([extra1.id]);
+
+    const ticket2Extras = await prisma.ticketExtraItem.findMany({
+      where: { ticketId: ticket2.id },
+    });
+    expect(ticket2Extras.map((e) => e.extraId)).toEqual([extra2.id]);
+
+    // No new tickets created on extras-only paths.
+    const newTickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(newTickets).toHaveLength(0);
+  });
+});

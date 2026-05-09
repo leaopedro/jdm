@@ -206,12 +206,14 @@ export async function reserveAndCreateOrders(
         preparedItems.push(prepared);
       }
 
-      // Determine kind for the single order
-      const itemKinds = new Set(preparedItems.map((p) => p.cartItemKind));
-      type SimpleKind = 'ticket' | 'extras_only' | 'product';
-      const itemKindsList = Array.from(itemKinds);
+      // Order kind invariant: a homogeneous discriminator (`ticket` /
+      // `extras_only` / `product`) is reserved for single-line carts where
+      // `Order.eventId`/`tierId` (or `variantId`) can be pinned. Any cart with
+      // more than one prepared item must use `mixed` so settlement reads scope
+      // from `OrderItem` rows; otherwise multi-event ticket-only or extras-only
+      // carts reach `issueTicketForPaidOrder` with null eventId/tierId.
       const orderKind: 'ticket' | 'extras_only' | 'product' | 'mixed' =
-        itemKindsList.length === 1 ? (itemKindsList[0] as SimpleKind) : 'mixed';
+        preparedItems.length === 1 ? preparedItems[0]!.cartItemKind : 'mixed';
 
       const totalAmountCents = preparedItems.reduce((sum, p) => sum + p.amountCents, 0);
       const totalQuantity = preparedItems.reduce((sum, p) => sum + p.quantity, 0);
