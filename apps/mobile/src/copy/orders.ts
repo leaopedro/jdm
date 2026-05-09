@@ -36,6 +36,7 @@ export const ordersCopy = {
     eventDate: 'Evento',
     orderDate: 'Pedido em',
     total: 'Total',
+    separator: '•',
   },
   viewTicket: 'Ver ingresso',
   viewTickets: 'Ver ingressos',

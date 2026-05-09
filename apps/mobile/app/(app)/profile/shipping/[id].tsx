@@ -148,7 +148,7 @@ export default function ShippingAddressDetailScreen() {
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <Button label={profileCopy.shipping.save} onPress={() => void onSave()} disabled={deleting} />
       <Button
-        label={deleting ? `${profileCopy.shipping.delete}...` : profileCopy.shipping.delete}
+        label={deleting ? profileCopy.shipping.deleting : profileCopy.shipping.delete}
         onPress={() => void onDelete()}
         disabled={deleting}
       />

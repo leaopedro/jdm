@@ -78,7 +78,7 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
             onPress={onClose}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Fechar"
+            accessibilityLabel={cartCopy.actions.close}
           >
             <X color={theme.colors.muted} size={20} strokeWidth={2} />
           </Pressable>
