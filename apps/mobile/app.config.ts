@@ -39,6 +39,9 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: bundleId[variant],
     supportsTablet: false,
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     package: bundleId[variant],
