@@ -61,9 +61,8 @@ export const ProductForm = ({
   const update = updateProductAction.bind(null, product.id);
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
-  const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'ship'>(
-    product.shippingFeeCents === null ? 'pickup' : 'ship',
-  );
+  const [allowPickup, setAllowPickup] = useState(product.allowPickup);
+  const [allowShip, setAllowShip] = useState(product.shippingFeeCents !== null);
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
   const hasPhotos = product.photos.length > 0;
 
@@ -107,18 +106,27 @@ export const ProductForm = ({
           required
           defaultValue={v.basePriceCents ?? String(product.basePriceCents)}
         />
-        <label className="flex flex-col gap-1">
-          <span className="text-sm text-[color:var(--color-muted)]">Modo de entrega</span>
-          <select
-            value={fulfillmentMode}
-            onChange={(e) => setFulfillmentMode(e.target.value as 'pickup' | 'ship')}
-            className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-          >
-            <option value="pickup">Retirada no evento</option>
-            <option value="ship">Envio</option>
-          </select>
-        </label>
-        {fulfillmentMode === 'ship' ? (
+        <fieldset className="col-span-2 flex flex-col gap-2">
+          <legend className="mb-1 text-sm text-[color:var(--color-muted)]">Modo de entrega</legend>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allowPickup}
+              onChange={(e) => setAllowPickup(e.target.checked)}
+            />
+            <span>Retirada no evento</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allowShip}
+              onChange={(e) => setAllowShip(e.target.checked)}
+            />
+            <span>Envio</span>
+          </label>
+        </fieldset>
+        <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+        {allowShip ? (
           <Field
             label="Frete fixo (centavos)"
             name="shippingFeeCents"

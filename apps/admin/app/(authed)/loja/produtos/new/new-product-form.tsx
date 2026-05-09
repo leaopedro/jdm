@@ -49,7 +49,8 @@ const Field = ({
 export const NewProductForm = ({ productTypes }: { productTypes: AdminProductType[] }) => {
   const [state, action] = useActionState(createProductAction, initial);
   const v = state.values ?? {};
-  const [fulfillmentMode, setFulfillmentMode] = useState<'pickup' | 'ship'>('pickup');
+  const [allowPickup, setAllowPickup] = useState(false);
+  const [allowShip, setAllowShip] = useState(false);
   return (
     <form action={action} className="grid grid-cols-2 gap-4">
       <Field
@@ -96,18 +97,27 @@ export const NewProductForm = ({ productTypes }: { productTypes: AdminProductTyp
         required
         defaultValue={v.basePriceCents ?? ''}
       />
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-[color:var(--color-muted)]">Modo de entrega</span>
-        <select
-          value={fulfillmentMode}
-          onChange={(e) => setFulfillmentMode(e.target.value as 'pickup' | 'ship')}
-          className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
-        >
-          <option value="pickup">Retirada no evento</option>
-          <option value="ship">Envio</option>
-        </select>
-      </label>
-      {fulfillmentMode === 'ship' ? (
+      <fieldset className="col-span-2 flex flex-col gap-2">
+        <legend className="mb-1 text-sm text-[color:var(--color-muted)]">Modo de entrega</legend>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allowPickup}
+            onChange={(e) => setAllowPickup(e.target.checked)}
+          />
+          <span>Retirada no evento</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allowShip}
+            onChange={(e) => setAllowShip(e.target.checked)}
+          />
+          <span>Envio</span>
+        </label>
+      </fieldset>
+      <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+      {allowShip ? (
         <Field
           label="Frete fixo (centavos)"
           name="shippingFeeCents"
