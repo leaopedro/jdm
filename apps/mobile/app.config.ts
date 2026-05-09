@@ -25,6 +25,7 @@ const bundleId: Record<Variant, string> = {
 const config: ExpoConfig = {
   name: `JDM Experience${suffix[variant]}`,
   slug: 'jdm-experience',
+  owner: 'leaopedro',
   scheme: 'jdm',
   version: '0.0.1',
   orientation: 'portrait',
