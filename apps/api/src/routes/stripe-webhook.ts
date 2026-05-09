@@ -40,7 +40,7 @@ const markRefundedAndReleaseReservation = async (orderId: string): Promise<void>
   await prisma.$transaction(async (tx) => {
     const updated = await tx.order.updateMany({
       where: { id: orderId, status: 'pending' },
-      data: { status: 'refunded' },
+      data: { status: 'refunded', refundedAt: new Date() },
     });
     if (updated.count !== 1) return;
 

@@ -93,6 +93,7 @@ async function seedOrder(
     provider: 'stripe' | 'abacatepay';
     status: 'paid' | 'refunded' | 'pending';
     paidAt: Date | null;
+    refundedAt: Date | null;
     kind: 'ticket' | 'extras_only' | 'product' | 'mixed';
     orderItems: SeedOrderItemInput[];
   }> = {},
@@ -113,14 +114,15 @@ async function seedOrder(
   const provider = overrides.provider ?? 'stripe';
   const kind = overrides.kind ?? 'ticket';
   const paidAt = overrides.paidAt ?? new Date('2026-05-01T12:00:00Z');
+  const refundedAt = overrides.refundedAt ?? null;
 
   const order =
     eventId === null && tierId === null
       ? await (async () => {
           const orderId = randomUUID();
           await prisma.$executeRawUnsafe(
-            `INSERT INTO "Order" ("id", "userId", "eventId", "tierId", "kind", "amountCents", "currency", "method", "provider", "providerRef", "quantity", "status", "paidAt", "createdAt", "updatedAt")
-             VALUES ($1, $2, NULL, NULL, $3::"OrderKind", $4, $5, $6::"PaymentMethod", $7::"PaymentProvider", $8, 1, $9::"OrderStatus", $10, NOW(), NOW())`,
+            `INSERT INTO "Order" ("id", "userId", "eventId", "tierId", "kind", "amountCents", "currency", "method", "provider", "providerRef", "quantity", "status", "paidAt", "refundedAt", "createdAt", "updatedAt")
+             VALUES ($1, $2, NULL, NULL, $3::"OrderKind", $4, $5, $6::"PaymentMethod", $7::"PaymentProvider", $8, 1, $9::"OrderStatus", $10, $11, NOW(), NOW())`,
             orderId,
             userId,
             kind,
@@ -131,6 +133,7 @@ async function seedOrder(
             providerRef,
             status,
             paidAt,
+            refundedAt,
           );
           return { id: orderId };
         })()
@@ -146,6 +149,7 @@ async function seedOrder(
             provider,
             status,
             paidAt,
+            refundedAt,
             providerRef,
           },
         });
@@ -318,6 +322,42 @@ describe('Admin Finance Endpoints', () => {
       const body = adminFinanceSummarySchema.parse(res.json());
       expect(body.totalRevenueCents).toBe(5000);
       expect(body.orderCount).toBe(1);
+    });
+
+    it('refund-this-month for paid-last-month appears in refundedCents when filtering by date', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event = await seedEvent('meet-sp');
+      const tier = await seedTier(event.id);
+
+      // Paid in April, still active — should appear in April filter only
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 10000,
+        status: 'paid',
+        paidAt: new Date('2026-04-15T12:00:00Z'),
+      });
+      // Paid in April, refunded in May — should appear in May refundedCents
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 3000,
+        status: 'refunded',
+        paidAt: new Date('2026-04-10T12:00:00Z'),
+        refundedAt: new Date('2026-05-05T12:00:00Z'),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/summary?from=2026-05-01&to=2026-05-31',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceSummarySchema.parse(res.json());
+      expect(body.totalRevenueCents).toBe(0);
+      expect(body.refundedCents).toBe(3000);
+      expect(body.refundedCount).toBe(1);
     });
 
     it('filters by provider', async () => {
