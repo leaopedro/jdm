@@ -193,6 +193,7 @@ export type ExpireSingleOrderOutcome =
         currency: string;
         provider: 'stripe' | 'abacatepay';
         providerRef: string | null;
+        brCode: string | null;
       };
     };
 
@@ -221,6 +222,7 @@ export const expireSingleOrder = async (
         currency: true,
         provider: true,
         providerRef: true,
+        brCode: true,
       },
     });
     if (!order) return { kind: 'not_found' };
