@@ -1,8 +1,10 @@
 import type { MyOrder } from '@jdm/shared/orders';
+import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,7 +13,7 @@ import {
   View,
 } from 'react-native';
 
-import { listMyOrders } from '~/api/orders';
+import { listMyOrders, resumeOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { ordersCopy } from '~/copy/orders';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -36,11 +38,16 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
   return styles.badgeFulfillment;
 }
 
-function OrderCard({ order }: { order: MyOrder }) {
+function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown }) {
   const router = useRouter();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const eventDate = order.event
     ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
     : null;
+
+  const isPendingAndActive =
+    order.status === 'pending' &&
+    (order.expiresAt === null || new Date(order.expiresAt) > new Date());
 
   const openTicket = (ticketIds: string[]) => {
     if (ticketIds.length === 1) {
@@ -50,6 +57,40 @@ function OrderCard({ order }: { order: MyOrder }) {
       } as never);
     } else {
       router.push('/tickets');
+    }
+  };
+
+  const handlePay = async () => {
+    try {
+      const data = await resumeOrder(order.id);
+      if (data.method === 'pix') {
+        router.push({
+          pathname: '/events/buy/checkout-pix',
+          params: {
+            orderId: data.orderId,
+            brCode: data.brCode,
+            expiresAt: data.expiresAt,
+            amountCents: String(data.amountCents),
+          },
+        } as never);
+        return;
+      }
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: data.clientSecret,
+        merchantDisplayName: 'JDM Experience',
+      });
+      if (initError) {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError && presentError.code !== PaymentSheetError.Canceled) {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      reload();
+    } catch {
+      Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
     }
   };
 
@@ -127,8 +168,19 @@ function OrderCard({ order }: { order: MyOrder }) {
       </View>
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
-        <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
+        <View>
+          <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
+          <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
+        </View>
+        {isPendingAndActive ? (
+          <Pressable
+            onPress={() => void handlePay()}
+            accessibilityRole="button"
+            style={styles.payLink}
+          >
+            <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -196,7 +248,7 @@ export default function ProfileOrdersScreen() {
     return (
       <View style={styles.list}>
         {orders.map((order) => (
-          <OrderCard key={order.id} order={order} />
+          <OrderCard key={order.id} order={order} reload={load} />
         ))}
       </View>
     );
@@ -348,7 +400,7 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingTop: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
@@ -360,6 +412,17 @@ const styles = StyleSheet.create({
   total: {
     color: theme.colors.fg,
     fontSize: theme.font.size.lg,
+    fontWeight: '700',
+  },
+  payLink: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.accent,
+  },
+  payLinkText: {
+    color: '#fff',
+    fontSize: theme.font.size.sm,
     fontWeight: '700',
   },
 });

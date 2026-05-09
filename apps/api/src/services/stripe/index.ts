@@ -42,6 +42,7 @@ export type StripeClient = {
   constructWebhookEvent: (payload: Buffer, signature: string) => Promise<WebhookEvent>;
   refund: (paymentIntentId: string, reason: string, amountCents?: number) => Promise<void>;
   cancelPaymentIntent: (paymentIntentId: string) => Promise<void>;
+  retrievePaymentIntent: (paymentIntentId: string) => Promise<PaymentIntentResult>;
   publishableKey: () => string;
 };
 
@@ -183,6 +184,11 @@ export const buildStripe = (env: StripeEnv): StripeClient => {
     },
     cancelPaymentIntent: async (paymentIntentId) => {
       await stripe.paymentIntents.cancel(paymentIntentId);
+    },
+    retrievePaymentIntent: async (paymentIntentId) => {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (!pi.client_secret) throw new Error('stripe paymentIntent missing client_secret');
+      return { id: pi.id, clientSecret: pi.client_secret };
     },
     // Mobile also reads its own EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY; server echo
     // is a convenience. Empty string is acceptable in dev/test; order-creating
