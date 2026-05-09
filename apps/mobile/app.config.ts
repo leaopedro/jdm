@@ -28,9 +28,15 @@ const config: ExpoConfig = {
   owner: 'leaopedro',
   scheme: 'jdm',
   version: '0.0.1',
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
+  updates: {
+    url: 'https://u.expo.dev/c071216e-6224-4f00-9eb0-6737fb5e1691',
+  },
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
