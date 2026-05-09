@@ -556,7 +556,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           captureStripeCancelFailure(cancelErr, {
             route: 'get_order',
             orderId: id,
-            providerRef: order.providerRef ?? undefined,
+            ...(order.providerRef ? { providerRef: order.providerRef } : {}),
           });
         });
       }
