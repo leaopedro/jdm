@@ -211,7 +211,7 @@ export default function StoreProductDetailScreen() {
               <Text style={styles.variantPrice}>{formatBRL(selectedVariant.priceCents)}</Text>
             </View>
             <Text style={styles.variantMeta}>
-              {selectedVariant.sku} · {getVariantStockLabel(selectedVariant)}
+              {getVariantStockLabel(selectedVariant)}
             </Text>
           </View>
         ) : null}
