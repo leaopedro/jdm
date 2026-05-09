@@ -40,4 +40,7 @@ export const ordersCopy = {
   },
   viewTicket: 'Ver ingresso',
   viewTickets: 'Ver ingressos',
+  pay: 'Pagar',
+  payError: 'Não foi possível retomar o pagamento.',
+  payErrorBody: 'Tente novamente ou entre em contato com o suporte.',
 };

@@ -7,8 +7,10 @@ import {
   createWebCheckoutRequestSchema,
   createWebCheckoutResponseSchema,
   getOrderResponseSchema,
+  resumeOrderResponseSchema,
   type TicketInput,
 } from '@jdm/shared/orders';
+import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
@@ -320,6 +322,23 @@ const withReturnParams = (rawUrl: string, params: Record<string, string>): strin
   return url.toString();
 };
 
+const captureStripeCancelFailure = (
+  err: unknown,
+  context: {
+    route: 'create_order' | 'web_checkout' | 'get_order';
+    providerRef?: string;
+    orderId?: string;
+  },
+): void => {
+  Sentry.withScope((scope) => {
+    scope.setTag('stripe_operation', 'cancel_payment_intent');
+    scope.setTag('orders_route', context.route);
+    if (context.providerRef) scope.setTag('stripe_payment_intent_id', context.providerRef);
+    if (context.orderId) scope.setTag('order_id', context.orderId);
+    Sentry.captureException(err);
+  });
+};
+
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
@@ -378,7 +397,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
 
         await prisma.order.update({
           where: { id: order.id },
-          data: { providerRef: billing.id },
+          data: { providerRef: billing.id, brCode: billing.brCode },
         });
 
         return reply.status(201).send(
@@ -403,6 +422,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           { err: cancelErr, providerRef: ref },
           'orders: stripe PI cancel failed after sweep',
         );
+        captureStripeCancelFailure(cancelErr, {
+          route: 'create_order',
+          providerRef: ref,
+        });
       });
     }
 
@@ -463,6 +486,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           { err: cancelErr, providerRef: ref },
           'orders: stripe PI cancel failed after sweep',
         );
+        captureStripeCancelFailure(cancelErr, {
+          route: 'web_checkout',
+          providerRef: ref,
+        });
       });
     }
 
@@ -529,6 +556,57 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
+    scoped.get('/orders/:id/resume', { preHandler: [app.authenticate] }, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const { id } = request.params as { id: string };
+
+      const result = await expireSingleOrder(id, sub);
+      if (result.kind === 'not_found') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+      if (result.kind === 'forbidden') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+
+      const { order } = result;
+      if (order.status !== 'pending') {
+        return reply.status(409).send({ error: 'OrderNotPending', status: order.status });
+      }
+
+      reply.header('Cache-Control', 'no-store');
+
+      if (order.provider === 'abacatepay') {
+        if (!order.brCode || !order.expiresAt) {
+          return reply.status(409).send({ error: 'OrderNotPending', status: order.status });
+        }
+        return reply.status(200).send(
+          resumeOrderResponseSchema.parse({
+            method: 'pix',
+            orderId: order.id,
+            brCode: order.brCode,
+            expiresAt: order.expiresAt.toISOString(),
+            amountCents: order.amountCents,
+            currency: order.currency,
+          }),
+        );
+      }
+
+      // Stripe
+      if (!order.providerRef) {
+        return reply.status(409).send({ error: 'OrderNotPending', status: order.status });
+      }
+      const pi = await app.stripe.retrievePaymentIntent(order.providerRef);
+      return reply.status(200).send(
+        resumeOrderResponseSchema.parse({
+          method: 'card',
+          orderId: order.id,
+          clientSecret: pi.clientSecret,
+          amountCents: order.amountCents,
+          currency: order.currency,
+        }),
+      );
+    });
+
     scoped.get('/orders/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
       const { sub } = requireUser(request);
       const { id } = request.params as { id: string };
@@ -549,6 +627,11 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             { err: cancelErr, orderId: id },
             'orders: stripe PI cancel failed after lazy expiry',
           );
+          captureStripeCancelFailure(cancelErr, {
+            route: 'get_order',
+            orderId: id,
+            ...(order.providerRef ? { providerRef: order.providerRef } : {}),
+          });
         });
       }
 

@@ -14,7 +14,8 @@ function buildTileGroups(s: AdminFinanceSummary): TileGroup[] {
     {
       title: 'Resumo geral',
       tiles: [
-        { label: 'Receita total', value: fmtCurrency(s.totalRevenueCents), accent: true },
+        { label: 'Receita líquida', value: fmtCurrency(s.netRevenueCents), accent: true },
+        { label: 'Receita bruta', value: fmtCurrency(s.totalRevenueCents) },
         { label: 'Pedidos', value: fmtNumber(s.orderCount) },
         { label: 'Ticket médio', value: fmtCurrency(s.avgOrderCents) },
         { label: 'Ingressos', value: fmtNumber(s.ticketCount) },

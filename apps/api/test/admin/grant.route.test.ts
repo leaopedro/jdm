@@ -7,7 +7,7 @@ import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
 const env = loadEnv();
 
-const seedGrantFixture = async () => {
+const seedGrantFixture = async (opts?: { maxTicketsPerUser?: number | null }) => {
   const { user: holder } = await createUser({
     email: `h-${Math.random()}@jdm.test`,
     verified: true,
@@ -27,6 +27,7 @@ const seedGrantFixture = async () => {
       status: 'published',
       publishedAt: new Date(),
       capacity: 10,
+      maxTicketsPerUser: opts?.maxTicketsPerUser ?? null,
     },
   });
   const tier = await prisma.ticketTier.create({
@@ -313,8 +314,8 @@ describe('POST /admin/tickets/grant', () => {
     expect(ticket.licensePlate).toBe('ABC-1234');
   });
 
-  it('409 when user already has a valid ticket for the event', async () => {
-    const { holder, event, tier } = await seedGrantFixture();
+  it('allows repeated grants while the user remains under event.maxTicketsPerUser', async () => {
+    const { holder, event, tier } = await seedGrantFixture({ maxTicketsPerUser: 2 });
     const { user: actor } = await createUser({
       email: 'd@jdm.test',
       verified: true,
@@ -335,12 +336,43 @@ describe('POST /admin/tickets/grant', () => {
       headers: auth,
       payload,
     });
+    expect(second.statusCode).toBe(201);
+    const validTickets = await prisma.ticket.findMany({
+      where: { userId: holder.id, eventId: event.id, status: 'valid' },
+    });
+    expect(validTickets).toHaveLength(2);
+  });
+
+  it('409 when comp grant would exceed event.maxTicketsPerUser', async () => {
+    const { holder, event, tier } = await seedGrantFixture({ maxTicketsPerUser: 1 });
+    const { user: actor } = await createUser({
+      email: 'd-cap@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const auth = { authorization: bearer(env, actor.id, 'admin') };
+    const payload = { userId: holder.id, eventId: event.id, tierId: tier.id };
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: auth,
+      payload,
+    });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/grant',
+      headers: auth,
+      payload,
+    });
     expect(second.statusCode).toBe(409);
     expect(second.json<{ error: string }>().error).toBe('DuplicateTicket');
   });
 
   it('serializes concurrent grant requests for same user/event', async () => {
-    const { holder, event, tier } = await seedGrantFixture();
+    const { holder, event, tier } = await seedGrantFixture({ maxTicketsPerUser: 1 });
     const { user: actor } = await createUser({
       email: 'race@jdm.test',
       verified: true,
