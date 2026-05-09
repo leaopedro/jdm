@@ -20,7 +20,16 @@ export default function TicketsLayout() {
         options={{
           title: 'Ingresso',
           headerLeft: () => (
-            <Pressable onPress={() => router.replace('/tickets')} hitSlop={8}>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/tickets');
+                }
+              }}
+              hitSlop={8}
+            >
               <ChevronLeft color="#F5F5F5" size={24} />
             </Pressable>
           ),

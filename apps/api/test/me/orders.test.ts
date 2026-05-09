@@ -124,7 +124,7 @@ describe('GET /me/orders', () => {
       },
     });
 
-    await prisma.order.create({
+    const mixed = await prisma.order.create({
       data: {
         userId: user.id,
         eventId: event.id,
@@ -146,6 +146,7 @@ describe('GET /me/orders', () => {
             {
               kind: 'ticket',
               tierId: tier.id,
+              eventId: event.id,
               quantity: 1,
               unitPriceCents: 8_000,
               subtotalCents: 8_000,
@@ -166,6 +167,17 @@ describe('GET /me/orders', () => {
             },
           ],
         },
+      },
+    });
+
+    const issuedTicket = await prisma.ticket.create({
+      data: {
+        orderId: mixed.id,
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
       },
     });
 
@@ -193,9 +205,15 @@ describe('GET /me/orders', () => {
     expect(latest.shortId).toBe(latest.id.slice(-8).toUpperCase());
     expect(latest.shortId).toMatch(/^[0-9A-Z]{8}$/);
     expect(latest.items.map((item) => item.kind)).toEqual(['ticket', 'product', 'extras']);
-    expect(latest.items[0]).toMatchObject({ title: event.title, detail: tier.name });
+    expect(latest.items[0]).toMatchObject({
+      title: event.title,
+      detail: tier.name,
+      ticketIds: [issuedTicket.id],
+    });
     expect(latest.items[1]).toMatchObject({ title: 'Camiseta JDM', detail: 'Preta / G' });
+    expect(latest.items[1]?.ticketIds).toBeUndefined();
     expect(latest.items[2]).toMatchObject({ title: extra.name, detail: event.title });
+    expect(latest.items[2]?.ticketIds).toBeUndefined();
 
     expect(older).toMatchObject({
       id: productOnly.id,

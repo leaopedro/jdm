@@ -119,6 +119,7 @@ export const myOrderLineItemSchema = z.object({
   quantity: z.number().int().positive(),
   unitPriceCents: z.number().int().nonnegative(),
   subtotalCents: z.number().int().nonnegative(),
+  ticketIds: z.array(z.string().min(1)).optional(),
 });
 export type MyOrderLineItem = z.infer<typeof myOrderLineItemSchema>;
 

@@ -37,4 +37,6 @@ export const ordersCopy = {
     orderDate: 'Pedido em',
     total: 'Total',
   },
+  viewTicket: 'Ver ingresso',
+  viewTickets: 'Ver ingressos',
 };
