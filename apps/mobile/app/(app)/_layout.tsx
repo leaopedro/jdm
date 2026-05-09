@@ -1,12 +1,13 @@
 import { router, Tabs } from 'expo-router';
 import { CalendarDays, ShoppingBag, ShoppingCart, Ticket, UserRound } from 'lucide-react-native';
+import { Platform } from 'react-native';
 
 import { CartProvider, useCart } from '~/cart/context';
+import { getAppTabScreenOptions } from '~/navigation/app-tab-screen-options';
 import { APP_TAB_SPECS, getCartTabBadge, getPrimaryTabName } from '~/navigation/app-tabs';
 import { useStoreRuntime } from '~/store/runtime-context';
 
 const ACTIVE = '#E10600';
-const INACTIVE = '#8A8A93';
 
 const EventsIcon = ({ color }: { color: string }) => (
   <CalendarDays color={color} size={22} strokeWidth={1.75} />
@@ -24,29 +25,7 @@ const ProfileIcon = ({ color }: { color: string }) => (
   <UserRound color={color} size={22} strokeWidth={1.75} />
 );
 
-const screenOptions = {
-  headerShown: false,
-  tabBarActiveTintColor: ACTIVE,
-  tabBarInactiveTintColor: INACTIVE,
-  tabBarStyle: {
-    backgroundColor: '#0a0a0a',
-    borderTopColor: '#2A2A2A',
-    borderTopWidth: 1,
-    height: 84,
-    paddingTop: 10,
-    paddingBottom: 18,
-  },
-  tabBarLabelStyle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    marginTop: 4,
-  },
-  tabBarIconStyle: {
-    marginBottom: 2,
-  },
-} as const;
+const screenOptions = getAppTabScreenOptions(Platform.OS === 'web' ? 'web' : 'native');
 
 function AppTabs() {
   const { itemCount } = useCart();
