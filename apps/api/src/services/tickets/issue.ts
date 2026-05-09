@@ -312,6 +312,20 @@ const issueExtrasOnly = async (
   };
 };
 
+function parseOrderItemTickets(raw: unknown): TicketMeta[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map((entry: unknown) => {
+    if (typeof entry !== 'object' || entry === null) return { extras: [] };
+    const obj = entry as Record<string, unknown>;
+    return {
+      extras: Array.isArray(obj['extras']) ? (obj['extras'] as string[]) : [],
+      carId: typeof obj['carId'] === 'string' ? obj['carId'] : undefined,
+      licensePlate: typeof obj['licensePlate'] === 'string' ? obj['licensePlate'] : undefined,
+      nickname: typeof obj['nickname'] === 'string' ? obj['nickname'] : undefined,
+    };
+  });
+}
+
 export const issueTicketsForMixedOrder = async (
   orderId: string,
   providerRef: string,
@@ -356,9 +370,7 @@ export const issueTicketsForMixedOrder = async (
     for (const item of ticketItems) {
       if (!item.tierId || !item.eventId || !item.event) continue;
 
-      const ticketsMeta = parseTicketsMeta(
-        item.tickets ? { tickets: JSON.stringify(item.tickets) } : undefined,
-      );
+      const ticketsMeta = parseOrderItemTickets(item.tickets);
 
       await lockTicketTuple(tx, order.userId, item.eventId);
 

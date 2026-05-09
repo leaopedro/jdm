@@ -516,7 +516,7 @@ export async function rollbackCartCheckout(cartId: string, orders: CartOrder[]):
       });
 
       for (const item of items) {
-        if ((item.kind === 'ticket' || item.kind === 'extras_only') && item.tierId) {
+        if (item.kind === 'ticket' && item.tierId) {
           await tx.ticketTier.updateMany({
             where: { id: item.tierId, quantitySold: { gte: item.quantity } },
             data: { quantitySold: { decrement: item.quantity } },
