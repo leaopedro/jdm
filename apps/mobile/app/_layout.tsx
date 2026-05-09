@@ -21,6 +21,7 @@ import { AuthProvider, useAuth } from '~/auth/context';
 import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
 import { initSentry } from '~/lib/sentry';
 import { ToastHost } from '~/lib/toast';
+import { StoreRuntimeProvider } from '~/store/runtime-context';
 import { theme } from '~/theme';
 
 // Override @react-navigation default light bg ('rgb(242,242,242)') so the
@@ -103,11 +104,13 @@ export default function RootLayout() {
         publishableKey={stripeKey}
         merchantIdentifier="merchant.com.jdmexperience.app"
       >
-        <AuthProvider>
-          <StatusBar style="light" />
-          <Gate />
-          <ToastHost />
-        </AuthProvider>
+        <StoreRuntimeProvider>
+          <AuthProvider>
+            <StatusBar style="light" />
+            <Gate />
+            <ToastHost />
+          </AuthProvider>
+        </StoreRuntimeProvider>
       </StripeProvider>
     </ThemeProvider>
   );

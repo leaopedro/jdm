@@ -1,7 +1,5 @@
 import { cartCopy } from '../copy/cart';
-
-// When false, store tab is hidden and garage replaces it at nav index 1.
-export const STORE_ENABLED = process.env.EXPO_PUBLIC_STORE_ENABLED !== 'false';
+import { resolveStoreSlot, shouldShowTicketsTab } from '../store/runtime';
 
 export const APP_TAB_SPECS = [
   { name: 'events', title: 'Eventos', visible: true },
@@ -14,4 +12,22 @@ export const APP_TAB_SPECS = [
 
 export function getCartTabBadge(itemCount: number) {
   return itemCount > 0 ? cartCopy.badge(itemCount) : undefined;
+}
+
+export function getPrimaryTabName(runtimeStoreEnabled: boolean | null): 'store' | 'tickets' {
+  return resolveStoreSlot(runtimeStoreEnabled);
+}
+
+export function getVisibleTabSpecs(runtimeStoreEnabled: boolean | null) {
+  if (resolveStoreSlot(runtimeStoreEnabled) === 'tickets') {
+    return [APP_TAB_SPECS[0], APP_TAB_SPECS[3], APP_TAB_SPECS[2], APP_TAB_SPECS[5]] as const;
+  }
+
+  return APP_TAB_SPECS.filter((tab) => {
+    if (tab.name === 'tickets') {
+      return shouldShowTicketsTab(runtimeStoreEnabled);
+    }
+
+    return tab.visible;
+  });
 }

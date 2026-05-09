@@ -1,15 +1,9 @@
 import { router, Tabs } from 'expo-router';
-import {
-  CalendarDays,
-  Car,
-  ShoppingBag,
-  ShoppingCart,
-  Ticket,
-  UserRound,
-} from 'lucide-react-native';
+import { CalendarDays, ShoppingBag, ShoppingCart, Ticket, UserRound } from 'lucide-react-native';
 
 import { CartProvider, useCart } from '~/cart/context';
-import { APP_TAB_SPECS, getCartTabBadge, STORE_ENABLED } from '~/navigation/app-tabs';
+import { APP_TAB_SPECS, getCartTabBadge, getPrimaryTabName } from '~/navigation/app-tabs';
+import { useStoreRuntime } from '~/store/runtime-context';
 
 const ACTIVE = '#E10600';
 const INACTIVE = '#8A8A93';
@@ -25,9 +19,6 @@ const CartIcon = ({ color }: { color: string }) => (
 );
 const TicketsIcon = ({ color }: { color: string }) => (
   <Ticket color={color} size={22} strokeWidth={1.75} />
-);
-const GarageIcon = ({ color }: { color: string }) => (
-  <Car color={color} size={22} strokeWidth={1.75} />
 );
 const ProfileIcon = ({ color }: { color: string }) => (
   <UserRound color={color} size={22} strokeWidth={1.75} />
@@ -60,11 +51,14 @@ const screenOptions = {
 function AppTabs() {
   const { itemCount } = useCart();
   const cartBadge = getCartTabBadge(itemCount);
+  const { runtimeStoreEnabled } = useStoreRuntime();
+  const primaryTabName = getPrimaryTabName(runtimeStoreEnabled);
+  const showDedicatedTicketsTab = primaryTabName === 'store';
 
   return (
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
-        name={APP_TAB_SPECS[0].name}
+        name="events"
         options={{ title: APP_TAB_SPECS[0].title, tabBarIcon: EventsIcon }}
         listeners={{
           tabPress: (e) => {
@@ -76,7 +70,7 @@ function AppTabs() {
           },
         }}
       />
-      {STORE_ENABLED ? (
+      {primaryTabName === 'store' ? (
         <Tabs.Screen
           name="store"
           options={{ title: 'Loja', tabBarIcon: StoreIcon }}
@@ -89,18 +83,18 @@ function AppTabs() {
         />
       ) : (
         <Tabs.Screen
-          name="garage"
-          options={{ title: 'Garagem', tabBarIcon: GarageIcon }}
+          name="tickets"
+          options={{ title: 'Ingressos', tabBarIcon: TicketsIcon }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              router.replace('/garage');
+              router.replace('/tickets');
             },
           }}
         />
       )}
       <Tabs.Screen
-        name={APP_TAB_SPECS[2].name}
+        name="cart"
         options={{
           title: APP_TAB_SPECS[2].title,
           tabBarIcon: CartIcon,
@@ -113,26 +107,23 @@ function AppTabs() {
           ...(cartBadge ? { tabBarBadge: cartBadge } : {}),
         }}
       />
-      <Tabs.Screen
-        name={APP_TAB_SPECS[3].name}
-        options={{ title: APP_TAB_SPECS[3].title, tabBarIcon: TicketsIcon }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-            router.replace('/tickets');
-          },
-        }}
-      />
-      {STORE_ENABLED ? (
+      {showDedicatedTicketsTab ? (
         <Tabs.Screen
-          name="garage"
-          options={{ href: null, title: 'Garagem', tabBarIcon: GarageIcon }}
+          name="tickets"
+          options={{ title: APP_TAB_SPECS[3].title, tabBarIcon: TicketsIcon }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              router.replace('/tickets');
+            },
+          }}
         />
       ) : (
         <Tabs.Screen name="store" options={{ href: null, title: 'Loja', tabBarIcon: StoreIcon }} />
       )}
+      <Tabs.Screen name="garage" options={{ href: null, title: APP_TAB_SPECS[4].title }} />
       <Tabs.Screen
-        name={APP_TAB_SPECS[5].name}
+        name="profile"
         options={{ title: APP_TAB_SPECS[5].title, tabBarIcon: ProfileIcon }}
       />
     </Tabs>
