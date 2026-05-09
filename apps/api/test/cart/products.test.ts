@@ -586,7 +586,10 @@ describe('cart product lines (JDMA-345)', () => {
         where: { id: body.orderIds[0]! },
         include: { items: true },
       });
-      expect(order.kind).toBe('product');
+      // Multi-line carts always collapse to kind='mixed' so settlement reads
+      // scope from OrderItem rows; a multi-product cart has two product
+      // OrderItems and is no longer treated as a homogeneous 'product' Order.
+      expect(order.kind).toBe('mixed');
       expect(order.shippingCents).toBe(2_500);
       expect(order.shippingAddressId).toBe(address.id);
       expect(order.fulfillmentMethod).toBe('ship');
