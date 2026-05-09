@@ -129,7 +129,7 @@ const PROVIDER_FOR_METHOD: Record<CartCheckoutMethod, 'stripe' | 'abacatepay'> =
 };
 
 type PreparedOrderItemRow = {
-  kind: 'ticket' | 'extras_only' | 'product' | 'extras';
+  kind: 'ticket' | 'product' | 'extras';
   eventId?: string | null;
   tierId?: string | null;
   variantId?: string | null;
@@ -137,7 +137,7 @@ type PreparedOrderItemRow = {
   quantity: number;
   unitPriceCents: number;
   subtotalCents: number;
-  tickets?: unknown;
+  tickets?: Prisma.InputJsonValue;
 };
 
 type PreparedOrderExtraRow = {
@@ -472,7 +472,7 @@ async function prepareTicketCartItem(
       quantity: item.quantity,
       unitPriceCents: tier.priceCents,
       subtotalCents: ticketSubtotal,
-      tickets: tickets.length > 0 ? tickets : null,
+      ...(tickets.length > 0 ? { tickets: tickets as Prisma.InputJsonValue } : {}),
     });
   }
 

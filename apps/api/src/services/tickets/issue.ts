@@ -122,6 +122,8 @@ const upsertExtraItemsFromMeta = async (
 };
 
 // Fallback for single-ticket orders without metadata: read extras from OrderExtra rows.
+// Safe only for non-mixed orders (single event), where every OrderExtra belongs
+// to that event's ticket. For mixed orders, use upsertExtraItemsFromOrderItemsForEvent.
 const upsertExtraItemsFromOrder = async (
   orderId: string,
   ticketId: string,
@@ -138,6 +140,27 @@ const upsertExtraItemsFromOrder = async (
     env,
     tx,
   );
+};
+
+// Mixed-order safe extras fallback: read extras scoped to a single event from
+// OrderItem rows (kind='extras') so we never attach another event's extras
+// to this ticket.
+const upsertExtraItemsFromOrderItemsForEvent = async (
+  orderId: string,
+  eventId: string,
+  ticketId: string,
+  env: IssueEnv,
+  tx: Tx,
+): Promise<void> => {
+  const extraItems = await tx.orderItem.findMany({
+    where: { orderId, kind: 'extras', eventId },
+    select: { extraId: true },
+  });
+  const extraIds = extraItems
+    .map((row) => row.extraId)
+    .filter((id): id is string => typeof id === 'string');
+  if (extraIds.length === 0) return;
+  await upsertExtraItemsFromMeta(ticketId, extraIds, env, tx);
 };
 
 export const issueTicketForPaidOrder = async (
@@ -407,7 +430,7 @@ export const issueTicketsForMixedOrder = async (
         if (meta && meta.extras.length > 0) {
           await upsertExtraItemsFromMeta(ticket.id, meta.extras, env, tx);
         } else if (item.quantity === 1 && ticketsMeta.length === 0) {
-          await upsertExtraItemsFromOrder(orderId, ticket.id, env, tx);
+          await upsertExtraItemsFromOrderItemsForEvent(orderId, item.eventId, ticket.id, env, tx);
         }
 
         results.push({
