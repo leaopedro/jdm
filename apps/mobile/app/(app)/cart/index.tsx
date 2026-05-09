@@ -20,6 +20,7 @@ import {
 import { beginCheckout } from '~/api/cart';
 import { getEventCommerceById } from '~/api/events';
 import { useCart } from '~/cart/context';
+import { redirectToStripeCheckout } from '~/cart/web-stripe-redirect';
 import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
@@ -316,7 +317,10 @@ export default function CartScreen() {
         return;
       }
       if (isWeb && typeof window !== 'undefined') {
-        window.location.href = result.checkoutUrl;
+        redirectToStripeCheckout({
+          checkoutUrl: result.checkoutUrl,
+          orderIds: result.orderIds,
+        });
       } else {
         await Linking.openURL(result.checkoutUrl);
       }
