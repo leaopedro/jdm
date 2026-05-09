@@ -7,31 +7,58 @@ const fmtNumber = (n: number) => new Intl.NumberFormat('pt-BR').format(n);
 
 type Tile = { label: string; value: string; accent?: boolean };
 
-function buildTiles(s: AdminFinanceSummary): Tile[] {
+type TileGroup = { title: string; tiles: Tile[] };
+
+function buildTileGroups(s: AdminFinanceSummary): TileGroup[] {
   return [
-    { label: 'Receita total', value: fmtCurrency(s.totalRevenueCents), accent: true },
-    { label: 'Pedidos', value: fmtNumber(s.orderCount) },
-    { label: 'Ticket médio', value: fmtCurrency(s.avgOrderCents) },
-    { label: 'Ingressos', value: fmtNumber(s.ticketCount) },
-    { label: 'Reembolsado', value: fmtCurrency(s.refundedCents) },
-    { label: 'Reembolsos', value: fmtNumber(s.refundedCount) },
-    { label: 'Receita loja', value: fmtCurrency(s.storeRevenueCents) },
-    { label: 'Pedidos loja', value: fmtNumber(s.storeOrderCount) },
+    {
+      title: 'Resumo geral',
+      tiles: [
+        { label: 'Receita total', value: fmtCurrency(s.totalRevenueCents), accent: true },
+        { label: 'Pedidos', value: fmtNumber(s.orderCount) },
+        { label: 'Ticket médio', value: fmtCurrency(s.avgOrderCents) },
+        { label: 'Ingressos', value: fmtNumber(s.ticketCount) },
+      ],
+    },
+    {
+      title: 'Loja e ajustes',
+      tiles: [
+        { label: 'Receita loja', value: fmtCurrency(s.storeRevenueCents) },
+        { label: 'Pedidos loja', value: fmtNumber(s.storeOrderCount) },
+        { label: 'Reembolsado', value: fmtCurrency(s.refundedCents) },
+        { label: 'Reembolsos', value: fmtNumber(s.refundedCount) },
+      ],
+    },
   ];
 }
 
 export function KpiRow({ summary }: { summary: AdminFinanceSummary }) {
-  const tiles = buildTiles(summary);
+  const groups = buildTileGroups(summary);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-      {tiles.map((t) => (
-        <div key={t.label} className="rounded-lg border border-[color:var(--color-border)] p-4">
-          <div className="text-xs text-[color:var(--color-muted)]">{t.label}</div>
-          <div
-            className={`mt-1 text-xl font-semibold tabular-nums ${t.accent ? 'text-[color:var(--color-accent)]' : ''}`}
-          >
-            {t.value}
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div
+          key={group.title}
+          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]/40 p-4"
+        >
+          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+            {group.title}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {group.tiles.map((t) => (
+              <div
+                key={t.label}
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4"
+              >
+                <div className="text-xs text-[color:var(--color-muted)]">{t.label}</div>
+                <div
+                  className={`mt-1 text-xl font-semibold tabular-nums ${t.accent ? 'text-[color:var(--color-accent)]' : ''}`}
+                >
+                  {t.value}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ))}
