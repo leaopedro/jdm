@@ -124,7 +124,11 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     for (const order of orders) {
       try {
         const settled = await settlePaidOrder(order.id, piId, app.env, { cartId });
-        if (settled.kind === 'ticket' || settled.kind === 'extras_only') {
+        if (
+          settled.kind === 'ticket' ||
+          settled.kind === 'extras_only' ||
+          (settled.kind === 'mixed' && (settled.issued?.length ?? 0) > 0)
+        ) {
           issuedAnyTicket = true;
         }
       } catch (err) {
