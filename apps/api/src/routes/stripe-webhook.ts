@@ -306,6 +306,64 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
     const orderId = intent.metadata?.orderId;
     const cartId = intent.metadata?.cartId;
 
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object as {
+        payment_intent?: string;
+        amount?: number;
+        amount_refunded?: number;
+      };
+      const piId = charge.payment_intent;
+      const amount = charge.amount ?? 0;
+      const amountRefunded = charge.amount_refunded ?? 0;
+
+      if (!piId) {
+        return reply.status(200).send({ ok: true, ignored: true, reason: 'missing-pi' });
+      }
+
+      const order = await prisma.order.findFirst({
+        where: { provider: 'stripe', providerRef: piId },
+        select: { id: true, status: true },
+      });
+
+      if (!order) {
+        request.log.warn(
+          { paymentIntentId: piId, eventId: event.id },
+          'stripe webhook: charge.refunded for unknown order',
+        );
+        return reply.status(200).send({ ok: true, ignored: true, reason: 'unknown-order' });
+      }
+
+      // Stripe partial refunds need separate handling (line-item attribution,
+      // refundedCents partial accounting). Out of scope for JDMA-312; flag and
+      // skip status flip so finance is not misled.
+      if (amountRefunded < amount) {
+        request.log.warn(
+          { orderId: order.id, paymentIntentId: piId, amount, amountRefunded },
+          'stripe webhook: charge.refunded partial refund ignored',
+        );
+        Sentry.captureMessage('stripe webhook: partial refund received', {
+          level: 'warning',
+          tags: { kind: 'payment-webhook-partial-refund', provider: 'stripe' },
+          extra: { orderId: order.id, paymentIntentId: piId, amount, amountRefunded },
+        });
+        await markProcessed(event.id, event);
+        return reply.status(200).send({ ok: true, ignored: true, reason: 'partial-refund' });
+      }
+
+      // updatedAt auto-bumps as a refundedAt proxy until JDMA-314 lands.
+      await prisma.order.updateMany({
+        where: { id: order.id, status: 'paid' },
+        data: { status: 'refunded' },
+      });
+
+      const firstTime = await markProcessed(event.id, event);
+      request.log.info(
+        { orderId: order.id, paymentIntentId: piId, firstTime },
+        'stripe webhook: charge.refunded settled',
+      );
+      return reply.status(200).send({ ok: true, refunded: true, deduped: !firstTime });
+    }
+
     // Cart checkout settlement: multiple orders linked by cartId
     if (event.type === 'payment_intent.succeeded' && cartId && intent.id) {
       return handleCartPaymentSucceeded(cartId, intent.id, event, request, reply);
