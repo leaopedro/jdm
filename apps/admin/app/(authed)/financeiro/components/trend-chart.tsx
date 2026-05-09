@@ -25,7 +25,12 @@ function CustomTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: AdminFinanceTrendPoint; dataKey: string; value: number; color: string }>;
+  payload?: Array<{
+    payload: AdminFinanceTrendPoint;
+    dataKey: string;
+    value: number;
+    color: string;
+  }>;
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0]!.payload;

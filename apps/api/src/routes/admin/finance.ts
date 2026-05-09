@@ -71,9 +71,7 @@ function getOrderItemRevenueCents(
   kind: 'ticket' | 'product' | 'extras',
 ): number {
   if (order.items.length === 0) return kind === 'ticket' ? order.amountCents : 0;
-  return order.items
-    .filter((i) => i.kind === kind)
-    .reduce((sum, i) => sum + i.subtotalCents, 0);
+  return order.items.filter((i) => i.kind === kind).reduce((sum, i) => sum + i.subtotalCents, 0);
 }
 
 function hasProductItems(order: Pick<FinanceOrderRecord, 'items'>): boolean {
@@ -263,7 +261,12 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
     const buckets = new Map<
       string,
-      { revenueCents: number; orderCount: number; ticketRevenueCents: number; storeRevenueCents: number }
+      {
+        revenueCents: number;
+        orderCount: number;
+        ticketRevenueCents: number;
+        storeRevenueCents: number;
+      }
     >();
     for (const o of orders) {
       if (!o.paidAt) continue;
@@ -333,9 +336,7 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     const where = buildWhere(request.query);
     const orders = await findFinanceOrders(where, ['paid']);
 
-    const productOrderIds = orders
-      .filter((o) => hasProductItems(o))
-      .map((o) => o.id);
+    const productOrderIds = orders.filter((o) => hasProductItems(o)).map((o) => o.id);
 
     if (productOrderIds.length === 0) return { items: [] };
 
@@ -355,7 +356,13 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
 
     const buckets = new Map<
       string,
-      { productId: string; productTitle: string; quantitySold: number; revenueCents: number; orderIds: Set<string> }
+      {
+        productId: string;
+        productTitle: string;
+        quantitySold: number;
+        revenueCents: number;
+        orderIds: Set<string>;
+      }
     >();
 
     for (const item of productItems) {
