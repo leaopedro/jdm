@@ -5,6 +5,7 @@ import {
   adminProductTypeListResponseSchema,
   adminProductTypeSchema,
   adminFinanceByEventResponseSchema,
+  adminFinanceByProductResponseSchema,
   adminFinancePaymentMixResponseSchema,
   adminFinanceSummarySchema,
   adminFinanceTrendResponseSchema,
@@ -286,6 +287,11 @@ export const getFinancePaymentMix = (
 ): Promise<AdminFinancePaymentMixResponse> =>
   apiFetch(`/admin/finance/payment-mix${financeQs(q)}`, {
     schema: adminFinancePaymentMixResponseSchema,
+  });
+
+export const getFinanceByProduct = (q?: AdminFinanceQuery) =>
+  apiFetch(`/admin/finance/by-product${financeQs(q)}`, {
+    schema: adminFinanceByProductResponseSchema,
   });
 
 export const getFinanceExportUrl = (q?: AdminFinanceQuery) =>

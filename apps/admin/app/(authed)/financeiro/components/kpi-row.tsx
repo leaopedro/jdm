@@ -15,6 +15,8 @@ function buildTiles(s: AdminFinanceSummary): Tile[] {
     { label: 'Ingressos', value: fmtNumber(s.ticketCount) },
     { label: 'Reembolsado', value: fmtCurrency(s.refundedCents) },
     { label: 'Reembolsos', value: fmtNumber(s.refundedCount) },
+    { label: 'Receita loja', value: fmtCurrency(s.storeRevenueCents) },
+    { label: 'Pedidos loja', value: fmtNumber(s.storeOrderCount) },
   ];
 }
 
@@ -22,7 +24,7 @@ export function KpiRow({ summary }: { summary: AdminFinanceSummary }) {
   const tiles = buildTiles(summary);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
       {tiles.map((t) => (
         <div key={t.label} className="rounded-lg border border-[color:var(--color-border)] p-4">
           <div className="text-xs text-[color:var(--color-muted)]">{t.label}</div>

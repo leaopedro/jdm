@@ -5,6 +5,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,15 +25,23 @@ function CustomTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: AdminFinanceTrendPoint }>;
+  payload?: Array<{ payload: AdminFinanceTrendPoint; dataKey: string; value: number; color: string }>;
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0]!.payload;
+  const hasStore = p.storeRevenueCents > 0;
   return (
     <div className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm shadow-lg">
-      <div className="font-semibold">{p.date}</div>
-      <div className="text-[color:var(--color-accent)]">{fmtCurrency(p.revenueCents)}</div>
-      <div className="text-[color:var(--color-muted)]">{p.orderCount} pedidos</div>
+      <div className="mb-1 font-semibold">{p.date}</div>
+      <div className="text-[color:var(--color-accent)]">
+        Ingressos: {fmtCurrency(p.ticketRevenueCents)}
+      </div>
+      {hasStore ? (
+        <div style={{ color: '#f97316' }}>Loja: {fmtCurrency(p.storeRevenueCents)}</div>
+      ) : null}
+      <div className="mt-1 text-[color:var(--color-muted)]">
+        Total: {fmtCurrency(p.revenueCents)} · {p.orderCount} pedidos
+      </div>
     </div>
   );
 }
@@ -46,15 +55,21 @@ export function TrendChart({ points }: { points: AdminFinanceTrendPoint[] }) {
     );
   }
 
+  const hasStoreData = points.some((p) => p.storeRevenueCents > 0);
+
   return (
     <div className="rounded-lg border border-[color:var(--color-border)] p-4">
       <h3 className="mb-3 text-sm font-semibold">Receita diária</h3>
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
           <defs>
-            <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id="ticketGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#e10600" stopOpacity={0.3} />
               <stop offset="95%" stopColor="#e10600" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="storeGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#1f1f24" strokeDasharray="3 3" />
@@ -73,13 +88,32 @@ export function TrendChart({ points }: { points: AdminFinanceTrendPoint[] }) {
             width={90}
           />
           <Tooltip content={<CustomTooltip />} />
+          {hasStoreData ? (
+            <Legend
+              formatter={(value: string) => (value === 'ticketRevenueCents' ? 'Ingressos' : 'Loja')}
+              wrapperStyle={{ fontSize: 12, color: '#8a8a93' }}
+            />
+          ) : null}
           <Area
             type="monotone"
-            dataKey="revenueCents"
+            dataKey="ticketRevenueCents"
+            stackId="revenue"
             stroke="#e10600"
             strokeWidth={2}
-            fill="url(#revenueGradient)"
+            fill="url(#ticketGradient)"
+            name="ticketRevenueCents"
           />
+          {hasStoreData ? (
+            <Area
+              type="monotone"
+              dataKey="storeRevenueCents"
+              stackId="revenue"
+              stroke="#f97316"
+              strokeWidth={2}
+              fill="url(#storeGradient)"
+              name="storeRevenueCents"
+            />
+          ) : null}
         </AreaChart>
       </ResponsiveContainer>
     </div>

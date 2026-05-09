@@ -2,6 +2,7 @@
 
 import type {
   AdminFinanceByEventResponse,
+  AdminFinanceByProductResponse,
   AdminFinancePaymentMixResponse,
   AdminFinanceQuery,
   AdminFinanceSummary,
@@ -21,6 +22,7 @@ import {
 import { FilterBar } from './filter-bar';
 import { KpiRow } from './kpi-row';
 import { PaymentMix } from './payment-mix';
+import { ProductTable } from './product-table';
 import { RevenueTable } from './revenue-table';
 import { TrendChart } from './trend-chart';
 
@@ -36,6 +38,7 @@ type DashboardData = {
   byEvent: AdminFinanceByEventResponse;
   trends: AdminFinanceTrendResponse;
   paymentMix: AdminFinancePaymentMixResponse;
+  byProduct: AdminFinanceByProductResponse;
 };
 
 type ViewState =
@@ -220,6 +223,9 @@ function DashboardContent({ data }: { data: DashboardData }) {
         </div>
         <PaymentMix items={data.paymentMix.items} />
       </div>
+      {data.byProduct.items.length > 0 ? (
+        <ProductTable items={data.byProduct.items} />
+      ) : null}
     </div>
   );
 }
