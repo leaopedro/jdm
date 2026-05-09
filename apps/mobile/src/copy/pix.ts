@@ -8,7 +8,7 @@ export const pixCopy = {
   expired: 'Código expirado',
   expiredSub: 'O tempo para pagamento esgotou. Tente novamente.',
   paid: 'Pagamento confirmado!',
-  paidSub: 'Seu ingresso está pronto.',
+  paidSub: 'Seu pedido está pronto.',
   viewTicket: 'Ver ingresso',
   failed: 'Pagamento não processado.',
   failedSub: 'Tente novamente ou escolha outro método.',

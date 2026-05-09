@@ -38,9 +38,8 @@ export const buyCopy = {
   },
   confirmed: {
     title: 'Pagamento confirmado!',
-    subtitle: 'Seu ingresso está pronto.',
-    viewTicket: 'Ver ingresso',
-    goHome: 'Voltar para Eventos',
+    subtitle: 'Seu pedido está pronto.',
+    viewOrders: 'Ver meus pedidos',
   },
   webCheckout: {
     redirecting: 'Redirecionando para pagamento...',

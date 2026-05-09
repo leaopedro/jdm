@@ -1,51 +1,17 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { CheckCircle2 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { getOrder } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { theme } from '~/theme';
 
 export default function CheckoutConfirmedScreen() {
   const router = useRouter();
-  const { orderId, ticketId: ticketIdParam } = useLocalSearchParams<{
-    orderId?: string;
-    ticketId?: string;
-  }>();
 
-  const [ticketId, setTicketId] = useState<string | undefined>(ticketIdParam);
-  const [resolving, setResolving] = useState<boolean>(!ticketIdParam && Boolean(orderId));
-
-  useEffect(() => {
-    if (ticketIdParam || !orderId) return;
-    let active = true;
-    void (async () => {
-      try {
-        const order = await getOrder(orderId);
-        if (!active) return;
-        setTicketId(order.ticketId);
-      } catch {
-        // Ignore: user can still tap "Voltar para Eventos".
-      } finally {
-        if (active) setResolving(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [orderId, ticketIdParam]);
-
-  const goTicket = () => {
-    if (!ticketId) return;
+  const goOrders = () => {
     router.dismissAll();
-    router.replace(`/tickets/${ticketId}` as never);
-  };
-
-  const goEvents = () => {
-    router.dismissAll();
-    router.replace('/events' as never);
+    router.replace('/profile/orders' as never);
   };
 
   return (
@@ -56,14 +22,7 @@ export default function CheckoutConfirmedScreen() {
         <Text style={styles.subtitle}>{buyCopy.confirmed.subtitle}</Text>
 
         <View style={styles.actions}>
-          {resolving ? (
-            <ActivityIndicator color={theme.colors.accent} />
-          ) : (
-            <>
-              {ticketId ? <Button label={buyCopy.confirmed.viewTicket} onPress={goTicket} /> : null}
-              <Button label={buyCopy.confirmed.goHome} onPress={goEvents} variant="secondary" />
-            </>
-          )}
+          <Button label={buyCopy.confirmed.viewOrders} onPress={goOrders} />
         </View>
       </View>
     </View>
