@@ -73,7 +73,7 @@ const serializeImage = (photo: DbProductPhoto, uploads: Uploads) =>
 const serializeVariant = (v: DbVariant, currency: string) =>
   storeProductVariantSchema.parse({
     id: v.id,
-    sku: v.sku ?? v.id,
+    sku: v.sku ?? null,
     title: v.name,
     priceCents: v.priceCents,
     compareAtPriceCents: null,

@@ -93,7 +93,7 @@ export type StoreProductImage = z.infer<typeof storeProductImageSchema>;
 
 export const storeProductVariantSchema = z.object({
   id: z.string().min(1),
-  sku: z.string().trim().min(1).max(80),
+  sku: z.string().trim().min(1).max(80).nullable(),
   title: z.string().trim().min(1).max(120),
   priceCents: z.number().int().nonnegative(),
   compareAtPriceCents: z.number().int().nonnegative().nullable(),
