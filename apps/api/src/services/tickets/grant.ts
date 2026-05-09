@@ -31,8 +31,12 @@ export class DuplicateTicketError extends Error {
   constructor(
     public readonly userId: string,
     public readonly eventId: string,
+    public readonly maxTicketsPerUser: number | null,
+    public readonly existingValidCount: number,
   ) {
-    super(`user ${userId} already has a valid ticket for event ${eventId}`);
+    super(
+      `user ${userId} reached ticket limit (${existingValidCount}/${maxTicketsPerUser ?? '∞'}) for event ${eventId}`,
+    );
     this.name = 'DuplicateTicketError';
   }
 }
@@ -64,7 +68,7 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
 
     const tier = await tx.ticketTier.findFirst({
       where: { id: tierId, eventId },
-      select: { id: true },
+      select: { id: true, event: { select: { maxTicketsPerUser: true } } },
     });
     if (!tier) throw new GrantInputError(`tier ${tierId} not found for event ${eventId}`);
 
@@ -78,10 +82,13 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
 
     await lockTicketTuple(tx, userId, eventId);
 
-    const conflict = await tx.ticket.findFirst({
+    const existingValidCount = await tx.ticket.count({
       where: { userId, eventId, status: 'valid' },
     });
-    if (conflict) throw new DuplicateTicketError(userId, eventId);
+    const maxTicketsPerUser = tier.event.maxTicketsPerUser;
+    if (maxTicketsPerUser !== null && existingValidCount >= maxTicketsPerUser) {
+      throw new DuplicateTicketError(userId, eventId, maxTicketsPerUser, existingValidCount);
+    }
 
     const order = await tx.order.create({
       data: {
@@ -121,7 +128,7 @@ export const grantCompTicket = async (input: GrantInput, env: GrantEnv): Promise
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new DuplicateTicketError(userId, eventId);
+        throw new DuplicateTicketError(userId, eventId, maxTicketsPerUser, existingValidCount);
       }
       throw err;
     }
