@@ -210,6 +210,7 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const body = adminFinanceSummarySchema.parse(res.json());
       expect(body.totalRevenueCents).toBe(0);
+      expect(body.netRevenueCents).toBe(0);
       expect(body.orderCount).toBe(0);
       expect(body.avgOrderCents).toBe(0);
       expect(body.ticketCount).toBe(0);
@@ -243,6 +244,7 @@ describe('Admin Finance Endpoints', () => {
       expect(body.avgOrderCents).toBe(7500);
       expect(body.refundedCents).toBe(3000);
       expect(body.refundedCount).toBe(1);
+      expect(body.netRevenueCents).toBe(12000);
     });
 
     it('prefers order item revenue and falls back to legacy order amounts', async () => {
@@ -288,6 +290,7 @@ describe('Admin Finance Endpoints', () => {
       expect(body.refundedCount).toBe(1);
       expect(body.storeRevenueCents).toBe(5000);
       expect(body.storeOrderCount).toBe(1);
+      expect(body.netRevenueCents).toBe(19500);
     });
 
     it('filters by date range', async () => {
@@ -390,6 +393,31 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const body = adminFinanceSummarySchema.parse(res.json());
       expect(body.totalRevenueCents).toBe(5000);
+    });
+
+    it('netRevenueCents goes negative when refunds exceed paid revenue in window', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event = await seedEvent('meet-sp');
+      const tier = await seedTier(event.id);
+
+      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 1000, status: 'paid' });
+      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 5000, status: 'refunded' });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/summary',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceSummarySchema.parse(res.json());
+      expect(body.totalRevenueCents).toBe(1000);
+      expect(body.refundedCents).toBe(5000);
+      expect(body.netRevenueCents).toBe(-4000);
     });
   });
 

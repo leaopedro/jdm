@@ -451,6 +451,7 @@ export type AdminFinanceQuery = z.infer<typeof adminFinanceQuerySchema>;
 
 export const adminFinanceSummarySchema = z.object({
   totalRevenueCents: z.number().int(),
+  netRevenueCents: z.number().int(),
   orderCount: z.number().int().nonnegative(),
   avgOrderCents: z.number().int().nonnegative(),
   ticketCount: z.number().int().nonnegative(),
