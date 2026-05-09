@@ -31,9 +31,10 @@ export const ordersCopy = {
     mixed: 'Evento + loja',
   },
   summary: {
-    moreItems: (count: number) => `+${count} ${count === 1 ? 'item' : 'itens'}`,
+    orderId: 'Pedido',
     shipping: 'Frete',
     eventDate: 'Evento',
     orderDate: 'Pedido em',
+    total: 'Total',
   },
 };

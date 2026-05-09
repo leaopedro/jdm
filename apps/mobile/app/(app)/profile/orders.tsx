@@ -23,10 +23,6 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 });
 
-function headline(order: MyOrder): string {
-  return order.items[0]?.title ?? ordersCopy.orderKind[order.kind];
-}
-
 function paymentBadgeStyle(status: MyOrder['status']) {
   if (status === 'paid') return styles.badgePaid;
   if (status === 'pending') return styles.badgePending;
@@ -40,7 +36,6 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
 }
 
 function OrderCard({ order }: { order: MyOrder }) {
-  const extraItems = Math.max(order.items.length - 1, 0);
   const eventDate = order.event
     ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
     : null;
@@ -49,7 +44,9 @@ function OrderCard({ order }: { order: MyOrder }) {
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{headline(order)}</Text>
+          <Text style={styles.title}>
+            {ordersCopy.summary.orderId} #{order.shortId}
+          </Text>
           <Text style={styles.subtitle}>{ordersCopy.orderKind[order.kind]}</Text>
         </View>
         <View style={styles.badges}>
@@ -100,11 +97,7 @@ function OrderCard({ order }: { order: MyOrder }) {
       </View>
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>
-          {extraItems > 0
-            ? ordersCopy.summary.moreItems(extraItems)
-            : ordersCopy.orderKind[order.kind]}
-        </Text>
+        <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
         <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
       </View>
     </View>

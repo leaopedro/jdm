@@ -124,6 +124,7 @@ export type MyOrderLineItem = z.infer<typeof myOrderLineItemSchema>;
 
 export const myOrderSchema = z.object({
   id: z.string().min(1),
+  shortId: z.string().min(1),
   kind: orderKindSchema,
   status: orderStatusSchema,
   provider: paymentProviderSchema,

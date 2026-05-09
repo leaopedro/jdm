@@ -32,6 +32,7 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
 
         return {
           id: order.id,
+          shortId: order.id.slice(-8).toUpperCase(),
           kind: order.kind,
           status: order.status,
           provider: order.provider,

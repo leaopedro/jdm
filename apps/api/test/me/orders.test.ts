@@ -190,6 +190,8 @@ describe('GET /me/orders', () => {
       fulfillmentStatus: 'packed',
       event: { id: event.id, title: event.title },
     });
+    expect(latest.shortId).toBe(latest.id.slice(-8).toUpperCase());
+    expect(latest.shortId).toMatch(/^[0-9A-Z]{8}$/);
     expect(latest.items.map((item) => item.kind)).toEqual(['ticket', 'product', 'extras']);
     expect(latest.items[0]).toMatchObject({ title: event.title, detail: tier.name });
     expect(latest.items[1]).toMatchObject({ title: 'Camiseta JDM', detail: 'Preta / G' });
@@ -197,6 +199,7 @@ describe('GET /me/orders', () => {
 
     expect(older).toMatchObject({
       id: productOnly.id,
+      shortId: productOnly.id.slice(-8).toUpperCase(),
       kind: 'product',
       containsTickets: false,
       containsStoreItems: true,
