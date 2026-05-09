@@ -9,7 +9,8 @@ type CheckoutCart = {
     eventId: string | null;
     variant: {
       product: {
-        shippingFeeCents: number | null;
+        allowPickup: boolean;
+        allowShip: boolean;
       };
     } | null;
   }>;
@@ -61,11 +62,14 @@ export const validateEventPickupSelection = async (
     throw new EventPickupValidationError('event pickup requires at least one product item');
   }
 
-  const hasShippableProduct = cart.items.some(
-    (item) => item.kind === 'product' && item.variant?.product.shippingFeeCents !== null,
+  const hasShipOnlyProduct = cart.items.some(
+    (item) =>
+      item.kind === 'product' &&
+      !!item.variant?.product.allowShip &&
+      !item.variant.product.allowPickup,
   );
-  if (hasShippableProduct) {
-    throw new EventPickupValidationError('event pickup is unavailable for shippable products');
+  if (hasShipOnlyProduct) {
+    throw new EventPickupValidationError('event pickup is unavailable for shipping-only products');
   }
 
   const event = await prisma.event.findFirst({

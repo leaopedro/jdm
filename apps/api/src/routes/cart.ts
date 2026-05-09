@@ -456,7 +456,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const requiresShipping = cart.items.some(
-      (item) => item.kind === 'product' && item.variant?.product.shippingFeeCents !== null,
+      (item) =>
+        item.kind === 'product' &&
+        !!item.variant?.product.allowShip &&
+        (!item.variant.product.allowPickup || !input.pickupEventId),
     );
     let shippingAddressId: string | null = null;
 
