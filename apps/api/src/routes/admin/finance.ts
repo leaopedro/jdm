@@ -1,13 +1,29 @@
 import { prisma } from '@jdm/db';
 import { adminFinanceQuerySchema } from '@jdm/shared/admin';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type OrderStatus, type PaymentMethod, type PaymentProvider } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
+
+type FinanceOrderRecord = {
+  id: string;
+  eventId: string | null;
+  amountCents: number;
+  provider: PaymentProvider;
+  method: PaymentMethod;
+  status: OrderStatus;
+  paidAt: Date | null;
+  items: Array<{ subtotalCents: number }>;
+  event: null | {
+    id: string;
+    title: string;
+    startsAt: Date;
+    city: string | null;
+    stateCode: string | null;
+  };
+};
 
 function buildWhere(query: unknown): Prisma.OrderWhereInput {
   const q = adminFinanceQuerySchema.parse(query);
-  const where: Prisma.OrderWhereInput = {
-    kind: { in: ['ticket', 'extras_only'] },
-  };
+  const where: Prisma.OrderWhereInput = {};
 
   if (q.statuses && q.statuses.length > 0) {
     where.status = { in: q.statuses };
@@ -40,22 +56,75 @@ function buildWhere(query: unknown): Prisma.OrderWhereInput {
   return where;
 }
 
+function getFinanceOrderRevenueCents(
+  order: Pick<FinanceOrderRecord, 'amountCents' | 'items'>,
+): number {
+  if (order.items.length === 0) {
+    return order.amountCents;
+  }
+
+  return order.items.reduce((sum, item) => sum + item.subtotalCents, 0);
+}
+
+async function findFinanceOrders(
+  where: Prisma.OrderWhereInput,
+  statuses: Array<'paid' | 'refunded'>,
+): Promise<FinanceOrderRecord[]> {
+  const orders = await prisma.order.findMany({
+    where: {
+      ...where,
+      status: { in: statuses },
+    },
+    select: {
+      id: true,
+      eventId: true,
+      amountCents: true,
+      provider: true,
+      method: true,
+      status: true,
+      paidAt: true,
+      event: {
+        select: {
+          id: true,
+          title: true,
+          startsAt: true,
+          city: true,
+          stateCode: true,
+        },
+      },
+    },
+  });
+
+  const orderIds = orders.map((order) => order.id);
+  const orderItems =
+    orderIds.length > 0
+      ? await prisma.$queryRaw<Array<{ orderId: string; subtotalCents: number }>>(Prisma.sql`
+          SELECT "orderId", "subtotalCents"
+          FROM "OrderItem"
+          WHERE "orderId" IN (${Prisma.join(orderIds)})
+        `)
+      : [];
+
+  const itemsByOrderId = new Map<string, Array<{ subtotalCents: number }>>();
+  for (const item of orderItems) {
+    const bucket = itemsByOrderId.get(item.orderId) ?? [];
+    bucket.push({ subtotalCents: item.subtotalCents });
+    itemsByOrderId.set(item.orderId, bucket);
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    items: itemsByOrderId.get(order.id) ?? [],
+  }));
+}
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
   app.get('/finance/summary', async (request) => {
     const where = buildWhere(request.query);
 
-    const [paidAgg, refundedAgg, ticketCount] = await Promise.all([
-      prisma.order.aggregate({
-        where: { ...where, status: 'paid' },
-        _sum: { amountCents: true },
-        _count: { id: true },
-      }),
-      prisma.order.aggregate({
-        where: { ...where, status: 'refunded' },
-        _sum: { amountCents: true },
-        _count: { id: true },
-      }),
+    const [orders, ticketCount] = await Promise.all([
+      findFinanceOrders(where, ['paid', 'refunded']),
       prisma.ticket.count({
         where: {
           order: where,
@@ -64,8 +133,22 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       }),
     ]);
 
-    const totalRevenueCents = paidAgg._sum.amountCents ?? 0;
-    const orderCount = paidAgg._count.id;
+    let totalRevenueCents = 0;
+    let refundedCents = 0;
+    let orderCount = 0;
+    let refundedCount = 0;
+
+    for (const order of orders) {
+      const revenueCents = getFinanceOrderRevenueCents(order);
+      if (order.status === 'paid') {
+        totalRevenueCents += revenueCents;
+        orderCount += 1;
+      } else {
+        refundedCents += revenueCents;
+        refundedCount += 1;
+      }
+    }
+
     const avgOrderCents = orderCount > 0 ? Math.round(totalRevenueCents / orderCount) : 0;
 
     return {
@@ -73,41 +156,59 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       orderCount,
       avgOrderCents,
       ticketCount,
-      refundedCents: refundedAgg._sum.amountCents ?? 0,
-      refundedCount: refundedAgg._count.id,
+      refundedCents,
+      refundedCount,
     };
   });
 
   app.get('/finance/by-event', async (request) => {
     const where = buildWhere(request.query);
     const whereWithEvent: Prisma.OrderWhereInput = { ...where, eventId: { not: null } };
+    const orders = await findFinanceOrders(whereWithEvent, ['paid', 'refunded']);
+    const buckets = new Map<
+      string,
+      {
+        eventId: string;
+        eventTitle: string;
+        startsAt: string;
+        city: string | null;
+        stateCode: string | null;
+        revenueCents: number;
+        orderCount: number;
+        ticketCount: number;
+        refundedCents: number;
+      }
+    >();
 
-    const orders = await prisma.order.groupBy({
-      by: ['eventId'],
-      where: { ...whereWithEvent, status: 'paid' },
-      _sum: { amountCents: true },
-      _count: { id: true },
-    });
+    for (const order of orders) {
+      if (!order.eventId || !order.event) {
+        continue;
+      }
 
-    const refunds = await prisma.order.groupBy({
-      by: ['eventId'],
-      where: { ...whereWithEvent, status: 'refunded' },
-      _sum: { amountCents: true },
-    });
+      const bucket = buckets.get(order.eventId) ?? {
+        eventId: order.eventId,
+        eventTitle: order.event.title,
+        startsAt: order.event.startsAt.toISOString(),
+        city: order.event.city,
+        stateCode: order.event.stateCode,
+        revenueCents: 0,
+        orderCount: 0,
+        ticketCount: 0,
+        refundedCents: 0,
+      };
 
-    const eventIds = orders.map((o) => o.eventId).filter((id): id is string => id !== null);
-    const events = await prisma.event.findMany({
-      where: { id: { in: eventIds } },
-      select: { id: true, title: true, startsAt: true, city: true, stateCode: true },
-    });
-    const eventMap = new Map(events.map((e) => [e.id, e]));
+      const revenueCents = getFinanceOrderRevenueCents(order);
+      if (order.status === 'paid') {
+        bucket.revenueCents += revenueCents;
+        bucket.orderCount += 1;
+      } else {
+        bucket.refundedCents += revenueCents;
+      }
 
-    const refundMap = new Map(
-      refunds
-        .filter((r): r is typeof r & { eventId: string } => r.eventId !== null)
-        .map((r) => [r.eventId, r._sum.amountCents ?? 0]),
-    );
+      buckets.set(order.eventId, bucket);
+    }
 
+    const eventIds = Array.from(buckets.keys());
     const ticketCounts = await prisma.ticket.groupBy({
       by: ['eventId'],
       where: {
@@ -119,25 +220,12 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     });
     const ticketMap = new Map(ticketCounts.map((t) => [t.eventId, t._count?.id ?? 0]));
 
-    const items = orders
-      .map((o) => {
-        if (!o.eventId) return null;
-        const ev = eventMap.get(o.eventId);
-        if (!ev) return null;
-        return {
-          eventId: o.eventId,
-          eventTitle: ev.title,
-          startsAt: ev.startsAt.toISOString(),
-          city: ev.city,
-          stateCode: ev.stateCode,
-          revenueCents: o._sum.amountCents ?? 0,
-          orderCount: o._count.id,
-          ticketCount: ticketMap.get(o.eventId) ?? 0,
-          refundedCents: refundMap.get(o.eventId) ?? 0,
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.revenueCents - a!.revenueCents);
+    const items = Array.from(buckets.values())
+      .map((bucket) => ({
+        ...bucket,
+        ticketCount: ticketMap.get(bucket.eventId) ?? 0,
+      }))
+      .sort((a, b) => b.revenueCents - a.revenueCents);
 
     return { items };
   });
@@ -145,18 +233,14 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
   app.get('/finance/trends', async (request) => {
     const where = buildWhere(request.query);
 
-    const orders = await prisma.order.findMany({
-      where: { ...where, status: 'paid' },
-      select: { paidAt: true, amountCents: true },
-      orderBy: { paidAt: 'asc' },
-    });
+    const orders = await findFinanceOrders(where, ['paid']);
 
     const buckets = new Map<string, { revenueCents: number; orderCount: number }>();
     for (const o of orders) {
       if (!o.paidAt) continue;
       const date = o.paidAt.toISOString().slice(0, 10);
       const bucket = buckets.get(date) ?? { revenueCents: 0, orderCount: 0 };
-      bucket.revenueCents += o.amountCents;
+      bucket.revenueCents += getFinanceOrderRevenueCents(o);
       bucket.orderCount += 1;
       buckets.set(date, bucket);
     }
@@ -171,25 +255,41 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
   app.get('/finance/payment-mix', async (request) => {
     const where = buildWhere(request.query);
 
-    const groups = await prisma.order.groupBy({
-      by: ['provider', 'method'],
-      where: { ...where, status: 'paid' },
-      _sum: { amountCents: true },
-      _count: { id: true },
-    });
+    const orders = await findFinanceOrders(where, ['paid']);
+    const buckets = new Map<
+      string,
+      {
+        provider: 'stripe' | 'abacatepay';
+        method: 'card' | 'pix';
+        revenueCents: number;
+        orderCount: number;
+      }
+    >();
 
-    const totalRevenue = groups.reduce((sum, g) => sum + (g._sum.amountCents ?? 0), 0);
+    for (const order of orders) {
+      const key = `${order.provider}:${order.method}`;
+      const bucket = buckets.get(key) ?? {
+        provider: order.provider,
+        method: order.method,
+        revenueCents: 0,
+        orderCount: 0,
+      };
 
-    const items = groups.map((g) => ({
-      provider: g.provider,
-      method: g.method,
-      revenueCents: g._sum.amountCents ?? 0,
-      orderCount: g._count.id,
-      percentage:
-        totalRevenue > 0 ? Math.round(((g._sum.amountCents ?? 0) / totalRevenue) * 10000) / 100 : 0,
-    }));
+      bucket.revenueCents += getFinanceOrderRevenueCents(order);
+      bucket.orderCount += 1;
+      buckets.set(key, bucket);
+    }
 
-    return { items };
+    const items = Array.from(buckets.values());
+    const totalRevenue = items.reduce((sum, item) => sum + item.revenueCents, 0);
+
+    return {
+      items: items.map((item) => ({
+        ...item,
+        percentage:
+          totalRevenue > 0 ? Math.round((item.revenueCents / totalRevenue) * 10000) / 100 : 0,
+      })),
+    };
   });
 
   app.get('/finance/export', async (request, reply) => {
