@@ -123,7 +123,7 @@ export default function StoreProductDetailScreen() {
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
           accessibilityRole="button"
-          accessibilityLabel="Voltar"
+          accessibilityLabel={storeCopy.actions.back}
           hitSlop={8}
           style={styles.backButton}
         >
@@ -221,7 +221,7 @@ export default function StoreProductDetailScreen() {
           <Pressable
             onPress={() => updateQuantity(quantity - 1)}
             accessibilityRole="button"
-            accessibilityLabel="Diminuir quantidade"
+            accessibilityLabel={storeCopy.actions.decreaseQuantity}
             style={styles.quantityButton}
           >
             <Minus color={theme.colors.fg} size={18} strokeWidth={2} />
@@ -232,7 +232,7 @@ export default function StoreProductDetailScreen() {
           <Pressable
             onPress={() => updateQuantity(quantity + 1)}
             accessibilityRole="button"
-            accessibilityLabel="Aumentar quantidade"
+            accessibilityLabel={storeCopy.actions.increaseQuantity}
             style={styles.quantityButton}
           >
             <Plus color={theme.colors.fg} size={18} strokeWidth={2} />
@@ -285,7 +285,7 @@ export default function StoreProductDetailScreen() {
                 accessibilityLabel={storeCopy.closeSheet}
                 style={styles.sheetClose}
               >
-                <Text style={styles.sheetCloseText}>Fechar</Text>
+                <Text style={styles.sheetCloseText}>{storeCopy.closeSheet}</Text>
               </Pressable>
             </View>
             <View style={styles.variantGrid}>

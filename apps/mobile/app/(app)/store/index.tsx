@@ -248,7 +248,7 @@ export default function StoreIndex() {
         <Pressable
           onPress={() => router.push('/cart' as never)}
           accessibilityRole="button"
-          accessibilityLabel={`${storeCopy.actions.openCart}, ${itemCount} itens`}
+          accessibilityLabel={storeCopy.actions.openCartWithCount(itemCount)}
           hitSlop={8}
           style={styles.cartButton}
         >

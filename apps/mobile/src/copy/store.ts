@@ -27,6 +27,11 @@ export const storeCopy = {
     cancelVariant: 'Agora não',
     retry: 'Tentar novamente',
     openCart: 'Abrir carrinho',
+    openCartWithCount: (count: number) =>
+      `Abrir carrinho, ${count} ${count === 1 ? 'item' : 'itens'}`,
+    back: 'Voltar',
+    decreaseQuantity: 'Diminuir quantidade',
+    increaseQuantity: 'Aumentar quantidade',
   },
   variantPicker: {
     title: 'Escolha a variação',

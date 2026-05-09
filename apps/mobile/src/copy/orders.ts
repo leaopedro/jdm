@@ -36,5 +36,6 @@ export const ordersCopy = {
     eventDate: 'Evento',
     orderDate: 'Pedido em',
     total: 'Total',
+    separator: '•',
   },
 };

@@ -50,7 +50,9 @@ export const profileCopy = {
     saveFailed: 'Não foi possível salvar o endereço.',
     loadFailed: 'Não foi possível carregar os endereços.',
     delete: 'Excluir',
+    deleting: 'Excluindo...',
     deleteConfirm: 'Remover este endereço?',
+    openDetailsHint: 'Abrir endereço',
   },
   garage: {
     title: 'Garagem',

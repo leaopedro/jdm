@@ -76,7 +76,7 @@ function OrderCard({ order }: { order: MyOrder }) {
           <Text style={styles.metaLabel}>
             {ordersCopy.fulfillmentMethod[order.fulfillmentMethod]}
             {order.shippingCents > 0
-              ? ` • ${ordersCopy.summary.shipping} ${formatBRL(order.shippingCents)}`
+              ? ` ${ordersCopy.summary.separator} ${ordersCopy.summary.shipping} ${formatBRL(order.shippingCents)}`
               : ''}
           </Text>
         ) : null}

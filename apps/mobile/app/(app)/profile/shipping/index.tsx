@@ -93,7 +93,7 @@ export default function ShippingAddressListScreen() {
                 style={styles.card}
                 accessibilityRole="link"
                 accessibilityLabel={item.recipientName}
-                accessibilityHint="Abrir endereço"
+                accessibilityHint={profileCopy.shipping.openDetailsHint}
               >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{item.recipientName}</Text>
