@@ -7,11 +7,11 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Linking,
   Modal,
   Platform,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
   View,
@@ -26,6 +26,11 @@ import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
 import { formatBRL } from '~/lib/format';
 import { ExtrasDrawer } from '~/screens/cart/ExtrasDrawer';
+import {
+  buildCartSections,
+  formatProductAttributes,
+  isProductItem,
+} from '~/screens/cart/presentation';
 import { formatShippingAddress } from '~/shipping/format-address';
 import { theme } from '~/theme';
 
@@ -155,12 +160,6 @@ function itemNeedsCar(item: CartItem): boolean {
 
 function firstTicketPlate(item: CartItem): string | undefined {
   return item.tickets[0]?.licensePlate;
-}
-
-function isProductItem(
-  item: CartItem,
-): item is CartItem & { kind: 'product'; product: NonNullable<CartItem['product']> } {
-  return item.kind === 'product' && item.product !== null;
 }
 
 function showError(message: string) {
@@ -392,6 +391,7 @@ export default function CartScreen() {
   const currentDrawerItem = drawerItem
     ? (cart.items.find((i) => i.id === drawerItem.id) ?? drawerItem)
     : null;
+  const sections = buildCartSections(cart.items);
 
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
   const blockedByShippingAddress = requiresShipping && !selectedShippingAddressId;
@@ -425,100 +425,115 @@ export default function CartScreen() {
     void openExtrasDrawer(item);
   };
 
-  return (
-    <View style={styles.container}>
-      <FlatList
-        data={cart.items}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
+  const renderCartItem = ({ item }: { item: CartItem }) => {
+    const productDetails = isProductItem(item)
+      ? formatProductAttributes(item.product.attributes)
+      : null;
+
+    return (
+      <Pressable
+        style={styles.card}
+        onPress={() => openItem(item)}
+        accessibilityRole="button"
+        accessibilityHint={
+          isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras
+        }
+      >
+        <View style={styles.cardTop}>
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardTitle}>
+              {isProductItem(item)
+                ? `${cartCopy.item.quantity(item.quantity)} ${item.product.productTitle}`
+                : `${cartCopy.item.quantity(item.quantity)} ${cartCopy.item.ticket}`}
+            </Text>
+            <Text style={styles.cardSub}>
+              {isProductItem(item)
+                ? `${item.product.variantName} · ${formatBRL(item.product.unitPriceCents)}`
+                : formatBRL(item.amountCents)}
+            </Text>
+            {productDetails ? <Text style={styles.cardMeta}>{productDetails}</Text> : null}
+          </View>
+          <View style={styles.cardActions}>
+            <Pressable
+              onPress={() => void handleRemove(item.id)}
+              disabled={removingId === item.id}
+              accessibilityRole="button"
+              accessibilityLabel={cartCopy.item.remove}
+              hitSlop={8}
+              style={styles.removeBtn}
+            >
+              {removingId === item.id ? (
+                <ActivityIndicator size="small" color={theme.colors.muted} />
+              ) : (
+                <Trash2 color={theme.colors.muted} size={18} strokeWidth={1.75} />
+              )}
+            </Pressable>
+            <ChevronRight color={theme.colors.muted} size={16} strokeWidth={1.75} />
+          </View>
+        </View>
+        {isProductItem(item) ? (
+          <View style={styles.productMetaRow}>
+            <Text style={styles.cardExtras}>
+              {item.product.requiresShipping ? cartCopy.item.shipping : cartCopy.item.pickup}
+            </Text>
+          </View>
+        ) : item.extras.length > 0 ? (
+          <View style={styles.extrasRow}>
+            <Text style={styles.cardExtras}>
+              {item.extras.length} {cartCopy.item.extras.toLowerCase()}
+            </Text>
+            <Text style={styles.extrasAmount}>
+              {formatBRL(item.extras.reduce((s, e) => s + e.subtotalCents, 0))}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.tapHint}>
+            {isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras}
+          </Text>
+        )}
+        {item.requiresCar && item.kind === 'ticket' ? (
           <Pressable
-            style={styles.card}
-            onPress={() => openItem(item)}
+            onPress={() => openCarPlate(item)}
+            style={[styles.carRow, itemNeedsCar(item) && styles.carRowWarn]}
             accessibilityRole="button"
-            accessibilityHint={
-              isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras
+            accessibilityLabel={
+              itemNeedsCar(item) ? cartCopy.item.selectCar : cartCopy.item.changeCar
             }
           >
-            <View style={styles.cardTop}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle}>
-                  {isProductItem(item)
-                    ? `${cartCopy.item.quantity(item.quantity)} ${item.product.productTitle}`
-                    : `${cartCopy.item.quantity(item.quantity)} ${cartCopy.item.ticket}`}
-                </Text>
-                <Text style={styles.cardSub}>
-                  {isProductItem(item)
-                    ? `${item.product.variantName} · ${formatBRL(item.product.unitPriceCents)}`
-                    : formatBRL(item.amountCents)}
-                </Text>
-              </View>
-              <View style={styles.cardActions}>
-                <Pressable
-                  onPress={() => void handleRemove(item.id)}
-                  disabled={removingId === item.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={cartCopy.item.remove}
-                  hitSlop={8}
-                  style={styles.removeBtn}
-                >
-                  {removingId === item.id ? (
-                    <ActivityIndicator size="small" color={theme.colors.muted} />
-                  ) : (
-                    <Trash2 color={theme.colors.muted} size={18} strokeWidth={1.75} />
-                  )}
-                </Pressable>
-                <ChevronRight color={theme.colors.muted} size={16} strokeWidth={1.75} />
-              </View>
-            </View>
-            {isProductItem(item) ? (
-              <View style={styles.productMetaRow}>
-                <Text style={styles.cardExtras}>
-                  {item.product.requiresShipping ? cartCopy.item.shipping : cartCopy.item.pickup}
-                </Text>
-              </View>
-            ) : item.extras.length > 0 ? (
-              <View style={styles.extrasRow}>
-                <Text style={styles.cardExtras}>
-                  {item.extras.length} {cartCopy.item.extras.toLowerCase()}
-                </Text>
-                <Text style={styles.extrasAmount}>
-                  {formatBRL(item.extras.reduce((s, e) => s + e.subtotalCents, 0))}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.tapHint}>
-                {isProductItem(item) ? cartCopy.item.viewProduct : cartCopy.item.tapExtras}
-              </Text>
-            )}
-            {item.requiresCar && item.kind === 'ticket' ? (
-              <Pressable
-                onPress={() => openCarPlate(item)}
-                style={[styles.carRow, itemNeedsCar(item) && styles.carRowWarn]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  itemNeedsCar(item) ? cartCopy.item.selectCar : cartCopy.item.changeCar
-                }
-              >
-                <CarIcon
-                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
-                  size={16}
-                  strokeWidth={1.75}
-                />
-                <Text style={[styles.carRowText, itemNeedsCar(item) && styles.carRowTextWarn]}>
-                  {itemNeedsCar(item)
-                    ? cartCopy.item.selectCar
-                    : cartCopy.item.plate(firstTicketPlate(item) ?? '')}
-                </Text>
-                <ChevronRight
-                  color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
-                  size={14}
-                  strokeWidth={1.75}
-                />
-              </Pressable>
-            ) : null}
+            <CarIcon
+              color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+              size={16}
+              strokeWidth={1.75}
+            />
+            <Text style={[styles.carRowText, itemNeedsCar(item) && styles.carRowTextWarn]}>
+              {itemNeedsCar(item)
+                ? cartCopy.item.selectCar
+                : cartCopy.item.plate(firstTicketPlate(item) ?? '')}
+            </Text>
+            <ChevronRight
+              color={itemNeedsCar(item) ? theme.colors.accent : theme.colors.muted}
+              size={14}
+              strokeWidth={1.75}
+            />
           </Pressable>
+        ) : null}
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+          </View>
         )}
+        renderItem={renderCartItem}
       />
 
       <View style={styles.footer}>
@@ -648,6 +663,17 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   list: { padding: theme.spacing.md, gap: theme.spacing.sm },
+  sectionHeader: {
+    paddingTop: theme.spacing.xs,
+    paddingBottom: theme.spacing.xs,
+  },
+  sectionTitle: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
   emptyTitle: {
     color: theme.colors.fg,
     fontSize: theme.font.size.lg,
@@ -670,6 +696,7 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1, gap: theme.spacing.xs },
   cardTitle: { color: theme.colors.fg, fontSize: theme.font.size.md, fontWeight: '600' },
   cardSub: { color: theme.colors.muted, fontSize: theme.font.size.sm },
+  cardMeta: { color: theme.colors.muted, fontSize: theme.font.size.sm },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   cardExtras: { color: theme.colors.muted, fontSize: theme.font.size.sm },
   extrasRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

@@ -1,0 +1,77 @@
+import type { CartItem } from '@jdm/shared/cart';
+import { describe, expect, it } from 'vitest';
+
+import { buildCartSections, formatProductAttributes } from '../presentation';
+
+const baseItem = (overrides: Partial<CartItem>): CartItem => ({
+  id: 'item_1',
+  eventId: 'evt_1',
+  tierId: 'tier_1',
+  variantId: null,
+  source: 'purchase',
+  kind: 'ticket',
+  quantity: 1,
+  requiresCar: false,
+  tickets: [{ extras: [] }],
+  extras: [],
+  product: null,
+  amountCents: 15000,
+  currency: 'BRL',
+  reservationExpiresAt: null,
+  createdAt: '2026-05-01T10:00:00.000Z',
+  updatedAt: '2026-05-01T10:00:00.000Z',
+  ...overrides,
+});
+
+describe('cart presentation helpers', () => {
+  it('groups mixed carts into ticket and product sections', () => {
+    const sections = buildCartSections([
+      baseItem({ id: 'ticket_1' }),
+      baseItem({
+        id: 'product_1',
+        eventId: null,
+        tierId: null,
+        variantId: 'var_1',
+        kind: 'product',
+        product: {
+          productId: 'prod_1',
+          productTitle: 'Camiseta JDM',
+          productSlug: 'camiseta-jdm',
+          variantId: 'var_1',
+          variantName: 'Preto / G',
+          variantSku: 'SKU-1',
+          unitPriceCents: 9900,
+          requiresShipping: true,
+          shippingFeeCents: 2500,
+          attributes: { Cor: 'Preto', Tamanho: 'G' },
+        },
+      }),
+    ]);
+
+    expect(sections).toEqual([
+      { key: 'ticket', title: 'Ingressos', data: [expect.objectContaining({ id: 'ticket_1' })] },
+      { key: 'product', title: 'Produtos', data: [expect.objectContaining({ id: 'product_1' })] },
+    ]);
+  });
+
+  it('skips empty cart sections', () => {
+    const sections = buildCartSections([baseItem({ id: 'ticket_1' })]);
+
+    expect(sections).toEqual([
+      { key: 'ticket', title: 'Ingressos', data: [expect.objectContaining({ id: 'ticket_1' })] },
+    ]);
+  });
+
+  it('formats visible product attributes into a compact label', () => {
+    expect(
+      formatProductAttributes({
+        Cor: 'Preto',
+        Tamanho: 'G',
+        Estoque: 5,
+        Inativo: false,
+        Ignorar: null,
+        Nested: { foo: 'bar' },
+      }),
+    ).toBe('Cor: Preto · Tamanho: G · Estoque: 5 · Inativo: false');
+  });
+});
