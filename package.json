@@ -17,7 +17,7 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
-    "prepare": "sh ./scripts/sync-git-hooks.sh"
+    "prepare": "if [ -f ./scripts/sync-git-hooks.sh ] && [ -d .git ]; then sh ./scripts/sync-git-hooks.sh; fi"
   },
   "simple-git-hooks": {
     "pre-commit": "./scripts/guard-branch-context.sh pre-commit && pnpm lint-staged"
