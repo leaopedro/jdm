@@ -7,12 +7,11 @@ const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getSentryExpoConfig(projectRoot, { getDefaultConfig });
-config.watchFolders = [workspaceRoot];
+config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), workspaceRoot]));
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-config.resolver.disableHierarchicalLookup = true;
 
 // Shared packages use NodeNext-style `.js` imports in `.ts` source. Strip the
 // extension so Metro resolves the TypeScript file.

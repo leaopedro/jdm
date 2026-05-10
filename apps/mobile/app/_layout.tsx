@@ -79,7 +79,7 @@ export default function RootLayout() {
   useEffect(() => {
     initSentry();
   }, []);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Anton_400Regular,
     Inter_400Regular,
     Inter_500Medium,
@@ -90,31 +90,40 @@ export default function RootLayout() {
   const stripeKey =
     (Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined)
       ?.stripePublishableKey ?? '';
-  if (!stripeKey && __DEV__) {
-    // Not thrown: dev builds without Stripe configured should still run
-    // screens unrelated to payment. StripeProvider just becomes a no-op.
+  if (!stripeKey) {
+    // Preview builds still need to boot even when Stripe is unset.
     console.warn('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set — payments will fail.');
   }
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError) {
     return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;
   }
+  const app = (
+    <>
+      {/* StoreRuntimeProvider must wrap AuthProvider so the store probe fires
+          before auth state settles. The probe uses an unauthenticated endpoint;
+          do not move it inside AuthProvider without verifying the probe auth. */}
+      <StoreRuntimeProvider>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <Gate />
+          <ToastHost />
+        </AuthProvider>
+      </StoreRuntimeProvider>
+    </>
+  );
+
   return (
     <ThemeProvider value={jdmNavTheme}>
-      <StripeProvider
-        publishableKey={stripeKey}
-        merchantIdentifier="merchant.com.jdmexperience.app"
-      >
-        {/* StoreRuntimeProvider must wrap AuthProvider so the store probe fires
-            before auth state settles. The probe uses an unauthenticated endpoint;
-            do not move it inside AuthProvider without verifying the probe auth. */}
-        <StoreRuntimeProvider>
-          <AuthProvider>
-            <StatusBar style="light" />
-            <Gate />
-            <ToastHost />
-          </AuthProvider>
-        </StoreRuntimeProvider>
-      </StripeProvider>
+      {stripeKey ? (
+        <StripeProvider
+          publishableKey={stripeKey}
+          merchantIdentifier="merchant.com.jdmexperience.app"
+        >
+          {app}
+        </StripeProvider>
+      ) : (
+        app
+      )}
     </ThemeProvider>
   );
 }
