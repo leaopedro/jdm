@@ -43,8 +43,42 @@ const STRIPE_AVAILABLE = !!(
   Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined
 )?.stripePublishableKey;
 
-// Only rendered when StripeProvider is in the tree (STRIPE_AVAILABLE === true).
-// Isolates useStripe() so OrderCard doesn't crash in preview builds without Stripe.
+// Resumes a Pix order. Stripe SDK not touched, so this button is safe
+// in any build regardless of whether StripeProvider is mounted.
+function ResumePixButton({ orderId }: { orderId: string }) {
+  const router = useRouter();
+
+  const handlePay = async () => {
+    try {
+      const data = await resumeOrder(orderId);
+      if (data.method !== 'pix') {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      router.push({
+        pathname: '/events/buy/checkout-pix',
+        params: {
+          orderId: data.orderId,
+          brCode: data.brCode,
+          expiresAt: data.expiresAt,
+          amountCents: String(data.amountCents),
+        },
+      } as never);
+    } catch {
+      Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+    }
+  };
+
+  return (
+    <Pressable onPress={() => void handlePay()} accessibilityRole="button" style={styles.payLink}>
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
+// Resumes a Stripe (card) order. Only rendered when StripeProvider is in
+// the tree (STRIPE_AVAILABLE === true). Isolates useStripe() so OrderCard
+// doesn't crash in preview builds without Stripe.
 function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () => unknown }) {
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -53,6 +87,7 @@ function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () 
     try {
       const data = await resumeOrder(orderId);
       if (data.method === 'pix') {
+        // Provider says stripe but server returned pix: fall back to the Pix flow.
         router.push({
           pathname: '/events/buy/checkout-pix',
           params: {
@@ -88,6 +123,27 @@ function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () 
       <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
     </Pressable>
   );
+}
+
+function ResumeOrderButton({
+  order,
+  reload,
+}: {
+  order: MyOrder;
+  reload: () => unknown;
+}): React.ReactElement | null {
+  // Pix orders never touch the Stripe SDK, so render them regardless of
+  // whether STRIPE_AVAILABLE is true.
+  if (order.provider === 'abacatepay') {
+    return <ResumePixButton orderId={order.id} />;
+  }
+  // Stripe orders need StripeProvider. Hide the CTA when Stripe is not
+  // configured (e.g. preview builds without a publishable key) — there is
+  // no usable resume path for card orders in that environment.
+  if (STRIPE_AVAILABLE) {
+    return <PayWithStripeButton orderId={order.id} reload={reload} />;
+  }
+  return null;
 }
 
 function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown }) {
@@ -189,9 +245,7 @@ function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown })
           <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
           <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
         </View>
-        {isPendingAndActive && STRIPE_AVAILABLE ? (
-          <PayWithStripeButton orderId={order.id} reload={reload} />
-        ) : null}
+        {isPendingAndActive ? <ResumeOrderButton order={order} reload={reload} /> : null}
       </View>
     </View>
   );
