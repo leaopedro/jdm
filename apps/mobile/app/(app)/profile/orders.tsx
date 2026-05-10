@@ -1,5 +1,6 @@
 import type { MyOrder } from '@jdm/shared/orders';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
+import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -38,31 +39,19 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
   return styles.badgeFulfillment;
 }
 
-function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown }) {
+const STRIPE_AVAILABLE = !!(
+  Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined
+)?.stripePublishableKey;
+
+// Only rendered when StripeProvider is in the tree (STRIPE_AVAILABLE === true).
+// Isolates useStripe() so OrderCard doesn't crash in preview builds without Stripe.
+function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () => unknown }) {
   const router = useRouter();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
-  const eventDate = order.event
-    ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
-    : null;
-
-  const isPendingAndActive =
-    order.status === 'pending' &&
-    (order.expiresAt === null || new Date(order.expiresAt) > new Date());
-
-  const openTicket = (ticketIds: string[]) => {
-    if (ticketIds.length === 1) {
-      router.push({
-        pathname: '/tickets/[ticketId]',
-        params: { ticketId: ticketIds[0]! },
-      } as never);
-    } else {
-      router.push('/tickets');
-    }
-  };
 
   const handlePay = async () => {
     try {
-      const data = await resumeOrder(order.id);
+      const data = await resumeOrder(orderId);
       if (data.method === 'pix') {
         router.push({
           pathname: '/events/buy/checkout-pix',
@@ -91,6 +80,34 @@ function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown })
       reload();
     } catch {
       Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+    }
+  };
+
+  return (
+    <Pressable onPress={() => void handlePay()} accessibilityRole="button" style={styles.payLink}>
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
+function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown }) {
+  const router = useRouter();
+  const eventDate = order.event
+    ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
+    : null;
+
+  const isPendingAndActive =
+    order.status === 'pending' &&
+    (order.expiresAt === null || new Date(order.expiresAt) > new Date());
+
+  const openTicket = (ticketIds: string[]) => {
+    if (ticketIds.length === 1) {
+      router.push({
+        pathname: '/tickets/[ticketId]',
+        params: { ticketId: ticketIds[0]! },
+      } as never);
+    } else {
+      router.push('/tickets');
     }
   };
 
@@ -172,14 +189,8 @@ function OrderCard({ order, reload }: { order: MyOrder; reload: () => unknown })
           <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
           <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
         </View>
-        {isPendingAndActive ? (
-          <Pressable
-            onPress={() => void handlePay()}
-            accessibilityRole="button"
-            style={styles.payLink}
-          >
-            <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
-          </Pressable>
+        {isPendingAndActive && STRIPE_AVAILABLE ? (
+          <PayWithStripeButton orderId={order.id} reload={reload} />
         ) : null}
       </View>
     </View>
