@@ -94,8 +94,11 @@ export default function ResetPasswordScreen() {
 
   if (!token || invalidToken) {
     return (
-      <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
-        <View className="flex-1 px-5 pt-4 pb-8">
+      <SafeAreaView className="flex-1 bg-bg" style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+        <View
+          className="flex-1 px-5 pt-4 pb-8"
+          style={{ flex: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32 }}
+        >
           <View className="flex-row items-center pb-2 gap-3">
             <Pressable
               onPress={() => router.replace('/forgot')}
@@ -130,13 +133,16 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
+    <SafeAreaView className="flex-1 bg-bg" style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
       <KeyboardAvoidingView
         className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           className="flex-1"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, flexGrow: 1 }}
           contentContainerClassName="px-5 pb-8 flex-grow"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

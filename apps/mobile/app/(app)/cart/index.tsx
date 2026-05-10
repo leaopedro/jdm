@@ -1,6 +1,7 @@
 import type { CartItem } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
 import type { ShippingAddressRecord } from '@jdm/shared/store';
+import { Button } from '@jdm/ui';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,7 +24,6 @@ import { getStoreSettings } from '~/api/store';
 import { listMyTickets } from '~/api/tickets';
 import { useCart } from '~/cart/context';
 import { redirectToStripeCheckout } from '~/cart/web-stripe-redirect';
-import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
 import { formatBRL, formatEventDateRange } from '~/lib/format';

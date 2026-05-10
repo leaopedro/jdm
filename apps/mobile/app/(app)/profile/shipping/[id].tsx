@@ -1,3 +1,4 @@
+import { Button } from '@jdm/ui';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
@@ -5,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { deleteShippingAddress, listShippingAddresses, updateShippingAddress } from '~/api/store';
-import { Button } from '~/components/Button';
 import { profileCopy } from '~/copy/profile';
 import { confirmDestructive, showMessage } from '~/lib/confirm';
 import { ShippingAddressFormFields } from '~/shipping/ShippingAddressFormFields';

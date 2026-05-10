@@ -1,10 +1,10 @@
+import { Button } from '@jdm/ui';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useForm } from 'react-hook-form';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { createShippingAddress } from '~/api/store';
-import { Button } from '~/components/Button';
 import { profileCopy } from '~/copy/profile';
 import { showMessage } from '~/lib/confirm';
 import { ShippingAddressFormFields } from '~/shipping/ShippingAddressFormFields';

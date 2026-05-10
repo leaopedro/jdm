@@ -1,4 +1,5 @@
 import type { Car } from '@jdm/shared/cars';
+import { Button } from '@jdm/ui';
 import { Link, Stack, useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -13,7 +14,6 @@ import {
 } from 'react-native';
 
 import { listCars } from '~/api/cars';
-import { Button } from '~/components/Button';
 import { profileCopy } from '~/copy/profile';
 import { theme } from '~/theme';
 

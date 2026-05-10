@@ -4,12 +4,12 @@ import {
   updateProfileSchema,
   type UpdateProfileInput,
 } from '@jdm/shared/profile';
+import { Button } from '@jdm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getProfile, updateProfile } from '~/api/profile';
-import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
 import { theme } from '~/theme';

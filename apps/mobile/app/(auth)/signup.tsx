@@ -66,13 +66,16 @@ export default function SignupScreen() {
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" style={{ backgroundColor: '#0a0a0a' }}>
+    <SafeAreaView className="flex-1 bg-bg" style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
       <KeyboardAvoidingView
         className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           className="flex-1"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, flexGrow: 1 }}
           contentContainerClassName="px-5 pb-8 flex-grow"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

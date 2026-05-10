@@ -15,6 +15,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   getStoreProduct,
@@ -56,6 +58,8 @@ type VariantPickerState = {
 export default function StoreIndex() {
   const router = useRouter();
   const { addItem, adding, itemCount } = useCart();
+  const insets = useSafeAreaInsets();
+  const headerTop = Platform.OS === 'web' ? 8 : Math.max(insets.top, 16) + 8;
   const [search, setSearch] = useState('');
   const [collections, setCollections] = useState<StoreCollection[]>([]);
   const [productTypes, setProductTypes] = useState<StoreProductType[]>([]);
@@ -232,7 +236,7 @@ export default function StoreIndex() {
   );
 
   const renderHero = () => (
-    <View style={styles.headerWrap}>
+    <View style={[styles.headerWrap, { paddingTop: headerTop }]}>
       <LinearGradient colors={['#2D0603', '#130D0D', '#0B0B0F']} style={styles.hero}>
         <View style={styles.heroCopy}>
           <Text variant="eyebrow" tone="brand">

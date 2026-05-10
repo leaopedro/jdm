@@ -36,6 +36,7 @@ export default function TicketsIndex() {
   const params = useLocalSearchParams<{ eventId?: string | string[] }>();
   const rawEventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const [items, setItems] = useState<MyTicket[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<TicketStatusFilter>('valid');
   const [eventFilterCleared, setEventFilterCleared] = useState(false);
@@ -43,8 +44,14 @@ export default function TicketsIndex() {
   const eventId = eventFilterCleared ? null : (rawEventId ?? null);
 
   const load = useCallback(async () => {
-    const res = await listMyTickets();
-    setItems(res.items);
+    try {
+      const res = await listMyTickets();
+      setItems(res.items);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      setItems([]);
+    }
   }, []);
 
   useFocusEffect(
@@ -85,7 +92,20 @@ export default function TicketsIndex() {
   if (items.length === 0) {
     return (
       <View style={styles.center}>
-        <Text style={styles.empty}>{ticketsCopy.list.empty}</Text>
+        <Text style={styles.empty}>
+          {loadError ? ticketsCopy.list.emptyFilter : ticketsCopy.list.empty}
+        </Text>
+        {loadError ? (
+          <View style={styles.retryWrap}>
+            <Pressable
+              style={styles.retryBtn}
+              onPress={() => void load()}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryText}>Tentar novamente</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -222,6 +242,19 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bg,
   },
   empty: { color: theme.colors.muted },
+  retryWrap: { marginTop: theme.spacing.md },
+  retryBtn: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  retryText: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
   eventBanner: {
     flexDirection: 'row',
     alignItems: 'center',

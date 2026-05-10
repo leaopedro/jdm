@@ -1,10 +1,10 @@
+import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CheckCircle2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { getOrder } from '~/api/orders';
-import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { theme } from '~/theme';
 

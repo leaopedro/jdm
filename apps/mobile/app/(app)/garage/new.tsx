@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { carInputSchema, type CarInput } from '@jdm/shared/cars';
+import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
 import { createCar } from '~/api/cars';
 import { sanitizeNext } from '~/auth/redirect-intent';
-import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
 import { theme } from '~/theme';

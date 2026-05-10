@@ -1,4 +1,5 @@
 import type { EventDetailCommerce, EventDetailPublic, TicketTier } from '@jdm/shared/events';
+import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -6,19 +7,20 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
 import { useCart } from '~/cart/context';
 import { getCartAddErrorMessage } from '~/cart/error-message';
-import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
@@ -40,6 +42,8 @@ export default function EventDetailScreen() {
   const [hasTicket, setHasTicket] = useState(false);
   const { addItem, adding } = useCart();
   const { status: authStatus } = useAuth();
+  const insets = useSafeAreaInsets();
+  const backTop = Platform.OS === 'web' ? 16 : Math.max(insets.top, 16);
   const isAnon = authStatus === 'unauthenticated';
   const isAuthed = authStatus === 'authenticated';
 
@@ -177,7 +181,7 @@ export default function EventDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Voltar"
           hitSlop={8}
-          style={styles.backButton}
+          style={[styles.backButton, { top: backTop }]}
         >
           <ArrowLeft color="#F5F5F5" size={22} strokeWidth={2} />
         </Pressable>

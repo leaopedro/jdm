@@ -42,15 +42,28 @@ function MenuRow({ icon, label, hint, onPress, accent = false }: MenuRowProps) {
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      style={({ pressed }) => [
-        styles.menuRow,
-        pressed ? styles.menuRowPressed : null,
-        accent ? styles.menuRowDanger : null,
-      ]}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.sm,
+        borderRadius: theme.radii.lg,
+        borderWidth: 1,
+        borderColor: accent ? '#3A1818' : '#2A2A30',
+        backgroundColor: '#111217',
+      }}
     >
-      <View style={styles.menuLead}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
         <View style={[styles.menuIconWrap, accent ? styles.menuIconWrapDanger : null]}>{icon}</View>
-        <View style={styles.menuText}>
+        <View style={{ flex: 1, minWidth: 0, marginRight: theme.spacing.sm }}>
           <Text style={[styles.menuLabel, accent ? styles.menuLabelDanger : null]}>{label}</Text>
           <Text style={styles.menuHint}>{hint}</Text>
         </View>
@@ -230,21 +243,27 @@ const styles = StyleSheet.create({
   },
   subtitle: { color: theme.colors.muted, fontSize: theme.font.size.md },
   banner: { color: theme.colors.muted },
-  menuList: { gap: theme.spacing.sm },
+  menuList: { marginTop: theme.spacing.sm },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.md,
     padding: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#2A2A30',
     backgroundColor: '#111217',
   },
   menuRowPressed: { opacity: 0.82 },
   menuRowDanger: { borderColor: '#3A1818' },
-  menuLead: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, flex: 1 },
+  menuLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   menuIconWrap: {
     width: 36,
     height: 36,
@@ -252,9 +271,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1A1C23',
+    marginRight: theme.spacing.md,
   },
   menuIconWrapDanger: { backgroundColor: '#261012' },
-  menuText: { flex: 1, gap: 2 },
+  menuText: { flex: 1, flexShrink: 1, minWidth: 0, marginRight: theme.spacing.sm },
   menuLabel: { color: theme.colors.fg, fontSize: theme.font.size.lg, fontWeight: '600' },
   menuLabelDanger: { color: theme.colors.accent },
   menuHint: { color: theme.colors.muted, fontSize: theme.font.size.md },

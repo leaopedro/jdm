@@ -1,9 +1,9 @@
+import { Button } from '@jdm/ui';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '~/components/Button';
 import { HiddenQR } from '~/components/HiddenQR';
 import { pixCopy } from '~/copy/pix';
 import { useOrderStatus } from '~/hooks/useOrderStatus';

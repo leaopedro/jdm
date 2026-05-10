@@ -1,3 +1,4 @@
+import { Button } from '@jdm/ui';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
@@ -22,7 +23,6 @@ interface SelectedExtra {
 
 import { getApiErrorCode } from '~/api/errors';
 import { createOrder, createPixOrder } from '~/api/orders';
-import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
 import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
