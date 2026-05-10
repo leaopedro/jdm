@@ -134,9 +134,13 @@ export default function RootLayout() {
     Inter_700Bold,
     JetBrainsMono_400Regular,
   });
+
   const stripeKey =
     (Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined)
       ?.stripePublishableKey ?? '';
+  const stripeMerchantIdentifier = (
+    Constants.expoConfig?.extra as { stripeMerchantIdentifier?: string } | undefined
+  )?.stripeMerchantIdentifier;
   if (!stripeKey) {
     // Preview builds still need to boot even when Stripe is unset.
     console.warn('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set — payments will fail.');
@@ -164,7 +168,7 @@ export default function RootLayout() {
       {stripeKey ? (
         <StripeProvider
           publishableKey={stripeKey}
-          merchantIdentifier="merchant.com.jdmexperience.app"
+          {...(stripeMerchantIdentifier ? { merchantIdentifier: stripeMerchantIdentifier } : {})}
         >
           {app}
         </StripeProvider>

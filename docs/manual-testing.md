@@ -283,6 +283,21 @@ Pass:
 
 - You captured the first fatal line or confirmed there was no crash line.
 
+Expected new breadcrumbs from the current app build:
+
+- `[boot] root-layout.module-evaluated`
+- `[boot] sentry.init-complete`
+- `[boot] auth.boot.start`
+- `[boot] auth.boot.no-session` or `[boot] auth.boot.authenticated`
+- `[boot] boot.ready`
+
+If you never see `root-layout.module-evaluated`, the app likely failed before
+the JS bundle executed. Treat that as a native startup failure, not a React one.
+
+If you see the early boot breadcrumbs but never `boot.ready`, look for the
+paired `[mobile-error] ...` line in the same log window. That is the exact
+startup exception context emitted by the app.
+
 **Step 2 — Read simulator logs for a local repro**
 
 ```bash
