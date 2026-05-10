@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { carInputSchema, type CarInput } from '@jdm/shared/cars';
+import { Button } from '@jdm/ui';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { Controller, useForm } from 'react-hook-form';
@@ -7,7 +8,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { createCar } from '~/api/cars';
 import { sanitizeNext } from '~/auth/redirect-intent';
-import { Button } from '~/components/Button';
 import { TextField } from '~/components/TextField';
 import { profileCopy } from '~/copy/profile';
 import { theme } from '~/theme';

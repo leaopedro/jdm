@@ -1,3 +1,4 @@
+import { Button } from '@jdm/ui';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -5,7 +6,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { resendVerifyRequest } from '~/api/auth';
 import { ApiError } from '~/api/client';
 import { useAuth } from '~/auth/context';
-import { Button } from '~/components/Button';
 import { authCopy } from '~/copy/auth';
 import { theme } from '~/theme';
 

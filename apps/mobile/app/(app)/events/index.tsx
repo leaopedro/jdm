@@ -9,11 +9,13 @@ import {
   Animated,
   FlatList,
   Image,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { listEvents } from '~/api/events';
 import { getProfile } from '~/api/profile';
@@ -157,8 +159,13 @@ export default function EventsIndex() {
 function Header() {
   const { itemCount } = useCart();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 8 : Math.max(insets.top, 16) + 8;
   return (
-    <View className="px-5 pt-2 pb-4 flex-row items-start justify-between">
+    <View
+      className="px-5 pt-2 pb-4 flex-row items-start justify-between"
+      style={{ paddingTop: topInset, paddingHorizontal: 20, paddingBottom: 16 }}
+    >
       <View className="flex-1">
         <Text variant="eyebrow" tone="brand">
           {eventsCopy.header.eyebrow}

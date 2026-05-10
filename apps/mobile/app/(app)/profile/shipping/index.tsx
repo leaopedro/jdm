@@ -1,11 +1,11 @@
 import type { ShippingAddressRecord } from '@jdm/shared/store';
+import { Button } from '@jdm/ui';
 import { Link, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { listShippingAddresses } from '~/api/store';
-import { Button } from '~/components/Button';
 import { profileCopy } from '~/copy/profile';
 import { formatShippingAddress } from '~/shipping/format-address';
 import { getShippingExitPath, resolveShippingReturnTo } from '~/shipping/navigation';

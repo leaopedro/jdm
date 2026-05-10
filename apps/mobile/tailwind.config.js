@@ -8,7 +8,4 @@ module.exports = {
     '../../packages/ui/src/**/*.{js,jsx,ts,tsx}',
   ],
   presets: [require('nativewind/preset'), designPreset],
-  corePlugins: {
-    aspectRatio: false,
-  },
 };

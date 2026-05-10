@@ -3,13 +3,14 @@ import { Badge, Button, Card, Text } from '@jdm/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Bell, User } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, View } from 'react-native';
 
 import { listEvents } from '~/api/events';
 import { useAuth } from '~/auth/context';
 import { buildLoginHref } from '~/auth/redirect-intent';
 import { formatEventDateRange } from '~/lib/format';
+import { captureException } from '~/lib/sentry';
 
 const copy = {
   greeting: (name: string) => `OLÁ, ${name.toUpperCase()}`,
@@ -44,8 +45,45 @@ export default function Welcome() {
   const router = useRouter();
   const { user, status } = useAuth();
   const isAnon = status === 'unauthenticated';
+  const isAuthSettled = status !== 'loading';
   const [items, setItems] = useState<EventSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const profileNavGuard = useRef(false);
+
+  const handleProfilePress = useCallback(() => {
+    if (!isAuthSettled || profileNavGuard.current) return;
+
+    profileNavGuard.current = true;
+
+    const safePush = (href: string) => {
+      try {
+        const result = router.push(href as never);
+        Promise.resolve(result).catch((error) => {
+          captureException(error, 'welcome.profile-button.push');
+        });
+      } catch (error) {
+        captureException(error, 'welcome.profile-button.push');
+      }
+    };
+
+    try {
+      if (isAnon) {
+        safePush(buildLoginHref('/welcome'));
+      } else if (!user) {
+        captureException(
+          new Error('welcome.profile-button.missing-user'),
+          'welcome.profile-button',
+        );
+        safePush(buildLoginHref('/welcome'));
+      } else {
+        safePush('/profile');
+      }
+    } catch (error) {
+      captureException(error, 'welcome.profile-button');
+    } finally {
+      profileNavGuard.current = false;
+    }
+  }, [isAuthSettled, isAnon, router, user]);
 
   const load = useCallback(async () => {
     try {
@@ -95,9 +133,12 @@ export default function Welcome() {
               accessibilityRole="button"
               accessibilityLabel={isAnon ? 'Entrar' : 'Perfil'}
               hitSlop={8}
-              onPress={() =>
-                router.push(isAnon ? (buildLoginHref('/welcome') as never) : '/profile')
-              }
+              disabled={!isAuthSettled}
+              style={({ pressed }) => [
+                pressed ? { opacity: 0.7 } : null,
+                !isAuthSettled ? { opacity: 0.5 } : null,
+              ]}
+              onPress={handleProfilePress}
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
             >
               <User color="#F5F5F5" size={22} strokeWidth={1.75} />

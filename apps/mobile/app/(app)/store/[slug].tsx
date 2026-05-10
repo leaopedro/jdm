@@ -1,4 +1,5 @@
 import { Text } from '@jdm/ui';
+import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Minus, Plus, ShoppingBag } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
@@ -6,15 +7,16 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCart } from '~/cart/context';
 import { getCartAddErrorMessage } from '~/cart/error-message';
-import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { storeCopy } from '~/copy/store';
 import { useStoreProductDetail } from '~/hooks/useStoreProductDetail';
@@ -38,6 +40,8 @@ export default function StoreProductDetailScreen() {
     typeof slug === 'string' ? slug : undefined,
   );
   const { addItem, adding } = useCart();
+  const insets = useSafeAreaInsets();
+  const backTop = Platform.OS === 'web' ? 16 : Math.max(insets.top, 16);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [variantSheetOpen, setVariantSheetOpen] = useState(false);
@@ -125,7 +129,7 @@ export default function StoreProductDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel={storeCopy.actions.back}
           hitSlop={8}
-          style={styles.backButton}
+          style={[styles.backButton, { top: backTop }]}
         >
           <ArrowLeft color={theme.colors.fg} size={22} strokeWidth={2} />
         </Pressable>

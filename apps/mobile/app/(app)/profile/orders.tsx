@@ -1,4 +1,5 @@
 import type { MyOrder } from '@jdm/shared/orders';
+import { Button } from '@jdm/ui';
 import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -15,7 +16,6 @@ import {
 } from 'react-native';
 
 import { listMyOrders, resumeOrder } from '~/api/orders';
-import { Button } from '~/components/Button';
 import { ordersCopy } from '~/copy/orders';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
