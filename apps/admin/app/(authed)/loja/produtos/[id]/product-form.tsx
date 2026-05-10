@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminProductType, AdminStoreProductDetail } from '@jdm/shared/admin';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -62,6 +62,12 @@ export const ProductForm = ({
   const v = state.values ?? {};
   const [allowPickup, setAllowPickup] = useState(product.allowPickup);
   const [allowShip, setAllowShip] = useState(product.allowShip);
+  useEffect(() => {
+    setAllowPickup(product.allowPickup);
+  }, [product.allowPickup]);
+  useEffect(() => {
+    setAllowShip(product.allowShip);
+  }, [product.allowShip]);
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
   const hasPhotos = product.photos.length > 0;
 
