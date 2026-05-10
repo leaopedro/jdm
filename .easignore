@@ -39,3 +39,7 @@ packages/db/
 BUSINESS_PLAN.md
 CLAUDE.md
 handoff.md
+
+# Shared package exports resolve to dist files at runtime in EAS builds.
+!packages/shared/dist/
+!packages/shared/dist/**
