@@ -12,14 +12,20 @@ import { DarkTheme, ThemeProvider, type Theme } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
-import { Redirect, Slot, useGlobalSearchParams, usePathname } from 'expo-router';
+import {
+  Redirect,
+  Slot,
+  type ErrorBoundaryProps,
+  useGlobalSearchParams,
+  usePathname,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '~/auth/context';
 import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
-import { initSentry } from '~/lib/sentry';
+import { captureException, initSentry } from '~/lib/sentry';
 import { ToastHost } from '~/lib/toast';
 import { StoreRuntimeProvider } from '~/store/runtime-context';
 import { theme } from '~/theme';
@@ -74,6 +80,47 @@ const Gate = () => {
   }
   return <Slot />;
 };
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    captureException(error, 'root-layout');
+  }, [error]);
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        padding: 24,
+        backgroundColor: theme.colors.bg,
+      }}
+    >
+      <Text style={{ color: '#f5f5f5', fontSize: 20, fontWeight: '700', textAlign: 'center' }}>
+        Falha ao iniciar o app.
+      </Text>
+      <Text style={{ color: '#a3a3a3', fontSize: 14, textAlign: 'center' }}>
+        Abra os logs do dispositivo. O erro de boot foi enviado ao console e ao Sentry quando
+        configurado.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          void retry();
+        }}
+        style={{
+          borderRadius: 999,
+          backgroundColor: '#e10600',
+          paddingHorizontal: 20,
+          paddingVertical: 12,
+        }}
+      >
+        <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '600' }}>Tentar novamente</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   useEffect(() => {

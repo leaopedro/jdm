@@ -15,6 +15,7 @@ import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './storag
 import { loginRequest, logoutRequest, meAuthed, refreshRequest, signupRequest } from '~/api/auth';
 import { registerTokenProvider } from '~/api/client';
 import { authCopy } from '~/copy/auth';
+import { captureException } from '~/lib/sentry';
 import { usePushRegistration } from '~/notifications/use-push-registration';
 
 type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated';
@@ -50,6 +51,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setState((prev) => ({ ...prev, flashMessage: message }));
   }, []);
 
+  const resetToSignedOut = useCallback((flashMessage: string | null = null) => {
+    setState({
+      status: 'unauthenticated',
+      user: null,
+      tokens: null,
+      flashMessage,
+    });
+  }, []);
+
   const applySession = useCallback(async (tokens: StoredTokens, user: PublicUser) => {
     tokensRef.current = tokens;
     await saveTokens(tokens);
@@ -58,25 +68,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = useCallback(async () => {
     tokensRef.current = null;
-    await clearTokens();
-    setState({
-      status: 'unauthenticated',
-      user: null,
-      tokens: null,
-      flashMessage: null,
-    });
-  }, []);
+    try {
+      await clearTokens();
+    } catch (error) {
+      captureException(error, 'auth.clearTokens');
+    } finally {
+      resetToSignedOut();
+    }
+  }, [resetToSignedOut]);
 
   const handleAccountDisabled = useCallback(async () => {
     tokensRef.current = null;
-    await clearTokens();
-    setState({
-      status: 'unauthenticated',
-      user: null,
-      tokens: null,
-      flashMessage: authCopy.errors.accountDisabled,
-    });
-  }, []);
+    try {
+      await clearTokens();
+    } catch (error) {
+      captureException(error, 'auth.clearTokens.accountDisabled');
+    } finally {
+      resetToSignedOut(authCopy.errors.accountDisabled);
+    }
+  }, [resetToSignedOut]);
 
   // Register provider once. Reads/writes go through tokensRef so the
   // closure never sees stale token state.
@@ -100,13 +110,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const boot = async () => {
-      const stored = await loadTokens();
-      if (!stored) {
-        setState((prev) => ({ ...prev, status: 'unauthenticated', user: null, tokens: null }));
-        return;
-      }
-      tokensRef.current = stored;
       try {
+        const stored = await loadTokens();
+        if (!stored) {
+          resetToSignedOut();
+          return;
+        }
+        tokensRef.current = stored;
         const user = await meAuthed();
         setState((prev) => ({
           ...prev,
@@ -114,12 +124,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           user,
           tokens: tokensRef.current ?? stored,
         }));
-      } catch {
+      } catch (error) {
+        captureException(error, 'auth.boot');
         await signOut();
       }
     };
     void boot();
-  }, [signOut]);
+  }, [resetToSignedOut, signOut]);
 
   const signup: AuthContextValue['signup'] = useCallback(
     async (input) => {
