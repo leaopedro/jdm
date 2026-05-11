@@ -247,7 +247,7 @@ export type BeginCheckoutResponse = z.infer<typeof beginCheckoutResponseSchema>;
 
 export const checkoutStatusResponseSchema = z.object({
   checkoutId: z.string().min(1),
-  status: z.enum(['pending', 'paid', 'failed', 'refunded', 'expired']),
+  status: z.enum(['pending', 'paid', 'failed', 'refunded', 'expired', 'cancelled']),
   orderIds: z.array(z.string().min(1)),
   provider: z.enum(['stripe', 'abacatepay']),
   providerRef: z.string().min(1).nullable(),

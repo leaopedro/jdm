@@ -288,6 +288,7 @@ enum OrderStatus {
   failed
   refunded
   expired
+  cancelled
 }
 
 enum TicketStatus {

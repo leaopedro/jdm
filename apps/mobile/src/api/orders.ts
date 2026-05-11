@@ -1,4 +1,5 @@
 import {
+  cancelMyOrderResponseSchema,
   createOrderRequestSchema,
   createOrderResponseSchema,
   createPixOrderResponseSchema,
@@ -9,6 +10,7 @@ import {
   resumeOrderResponseSchema,
 } from '@jdm/shared/orders';
 import type {
+  CancelMyOrderResponse,
   CreateOrderRequest,
   CreateOrderResponse,
   CreatePixOrderResponse,
@@ -52,6 +54,12 @@ export const getOrder = (orderId: string): Promise<GetOrderResponse> => {
 
 export const listMyOrders = (): Promise<MyOrdersResponse> => {
   return authedRequest('/me/orders', myOrdersResponseSchema);
+};
+
+export const cancelMyOrder = (orderId: string): Promise<CancelMyOrderResponse> => {
+  return authedRequest(`/me/orders/${orderId}/cancel`, cancelMyOrderResponseSchema, {
+    method: 'POST',
+  });
 };
 
 export const resumeOrder = (orderId: string): Promise<ResumeOrderResponse> => {

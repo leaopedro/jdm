@@ -4,7 +4,13 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
-import { bearer, createUser, makeAppWithFakeStripe, resetDatabase } from '../helpers.js';
+import {
+  bearer,
+  createUser,
+  makeAppWithFakes,
+  makeAppWithFakeStripe,
+  resetDatabase,
+} from '../helpers.js';
 
 const env = loadEnv();
 
@@ -270,5 +276,255 @@ describe('GET /me/orders', () => {
     });
 
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('POST /me/orders/:id/cancel', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('cancels a pending Stripe order, releases reservations, and cancels the payment intent', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+    const { stripe } = harness;
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier, extra } = await seedEvent();
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 2 },
+    });
+    await prisma.ticketExtra.update({
+      where: { id: extra.id },
+      data: { quantitySold: 1 },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 18_000,
+        currency: 'BRL',
+        quantity: 2,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_cancel_me',
+        status: 'pending',
+        orderExtras: {
+          create: [{ extraId: extra.id, quantity: 1 }],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      orderId: order.id,
+      status: 'cancelled',
+    });
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('cancelled');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(0);
+
+    const reloadedExtra = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+    expect(reloadedExtra.quantitySold).toBe(0);
+
+    const cancelCalls = stripe.calls.filter((call) => call.kind === 'cancelPaymentIntent');
+    expect(cancelCalls).toHaveLength(1);
+    expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_cancel_me' });
+  });
+
+  it('keeps the order pending when Stripe cancellation fails upstream', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+    const { stripe } = harness;
+    stripe.nextCancelPaymentIntentError = new Error('stripe cancel failed');
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier, extra } = await seedEvent();
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+    await prisma.ticketExtra.update({
+      where: { id: extra.id },
+      data: { quantitySold: 1 },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 10_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_cancel_fail',
+        status: 'pending',
+        orderExtras: {
+          create: [{ extraId: extra.id, quantity: 1 }],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({
+      error: 'BadGateway',
+      message: 'could not confirm stripe payment intent cancellation',
+    });
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('pending');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(1);
+
+    const reloadedExtra = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+    expect(reloadedExtra.quantitySold).toBe(1);
+  });
+
+  it('cancels a pending AbacatePay order locally and leaves upstream untouched', async () => {
+    const harness = await makeAppWithFakes();
+    app = harness.app;
+    const { stripe, abacatepay } = harness;
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'pix_cancel_me',
+        status: 'pending',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      orderId: order.id,
+      status: 'cancelled',
+    });
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('cancelled');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(0);
+
+    expect(stripe.calls.filter((call) => call.kind === 'cancelPaymentIntent')).toHaveLength(0);
+    expect(abacatepay.calls).toEqual([]);
+  });
+
+  it('returns 403 when trying to cancel another user order', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+
+    const { user } = await createUser({ verified: true });
+    const { user: other } = await createUser({ email: 'other-cancel@jdm.test', verified: true });
+    const { event, tier } = await seedEvent();
+
+    const order = await prisma.order.create({
+      data: {
+        userId: other.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'pending',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: 'Forbidden' });
+  });
+
+  it('returns 409 when the order is no longer pending', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: 'Conflict' });
   });
 });

@@ -10,6 +10,7 @@ export const ordersCopy = {
     failed: 'Falhou',
     refunded: 'Reembolsado',
     expired: 'Expirado',
+    cancelled: 'Cancelado',
   },
   fulfillmentStatus: {
     unfulfilled: 'Separando',
@@ -37,6 +38,19 @@ export const ordersCopy = {
     orderDate: 'Pedido em',
     total: 'Total',
     separator: '•',
+  },
+  actions: {
+    cancel: 'Cancelar pedido',
+    keep: 'Manter pedido',
+    confirm: 'Confirmar cancelamento',
+    cancelling: 'Cancelando...',
+  },
+  cancelModal: {
+    title: 'Cancelar pedido pendente?',
+    body: 'O pedido será encerrado e liberaremos a reserva dos itens. Esta ação não pode ser desfeita.',
+    success: 'Pedido cancelado.',
+    genericError: 'Não foi possível cancelar o pedido.',
+    conflictError: 'Este pedido não está mais pendente.',
   },
   viewTicket: 'Ver ingresso',
   viewTickets: 'Ver ingressos',
