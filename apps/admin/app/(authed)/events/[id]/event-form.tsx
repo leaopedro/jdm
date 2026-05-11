@@ -57,6 +57,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
   );
   const values = state.values ?? {};
   const statusError = publishState.error ?? unpublishState.error ?? cancelState.error;
+  const hasPersistedCover = Boolean(event.coverObjectKey);
 
   return (
     <div className="flex flex-col gap-6">
@@ -103,6 +104,11 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             </form>
           ) : null}
         </div>
+        {event.status === 'draft' && !hasPersistedCover ? (
+          <p className="text-xs text-[color:var(--color-muted)]">
+            Adicione e salve uma capa antes de publicar o evento.
+          </p>
+        ) : null}
         {statusError ? <p className="text-sm text-red-400">{statusError}</p> : null}
       </div>
 
