@@ -94,6 +94,36 @@ const extractCartIdFromMetadata = (data: Record<string, unknown>): string | unde
   return undefined;
 };
 
+const getMetadataString = (data: Record<string, unknown>, key: string): string | undefined => {
+  const transparent = getTransparent(data);
+  if (transparent && typeof transparent.metadata === 'object' && transparent.metadata !== null) {
+    const metadata = transparent.metadata as Record<string, unknown>;
+    const value = metadata[key];
+    if (typeof value === 'string') return value;
+  }
+  if (typeof data.metadata === 'object' && data.metadata !== null) {
+    const metadata = data.metadata as Record<string, unknown>;
+    const value = metadata[key];
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+};
+
+// metadata.orderIds is written by cart.ts as JSON.stringify(string[])
+const extractOrderIdsFromMetadata = (data: Record<string, unknown>): string[] | undefined => {
+  const raw = getMetadataString(data, 'orderIds');
+  if (!raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
+      return parsed;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
 const extractEventTimestamp = (data: Record<string, unknown>): Date | undefined => {
   const transparent = getTransparent(data);
   const source = transparent ?? data;
@@ -113,7 +143,9 @@ const extractEventTimestamp = (data: Record<string, unknown>): Date | undefined 
 const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const flagManualRefund = (context: {
-  orderId: string;
+  orderId?: string | null;
+  cartId?: string | null;
+  orderIds?: string[] | null;
   providerRef: string;
   userId: string;
   eventId: string | null;
@@ -124,7 +156,9 @@ const flagManualRefund = (context: {
     scope.setTag('provider', 'abacatepay');
     scope.setTag('reason', context.reason);
     scope.setExtras({
-      orderId: context.orderId,
+      orderId: context.orderId ?? null,
+      cartId: context.cartId ?? null,
+      orderIds: context.orderIds ?? null,
       providerRef: context.providerRef,
       userId: context.userId,
       eventId: context.eventId,
@@ -287,7 +321,36 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             await markProcessed(event.id, event);
             return reply.status(200).send({ ok: true, deduped: true });
           }
-          await markProcessed(event.id, event);
+          // JDMA-306: orphan billing — createPixBilling() succeeded but the
+          // local pending orders are gone (rollbackCartCheckout on response
+          // failure, manual deletion, etc.). The payer can still pay, leaving
+          // no ticket and no manual-refund signal. Flag finance via Sentry
+          // with the cart/order/user context AbacatePay echoed back to us.
+          const firstTime = await markProcessed(event.id, event);
+          if (firstTime) {
+            const metadataUserId = getMetadataString(event.data, 'userId');
+            const metadataOrderIds = extractOrderIdsFromMetadata(event.data);
+            if (metadataUserId) {
+              flagManualRefund({
+                cartId: metadataCartId,
+                orderIds: metadataOrderIds ?? null,
+                providerRef: billingId,
+                userId: metadataUserId,
+                eventId: null,
+                reason: 'cart-orphan-billing',
+              });
+            }
+            request.log.warn(
+              {
+                cartId: metadataCartId,
+                billingId,
+                userId: metadataUserId ?? null,
+                orderIds: metadataOrderIds ?? null,
+                webhookEventId: event.id,
+              },
+              'abacatepay webhook: cart orphan billing settled, manual refund flagged',
+            );
+          }
           return reply.status(200).send({ ok: true, ignored: true });
         }
 
