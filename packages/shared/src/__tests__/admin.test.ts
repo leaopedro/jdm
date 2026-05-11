@@ -134,6 +134,7 @@ describe('adminAuditActionSchema', () => {
     'event.create',
     'event.update',
     'event.publish',
+    'event.unpublish',
     'event.cancel',
     'tier.create',
     'tier.update',

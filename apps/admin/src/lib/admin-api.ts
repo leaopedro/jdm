@@ -107,6 +107,12 @@ export const publishAdminEvent = (id: string) =>
     schema: adminEventDetailSchema,
   });
 
+export const unpublishAdminEvent = (id: string) =>
+  apiFetch(`/admin/events/${id}/unpublish`, {
+    method: 'POST',
+    schema: adminEventDetailSchema,
+  });
+
 export const cancelAdminEvent = (id: string) =>
   apiFetch(`/admin/events/${id}/cancel`, {
     method: 'POST',

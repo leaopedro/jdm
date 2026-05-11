@@ -8,6 +8,7 @@ import {
   cancelAdminEvent,
   createAdminEvent,
   publishAdminEvent,
+  unpublishAdminEvent,
   updateAdminEvent,
 } from './admin-api';
 import { ApiError } from './api';
@@ -19,6 +20,11 @@ import { toIso, toNumber } from './form-helpers';
 // simplest way to preserve them.
 export type EventFormValues = Record<string, string>;
 export type EventFormState = { error: string | null; values?: EventFormValues };
+
+const revalidateEventPaths = (id: string) => {
+  revalidatePath('/events');
+  revalidatePath(`/events/${id}`);
+};
 
 const captureValues = (fd: FormData): EventFormValues => {
   const out: EventFormValues = {};
@@ -111,31 +117,51 @@ export const updateEventAction = async (
     if (e instanceof ApiError) return { error: e.message, values };
     return { error: 'Erro ao salvar.', values };
   }
-  revalidatePath(`/events/${id}`);
-  revalidatePath('/events');
+  revalidateEventPaths(id);
   return { error: null };
 };
 
-export const publishEventAction = async (id: string): Promise<EventFormState> => {
+export const publishEventAction = async (
+  id: string,
+  prev: EventFormState,
+): Promise<EventFormState> => {
+  void prev;
   try {
     await publishAdminEvent(id);
   } catch (e) {
     if (e instanceof ApiError) return { error: e.message };
     return { error: 'Erro ao publicar.' };
   }
-  revalidatePath('/events');
-  revalidatePath(`/events/${id}`);
+  revalidateEventPaths(id);
   return { error: null };
 };
 
-export const cancelEventAction = async (id: string): Promise<EventFormState> => {
+export const unpublishEventAction = async (
+  id: string,
+  prev: EventFormState,
+): Promise<EventFormState> => {
+  void prev;
+  try {
+    await unpublishAdminEvent(id);
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    return { error: 'Erro ao despublicar.' };
+  }
+  revalidateEventPaths(id);
+  return { error: null };
+};
+
+export const cancelEventAction = async (
+  id: string,
+  prev: EventFormState,
+): Promise<EventFormState> => {
+  void prev;
   try {
     await cancelAdminEvent(id);
   } catch (e) {
     if (e instanceof ApiError) return { error: e.message };
     return { error: 'Erro ao cancelar.' };
   }
-  revalidatePath('/events');
-  revalidatePath(`/events/${id}`);
+  revalidateEventPaths(id);
   return { error: null };
 };

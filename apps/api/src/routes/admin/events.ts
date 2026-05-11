@@ -159,22 +159,48 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     if (existing.status === 'published') {
       return reply.status(409).send({ error: 'Conflict', message: 'already published' });
     }
-    if (existing.status === 'cancelled') {
-      return reply
-        .status(409)
-        .send({ error: 'Conflict', message: 'cancelled events cannot be re-published' });
-    }
     const updated = await prisma.event.update({
       where: { id },
       data: {
         status: 'published',
-        publishedAt: existing.publishedAt ?? new Date(),
+        publishedAt: new Date(),
       },
       include: { tiers: true, extras: true },
     });
     await recordAudit({
       actorId: sub,
       action: 'event.publish',
+      entityType: 'event',
+      entityId: id,
+    });
+    return serializeDetail(updated, app.uploads);
+  });
+
+  app.post('/events/:id/unpublish', async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) return reply.status(404).send({ error: 'NotFound' });
+    if (existing.status !== 'published') {
+      return reply.status(409).send({
+        error: 'Conflict',
+        message:
+          existing.status === 'draft'
+            ? 'already draft'
+            : 'only published events can be unpublished',
+      });
+    }
+    const updated = await prisma.event.update({
+      where: { id },
+      data: {
+        status: 'draft',
+        publishedAt: null,
+      },
+      include: { tiers: true, extras: true },
+    });
+    await recordAudit({
+      actorId: sub,
+      action: 'event.unpublish',
       entityType: 'event',
       entityId: id,
     });

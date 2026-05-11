@@ -10,6 +10,7 @@ import { DateTimeField } from '~/components/date-time-field';
 import {
   cancelEventAction,
   publishEventAction,
+  unpublishEventAction,
   updateEventAction,
   type EventFormState,
 } from '~/lib/event-actions';
@@ -29,37 +30,80 @@ const Submit = ({ label }: { label: string }) => {
   );
 };
 
+const StatusActionButton = ({ label, className }: { label: string; className?: string }) => {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className={className}>
+      {pending ? '…' : label}
+    </button>
+  );
+};
+
 const isoToLocal = (iso: string) => iso.slice(0, 16);
 
 export const EventForm = ({ event }: { event: AdminEventDetail }) => {
   const [state, action] = useActionState(updateEventAction.bind(null, event.id), initial);
+  const [publishState, publishAction] = useActionState(
+    publishEventAction.bind(null, event.id),
+    initial,
+  );
+  const [unpublishState, unpublishAction] = useActionState(
+    unpublishEventAction.bind(null, event.id),
+    initial,
+  );
+  const [cancelState, cancelAction] = useActionState(
+    cancelEventAction.bind(null, event.id),
+    initial,
+  );
+  const values = state.values ?? {};
+  const statusError = publishState.error ?? unpublishState.error ?? cancelState.error;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        {event.status === 'draft' ? (
-          <form
-            action={() => {
-              void publishEventAction(event.id);
-            }}
-          >
-            <Submit label="Publicar" />
-          </form>
-        ) : null}
-        {event.status !== 'cancelled' ? (
-          <form
-            action={() => {
-              void cancelEventAction(event.id);
-            }}
-          >
-            <button
-              type="submit"
-              className="rounded border border-red-700 px-3 py-2 text-sm text-red-400"
-            >
-              Cancelar evento
-            </button>
-          </form>
-        ) : null}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          {event.status === 'draft' ? (
+            <>
+              <form action={publishAction}>
+                <StatusActionButton
+                  label="Publicar"
+                  className="rounded bg-[color:var(--color-accent)] px-4 py-2 font-semibold disabled:opacity-50"
+                />
+              </form>
+              <form action={cancelAction}>
+                <StatusActionButton
+                  label="Cancelar evento"
+                  className="rounded border border-red-700 px-3 py-2 text-sm text-red-400 disabled:opacity-50"
+                />
+              </form>
+            </>
+          ) : null}
+          {event.status === 'published' ? (
+            <>
+              <form action={unpublishAction}>
+                <StatusActionButton
+                  label="Despublicar"
+                  className="rounded border border-[color:var(--color-border)] px-4 py-2 font-semibold disabled:opacity-50"
+                />
+              </form>
+              <form action={cancelAction}>
+                <StatusActionButton
+                  label="Cancelar evento"
+                  className="rounded border border-red-700 px-3 py-2 text-sm text-red-400 disabled:opacity-50"
+                />
+              </form>
+            </>
+          ) : null}
+          {event.status === 'cancelled' ? (
+            <form action={publishAction}>
+              <StatusActionButton
+                label="Publicar novamente"
+                className="rounded bg-[color:var(--color-accent)] px-4 py-2 font-semibold disabled:opacity-50"
+              />
+            </form>
+          ) : null}
+        </div>
+        {statusError ? <p className="text-sm text-red-400">{statusError}</p> : null}
       </div>
 
       <form action={action} className="grid grid-cols-2 gap-4">
@@ -67,29 +111,40 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           <span className="text-sm text-[color:var(--color-muted)]">Título</span>
           <input
             name="title"
-            defaultValue={event.title}
+            defaultValue={values.title ?? event.title}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
         <div className="col-span-2">
-          <CoverUploader initialKey={event.coverObjectKey} initialUrl={event.coverUrl} />
+          <CoverUploader
+            initialKey={values.coverObjectKey ?? event.coverObjectKey}
+            initialUrl={event.coverUrl}
+          />
         </div>
         <label className="col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
             name="description"
-            defaultValue={event.description}
+            defaultValue={values.description ?? event.description}
             rows={5}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
-        <DateTimeField label="Início" name="startsAt" defaultValue={isoToLocal(event.startsAt)} />
-        <DateTimeField label="Fim" name="endsAt" defaultValue={isoToLocal(event.endsAt)} />
+        <DateTimeField
+          label="Início"
+          name="startsAt"
+          defaultValue={values.startsAt ?? isoToLocal(event.startsAt)}
+        />
+        <DateTimeField
+          label="Fim"
+          name="endsAt"
+          defaultValue={values.endsAt ?? isoToLocal(event.endsAt)}
+        />
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Local (opcional)</span>
           <input
             name="venueName"
-            defaultValue={event.venueName ?? ''}
+            defaultValue={values.venueName ?? event.venueName ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
@@ -97,7 +152,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           <span className="text-sm text-[color:var(--color-muted)]">Endereço (opcional)</span>
           <input
             name="venueAddress"
-            defaultValue={event.venueAddress ?? ''}
+            defaultValue={values.venueAddress ?? event.venueAddress ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
@@ -105,7 +160,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           <span className="text-sm text-[color:var(--color-muted)]">Cidade (opcional)</span>
           <input
             name="city"
-            defaultValue={event.city ?? ''}
+            defaultValue={values.city ?? event.city ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
@@ -113,7 +168,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           <span className="text-sm text-[color:var(--color-muted)]">Estado (opcional)</span>
           <select
             name="stateCode"
-            defaultValue={event.stateCode ?? ''}
+            defaultValue={values.stateCode ?? event.stateCode ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
             <option value="">—</option>
@@ -128,7 +183,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
           <span className="text-sm text-[color:var(--color-muted)]">Tipo</span>
           <select
             name="type"
-            defaultValue={event.type}
+            defaultValue={values.type ?? event.type}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           >
             <option value="meeting">Encontro</option>
@@ -142,7 +197,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             name="capacity"
             type="number"
             min={0}
-            defaultValue={event.capacity}
+            defaultValue={values.capacity ?? event.capacity}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
@@ -155,7 +210,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             type="number"
             min={1}
             placeholder="Sem limite"
-            defaultValue={event.maxTicketsPerUser ?? ''}
+            defaultValue={values.maxTicketsPerUser ?? event.maxTicketsPerUser ?? ''}
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
           <span className="text-xs text-[color:var(--color-muted)]">
