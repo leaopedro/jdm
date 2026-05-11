@@ -1675,6 +1675,7 @@ describe('POST /abacatepay/webhook', () => {
       expect(res.statusCode).toBe(200);
       const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updated.status).toBe('refunded');
+      expect(updated.refundedAt).toBeInstanceOf(Date);
       const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
       expect(tierAfter.quantitySold).toBe(1);
     });

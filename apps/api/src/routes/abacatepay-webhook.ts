@@ -632,7 +632,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           if (event.event === 'transparent.refunded' && paidOrderIds.length > 0) {
             const refundedPaid = await tx.order.updateMany({
               where: { id: { in: paidOrderIds }, status: 'paid' },
-              data: { status: 'refunded' },
+              data: { status: 'refunded', refundedAt: new Date() },
             });
             refundedPaidCount = refundedPaid.count;
           }
