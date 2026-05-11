@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "start:migrate": "pnpm --filter @jdm/db db:deploy && node dist/server.js",
+    "pretest": "pnpm --filter @jdm/db db:generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run"
