@@ -1,8 +1,9 @@
 import { prisma } from '@jdm/db';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
@@ -29,7 +30,7 @@ const markProcessed = async (eventId: string, payload: unknown): Promise<boolean
     });
     return true;
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueConstraintError(err)) {
       return false;
     }
     throw err;
