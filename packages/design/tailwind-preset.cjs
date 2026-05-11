@@ -27,7 +27,7 @@ module.exports = {
           DEFAULT: '#F5F5F5',
           secondary: '#C9C9CD',
           muted: '#8A8A93',
-          inverse: '#0A0A0A',
+          inverse: '#FFFFFF',
         },
 
         success: '#22C55E',

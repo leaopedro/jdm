@@ -21,7 +21,7 @@ export const color = {
   textPrimary: '#F5F5F5',
   textSecondary: '#C9C9CD',
   textMuted: '#8A8A93',
-  textInverse: '#0A0A0A',
+  textInverse: '#FFFFFF',
 
   success: '#22C55E',
   warning: '#F59E0B',
