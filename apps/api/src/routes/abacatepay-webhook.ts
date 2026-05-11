@@ -6,6 +6,7 @@ import type { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
 import { releaseAllReservationsForOrders } from '../services/orders/expire.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
@@ -23,19 +24,6 @@ const ACCEPTED_EVENTS = new Set([
   'transparent.disputed',
   'transparent.lost',
 ]);
-
-const isUniqueConstraintError = (err: unknown): boolean => {
-  if (typeof err !== 'object' || err === null) {
-    return false;
-  }
-
-  const candidate = err as { code?: unknown; message?: unknown };
-  return (
-    candidate.code === 'P2002' ||
-    (typeof candidate.message === 'string' &&
-      candidate.message.includes('Unique constraint failed'))
-  );
-};
 
 const markProcessed = async (eventId: string, payload: unknown): Promise<boolean> => {
   try {
