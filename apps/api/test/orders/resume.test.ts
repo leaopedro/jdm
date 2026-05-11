@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadEnv } from '../../src/env.js';
 import type { FakeAbacatePay } from '../../src/services/abacatepay/fake.js';
 import type { FakeStripe } from '../../src/services/stripe/fake.js';
-import { bearer, createUser, makeAppWithFakes, resetDatabase } from '../helpers.js';
+import {
+  bearer,
+  createUser,
+  makeAppWithFakeStripe,
+  makeAppWithFakes,
+  resetDatabase,
+} from '../helpers.js';
 
 const env = loadEnv();
 
@@ -237,6 +243,105 @@ describe('GET /orders/:id/resume', () => {
     });
 
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('GET /orders/:id/resume — brCode recovery', () => {
+  let app: FastifyInstance;
+  let abacatepay: FakeAbacatePay;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    ({ app, abacatepay } = await makeAppWithFakes());
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('creates a fresh billing and returns 200 when brCode is null (cart-checkout orders)', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+    // Simulate an order created via cart PIX checkout before the brCode fix —
+    // providerRef is set but brCode was never stored.
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 7500,
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'old_billing_id',
+        brCode: null,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 900_000),
+      },
+    });
+    abacatepay.nextBilling = {
+      id: 'new_billing_id',
+      brCode: '00020126...recovered',
+      amount: 7500,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      status: 'PENDING',
+    };
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/orders/${order.id}/resume`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = resumeOrderResponseSchema.parse(res.json());
+    expect(body.method).toBe('pix');
+    if (body.method === 'pix') {
+      expect(body.brCode).toBe('00020126...recovered');
+      expect(body.amountCents).toBe(7500);
+    }
+
+    // New billing was created
+    const billingCalls = abacatepay.calls.filter((c) => c.method === 'createPixBilling');
+    expect(billingCalls).toHaveLength(1);
+
+    // Order row updated with new providerRef and brCode
+    const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(updated.brCode).toBe('00020126...recovered');
+    expect(updated.providerRef).toBe('new_billing_id');
+  });
+
+  it('returns 503 when brCode is null and abacatepay is not configured', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'old_billing_id',
+        brCode: null,
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 900_000),
+      },
+    });
+
+    // Build app without AbacatePay configured
+    await app.close();
+    const { app: appNoAbacate } = await makeAppWithFakeStripe();
+
+    const res = await appNoAbacate.inject({
+      method: 'GET',
+      url: `/orders/${order.id}/resume`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ error: 'ServiceUnavailable' });
+
+    await appNoAbacate.close();
   });
 });
 
