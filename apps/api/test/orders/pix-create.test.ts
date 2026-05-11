@@ -81,6 +81,14 @@ describe('POST /orders (method=pix)', () => {
     expect(order.provider).toBe('abacatepay');
     expect(order.providerRef).toBeTruthy();
 
+    // expiresAt mirrors the DB order's 15-minute reservation window, not the
+    // AbacatePay billing expiry (which defaults to ~24h and breaks the mm:ss
+    // countdown on the checkout-pix screen).
+    expect(body.expiresAt).toBe(order.expiresAt?.toISOString());
+    const remainingMs = new Date(body.expiresAt).getTime() - Date.now();
+    expect(remainingMs).toBeLessThanOrEqual(15 * 60 * 1000);
+    expect(remainingMs).toBeGreaterThan(0);
+
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloadedTier.quantitySold).toBe(1);
   });

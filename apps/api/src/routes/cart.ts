@@ -639,7 +639,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
             clientSecret: null,
             checkoutUrl: null,
             brCode: billing.brCode,
-            reservationExpiresAt: billing.expiresAt,
+            reservationExpiresAt: new Date(Date.now() + ORDER_EXPIRY_MS).toISOString(),
           }),
         );
       } catch (err) {

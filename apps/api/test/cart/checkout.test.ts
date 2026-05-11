@@ -568,6 +568,13 @@ describe('POST /cart/checkout — pix', () => {
     expect(order.providerRef).toBe('pix_cart_test');
     expect(order.amountCents).toBe(10_000);
     expect(order.items).toHaveLength(2);
+
+    // reservationExpiresAt uses ORDER_EXPIRY_MS (15 min), not the AbacatePay
+    // billing expiry, so the mobile checkout-pix countdown reads as mm:ss.
+    expect(body.reservationExpiresAt).not.toBeNull();
+    const remainingMs = new Date(body.reservationExpiresAt!).getTime() - Date.now();
+    expect(remainingMs).toBeLessThanOrEqual(15 * 60 * 1000);
+    expect(remainingMs).toBeGreaterThan(0);
   });
 
   it('returns 503 when abacatepay is not configured', async () => {
