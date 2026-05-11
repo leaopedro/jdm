@@ -265,9 +265,10 @@ async function createPendingOrder(
   return { order, extraEntries: data.validationResult.extraEntries };
 }
 
-async function createPendingOrderPix(
-  data: PreparedOrder,
-): Promise<{ order: { id: string }; extraEntries: Array<{ extraId: string; quantity: number }> }> {
+async function createPendingOrderPix(data: PreparedOrder): Promise<{
+  order: { id: string; expiresAt: Date };
+  extraEntries: Array<{ extraId: string; quantity: number }>;
+}> {
   const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
   const order = await prisma.order.create({
     data: {
@@ -296,7 +297,10 @@ async function createPendingOrderPix(
     });
   }
 
-  return { order, extraEntries: data.validationResult.extraEntries };
+  return {
+    order: { id: order.id, expiresAt },
+    extraEntries: data.validationResult.extraEntries,
+  };
 }
 
 async function rollbackReservation(data: PreparedOrder, tierId: string): Promise<void> {
@@ -405,7 +409,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             orderId: order.id,
             status: 'pending',
             brCode: billing.brCode,
-            expiresAt: billing.expiresAt,
+            expiresAt: order.expiresAt.toISOString(),
             amountCents: data.amountCents,
             currency: data.tier.currency,
           }),
