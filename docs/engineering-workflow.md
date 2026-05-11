@@ -211,7 +211,9 @@ is evidence.
 
 Run `superpowers:requesting-code-review` before every real review request.
 That applies to the PR handoff and to any deliberate checkpoint review inside
-the plan-execution loop. Open a PR with:
+the plan-execution loop. "Real review request" means the PR already exists,
+is pushed to origin, and has the review-ready description/checklist/evidence
+filled in. Open a PR with:
 
 - Conventional Commits title.
 - A short description: what changed, why, and the verification evidence.
@@ -220,14 +222,19 @@ the plan-execution loop. Open a PR with:
   `docs/manual-testing.md`).
 - The PR checklist from `CONTRIBUTING.md`.
 
-Reassign the Paperclip issue to the CTO with status `in_review`. Add a
-comment with the PR link. This handoff is mandatory and is what wakes the
-CTO; if you leave the issue assigned to yourself, review can stall.
+Only after that PR is ready, reassign the Paperclip issue to the CTO with
+status `in_review`. Add a comment with the PR link. This handoff is
+mandatory and is what wakes the CTO; if you leave the issue assigned to
+yourself, review can stall.
 
 Do not request review before the PR exists. Branch-only review requests are
 invalid because the reviewer needs the PR diff, description, checklist, and
 verification evidence in one place. If the branch is not ready for a PR, keep
 the issue assigned to yourself in `in_progress` and keep implementing.
+
+Do not use a branch push, commit link, or "latest changes are up" comment as
+a substitute for the PR handoff. Until the PR is open and review-ready, the
+issue is still implementation work, not review work.
 
 Minimum comment content when handing off to CTO:
 
