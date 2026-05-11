@@ -19,6 +19,7 @@
       "env": {
         "APP_VARIANT": "preview",
         "EXPO_PUBLIC_API_BASE_URL": "https://jdm-production.up.railway.app",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "$EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
         "SENTRY_ALLOW_FAILURE": "true"
       }
     },
@@ -27,6 +28,7 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "$EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
         "SENTRY_ALLOW_FAILURE": "true"
       }
     }
