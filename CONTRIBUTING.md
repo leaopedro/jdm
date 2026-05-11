@@ -16,8 +16,8 @@ issue assigned
   → branch off main (`feat/<slug>`, `fix/<slug>`, `chore/<slug>`)
   → implement the accepted plan with `superpowers:subagent-driven-development`
   → commit logically and push the branch to origin
-  → open a PR to `main` and link the Paperclip issue
-  → run `superpowers:requesting-code-review` and request review
+  → open a review-ready PR to `main` and link the Paperclip issue
+  → run `superpowers:requesting-code-review` and request review on that PR
   → reviewer (CTO today; peer engineer once the bench is hired) reviews
   → if feedback lands, use `superpowers:receiving-code-review` before changing code
   → fix, re-request review, and reassign issue to CTO (`in_review`) until approved
@@ -32,6 +32,9 @@ test handoff, rollback plans) lives in [`docs/engineering-workflow.md`](docs/eng
 and [`docs/code-review.md`](docs/code-review.md). Read both before opening
 your first PR. The short version above is not optional; those skill gates are
 the required path for non-trivial work.
+
+No PR means no review request yet. Do not ask the CTO to review a branch,
+worktree, or commit range outside the PR handoff.
 
 ## Branching
 

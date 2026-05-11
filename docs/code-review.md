@@ -34,8 +34,10 @@ Reviews happen at PR level only. The CTO does not review a loose branch,
 worktree, or "please inspect my latest commits" handoff. If there is no PR,
 there is no review request yet.
 
-Authors must run `superpowers:requesting-code-review` before they open that
-handoff. Review starts after a deliberate review request, not by osmosis.
+Authors must not run `superpowers:requesting-code-review`, ping a reviewer,
+or reassign the Paperclip issue to `in_review` until the PR already exists
+and is ready for review. Review starts after a deliberate PR-level handoff,
+not by osmosis.
 
 ## 2. The reviewer's job
 
