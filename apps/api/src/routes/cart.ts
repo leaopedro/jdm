@@ -620,7 +620,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
 
         await prisma.order.update({
           where: { id: data.orders[0]!.id },
-          data: { providerRef: billing.id },
+          data: { providerRef: billing.id, brCode: billing.brCode },
         });
 
         const updatedCart = await prisma.cart.findUniqueOrThrow({

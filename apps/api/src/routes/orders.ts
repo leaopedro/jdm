@@ -580,15 +580,48 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       reply.header('Cache-Control', 'no-store');
 
       if (order.provider === 'abacatepay') {
-        if (!order.brCode || !order.expiresAt) {
+        if (!order.expiresAt) {
           return reply.status(409).send({ error: 'OrderNotPending', status: order.status });
         }
+
+        let brCode = order.brCode;
+        let expiresAt = order.expiresAt;
+
+        if (!brCode) {
+          if (!app.abacatepay) {
+            return reply
+              .status(503)
+              .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });
+          }
+          try {
+            const billing = await app.abacatepay.createPixBilling({
+              amountCents: order.amountCents,
+              description: 'Pagamento JDM Experience',
+              metadata: { orderId: order.id, userId: sub },
+            });
+            const newExpiresAt = new Date(Date.now() + ORDER_EXPIRY_MS);
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { providerRef: billing.id, brCode: billing.brCode, expiresAt: newExpiresAt },
+            });
+            brCode = billing.brCode;
+            expiresAt = newExpiresAt;
+          } catch (err) {
+            if (err instanceof AbacatePayUpstreamError) {
+              return reply
+                .status(502)
+                .send({ error: 'BadGateway', message: 'pix provider unavailable' });
+            }
+            throw err;
+          }
+        }
+
         return reply.status(200).send(
           resumeOrderResponseSchema.parse({
             method: 'pix',
             orderId: order.id,
-            brCode: order.brCode,
-            expiresAt: order.expiresAt.toISOString(),
+            brCode,
+            expiresAt: expiresAt.toISOString(),
             amountCents: order.amountCents,
             currency: order.currency,
           }),
