@@ -172,7 +172,8 @@ describe('storeProductSchema', () => {
         description: 'Algodão pesado com estampa frontal.',
         shortDescription: 'Camiseta oficial JDM.',
         status: 'active',
-        requiresShipping: true,
+        canShip: true,
+        canPickup: false,
         coverImageUrl: 'https://cdn.jdm.app/store/camiseta.jpg',
         collectionIds: ['col_1'],
         productType: {

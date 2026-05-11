@@ -1,5 +1,9 @@
 {
-  "cli": { "version": ">= 14.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 14.0.0",
+    "appVersionSource": "remote",
+    "promptToConfigurePushNotifications": false
+  },
   "build": {
     "development": {
       "developmentClient": true,
@@ -14,13 +18,17 @@
       "android": { "buildType": "apk" },
       "env": {
         "APP_VARIANT": "preview",
-        "EXPO_PUBLIC_API_BASE_URL": "https://jdm-production.up.railway.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://jdm-production.up.railway.app",
+        "SENTRY_ALLOW_FAILURE": "true"
       }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "env": { "APP_VARIANT": "production" }
+      "env": {
+        "APP_VARIANT": "production",
+        "SENTRY_ALLOW_FAILURE": "true"
+      }
     }
   },
   "submit": {

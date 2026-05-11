@@ -1,11 +1,11 @@
 'use client';
 
 import type { AdminProductType, AdminStoreProductDetail } from '@jdm/shared/admin';
+import { useEffect, useState } from 'react';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
-  activateProductAction,
   archiveProductAction,
   updateProductAction,
   type StoreFormState,
@@ -60,6 +60,14 @@ export const ProductForm = ({
   const update = updateProductAction.bind(null, product.id);
   const [state, action] = useActionState(update, initial);
   const v = state.values ?? {};
+  const [allowPickup, setAllowPickup] = useState(product.allowPickup);
+  const [allowShip, setAllowShip] = useState(product.allowShip);
+  useEffect(() => {
+    setAllowPickup(product.allowPickup);
+  }, [product.allowPickup]);
+  useEffect(() => {
+    setAllowShip(product.allowShip);
+  }, [product.allowShip]);
   const currentTypeMissing = !productTypes.some((t) => t.id === product.productTypeId);
   const hasPhotos = product.photos.length > 0;
 
@@ -103,16 +111,41 @@ export const ProductForm = ({
           required
           defaultValue={v.basePriceCents ?? String(product.basePriceCents)}
         />
-        <Field
-          label="Frete fixo (centavos, vazio = padrão da loja)"
-          name="shippingFeeCents"
-          type="number"
-          min={0}
-          defaultValue={
-            v.shippingFeeCents ??
-            (product.shippingFeeCents == null ? '' : String(product.shippingFeeCents))
-          }
-        />
+        <fieldset className="col-span-2 flex flex-col gap-2">
+          <legend className="mb-1 text-sm text-[color:var(--color-muted)]">Modo de entrega</legend>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allowPickup}
+              onChange={(e) => setAllowPickup(e.target.checked)}
+            />
+            <span>Retirada no evento</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allowShip}
+              onChange={(e) => setAllowShip(e.target.checked)}
+            />
+            <span>Envio</span>
+          </label>
+        </fieldset>
+        <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+        <input type="hidden" name="allowShip" value={allowShip ? 'true' : 'false'} />
+        {allowShip ? (
+          <Field
+            label="Frete fixo (centavos)"
+            name="shippingFeeCents"
+            type="number"
+            min={0}
+            defaultValue={
+              v.shippingFeeCents ??
+              (product.shippingFeeCents == null ? '' : String(product.shippingFeeCents))
+            }
+          />
+        ) : (
+          <input type="hidden" name="shippingFeeCents" value="" />
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Status</span>
           <select
@@ -148,8 +181,9 @@ export const ProductForm = ({
           ) : (
             <button
               type="submit"
-              formAction={() => {
-                void activateProductAction(product.id);
+              formAction={async (fd: FormData) => {
+                fd.set('status', 'active');
+                await updateProductAction(product.id, initial, fd);
               }}
               disabled={!hasPhotos}
               title={!hasPhotos ? 'Adicione pelo menos uma foto antes de ativar.' : undefined}

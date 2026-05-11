@@ -9,6 +9,20 @@ export type SweepResult = {
   expiredProviderRefs: string[];
 };
 
+const assertReservationReleased = async (
+  label: 'ticket tier' | 'variant' | 'ticket extra',
+  id: string,
+  reserved: number,
+  runUpdate: () => Promise<{ count: number }>,
+): Promise<void> => {
+  const result = await runUpdate();
+  if (result.count > 0) return;
+
+  throw new Error(
+    `Reservation release failed for ${label} ${id}: reserved quantity is below ${reserved}`,
+  );
+};
+
 /**
  * Releases every stock reservation held by `orderIds`: ticket tiers, product
  * variants, and ticket extras. Cart orders use `OrderItem` rows; legacy
@@ -59,16 +73,20 @@ export const releaseAllReservationsForOrders = async (
   }
 
   for (const [tierId, qty] of tierReleases) {
-    await tx.ticketTier.updateMany({
-      where: { id: tierId, quantitySold: { gte: qty } },
-      data: { quantitySold: { decrement: qty } },
-    });
+    await assertReservationReleased('ticket tier', tierId, qty, () =>
+      tx.ticketTier.updateMany({
+        where: { id: tierId, quantitySold: { gte: qty } },
+        data: { quantitySold: { decrement: qty } },
+      }),
+    );
   }
   for (const [variantId, qty] of variantReleases) {
-    await tx.variant.updateMany({
-      where: { id: variantId, quantitySold: { gte: qty } },
-      data: { quantitySold: { decrement: qty } },
-    });
+    await assertReservationReleased('variant', variantId, qty, () =>
+      tx.variant.updateMany({
+        where: { id: variantId, quantitySold: { gte: qty } },
+        data: { quantitySold: { decrement: qty } },
+      }),
+    );
   }
 
   const orderExtras = await tx.orderExtra.findMany({
@@ -80,10 +98,12 @@ export const releaseAllReservationsForOrders = async (
     extraReleases.set(extraId, (extraReleases.get(extraId) ?? 0) + quantity);
   }
   for (const [extraId, count] of extraReleases) {
-    await tx.ticketExtra.updateMany({
-      where: { id: extraId, quantitySold: { gte: count } },
-      data: { quantitySold: { decrement: count } },
-    });
+    await assertReservationReleased('ticket extra', extraId, count, () =>
+      tx.ticketExtra.updateMany({
+        where: { id: extraId, quantitySold: { gte: count } },
+        data: { quantitySold: { decrement: count } },
+      }),
+    );
   }
 };
 
@@ -193,6 +213,7 @@ export type ExpireSingleOrderOutcome =
         currency: string;
         provider: 'stripe' | 'abacatepay';
         providerRef: string | null;
+        brCode: string | null;
       };
     };
 
@@ -207,8 +228,45 @@ export const expireSingleOrder = async (
   orderId: string,
   ownerId: string,
 ): Promise<ExpireSingleOrderOutcome> => {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
+  return prisma.$transaction((tx) => expireSingleOrderInTransaction(tx, orderId, ownerId));
+};
+
+export const expireSingleOrderInTransaction = async (
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  ownerId: string,
+): Promise<ExpireSingleOrderOutcome> => {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      userId: true,
+      tierId: true,
+      kind: true,
+      status: true,
+      expiresAt: true,
+      amountCents: true,
+      currency: true,
+      provider: true,
+      providerRef: true,
+      brCode: true,
+    },
+  });
+  if (!order) return { kind: 'not_found' };
+  if (order.userId !== ownerId) return { kind: 'forbidden' };
+
+  const isStale =
+    order.status === 'pending' && order.expiresAt !== null && order.expiresAt < new Date();
+
+  if (!isStale) return { kind: 'ok', wasExpired: false, order };
+
+  const expiredUpdate = await tx.order.updateMany({
+    where: { id: orderId, status: 'pending' },
+    data: { status: 'expired' },
+  });
+
+  if (expiredUpdate.count === 0) {
+    const currentOrder = await tx.order.findUnique({
       where: { id: orderId },
       select: {
         id: true,
@@ -221,23 +279,17 @@ export const expireSingleOrder = async (
         currency: true,
         provider: true,
         providerRef: true,
+        brCode: true,
       },
     });
-    if (!order) return { kind: 'not_found' };
-    if (order.userId !== ownerId) return { kind: 'forbidden' };
 
-    const isStale =
-      order.status === 'pending' && order.expiresAt !== null && order.expiresAt < new Date();
+    if (!currentOrder) return { kind: 'not_found' };
+    if (currentOrder.userId !== ownerId) return { kind: 'forbidden' };
 
-    if (!isStale) return { kind: 'ok', wasExpired: false, order };
+    return { kind: 'ok', wasExpired: false, order: currentOrder };
+  }
 
-    await tx.order.updateMany({
-      where: { id: orderId, status: 'pending' },
-      data: { status: 'expired' },
-    });
+  await releaseAllReservationsForOrders(tx, [orderId]);
 
-    await releaseAllReservationsForOrders(tx, [orderId]);
-
-    return { kind: 'ok', wasExpired: true, order: { ...order, status: 'expired' } };
-  });
+  return { kind: 'ok', wasExpired: true, order: { ...order, status: 'expired' } };
 };

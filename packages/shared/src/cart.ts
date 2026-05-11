@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-import { licensePlateSchema } from './orders.js';
+import { fulfillmentMethodSchema, licensePlateSchema } from './orders.js';
+export type { FulfillmentMethod } from './orders.js';
+export { fulfillmentMethodSchema } from './orders.js';
 
 export const cartStatusSchema = z.enum(['open', 'checking_out', 'converted', 'abandoned']);
 export type CartStatus = z.infer<typeof cartStatusSchema>;
@@ -153,7 +155,8 @@ export const cartItemProductSchema = z.object({
   variantName: z.string().min(1),
   variantSku: z.string().min(1).nullable(),
   unitPriceCents: z.number().int().nonnegative(),
-  requiresShipping: z.boolean(),
+  canShip: z.boolean(),
+  canPickup: z.boolean(),
   shippingFeeCents: z.number().int().nonnegative().nullable(),
   attributes: z.record(z.unknown()).nullable(),
 });
@@ -185,6 +188,7 @@ export const cartSchema = z.object({
   status: cartStatusSchema,
   items: z.array(cartItemSchema),
   totals: cartTotalsSchema,
+  availableFulfillmentMethods: z.array(fulfillmentMethodSchema),
   version: z.number().int().nonnegative(),
   expiresAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
@@ -219,6 +223,7 @@ export type ClearCartResponse = z.infer<typeof clearCartResponseSchema>;
 
 export const beginCheckoutRequestSchema = z.object({
   paymentMethod: cartPaymentMethodSchema,
+  fulfillmentMethod: fulfillmentMethodSchema.optional(),
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
   shippingAddressId: z.string().min(1).optional(),

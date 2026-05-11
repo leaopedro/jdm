@@ -15,6 +15,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   getStoreProduct,
@@ -48,6 +50,13 @@ const formatPriceRange = (product: StoreProductSummary): string => {
 
 const formatVariantPrice = (variant: StoreProductVariant): string => formatBRL(variant.priceCents);
 
+const productBadgeLabel = (product: { canShip: boolean; canPickup: boolean }): string => {
+  const parts: string[] = [];
+  if (product.canShip) parts.push(storeCopy.badges.shipping);
+  if (product.canPickup) parts.push(storeCopy.badges.pickup);
+  return parts.join(' · ') || storeCopy.badges.shipping;
+};
+
 type VariantPickerState = {
   product: StoreProduct;
   variants: StoreProductVariant[];
@@ -56,6 +65,8 @@ type VariantPickerState = {
 export default function StoreIndex() {
   const router = useRouter();
   const { addItem, adding, itemCount } = useCart();
+  const insets = useSafeAreaInsets();
+  const headerTop = Platform.OS === 'web' ? 8 : Math.max(insets.top, 16) + 8;
   const [search, setSearch] = useState('');
   const [collections, setCollections] = useState<StoreCollection[]>([]);
   const [productTypes, setProductTypes] = useState<StoreProductType[]>([]);
@@ -232,7 +243,7 @@ export default function StoreIndex() {
   );
 
   const renderHero = () => (
-    <View style={styles.headerWrap}>
+    <View style={[styles.headerWrap, { paddingTop: headerTop }]}>
       <LinearGradient colors={['#2D0603', '#130D0D', '#0B0B0F']} style={styles.hero}>
         <View style={styles.heroCopy}>
           <Text variant="eyebrow" tone="brand">
@@ -504,11 +515,7 @@ function ProductCard({
         )}
         <View style={styles.cardBody}>
           <View style={styles.cardMeta}>
-            <Badge
-              label={product.requiresShipping ? storeCopy.badges.shipping : storeCopy.badges.pickup}
-              tone="neutral"
-              size="sm"
-            />
+            <Badge label={productBadgeLabel(product)} tone="neutral" size="sm" />
             <Text variant="caption" tone="muted">
               {product.productType.name}
             </Text>

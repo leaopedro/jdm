@@ -65,6 +65,8 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
           productTypeId: input.productTypeId,
           basePriceCents: input.basePriceCents,
           currency: input.currency,
+          allowPickup: input.allowPickup,
+          allowShip: input.allowShip,
           shippingFeeCents: input.shippingFeeCents ?? null,
           status: 'draft',
         },
@@ -113,6 +115,29 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
           message: 'product requires at least one photo to activate',
         });
       }
+      const nextAllowPickup = input.allowPickup ?? existing.allowPickup;
+      const nextAllowShip = input.allowShip ?? existing.allowShip;
+      if (!nextAllowPickup && !nextAllowShip) {
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: 'product requires at least one fulfillment method to activate',
+        });
+      }
+    }
+
+    if (
+      existing.status === 'active' &&
+      (input.allowPickup !== undefined || input.allowShip !== undefined)
+    ) {
+      const nextAllowPickup =
+        input.allowPickup !== undefined ? input.allowPickup : existing.allowPickup;
+      const nextAllowShip = input.allowShip !== undefined ? input.allowShip : existing.allowShip;
+      if (!nextAllowPickup && !nextAllowShip) {
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: 'active product must keep at least one fulfillment method',
+        });
+      }
     }
 
     if (input.productTypeId !== undefined && input.productTypeId !== existing.productTypeId) {
@@ -135,6 +160,8 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
     }
     if (input.basePriceCents !== undefined) data.basePriceCents = input.basePriceCents;
     if (input.currency !== undefined) data.currency = input.currency;
+    if (input.allowPickup !== undefined) data.allowPickup = input.allowPickup;
+    if (input.allowShip !== undefined) data.allowShip = input.allowShip;
     if (input.shippingFeeCents !== undefined) data.shippingFeeCents = input.shippingFeeCents;
     let auditAction: 'store.product.update' | 'store.product.archive' | 'store.product.activate' =
       'store.product.update';

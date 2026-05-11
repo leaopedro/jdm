@@ -1,8 +1,9 @@
 import { prisma } from '@jdm/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   expireSingleOrder,
+  expireSingleOrderInTransaction,
   sweepExpiredOrdersForTier,
   sweepExpiredOrdersForVariant,
 } from '../../src/services/orders/expire.js';
@@ -153,8 +154,8 @@ describe('expire.ts mixed-order coverage (JDMA-462)', () => {
     await resetDatabase();
   });
 
-  afterEach(async () => {
-    // no-op; resetDatabase runs in beforeEach
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('sweepExpiredOrdersForTier releases mixed-order ticket AND product reservations', async () => {
@@ -253,5 +254,89 @@ describe('expire.ts mixed-order coverage (JDMA-462)', () => {
 
     const reloadedVariant = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
     expect(reloadedVariant.quantitySold).toBe(0);
+  });
+
+  it('expireSingleOrder does not release reservations when the pending update loses a race', async () => {
+    const staleOrder = {
+      id: 'ord_race',
+      userId: 'user_race',
+      tierId: null,
+      kind: 'mixed',
+      status: 'pending',
+      expiresAt: new Date(Date.now() - 1000),
+      amountCents: 23_000,
+      currency: 'BRL',
+      provider: 'stripe' as const,
+      providerRef: 'pi_race',
+    };
+    const refreshedOrder = {
+      ...staleOrder,
+      status: 'paid',
+      expiresAt: null,
+    };
+
+    const releaseTouch = vi.fn(() => Promise.resolve([]));
+    const updateMany = vi.fn(() => Promise.resolve({ count: 0 }));
+    const outcome = await expireSingleOrderInTransaction(
+      {
+        order: {
+          findUnique: vi
+            .fn()
+            .mockResolvedValueOnce(staleOrder)
+            .mockResolvedValueOnce(refreshedOrder),
+          updateMany,
+        },
+        orderItem: { findMany: releaseTouch },
+        orderExtra: { findMany: releaseTouch },
+        ticketTier: { updateMany: releaseTouch },
+        variant: { updateMany: releaseTouch },
+        ticketExtra: { updateMany: releaseTouch },
+      } as never,
+      staleOrder.id,
+      staleOrder.userId,
+    );
+
+    expect(updateMany).toHaveBeenCalledOnce();
+    expect(releaseTouch).not.toHaveBeenCalled();
+    expect(outcome).toEqual({
+      kind: 'ok',
+      wasExpired: false,
+      order: refreshedOrder,
+    });
+  });
+
+  it('sweepExpiredOrdersForTier fails explicitly when reserved quantity is already below the release amount', async () => {
+    const user = await seedUser();
+    const { event, tier } = await seedPublishedEvent(10);
+    const { variant } = await seedActiveProduct(10);
+
+    const { order } = await seedMixedPendingOrder({
+      userId: user.id,
+      eventId: event.id,
+      tierId: tier.id,
+      variantId: variant.id,
+      ticketQuantity: 2,
+      productQuantity: 3,
+      expiresAt: new Date(Date.now() - 1000),
+      providerRef: 'pi_mixed_underflow',
+    });
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    await expect(
+      prisma.$transaction((tx) => sweepExpiredOrdersForTier(tier.id, tx)),
+    ).rejects.toThrow(/reservation release/i);
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('pending');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(1);
+
+    const reloadedVariant = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
+    expect(reloadedVariant.quantitySold).toBe(3);
   });
 });

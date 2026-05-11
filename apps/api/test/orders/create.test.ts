@@ -1,10 +1,20 @@
 import { prisma } from '@jdm/db';
 import { createOrderResponseSchema } from '@jdm/shared/orders';
+import * as Sentry from '@sentry/node';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 const errorResponseSchema = z.object({ error: z.string(), message: z.string().optional() });
+
+vi.mock('@sentry/node', () => ({
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
+  init: vi.fn(),
+  withScope: vi.fn((callback: (scope: { setTag: (key: string, value: string) => void }) => void) =>
+    callback({ setTag: vi.fn() }),
+  ),
+}));
 
 import { loadEnv } from '../../src/env.js';
 import type { FakeStripe } from '../../src/services/stripe/fake.js';
@@ -560,5 +570,167 @@ describe('POST /orders', () => {
     const cancelCalls = stripe.calls.filter((c) => c.kind === 'cancelPaymentIntent');
     expect(cancelCalls).toHaveLength(1);
     expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_abandoned' });
+  });
+
+  it('captures Sentry when sweep-triggered Stripe cancel fails during order creation', async () => {
+    const cancelErr = new Error('stripe cancel failed');
+    stripe.cancelPaymentIntent = (paymentIntentId) => {
+      stripe.calls.push({ kind: 'cancelPaymentIntent', payload: { paymentIntentId } });
+      return Promise.reject(cancelErr);
+    };
+
+    const { user } = await createUser({ verified: true });
+    const { user: user2 } = await createUser({ email: 'user2@jdm.test', verified: true });
+    const { event, tier } = await seedPublishedEvent(1);
+
+    await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        amountCents: 5000,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_abandoned_capture',
+        status: 'pending',
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    });
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user2.id) },
+      payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    await vi.waitFor(() => {
+      expect(Sentry.captureException).toHaveBeenCalledWith(cancelErr);
+    });
+  });
+
+  // JDMA-485: block second checkout while user has live pending ticket order for same event.
+  describe('pending ticket order guard (JDMA-485)', () => {
+    it('409 PENDING_TICKET_ORDER_FOR_EVENT when user has a live pending order for same event', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent();
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(second.statusCode).toBe(409);
+      const body = errorResponseSchema.extend({ code: z.string().optional() }).parse(second.json());
+      expect(body.code).toBe('PENDING_TICKET_ORDER_FOR_EVENT');
+
+      const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      expect(reloaded.quantitySold).toBe(1);
+    });
+
+    it('allows checkout for a different event while pending exists for another', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event: ev1, tier: tier1 } = await seedPublishedEvent();
+      const { event: ev2, tier: tier2 } = await seedPublishedEvent();
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: ev1.id, tierId: tier1.id, method: 'card', tickets: [{}] },
+      });
+      expect(first.statusCode).toBe(201);
+
+      stripe.nextPaymentIntent = { id: 'pi_test_2', clientSecret: 'pi_test_2_secret_abc' };
+      const second = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: ev2.id, tierId: tier2.id, method: 'card', tickets: [{}] },
+      });
+      expect(second.statusCode).toBe(201);
+    });
+
+    it('allows checkout after the previous pending order has expired', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent();
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(first.statusCode).toBe(201);
+      const firstBody = createOrderResponseSchema.parse(first.json());
+
+      await prisma.order.update({
+        where: { id: firstBody.orderId },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      stripe.nextPaymentIntent = { id: 'pi_test_2', clientSecret: 'pi_test_2_secret_abc' };
+      const second = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(second.statusCode).toBe(201);
+    });
+
+    it('allows extras_only checkout while user has pending ticket order', async () => {
+      const { user } = await createUser({ verified: true });
+      const { event, tier } = await seedPublishedEvent();
+      const extra = await seedExtra(event.id);
+
+      // user must already own a valid ticket for extras_only to be permitted.
+      await prisma.ticket.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(first.statusCode).toBe(201);
+
+      stripe.nextPaymentIntent = { id: 'pi_test_2', clientSecret: 'pi_test_2_secret_abc' };
+      const extrasOnlyRes = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: bearer(env, user.id) },
+        payload: {
+          eventId: event.id,
+          tierId: tier.id,
+          method: 'card',
+          extrasOnly: true,
+          tickets: [{ extras: [extra.id] }],
+        },
+      });
+      expect(extrasOnlyRes.statusCode).toBe(201);
+    });
   });
 });

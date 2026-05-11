@@ -7,6 +7,7 @@ import {
   createWebCheckoutResponseSchema,
   getOrderResponseSchema,
   myOrdersResponseSchema,
+  resumeOrderResponseSchema,
 } from '@jdm/shared/orders';
 import type {
   CancelMyOrderResponse,
@@ -17,6 +18,7 @@ import type {
   CreateWebCheckoutResponse,
   GetOrderResponse,
   MyOrdersResponse,
+  ResumeOrderResponse,
 } from '@jdm/shared/orders';
 
 import { authedRequest } from './client';
@@ -58,4 +60,8 @@ export const cancelMyOrder = (orderId: string): Promise<CancelMyOrderResponse> =
   return authedRequest(`/me/orders/${orderId}/cancel`, cancelMyOrderResponseSchema, {
     method: 'POST',
   });
+};
+
+export const resumeOrder = (orderId: string): Promise<ResumeOrderResponse> => {
+  return authedRequest(`/orders/${orderId}/resume`, resumeOrderResponseSchema);
 };

@@ -1,9 +1,13 @@
 import type { MyOrder } from '@jdm/shared/orders';
+import { Button } from '@jdm/ui';
+import { PaymentSheetError, useStripe } from '@stripe/stripe-react-native';
+import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,8 +17,7 @@ import {
 } from 'react-native';
 
 import { ApiError } from '~/api/client';
-import { cancelMyOrder, listMyOrders } from '~/api/orders';
-import { Button } from '~/components/Button';
+import { cancelMyOrder, listMyOrders, resumeOrder } from '~/api/orders';
 import { ordersCopy } from '~/copy/orders';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -39,12 +42,121 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
   return styles.badgeFulfillment;
 }
 
+const STRIPE_AVAILABLE = !!(
+  Constants.expoConfig?.extra as { stripePublishableKey?: string } | undefined
+)?.stripePublishableKey;
+
+// Resumes a Pix order. Stripe SDK not touched, so this button is safe
+// in any build regardless of whether StripeProvider is mounted.
+function ResumePixButton({ orderId }: { orderId: string }) {
+  const router = useRouter();
+
+  const handlePay = async () => {
+    try {
+      const data = await resumeOrder(orderId);
+      if (data.method !== 'pix') {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      router.push({
+        pathname: '/events/buy/checkout-pix',
+        params: {
+          orderId: data.orderId,
+          brCode: data.brCode,
+          expiresAt: data.expiresAt,
+          amountCents: String(data.amountCents),
+        },
+      } as never);
+    } catch {
+      Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+    }
+  };
+
+  return (
+    <Pressable onPress={() => void handlePay()} accessibilityRole="button" style={styles.payLink}>
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
+// Resumes a Stripe (card) order. Only rendered when StripeProvider is in
+// the tree (STRIPE_AVAILABLE === true). Isolates useStripe() so OrderCard
+// doesn't crash in preview builds without Stripe.
+function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () => unknown }) {
+  const router = useRouter();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const handlePay = async () => {
+    try {
+      const data = await resumeOrder(orderId);
+      if (data.method === 'pix') {
+        // Provider says stripe but server returned pix: fall back to the Pix flow.
+        router.push({
+          pathname: '/events/buy/checkout-pix',
+          params: {
+            orderId: data.orderId,
+            brCode: data.brCode,
+            expiresAt: data.expiresAt,
+            amountCents: String(data.amountCents),
+          },
+        } as never);
+        return;
+      }
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: data.clientSecret,
+        merchantDisplayName: 'JDM Experience',
+      });
+      if (initError) {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError && presentError.code !== PaymentSheetError.Canceled) {
+        Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+        return;
+      }
+      reload();
+    } catch {
+      Alert.alert(ordersCopy.payError, ordersCopy.payErrorBody);
+    }
+  };
+
+  return (
+    <Pressable onPress={() => void handlePay()} accessibilityRole="button" style={styles.payLink}>
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
+function ResumeOrderButton({
+  order,
+  reload,
+}: {
+  order: MyOrder;
+  reload: () => unknown;
+}): React.ReactElement | null {
+  // Pix orders never touch the Stripe SDK, so render them regardless of
+  // whether STRIPE_AVAILABLE is true.
+  if (order.provider === 'abacatepay') {
+    return <ResumePixButton orderId={order.id} />;
+  }
+  // Stripe orders need StripeProvider. Hide the CTA when Stripe is not
+  // configured (e.g. preview builds without a publishable key) — there is
+  // no usable resume path for card orders in that environment.
+  if (STRIPE_AVAILABLE) {
+    return <PayWithStripeButton orderId={order.id} reload={reload} />;
+  }
+  return null;
+}
+
 function OrderCard({
   order,
+  reload,
   onRequestCancel,
   cancelling,
 }: {
   order: MyOrder;
+  reload: () => unknown;
   onRequestCancel: (order: MyOrder) => void;
   cancelling: boolean;
 }) {
@@ -53,6 +165,10 @@ function OrderCard({
     ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
     : null;
   const canCancel = order.status === 'pending';
+
+  const isPendingAndActive =
+    order.status === 'pending' &&
+    (order.expiresAt === null || new Date(order.expiresAt) > new Date());
 
   const openTicket = (ticketIds: string[]) => {
     if (ticketIds.length === 1) {
@@ -139,24 +255,26 @@ function OrderCard({
       </View>
 
       <View style={styles.footerRow}>
-        <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
-        <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
-      </View>
-
-      {canCancel ? (
-        <View style={styles.cancelWrap}>
-          <Pressable
-            onPress={() => onRequestCancel(order)}
-            accessibilityRole="button"
-            disabled={cancelling}
-            style={[styles.cancelButton, cancelling && styles.actionDisabled]}
-          >
-            <Text style={styles.cancelButtonText}>
-              {cancelling ? ordersCopy.actions.cancelling : ordersCopy.actions.cancel}
-            </Text>
-          </Pressable>
+        <View>
+          <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
+          <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
         </View>
-      ) : null}
+        <View style={styles.footerActions}>
+          {isPendingAndActive ? <ResumeOrderButton order={order} reload={reload} /> : null}
+          {canCancel ? (
+            <Pressable
+              onPress={() => onRequestCancel(order)}
+              accessibilityRole="button"
+              disabled={cancelling}
+              style={[styles.cancelButton, cancelling && styles.actionDisabled]}
+            >
+              <Text style={styles.cancelButtonText}>
+                {cancelling ? ordersCopy.actions.cancelling : ordersCopy.actions.cancel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
@@ -259,6 +377,7 @@ export default function ProfileOrdersScreen() {
           <OrderCard
             key={order.id}
             order={order}
+            reload={load}
             onRequestCancel={requestCancel}
             cancelling={cancellingOrderId === order.id}
           />
@@ -460,7 +579,7 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingTop: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
@@ -469,13 +588,15 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
   },
-  cancelWrap: {
-    alignItems: 'flex-start',
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   cancelButton: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
     borderWidth: 1,
     borderColor: 'rgba(225, 106, 0, 0.36)',
     backgroundColor: 'rgba(225, 106, 0, 0.14)',
@@ -547,5 +668,16 @@ const styles = StyleSheet.create({
   },
   actionDisabled: {
     opacity: 0.6,
+  },
+  payLink: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.accent,
+  },
+  payLinkText: {
+    color: '#fff',
+    fontSize: theme.font.size.sm,
+    fontWeight: '700',
   },
 });

@@ -162,3 +162,28 @@ export const myOrdersResponseSchema = z.object({
   items: z.array(myOrderSchema),
 });
 export type MyOrdersResponse = z.infer<typeof myOrdersResponseSchema>;
+
+export const resumePixOrderResponseSchema = z.object({
+  method: z.literal('pix'),
+  orderId: z.string().min(1),
+  brCode: z.string().min(1),
+  expiresAt: z.string().datetime(),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+});
+export type ResumePixOrderResponse = z.infer<typeof resumePixOrderResponseSchema>;
+
+export const resumeCardOrderResponseSchema = z.object({
+  method: z.literal('card'),
+  orderId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().length(3),
+});
+export type ResumeCardOrderResponse = z.infer<typeof resumeCardOrderResponseSchema>;
+
+export const resumeOrderResponseSchema = z.discriminatedUnion('method', [
+  resumePixOrderResponseSchema,
+  resumeCardOrderResponseSchema,
+]);
+export type ResumeOrderResponse = z.infer<typeof resumeOrderResponseSchema>;

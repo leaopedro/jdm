@@ -19,10 +19,13 @@ import {
 } from '../services/cart/checkout.js';
 import {
   CART_INCLUDE_FOR_SERIALIZE,
+  computeAvailableFulfillmentMethods,
   computeItemAmount,
   evictStaleItems,
+  findIncompatibleProducts,
   getActiveCart,
   getOrCreateCart,
+  loadCartFulfillmentContext,
   serializeCart,
   validateCartItem,
 } from '../services/cart/index.js';
@@ -132,9 +135,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const evictedItems = await evictStaleItems(cart);
 
     const freshCart = evictedItems.length > 0 ? await getActiveCart(sub) : cart;
+    const fulfillmentContext = await loadCartFulfillmentContext();
 
     return getCartResponseSchema.parse({
-      cart: freshCart ? serializeCart(freshCart) : null,
+      cart: freshCart ? serializeCart(freshCart, fulfillmentContext) : null,
       stockWarnings: [],
       evictedItems,
       flags: { cartV1: true },
@@ -184,6 +188,24 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     );
 
     const cart = await getOrCreateCart(sub);
+    const fulfillmentContext = await loadCartFulfillmentContext();
+
+    if (validated.kind === 'product') {
+      const conflicting = findIncompatibleProducts(
+        cart.items,
+        validated.variant.allowShip,
+        validated.variant.allowPickup,
+        fulfillmentContext,
+      );
+      if (conflicting.compatible === false) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          code: 'CART_INCOMPATIBLE_FULFILLMENT',
+          message: 'Item nao compativel com os itens ja no carrinho.',
+          conflictingItemIds: conflicting.conflictingItemIds,
+        });
+      }
+    }
 
     const updatedCart = await prisma.$transaction(async (tx) => {
       const newItem = await tx.cartItem.create({
@@ -221,7 +243,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     });
 
-    return upsertCartItemResponseSchema.parse({ cart: serializeCart(updatedCart) });
+    return upsertCartItemResponseSchema.parse({
+      cart: serializeCart(updatedCart, fulfillmentContext),
+    });
   });
 
   // PATCH /cart/items/:itemId
@@ -308,6 +332,26 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         validated.kind,
       );
 
+      const fulfillmentContext = await loadCartFulfillmentContext();
+
+      if (validated.kind === 'product') {
+        const conflicting = findIncompatibleProducts(
+          cart.items,
+          validated.variant.allowShip,
+          validated.variant.allowPickup,
+          fulfillmentContext,
+          { excludeCartItemId: itemId },
+        );
+        if (conflicting.compatible === false) {
+          return reply.status(422).send({
+            error: 'UnprocessableEntity',
+            code: 'CART_INCOMPATIBLE_FULFILLMENT',
+            message: 'Item nao compativel com os itens ja no carrinho.',
+            conflictingItemIds: conflicting.conflictingItemIds,
+          });
+        }
+      }
+
       const updatedCart = await prisma.$transaction(async (tx) => {
         await tx.cartItemExtra.deleteMany({ where: { cartItemId: itemId } });
 
@@ -346,7 +390,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         });
       });
 
-      return upsertCartItemResponseSchema.parse({ cart: serializeCart(updatedCart) });
+      return upsertCartItemResponseSchema.parse({
+        cart: serializeCart(updatedCart, fulfillmentContext),
+      });
     },
   );
 
@@ -441,7 +487,46 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    if (input.pickupEventId) {
+    const fulfillmentContext = await loadCartFulfillmentContext();
+    const hasProductItems = cart.items.some((item) => item.kind === 'product');
+    const availableMethods = computeAvailableFulfillmentMethods(cart.items, fulfillmentContext);
+    let resolvedFulfillmentMethod: 'pickup' | 'ship' | null = null;
+
+    if (hasProductItems) {
+      if (availableMethods.length === 0) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          code: 'CART_INCOMPATIBLE_FULFILLMENT',
+          message: 'Itens no carrinho não compartilham nenhum método de entrega.',
+        });
+      }
+      const requested =
+        input.fulfillmentMethod ?? (availableMethods.length === 1 ? availableMethods[0] : null);
+      if (!requested) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          code: 'FULFILLMENT_METHOD_REQUIRED',
+          message: 'fulfillmentMethod: selecione retirada ou entrega.',
+        });
+      }
+      if (!availableMethods.includes(requested)) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          code: 'FULFILLMENT_METHOD_UNAVAILABLE',
+          message: 'fulfillmentMethod: método indisponível para os itens deste carrinho.',
+        });
+      }
+      resolvedFulfillmentMethod = requested;
+    }
+
+    let pickupEventIdToUse: string | null = null;
+    if (resolvedFulfillmentMethod === 'pickup') {
+      if (!input.pickupEventId) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          message: 'pickupEventId: obrigatório para retirada no evento.',
+        });
+      }
       try {
         await validateEventPickupSelection(sub, input.pickupEventId, cart);
       } catch (err) {
@@ -453,11 +538,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         }
         throw err;
       }
+      pickupEventIdToUse = input.pickupEventId;
     }
 
-    const requiresShipping = cart.items.some(
-      (item) => item.kind === 'product' && item.variant?.product.shippingFeeCents !== null,
-    );
+    const requiresShipping =
+      resolvedFulfillmentMethod === 'ship' &&
+      cart.items.some(
+        (item) => item.kind === 'product' && (item.variant?.product.shippingFeeCents ?? 0) > 0,
+      );
     let shippingAddressId: string | null = null;
 
     if (requiresShipping) {
@@ -485,12 +573,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const reserveResult = await reserveAndCreateOrders(cart, sub, {
       method: input.paymentMethod,
       shippingAddressId,
-      pickupEventId: input.pickupEventId ?? null,
+      pickupEventId: pickupEventIdToUse,
+      fulfillmentMethod: resolvedFulfillmentMethod,
     });
     if (!reserveResult.ok) {
       return reply.status(reserveResult.status).send({
         error: reserveResult.error,
         message: reserveResult.message,
+        ...(reserveResult.code ? { code: reserveResult.code } : {}),
       });
     }
     const { data } = reserveResult;
@@ -542,7 +632,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           beginCheckoutResponseSchema.parse({
             checkoutId: cart.id,
             status: 'pending',
-            cart: serializeCart(updatedCart),
+            cart: serializeCart(updatedCart, fulfillmentContext),
             orderIds: data.orders.map((o) => o.id),
             provider: 'abacatepay',
             providerRef: billing.id,
@@ -623,7 +713,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         beginCheckoutResponseSchema.parse({
           checkoutId: cart.id,
           status: 'pending',
-          cart: serializeCart(updatedCart),
+          cart: serializeCart(updatedCart, fulfillmentContext),
           orderIds: data.orders.map((o) => o.id),
           provider: 'stripe',
           providerRef: session.paymentIntentId,

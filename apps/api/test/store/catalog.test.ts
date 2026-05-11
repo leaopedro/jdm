@@ -53,6 +53,7 @@ const makeProduct = async (
     description: string;
     basePriceCents: number;
     status: 'draft' | 'active' | 'archived';
+    allowShip: boolean;
     shippingFeeCents: number | null;
     variants: VariantSeed[];
     photos: { objectKey: string; sortOrder: number }[];
@@ -64,6 +65,8 @@ const makeProduct = async (
   const photos = overrides.photos ?? [
     { objectKey: `products/default/${Math.random().toString(36).slice(2, 8)}.jpg`, sortOrder: 0 },
   ];
+  const resolvedShippingFee =
+    overrides.shippingFeeCents === undefined ? 0 : overrides.shippingFeeCents;
   const product = await prisma.product.create({
     data: {
       slug: overrides.slug ?? `p-${Math.random().toString(36).slice(2, 8)}`,
@@ -72,7 +75,9 @@ const makeProduct = async (
       productTypeId,
       basePriceCents: overrides.basePriceCents ?? 5000,
       status: overrides.status ?? 'active',
-      shippingFeeCents: overrides.shippingFeeCents === undefined ? 0 : overrides.shippingFeeCents,
+      allowShip:
+        overrides.allowShip !== undefined ? overrides.allowShip : resolvedShippingFee != null,
+      shippingFeeCents: resolvedShippingFee,
       ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
       variants: {
         create: variants.map((v, idx) => ({
@@ -421,7 +426,8 @@ describe('GET /store/products/:slug', () => {
     expect(res.statusCode).toBe(200);
     const body = storeProductDetailResponseSchema.parse(res.json());
     expect(body.product.slug).toBe('cam-jdm');
-    expect(body.product.requiresShipping).toBe(true);
+    expect(body.product.canShip).toBe(true);
+    expect(body.product.canPickup).toBe(false);
     expect(body.product.variants.map((v) => v.title)).toEqual(['P', 'M']);
     expect(body.product.variants[0]?.stockOnHand).toBe(4);
     expect(body.product.variants[1]?.stockOnHand).toBe(0);

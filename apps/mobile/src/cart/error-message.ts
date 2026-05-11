@@ -24,6 +24,8 @@ export function getCartAddErrorMessage(error: unknown): string {
       return cartCopy.errors.extraSoldOut;
     case 'VARIANT_SOLD_OUT':
       return cartCopy.errors.variantSoldOut;
+    case 'PENDING_TICKET_ORDER_FOR_EVENT':
+      return cartCopy.errors.pendingTicketOrderForEvent;
     default:
       return getApiErrorMessage(error, cartCopy.errors.add);
   }

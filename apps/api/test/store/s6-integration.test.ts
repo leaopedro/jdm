@@ -34,6 +34,7 @@ const seedActiveProduct = async (opts?: {
       basePriceCents: opts?.variantPriceCents ?? 9000,
       currency: 'BRL',
       status: 'active',
+      allowShip: opts?.shippingFeeCents != null,
       ...(opts?.shippingFeeCents !== undefined ? { shippingFeeCents: opts.shippingFeeCents } : {}),
     },
   });
@@ -259,6 +260,7 @@ describe('JDMA-367 store integration regression (S6.1)', () => {
           basePriceCents: 9000,
           currency: 'BRL',
           status: 'active',
+          allowShip: true,
           shippingFeeCents: 1500,
         },
       });
@@ -412,6 +414,7 @@ describe('JDMA-367 store integration regression (S6.1)', () => {
           basePriceCents: 9000,
           currency: 'BRL',
           status: 'active',
+          allowShip: true,
           shippingFeeCents: 1500,
         },
       });

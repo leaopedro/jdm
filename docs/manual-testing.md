@@ -77,6 +77,8 @@ Living references; update these as features land.
   storefront wire check).
 - **Loja admin — Estoque (low-stock) page** — §3.6 below
   (threshold-aware visibility, quick inventory edits, status filters).
+- **iOS native splash travado** — §3.7 below
+  (captura de logs no device, repro local em simulator/release build).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
 - **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
@@ -249,6 +251,109 @@ expandable-row details, CSV export, and responsive layout.
    Expect: URL resets to `/financeiro`. All filters cleared. Full dataset shown.
 7. Toggle a chip off by clicking it again.
    Expect: that param removed from URL. Data updates.
+
+### 3.7 iOS app stuck on native splash
+
+Use this when an installed iPhone build never gets past the native splash.
+
+**Goal**
+
+- Confirm whether the app is crashing before React mounts.
+- Capture native and JS logs from the affected device.
+- Reproduce with the closest local build before changing code.
+
+**Step 1 — Read device logs from macOS Console**
+
+1. Plug the iPhone into the Mac by cable.
+2. Open `Console.app`.
+3. In the left sidebar, select the iPhone under **Devices**.
+4. Filter by the bundle id in use:
+   - Preview: `com.jdmexperience.app.preview`
+   - Production: `com.jdmexperience.app`
+5. Launch the app and watch for:
+   - `EXC_CRASH`
+   - `Termination Reason`
+   - `No bundle URL present`
+   - `Unhandled JS Exception`
+   - `expo-updates`
+   - `StripeProvider`
+   - `SecureStore`
+
+Pass:
+
+- You captured the first fatal line or confirmed there was no crash line.
+
+Expected new breadcrumbs from the current app build:
+
+- `[boot] root-layout.module-evaluated`
+- `[boot] sentry.init-complete`
+- `[boot] auth.boot.start`
+- `[boot] auth.boot.no-session` or `[boot] auth.boot.authenticated`
+- `[boot] boot.ready`
+
+If you never see `root-layout.module-evaluated`, the app likely failed before
+the JS bundle executed. Treat that as a native startup failure, not a React one.
+
+If you see the early boot breadcrumbs but never `boot.ready`, look for the
+paired `[mobile-error] ...` line in the same log window. That is the exact
+startup exception context emitted by the app.
+
+**Step 2 — Read simulator logs for a local repro**
+
+```bash
+xcrun simctl list devices
+xcrun simctl boot "<simulator name>"
+xcrun simctl spawn booted log stream --level debug --predicate 'processImagePath CONTAINS "JDM Experience"'
+```
+
+In another terminal:
+
+```bash
+APP_VARIANT=development pnpm --filter @jdm/mobile ios
+```
+
+Pass:
+
+- Local boot either succeeds or prints the failing native/JS exception.
+
+**Step 3 — Reproduce a release-like JS bundle locally**
+
+```bash
+APP_VARIANT=preview pnpm --filter @jdm/mobile exec expo start --no-dev --minify --clear
+```
+
+Then open the dev client or simulator build against that bundle.
+
+Why:
+
+- This is the closest fast repro for issues that only appear with minified production JS.
+
+**Step 4 — Validate the embedded build config**
+
+```bash
+APP_VARIANT=preview pnpm --filter @jdm/mobile exec expo config --type public
+```
+
+Confirm:
+
+- `ios.bundleIdentifier` matches the installed app.
+- `extra.apiBaseUrl` points at Railway for `preview`.
+- `updates.url` is present.
+- `extra.eas.projectId` is present in the EAS build environment.
+
+**Step 5 — Common root causes in this repo**
+
+- Boot-time auth storage failure can leave auth in `loading`.
+- A render-time exception in `app/_layout.tsx` can look like a stuck splash.
+- Missing or wrong EAS project config can break update/bootstrap behavior.
+- Native module version skew can break startup before UI renders.
+
+**Current known diagnostics**
+
+- `npx expo-doctor` currently reports a duplicate native dependency tree for React:
+  `react@19.1.0` and nested `react@19.2.4`.
+- The mobile boot path now captures auth boot exceptions and root-layout render
+  failures so the next failing build should expose a visible fallback or a Sentry event.
 
 **Step 3 — KPI/table/trend consistency for the same recut**
 

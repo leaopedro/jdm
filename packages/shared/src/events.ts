@@ -40,6 +40,7 @@ export const eventSummarySchema = z.object({
   city: z.string().nullable(),
   stateCode: stateCodeSchema.nullable(),
   type: eventTypeSchema,
+  status: eventStatusSchema,
 });
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 

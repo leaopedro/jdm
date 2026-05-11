@@ -22,14 +22,53 @@ const bundleId: Record<Variant, string> = {
   production: 'com.jdmexperience.app',
 };
 
+const easProjectId = process.env.EAS_PROJECT_ID ?? 'c071216e-6224-4f00-9eb0-6737fb5e1691';
+
+const stripeMerchantIdentifier =
+  variant === 'production' ? 'merchant.com.jdmexperience.app' : undefined;
+const sentryOrg = process.env.SENTRY_ORG;
+const sentryProjectMobile = process.env.SENTRY_PROJECT_MOBILE;
+
+const devLauncherPlugins: ExpoConfig['plugins'] =
+  variant === 'development'
+    ? [
+        [
+          'expo-dev-launcher',
+          {
+            launchMode: 'launcher',
+          },
+        ],
+      ]
+    : [];
+
+const sentryExpoPlugin: ExpoConfig['plugins'] =
+  sentryOrg && sentryProjectMobile
+    ? [
+        [
+          '@sentry/react-native/expo',
+          {
+            organization: sentryOrg,
+            project: sentryProjectMobile,
+          },
+        ],
+      ]
+    : [];
+
 const config: ExpoConfig = {
   name: `JDM Experience${suffix[variant]}`,
   slug: 'jdm-experience',
+  owner: 'leaopedro',
   scheme: 'jdm',
   version: '0.0.1',
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
+  updates: {
+    url: 'https://u.expo.dev/c071216e-6224-4f00-9eb0-6737fb5e1691',
+  },
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
@@ -38,6 +77,9 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: bundleId[variant],
     supportsTablet: false,
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     package: bundleId[variant],
@@ -48,6 +90,12 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    ...devLauncherPlugins,
+    'expo-secure-store',
+    [
+      '@stripe/stripe-react-native',
+      stripeMerchantIdentifier ? { merchantIdentifier: stripeMerchantIdentifier } : {},
+    ],
     [
       'expo-notifications',
       {
@@ -55,13 +103,7 @@ const config: ExpoConfig = {
         color: '#0B0B0F',
       },
     ],
-    [
-      '@sentry/react-native/expo',
-      {
-        organization: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT_MOBILE,
-      },
-    ],
+    ...sentryExpoPlugin,
   ],
   web: {
     bundler: 'metro',
@@ -74,7 +116,8 @@ const config: ExpoConfig = {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     stripePublishableKey: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
-    eas: { projectId: process.env.EAS_PROJECT_ID ?? '' },
+    stripeMerchantIdentifier,
+    eas: { projectId: easProjectId },
   },
 };
 

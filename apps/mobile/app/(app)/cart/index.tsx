@@ -1,6 +1,7 @@
-import type { CartItem } from '@jdm/shared/cart';
+import type { CartItem, FulfillmentMethod } from '@jdm/shared/cart';
 import type { EventExtraPublic } from '@jdm/shared/extras';
 import type { ShippingAddressRecord } from '@jdm/shared/store';
+import { Button } from '@jdm/ui';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Car as CarIcon, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,7 +24,6 @@ import { getStoreSettings } from '~/api/store';
 import { listMyTickets } from '~/api/tickets';
 import { useCart } from '~/cart/context';
 import { redirectToStripeCheckout } from '~/cart/web-stripe-redirect';
-import { Button } from '~/components/Button';
 import { cartCopy } from '~/copy/cart';
 import { useShippingAddresses } from '~/hooks/useShippingAddresses';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -32,6 +32,8 @@ import {
   buildCartSections,
   buildPickupEventOptions,
   collectCartTicketEventIds,
+  computeDefaultFulfillmentMethod,
+  computeDisplayedCartTotals,
   formatProductAttributes,
   isProductItem,
   type PickupEventOption,
@@ -270,6 +272,13 @@ function PickupEventRow({
   );
 }
 
+function productMethodsLabel(canShip: boolean, canPickup: boolean): string {
+  const parts: string[] = [];
+  if (canShip) parts.push(cartCopy.item.shipping);
+  if (canPickup) parts.push(cartCopy.item.pickup);
+  return parts.join(' · ') || cartCopy.item.shipping;
+}
+
 function itemNeedsCar(item: CartItem): boolean {
   if (!item.requiresCar || item.kind !== 'ticket') return false;
   if (item.tickets.length === 0) return true;
@@ -320,8 +329,16 @@ export default function CartScreen() {
   const params = useLocalSearchParams<{ shippingAddressId?: string }>();
   const requestedShippingAddressId =
     typeof params.shippingAddressId === 'string' ? params.shippingAddressId : null;
-  const requiresShipping =
-    cart?.items.some((item) => isProductItem(item) && item.product.requiresShipping) ?? false;
+  const availableFulfillmentMethodsKey = (cart?.availableFulfillmentMethods ?? []).join(',');
+  const availableFulfillmentMethods: FulfillmentMethod[] = availableFulfillmentMethodsKey
+    ? (availableFulfillmentMethodsKey.split(',') as FulfillmentMethod[])
+    : [];
+  const cartHasTicket =
+    cart?.items.some((item) => item.kind === 'ticket' || item.kind === 'extras_only') ?? false;
+  const [selectedFulfillmentMethod, setSelectedFulfillmentMethod] =
+    useState<FulfillmentMethod | null>(null);
+  const [userOwnsValidFutureTicket, setUserOwnsValidFutureTicket] = useState(false);
+  const requiresShipping = selectedFulfillmentMethod === 'ship';
   const {
     items: shippingAddresses,
     loading: loadingShippingAddresses,
@@ -342,9 +359,7 @@ export default function CartScreen() {
   const [selectedPickupEventId, setSelectedPickupEventId] = useState<string | null>(null);
   const [pickupReloadToken, setPickupReloadToken] = useState(0);
 
-  const hasPickupProducts =
-    cart?.items.some((item) => isProductItem(item) && !item.product.requiresShipping) ?? false;
-  const needsEventPickup = hasPickupProducts && !requiresShipping;
+  const needsEventPickup = selectedFulfillmentMethod === 'pickup';
 
   useFocusEffect(
     useCallback(() => {
@@ -386,13 +401,15 @@ export default function CartScreen() {
     router.replace('/cart' as never);
   }, [requestedShippingAddressId, router, selectedShippingAddressId]);
 
+  const pickupAvailable = availableFulfillmentMethods.includes('pickup');
   useEffect(() => {
-    if (!cart || !needsEventPickup) {
+    if (!cart || !pickupAvailable) {
       setEventPickupEnabled(false);
       setPickupOptions([]);
       setSelectedPickupEventId(null);
       setPickupOptionsError(false);
       setLoadingPickupOptions(false);
+      setUserOwnsValidFutureTicket(false);
       return;
     }
 
@@ -430,6 +447,7 @@ export default function CartScreen() {
         const options = buildPickupEventOptions(ticketsResponse.items, missingCartEvents);
         setEventPickupEnabled(settings.eventPickupEnabled);
         setPickupOptions(options);
+        setUserOwnsValidFutureTicket(options.some((option) => option.hasOwnedTicket));
         setSelectedPickupEventId((current) => {
           if (!settings.eventPickupEnabled || options.length === 0) return null;
           if (current && options.some((option) => option.id === current)) return current;
@@ -448,7 +466,21 @@ export default function CartScreen() {
     return () => {
       cancelled = true;
     };
-  }, [cart, needsEventPickup, pickupReloadToken]);
+  }, [cart, pickupAvailable, pickupReloadToken]);
+
+  useEffect(() => {
+    const methods: FulfillmentMethod[] = availableFulfillmentMethodsKey
+      ? (availableFulfillmentMethodsKey.split(',') as FulfillmentMethod[])
+      : [];
+    setSelectedFulfillmentMethod((current) => {
+      if (methods.length === 0) return null;
+      if (current && methods.includes(current)) return current;
+      return computeDefaultFulfillmentMethod(methods, {
+        cartHasTicket,
+        userOwnsValidFutureTicket,
+      });
+    });
+  }, [availableFulfillmentMethodsKey, cartHasTicket, userOwnsValidFutureTicket]);
 
   const handleRemove = useCallback(
     async (itemId: string) => {
@@ -480,6 +512,7 @@ export default function CartScreen() {
     try {
       const result = await beginCheckout({
         paymentMethod,
+        ...(selectedFulfillmentMethod ? { fulfillmentMethod: selectedFulfillmentMethod } : {}),
         ...(selectedShippingAddressId ? { shippingAddressId: selectedShippingAddressId } : {}),
         ...(needsEventPickup && eventPickupEnabled && selectedPickupEventId
           ? { pickupEventId: selectedPickupEventId }
@@ -528,6 +561,7 @@ export default function CartScreen() {
     needsEventPickup,
     paymentMethod,
     router,
+    selectedFulfillmentMethod,
     selectedPickupEventId,
     selectedShippingAddressId,
   ]);
@@ -595,6 +629,11 @@ export default function CartScreen() {
     : null;
   const sections = buildCartSections(cart.items);
 
+  const hasProductItems = cart.items.some((item) => isProductItem(item));
+  const displayedTotals = computeDisplayedCartTotals(cart.totals, selectedFulfillmentMethod);
+  const blockedByIncompatibleCart = hasProductItems && availableFulfillmentMethods.length === 0;
+  const blockedByFulfillmentChoice =
+    hasProductItems && availableFulfillmentMethods.length > 0 && selectedFulfillmentMethod === null;
   const blockedByCarRequirement = cart.items.some(itemNeedsCar);
   const blockedByShippingAddress = requiresShipping && !selectedShippingAddressId;
   const blockedByPickupConfiguration = needsEventPickup && !eventPickupEnabled;
@@ -686,7 +725,7 @@ export default function CartScreen() {
         {isProductItem(item) ? (
           <View style={styles.productMetaRow}>
             <Text style={styles.cardExtras}>
-              {item.product.requiresShipping ? cartCopy.item.shipping : cartCopy.item.pickup}
+              {productMethodsLabel(item.product.canShip, item.product.canPickup)}
             </Text>
           </View>
         ) : item.extras.length > 0 ? (
@@ -749,42 +788,81 @@ export default function CartScreen() {
       />
 
       <View style={styles.footer}>
-        {cart.totals.ticketSubtotalCents > 0 && (
+        {displayedTotals.ticketSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.tickets}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.ticketSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(displayedTotals.ticketSubtotalCents)}</Text>
           </View>
         )}
-        {cart.totals.productsSubtotalCents > 0 && (
+        {displayedTotals.productsSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.products}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.productsSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>
+              {formatBRL(displayedTotals.productsSubtotalCents)}
+            </Text>
           </View>
         )}
-        {cart.totals.shippingSubtotalCents > 0 && (
+        {displayedTotals.shippingSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.shipping}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.shippingSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>
+              {formatBRL(displayedTotals.shippingSubtotalCents)}
+            </Text>
           </View>
         )}
-        {cart.totals.extrasSubtotalCents > 0 && (
+        {displayedTotals.extrasSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.extras}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.extrasSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(displayedTotals.extrasSubtotalCents)}</Text>
           </View>
         )}
-        {cart.totals.discountCents > 0 && (
+        {displayedTotals.discountCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.discount}</Text>
             <Text style={[styles.totalsValue, styles.discount]}>
-              -{formatBRL(cart.totals.discountCents)}
+              -{formatBRL(displayedTotals.discountCents)}
             </Text>
           </View>
         )}
         <View style={[styles.totalsRow, styles.totalBorder]}>
           <Text style={styles.totalLabel}>{cartCopy.totals.total}</Text>
-          <Text style={styles.totalValue}>{formatBRL(cart.totals.amountCents)}</Text>
+          <Text style={styles.totalValue}>{formatBRL(displayedTotals.amountCents)}</Text>
         </View>
+
+        {hasProductItems && availableFulfillmentMethods.length === 2 ? (
+          <View style={styles.fulfillmentToggleRow}>
+            <Text style={styles.shippingTitle}>{cartCopy.fulfillment.toggleLabel}</Text>
+            <View style={styles.fulfillmentSegmented}>
+              {(['pickup', 'ship'] as FulfillmentMethod[]).map((method) => {
+                const active = selectedFulfillmentMethod === method;
+                return (
+                  <Pressable
+                    key={method}
+                    onPress={() => setSelectedFulfillmentMethod(method)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.fulfillmentSegment, active && styles.fulfillmentSegmentActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.fulfillmentSegmentText,
+                        active && styles.fulfillmentSegmentTextActive,
+                      ]}
+                    >
+                      {method === 'pickup'
+                        ? cartCopy.fulfillment.pickup
+                        : cartCopy.fulfillment.ship}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
+        {blockedByIncompatibleCart ? (
+          <Text style={styles.payBlocked}>{cartCopy.fulfillment.incompatible}</Text>
+        ) : null}
 
         {requiresShipping ? (
           <ShippingAddressRow
@@ -845,6 +923,8 @@ export default function CartScreen() {
                 onPress={() => void handlePay()}
                 disabled={
                   checkingOut ||
+                  blockedByIncompatibleCart ||
+                  blockedByFulfillmentChoice ||
                   blockedByCarRequirement ||
                   blockedByShippingAddress ||
                   blockedByPickupConfiguration ||
@@ -853,7 +933,11 @@ export default function CartScreen() {
                   blockedByPickupSelection
                 }
               />
-              {blockedByCarRequirement ? (
+              {blockedByIncompatibleCart ? (
+                <Text style={styles.payBlocked}>{cartCopy.fulfillment.incompatible}</Text>
+              ) : blockedByFulfillmentChoice ? (
+                <Text style={styles.payBlocked}>{cartCopy.fulfillment.toggleLabel}</Text>
+              ) : blockedByCarRequirement ? (
                 <Text style={styles.payBlocked}>{cartCopy.item.carRequired}</Text>
               ) : blockedByShippingAddress ? (
                 <Text style={styles.payBlocked}>{cartCopy.shipping.blocked}</Text>
@@ -979,6 +1063,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
     marginTop: theme.spacing.xs,
+  },
+  fulfillmentToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  fulfillmentSegmented: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: 2,
+  },
+  fulfillmentSegment: {
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radii.sm,
+  },
+  fulfillmentSegmentActive: {
+    backgroundColor: theme.colors.accent,
+  },
+  fulfillmentSegmentText: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  fulfillmentSegmentTextActive: {
+    color: theme.colors.fg,
   },
   pickupRowWrap: {
     gap: theme.spacing.xs,

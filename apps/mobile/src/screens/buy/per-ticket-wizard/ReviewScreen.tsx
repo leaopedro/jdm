@@ -1,3 +1,4 @@
+import { Button } from '@jdm/ui';
 import { useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
@@ -20,8 +21,8 @@ interface SelectedExtra {
   priceCents: number;
 }
 
+import { getApiErrorCode } from '~/api/errors';
 import { createOrder, createPixOrder } from '~/api/orders';
-import { Button } from '~/components/Button';
 import { buyCopy } from '~/copy/buy';
 import { formatBRL } from '~/lib/format';
 import { isWeb, startWebCheckout } from '~/screens/buy/web-checkout';
@@ -91,9 +92,13 @@ export function ReviewScreen() {
       }
       const order = await createOrder(orderPayload());
       await onOrderCreated(order);
-    } catch {
+    } catch (err) {
       setRedirecting(false);
-      Alert.alert(buyCopy.review.errorTitle, buyCopy.review.errorBody);
+      if (getApiErrorCode(err) === 'PENDING_TICKET_ORDER_FOR_EVENT') {
+        Alert.alert(buyCopy.review.pendingOrderTitle, buyCopy.review.pendingOrderBody);
+      } else {
+        Alert.alert(buyCopy.review.errorTitle, buyCopy.review.errorBody);
+      }
     } finally {
       setSubmitting(false);
     }

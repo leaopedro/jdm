@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminProductType } from '@jdm/shared/admin';
+import { useState } from 'react';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
@@ -48,6 +49,8 @@ const Field = ({
 export const NewProductForm = ({ productTypes }: { productTypes: AdminProductType[] }) => {
   const [state, action] = useActionState(createProductAction, initial);
   const v = state.values ?? {};
+  const [allowPickup, setAllowPickup] = useState(false);
+  const [allowShip, setAllowShip] = useState(false);
   return (
     <form action={action} className="grid grid-cols-2 gap-4">
       <Field
@@ -94,13 +97,38 @@ export const NewProductForm = ({ productTypes }: { productTypes: AdminProductTyp
         required
         defaultValue={v.basePriceCents ?? ''}
       />
-      <Field
-        label="Frete fixo (centavos, opcional)"
-        name="shippingFeeCents"
-        type="number"
-        min={0}
-        defaultValue={v.shippingFeeCents ?? ''}
-      />
+      <fieldset className="col-span-2 flex flex-col gap-2">
+        <legend className="mb-1 text-sm text-[color:var(--color-muted)]">Modo de entrega</legend>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allowPickup}
+            onChange={(e) => setAllowPickup(e.target.checked)}
+          />
+          <span>Retirada no evento</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allowShip}
+            onChange={(e) => setAllowShip(e.target.checked)}
+          />
+          <span>Envio</span>
+        </label>
+      </fieldset>
+      <input type="hidden" name="allowPickup" value={allowPickup ? 'true' : 'false'} />
+      <input type="hidden" name="allowShip" value={allowShip ? 'true' : 'false'} />
+      {allowShip ? (
+        <Field
+          label="Frete fixo (centavos)"
+          name="shippingFeeCents"
+          type="number"
+          min={0}
+          defaultValue={v.shippingFeeCents ?? ''}
+        />
+      ) : (
+        <input type="hidden" name="shippingFeeCents" value="" />
+      )}
       {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
       <div className="col-span-2">
         <Submit />

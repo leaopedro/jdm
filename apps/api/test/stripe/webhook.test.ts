@@ -767,4 +767,138 @@ describe('POST /stripe/webhook', () => {
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloadedTier.quantitySold).toBe(1);
   });
+
+  describe('charge.refunded', () => {
+    const seedPaidOrder = async () => {
+      const { user } = await createUser({ verified: true });
+      const { order } = await seedEventTierOrder(user.id);
+      const paid = await prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'paid', paidAt: new Date() },
+      });
+      return { user, order: paid };
+    };
+
+    const refundEvent = (
+      eventId: string,
+      paymentIntent: string,
+      amount: number,
+      amountRefunded: number,
+    ) => ({
+      id: eventId,
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: `ch_${eventId}`,
+          payment_intent: paymentIntent,
+          amount,
+          amount_refunded: amountRefunded,
+          refunded: amountRefunded >= amount,
+        },
+      },
+    });
+
+    it('flips paid order to refunded on full refund', async () => {
+      const { order } = await seedPaidOrder();
+      stripe.nextEvent = refundEvent('evt_charge_refunded_1', order.providerRef!, 5000, 5000);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, refunded: true });
+
+      const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(reloaded.status).toBe('refunded');
+
+      const dedup = await prisma.paymentWebhookEvent.findFirst({
+        where: { eventId: 'evt_charge_refunded_1' },
+      });
+      expect(dedup).not.toBeNull();
+    });
+
+    it('dedupes redelivered charge.refunded events', async () => {
+      const { order } = await seedPaidOrder();
+      stripe.nextEvent = refundEvent('evt_charge_refunded_dup', order.providerRef!, 5000, 5000);
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toMatchObject({ deduped: true });
+
+      const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(reloaded.status).toBe('refunded');
+
+      const dedupRows = await prisma.paymentWebhookEvent.count({
+        where: { eventId: 'evt_charge_refunded_dup' },
+      });
+      expect(dedupRows).toBe(1);
+    });
+
+    it('rejects partial refund and leaves order paid', async () => {
+      const { order } = await seedPaidOrder();
+      stripe.nextEvent = refundEvent('evt_charge_partial', order.providerRef!, 5000, 1000);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, ignored: true, reason: 'partial-refund' });
+
+      const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(reloaded.status).toBe('paid');
+    });
+
+    it('ignores charge.refunded with no matching order', async () => {
+      stripe.nextEvent = refundEvent('evt_charge_no_order', 'pi_unknown_xxx', 5000, 5000);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, ignored: true });
+    });
+
+    it('is idempotent when order is already refunded', async () => {
+      const { order } = await seedPaidOrder();
+      await prisma.order.update({ where: { id: order.id }, data: { status: 'refunded' } });
+
+      stripe.nextEvent = refundEvent('evt_charge_already_refunded', order.providerRef!, 5000, 5000);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+        payload: rawJson(stripe.nextEvent),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(reloaded.status).toBe('refunded');
+    });
+  });
 });

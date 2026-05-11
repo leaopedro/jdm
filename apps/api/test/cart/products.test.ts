@@ -48,6 +48,8 @@ const seedActiveProduct = async (opts?: {
   quantityTotal?: number;
   active?: boolean;
   productStatus?: 'draft' | 'active' | 'archived';
+  allowPickup?: boolean;
+  allowShip?: boolean;
   shippingFeeCents?: number | null;
 }) => {
   const productType = await prisma.productType.create({
@@ -62,6 +64,8 @@ const seedActiveProduct = async (opts?: {
       basePriceCents: opts?.variantPriceCents ?? 9000,
       currency: 'BRL',
       status: opts?.productStatus ?? 'active',
+      allowPickup: opts?.allowPickup ?? false,
+      allowShip: opts?.allowShip !== undefined ? opts.allowShip : true,
       ...(opts?.shippingFeeCents !== undefined ? { shippingFeeCents: opts.shippingFeeCents } : {}),
     },
   });
@@ -294,10 +298,10 @@ describe('cart product lines (JDMA-345)', () => {
   });
 
   describe('POST /cart/checkout for product cart', () => {
-    it('rejects event pickup when the method is disabled', async () => {
+    it('rejects event pickup when the method is disabled globally', async () => {
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
-      const { variant } = await seedActiveProduct();
+      const { variant } = await seedActiveProduct({ allowPickup: true });
       const { event, tier } = await seedPublishedEvent();
 
       await prisma.ticket.create({
@@ -315,20 +319,21 @@ describe('cart product lines (JDMA-345)', () => {
         method: 'POST',
         url: '/cart/checkout',
         headers: { authorization: token },
-        payload: { paymentMethod: 'card', pickupEventId: event.id },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup', pickupEventId: event.id },
       });
 
       expect(res.statusCode).toBe(422);
-      const body = errorSchema.parse(res.json());
-      expect(body.message).toContain('pickupEventId');
-      expect(body.message).toContain('disabled');
+      const body = z
+        .object({ error: z.string(), code: z.string().optional(), message: z.string().optional() })
+        .parse(res.json());
+      expect(body.code).toBe('FULFILLMENT_METHOD_UNAVAILABLE');
     });
 
     it('rejects event pickup when no eligible ticket exists', async () => {
       await enableEventPickup();
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
-      const { variant } = await seedActiveProduct();
+      const { variant } = await seedActiveProduct({ allowPickup: true });
       const { event } = await seedPublishedEvent();
 
       await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
@@ -337,7 +342,7 @@ describe('cart product lines (JDMA-345)', () => {
         method: 'POST',
         url: '/cart/checkout',
         headers: { authorization: token },
-        payload: { paymentMethod: 'card', pickupEventId: event.id },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup', pickupEventId: event.id },
       });
 
       expect(res.statusCode).toBe(422);
@@ -350,7 +355,7 @@ describe('cart product lines (JDMA-345)', () => {
       await enableEventPickup();
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
-      const { variant } = await seedActiveProduct();
+      const { variant } = await seedActiveProduct({ allowPickup: true });
       const { event, tier } = await seedPublishedEvent();
 
       await prisma.ticket.create({
@@ -368,7 +373,7 @@ describe('cart product lines (JDMA-345)', () => {
         method: 'POST',
         url: '/cart/checkout',
         headers: { authorization: token },
-        payload: { paymentMethod: 'card', pickupEventId: event.id },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup', pickupEventId: event.id },
       });
 
       expect(res.statusCode).toBe(201);
@@ -385,7 +390,7 @@ describe('cart product lines (JDMA-345)', () => {
       await enableEventPickup();
       const { user } = await createUser({ verified: true });
       const token = bearer(env, user.id);
-      const { variant } = await seedActiveProduct();
+      const { variant } = await seedActiveProduct({ allowPickup: true });
       const { event, tier } = await seedPublishedEvent({ priceCents: 4000 });
 
       await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
@@ -395,7 +400,7 @@ describe('cart product lines (JDMA-345)', () => {
         method: 'POST',
         url: '/cart/checkout',
         headers: { authorization: token },
-        payload: { paymentMethod: 'card', pickupEventId: event.id },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup', pickupEventId: event.id },
       });
 
       expect(res.statusCode).toBe(201);
@@ -406,6 +411,44 @@ describe('cart product lines (JDMA-345)', () => {
       });
       expect(productOrder.pickupEventId).toBe(event.id);
       expect(productOrder.pickupTicketId).toBeNull();
+    });
+
+    it('dual-method product can be purchased for pickup without a shipping address', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({
+        allowPickup: true,
+        allowShip: true,
+        shippingFeeCents: 1500,
+      });
+      const { event, tier } = await seedPublishedEvent();
+      await prisma.ticket.create({
+        data: {
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup', pickupEventId: event.id },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = beginCheckoutResponseSchema.parse(res.json());
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: body.orderIds[0]! },
+        select: { pickupEventId: true, fulfillmentMethod: true },
+      });
+      expect(order.pickupEventId).toBe(event.id);
+      expect(order.fulfillmentMethod).toBe('pickup');
     });
 
     it('product-only checkout reserves variant and writes OrderItem', async () => {
@@ -775,6 +818,75 @@ describe('cart product lines (JDMA-345)', () => {
       expect(orders).toHaveLength(0);
       const variantAfter = await prisma.variant.findUniqueOrThrow({ where: { id: variant.id } });
       expect(variantAfter.quantitySold).toBe(0);
+    });
+
+    it('blocks adding a pickup-only product to a cart with a ship-only product', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant: shipOnly } = await seedActiveProduct({
+        allowShip: true,
+        allowPickup: false,
+        shippingFeeCents: 1500,
+      });
+      const { variant: pickupOnly } = await seedActiveProduct({
+        allowShip: false,
+        allowPickup: true,
+      });
+
+      const okRes = await addProductCartItem(app, token, { variantId: shipOnly.id, quantity: 1 });
+      expect(okRes.statusCode).toBe(200);
+
+      const conflictRes = await addProductCartItem(app, token, {
+        variantId: pickupOnly.id,
+        quantity: 1,
+      });
+      expect(conflictRes.statusCode).toBe(422);
+      const body = z
+        .object({
+          error: z.string(),
+          code: z.string().optional(),
+          conflictingItemIds: z.array(z.string()).optional(),
+        })
+        .parse(conflictRes.json());
+      expect(body.code).toBe('CART_INCOMPATIBLE_FULFILLMENT');
+      expect(body.conflictingItemIds?.length).toBe(1);
+    });
+
+    it('exposes availableFulfillmentMethods on the cart for a dual-method product', async () => {
+      await enableEventPickup();
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({
+        allowShip: true,
+        allowPickup: true,
+        shippingFeeCents: 1500,
+      });
+      const res = await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+      expect(res.statusCode).toBe(200);
+      const body = upsertCartItemResponseSchema.parse(res.json());
+      expect(body.cart.availableFulfillmentMethods.sort()).toEqual(['pickup', 'ship']);
+    });
+
+    it('rejects checkout with fulfillmentMethod not in availableFulfillmentMethods', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { variant } = await seedActiveProduct({
+        allowShip: true,
+        allowPickup: false,
+        shippingFeeCents: 1500,
+      });
+      await addProductCartItem(app, token, { variantId: variant.id, quantity: 1 });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card', fulfillmentMethod: 'pickup' },
+      });
+      expect(res.statusCode).toBe(422);
+      const body = z.object({ error: z.string(), code: z.string().optional() }).parse(res.json());
+      expect(body.code).toBe('FULFILLMENT_METHOD_UNAVAILABLE');
     });
 
     it('blocks oversell with concurrent variant checkout', async () => {

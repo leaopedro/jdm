@@ -1,3 +1,4 @@
+const { getDefaultConfig } = require('expo/metro-config');
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { withNativeWind } = require('nativewind/metro');
 const path = require('node:path');
@@ -5,13 +6,34 @@ const path = require('node:path');
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
-const config = getSentryExpoConfig(projectRoot);
-config.watchFolders = [workspaceRoot];
+const config = getSentryExpoConfig(projectRoot, { getDefaultConfig });
+// Watch only the workspace dirs Mobile actually consumes. Pointing watchFolders
+// at the full repo root makes metro-file-map crawl every `.claude/worktrees/*`
+// node_modules tree and overflow the JS max string length on machines with many
+// active worktrees (`RangeError: Invalid string length`). CI has no worktrees,
+// so the symptom is local-only — but the narrower list is correct everywhere.
+config.watchFolders = [
+  path.resolve(workspaceRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'packages'),
+];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-config.resolver.disableHierarchicalLookup = true;
+
+// Force a single physical react / react-dom across the bundle. With pnpm,
+// the install can surface react at more than one absolute path (hoisted root
+// copy plus a `.pnpm/...react...` peer-resolved copy). Metro keys modules by
+// absolute path, so the same react@19.1.0 gets bundled twice on Vercel. The
+// second copy never has a render dispatcher set, so any hook destructured at
+// module init (e.g. `var useRef = React.useRef` inside use-sync-external-
+// store) throws `Cannot read properties of null (reading 'useRef')` from
+// inside @react-navigation/elements `Screen` → `useFrameSize`. Verified by
+// counting `react.production` markers in the deployed (2) vs local (1) bundle.
+const singletonRoots = {
+  react: path.resolve(workspaceRoot, 'node_modules/react'),
+  'react-dom': path.resolve(workspaceRoot, 'node_modules/react-dom'),
+};
 
 // Shared packages use NodeNext-style `.js` imports in `.ts` source. Strip the
 // extension so Metro resolves the TypeScript file.
@@ -27,6 +49,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       moduleName.startsWith('@stripe/stripe-react-native/'))
   ) {
     return { type: 'sourceFile', filePath: stripeWebStub };
+  }
+  for (const [pkg, root] of Object.entries(singletonRoots)) {
+    if (moduleName === pkg || moduleName.startsWith(pkg + '/')) {
+      const fakeOrigin = path.join(root, '__resolve__.js');
+      const fakeContext = { ...context, originModulePath: fakeOrigin };
+      return defaultResolve
+        ? defaultResolve(fakeContext, moduleName, platform)
+        : context.resolveRequest(fakeContext, moduleName, platform);
+    }
   }
   if (moduleName.startsWith('.') && moduleName.endsWith('.js')) {
     try {

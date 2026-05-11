@@ -464,6 +464,44 @@ describe('POST /cart/checkout', () => {
     const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(tierAfter.quantitySold).toBe(1);
   });
+
+  // JDMA-485: cart checkout must also block if a live pending ticket order exists
+  // for any event represented in the cart.
+  describe('pending ticket order guard (JDMA-485)', () => {
+    it('409 PENDING_TICKET_ORDER_FOR_EVENT when user has live pending order for one of the cart events', async () => {
+      const { user } = await createUser({ verified: true });
+      const token = bearer(env, user.id);
+      const { event, tier } = await seedPublishedEvent();
+
+      const directOrder = await app.inject({
+        method: 'POST',
+        url: '/orders',
+        headers: { authorization: token },
+        payload: { eventId: event.id, tierId: tier.id, method: 'card', tickets: [{}] },
+      });
+      expect(directOrder.statusCode).toBe(201);
+
+      stripe.nextPaymentIntent = { id: 'pi_test_2', clientSecret: 'pi_test_2_secret_abc' };
+      await addCartItem(app, token, { eventId: event.id, tierId: tier.id });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/cart/checkout',
+        headers: { authorization: token },
+        payload: { paymentMethod: 'card' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      const body = errorSchema.extend({ code: z.string().optional() }).parse(res.json());
+      expect(body.code).toBe('PENDING_TICKET_ORDER_FOR_EVENT');
+
+      const cartAfter = await prisma.cart.findFirstOrThrow({ where: { userId: user.id } });
+      expect(cartAfter.status).toBe('open');
+      const tierAfter2 = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+      // Only the first /orders reservation, none for the cart.
+      expect(tierAfter2.quantitySold).toBe(1);
+    });
+  });
 });
 
 describe('POST /cart/checkout — pix', () => {

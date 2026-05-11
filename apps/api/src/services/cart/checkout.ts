@@ -6,6 +6,10 @@ import {
   sweepExpiredOrdersForTier,
   sweepExpiredOrdersForVariant,
 } from '../orders/expire.js';
+import {
+  PendingTicketOrderForEventError,
+  findPendingTicketOrderForEvent,
+} from '../orders/pending-guard.js';
 import { reserveExtras, validateTickets } from '../orders/validate-tickets.js';
 
 type CartWithItems = Prisma.CartGetPayload<{
@@ -37,6 +41,8 @@ type CartWithItems = Prisma.CartGetPayload<{
                 title: true;
                 status: true;
                 currency: true;
+                allowPickup: true;
+                allowShip: true;
                 shippingFeeCents: true;
               };
             };
@@ -94,6 +100,8 @@ const CART_CHECKOUT_INCLUDE = {
               title: true,
               status: true,
               currency: true,
+              allowPickup: true,
+              allowShip: true,
               shippingFeeCents: true,
             },
           },
@@ -168,9 +176,11 @@ export async function reserveAndCreateOrders(
     method: CartCheckoutMethod;
     shippingAddressId?: string | null;
     pickupEventId?: string | null;
+    fulfillmentMethod?: 'pickup' | 'ship' | null;
   } = { method: 'card' },
 ): Promise<
-  { ok: true; data: CheckoutResult } | { ok: false; status: number; error: string; message: string }
+  | { ok: true; data: CheckoutResult }
+  | { ok: false; status: number; error: string; message: string; code?: string }
 > {
   const method = options.method;
   const provider = PROVIDER_FOR_METHOD[method];
@@ -200,6 +210,7 @@ export async function reserveAndCreateOrders(
             item.id === primaryShippingCartItemId,
             options.shippingAddressId ?? null,
             options.pickupEventId ?? null,
+            options.fulfillmentMethod ?? null,
             tx,
             allExpiredRefs,
           );
@@ -314,6 +325,15 @@ export async function reserveAndCreateOrders(
       },
     };
   } catch (err) {
+    if (err instanceof PendingTicketOrderForEventError) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Conflict',
+        code: 'PENDING_TICKET_ORDER_FOR_EVENT',
+        message: 'already have a pending ticket order for this event',
+      };
+    }
     const coded = err as Error & { code?: string };
     if (
       coded.code === 'TIER_SOLD_OUT' ||
@@ -338,6 +358,7 @@ async function prepareProductCartItem(
   isPrimaryShipping: boolean,
   shippingAddressId: string | null,
   pickupEventId: string | null,
+  requestedFulfillmentMethod: 'pickup' | 'ship' | null,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
 ): Promise<PreparedCartItem> {
@@ -369,9 +390,19 @@ async function prepareProductCartItem(
     });
   }
 
+  const allowPickup = variant.product.allowPickup;
+  const allowShip = variant.product.allowShip;
+  let fulfillmentMethod: 'pickup' | 'ship';
+  if (requestedFulfillmentMethod === 'pickup' && allowPickup) {
+    fulfillmentMethod = 'pickup';
+  } else if (requestedFulfillmentMethod === 'ship' && allowShip) {
+    fulfillmentMethod = 'ship';
+  } else {
+    // Back-compat fallback when caller did not pass an explicit method.
+    fulfillmentMethod = allowShip && shippingAddressId ? 'ship' : allowPickup ? 'pickup' : 'ship';
+  }
   const appliedShippingCents = isPrimaryShipping ? (variant.product.shippingFeeCents ?? 0) : 0;
-  const fulfillmentMethod = variant.product.shippingFeeCents === null ? 'pickup' : 'ship';
-  const shippingCents = variant.product.shippingFeeCents === null ? 0 : appliedShippingCents;
+  const shippingCents = fulfillmentMethod === 'ship' ? appliedShippingCents : 0;
   const amountCents = variant.priceCents * item.quantity + shippingCents;
 
   return {
@@ -433,6 +464,13 @@ async function prepareTicketCartItem(
 
   const sweep = await sweepExpiredOrdersForTier(tier.id, tx);
   expiredRefs.push(...sweep.expiredProviderRefs);
+
+  if (!isExtrasOnly) {
+    const pending = await findPendingTicketOrderForEvent(tx, userId, item.eventId);
+    if (pending) {
+      throw new PendingTicketOrderForEventError(userId, item.eventId, pending.id);
+    }
+  }
 
   if (!isExtrasOnly) {
     const reservation = await tx.ticketTier.updateMany({
