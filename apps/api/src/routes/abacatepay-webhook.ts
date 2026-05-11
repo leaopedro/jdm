@@ -554,28 +554,51 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       const billingId = extractBillingId(event.data);
 
       let pendingOrderIds: string[] = [];
+      let paidOrderIds: string[] = [];
       if (metadataCartId) {
         const cartOrders = await prisma.order.findMany({
           where: { cartId: metadataCartId, provider: 'abacatepay', status: 'pending' },
           select: { id: true },
         });
         pendingOrderIds = cartOrders.map((o) => o.id);
+        if (event.event === 'transparent.refunded') {
+          const paidOrders = await prisma.order.findMany({
+            where: { cartId: metadataCartId, provider: 'abacatepay', status: 'paid' },
+            select: { id: true },
+          });
+          paidOrderIds = paidOrders.map((o) => o.id);
+        }
       } else if (metadataOrderId) {
         const order = await prisma.order.findFirst({
           where: { id: metadataOrderId, provider: 'abacatepay', status: 'pending' },
           select: { id: true },
         });
         if (order) pendingOrderIds = [order.id];
+        if (event.event === 'transparent.refunded') {
+          const paidOrder = await prisma.order.findFirst({
+            where: { id: metadataOrderId, provider: 'abacatepay', status: 'paid' },
+            select: { id: true },
+          });
+          if (paidOrder) paidOrderIds = [paidOrder.id];
+        }
       } else if (billingId) {
         const order = await prisma.order.findFirst({
           where: { provider: 'abacatepay', providerRef: billingId, status: 'pending' },
           select: { id: true },
         });
         if (order) pendingOrderIds = [order.id];
+        if (event.event === 'transparent.refunded') {
+          const paidOrder = await prisma.order.findFirst({
+            where: { provider: 'abacatepay', providerRef: billingId, status: 'paid' },
+            select: { id: true },
+          });
+          if (paidOrder) paidOrderIds = [paidOrder.id];
+        }
       }
 
       let releasedCount = 0;
-      if (pendingOrderIds.length > 0) {
+      let refundedPaidCount = 0;
+      if (pendingOrderIds.length > 0 || paidOrderIds.length > 0) {
         await prisma.$transaction(async (tx) => {
           const updated = await tx.order.updateMany({
             where: { id: { in: pendingOrderIds }, status: 'pending' },
@@ -594,6 +617,13 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
               data: { status: 'open' },
             });
           }
+          if (event.event === 'transparent.refunded' && paidOrderIds.length > 0) {
+            const refundedPaid = await tx.order.updateMany({
+              where: { id: { in: paidOrderIds }, status: 'paid' },
+              data: { status: 'refunded', refundedAt: new Date() },
+            });
+            refundedPaidCount = refundedPaid.count;
+          }
         });
       }
 
@@ -603,7 +633,9 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           eventId: event.id,
           eventType: event.event,
           released: releasedCount,
+          refundedPaid: refundedPaidCount,
           orderIds: pendingOrderIds,
+          paidOrderIds,
           firstTime,
         },
         'abacatepay webhook: failure event processed',
