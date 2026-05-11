@@ -6,8 +6,18 @@ import type {
   CartItemProduct,
   CartTotals,
   EvictedCartItem,
+  FulfillmentMethod,
 } from '@jdm/shared/cart';
 import type { Prisma } from '@prisma/client';
+
+import { ensureStoreSettings } from '../store-settings.js';
+
+export type CartFulfillmentContext = { eventPickupEnabled: boolean };
+
+export async function loadCartFulfillmentContext(): Promise<CartFulfillmentContext> {
+  const settings = await ensureStoreSettings();
+  return { eventPickupEnabled: settings.eventPickupEnabled };
+}
 
 type CartWithItems = Prisma.CartGetPayload<{
   include: {
@@ -178,7 +188,65 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
   };
 }
 
-export function serializeCart(cart: CartWithItems): Cart {
+export type FulfillmentCompatibilityResult =
+  | { compatible: true }
+  | { compatible: false; conflictingItemIds: string[] };
+
+export type CartItemForFulfillment = {
+  id: string;
+  kind: string;
+  variant: { product: { allowShip: boolean; allowPickup: boolean } } | null;
+};
+
+export function findIncompatibleProducts(
+  existingItems: CartItemForFulfillment[],
+  candidateAllowShip: boolean,
+  candidateAllowPickup: boolean,
+  context: CartFulfillmentContext,
+  options: { excludeCartItemId?: string } = {},
+): FulfillmentCompatibilityResult {
+  const productItems = existingItems.filter(
+    (item) =>
+      item.kind === 'product' &&
+      !!item.variant &&
+      (!options.excludeCartItemId || item.id !== options.excludeCartItemId),
+  );
+
+  const candidatePickupAvailable = candidateAllowPickup && context.eventPickupEnabled;
+  const candidateShipAvailable = candidateAllowShip;
+  const conflicting: string[] = [];
+
+  for (const item of productItems) {
+    const itemPickupAvailable = item.variant!.product.allowPickup && context.eventPickupEnabled;
+    const itemShipAvailable = item.variant!.product.allowShip;
+    const sharesPickup = candidatePickupAvailable && itemPickupAvailable;
+    const sharesShip = candidateShipAvailable && itemShipAvailable;
+    if (!sharesPickup && !sharesShip) {
+      conflicting.push(item.id);
+    }
+  }
+
+  if (conflicting.length === 0) return { compatible: true };
+  return { compatible: false, conflictingItemIds: conflicting };
+}
+
+export function computeAvailableFulfillmentMethods(
+  items: CartItemForFulfillment[],
+  context: CartFulfillmentContext,
+): FulfillmentMethod[] {
+  const productItems = items.filter((item) => item.kind === 'product' && !!item.variant);
+  if (productItems.length === 0) return [];
+
+  const everyCanPickup = productItems.every((item) => item.variant!.product.allowPickup);
+  const everyCanShip = productItems.every((item) => item.variant!.product.allowShip);
+
+  const methods: FulfillmentMethod[] = [];
+  if (everyCanPickup && context.eventPickupEnabled) methods.push('pickup');
+  if (everyCanShip) methods.push('ship');
+  return methods;
+}
+
+export function serializeCart(cart: CartWithItems, context: CartFulfillmentContext): Cart {
   const items: CartItem[] = cart.items.map((item) => {
     const product: CartItemProduct | null = item.variant
       ? {
@@ -189,7 +257,8 @@ export function serializeCart(cart: CartWithItems): Cart {
           variantName: item.variant.name,
           variantSku: item.variant.sku,
           unitPriceCents: item.variant.priceCents,
-          requiresShipping: item.variant.product.allowShip && !item.variant.product.allowPickup,
+          canShip: item.variant.product.allowShip,
+          canPickup: item.variant.product.allowPickup,
           shippingFeeCents: item.variant.product.shippingFeeCents,
           attributes: (item.variant.attributes as Record<string, unknown> | null) ?? null,
         }
@@ -235,6 +304,7 @@ export function serializeCart(cart: CartWithItems): Cart {
   });
 
   const totals = computeCartTotals(cart.items);
+  const availableFulfillmentMethods = computeAvailableFulfillmentMethods(cart.items, context);
 
   return {
     id: cart.id,
@@ -242,6 +312,7 @@ export function serializeCart(cart: CartWithItems): Cart {
     status: cart.status as Cart['status'],
     items,
     totals,
+    availableFulfillmentMethods,
     version: cart.version,
     expiresAt: cart.expiresAt?.toISOString() ?? null,
     createdAt: cart.createdAt.toISOString(),
@@ -402,6 +473,8 @@ export type ValidatedCartItem =
         priceCents: number;
         currency: string;
         shippingFeeCents: number | null;
+        allowShip: boolean;
+        allowPickup: boolean;
       };
     };
 
@@ -561,7 +634,16 @@ async function validateProductCartItem(
       quantityTotal: true,
       quantitySold: true,
       active: true,
-      product: { select: { id: true, status: true, currency: true, shippingFeeCents: true } },
+      product: {
+        select: {
+          id: true,
+          status: true,
+          currency: true,
+          shippingFeeCents: true,
+          allowShip: true,
+          allowPickup: true,
+        },
+      },
     },
   });
   if (!variant) {
@@ -587,6 +669,8 @@ async function validateProductCartItem(
       priceCents: variant.priceCents,
       currency: variant.product.currency,
       shippingFeeCents: variant.product.shippingFeeCents,
+      allowShip: variant.product.allowShip,
+      allowPickup: variant.product.allowPickup,
     },
   };
 }

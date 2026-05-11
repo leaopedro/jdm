@@ -50,6 +50,13 @@ const formatPriceRange = (product: StoreProductSummary): string => {
 
 const formatVariantPrice = (variant: StoreProductVariant): string => formatBRL(variant.priceCents);
 
+const productBadgeLabel = (product: { canShip: boolean; canPickup: boolean }): string => {
+  const parts: string[] = [];
+  if (product.canShip) parts.push(storeCopy.badges.shipping);
+  if (product.canPickup) parts.push(storeCopy.badges.pickup);
+  return parts.join(' · ') || storeCopy.badges.shipping;
+};
+
 type VariantPickerState = {
   product: StoreProduct;
   variants: StoreProductVariant[];
@@ -508,11 +515,7 @@ function ProductCard({
         )}
         <View style={styles.cardBody}>
           <View style={styles.cardMeta}>
-            <Badge
-              label={product.requiresShipping ? storeCopy.badges.shipping : storeCopy.badges.pickup}
-              tone="neutral"
-              size="sm"
-            />
+            <Badge label={productBadgeLabel(product)} tone="neutral" size="sm" />
             <Text variant="caption" tone="muted">
               {product.productType.name}
             </Text>

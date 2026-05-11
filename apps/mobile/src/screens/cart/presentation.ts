@@ -1,7 +1,25 @@
-import type { CartItem } from '@jdm/shared/cart';
+import type { CartItem, FulfillmentMethod } from '@jdm/shared/cart';
 import type { MyTicket } from '@jdm/shared/tickets';
 
 import { cartCopy } from '../../copy/cart';
+
+export type { FulfillmentMethod };
+
+export type FulfillmentSignals = {
+  cartHasTicket: boolean;
+  userOwnsValidFutureTicket: boolean;
+};
+
+export function computeDefaultFulfillmentMethod(
+  methods: FulfillmentMethod[],
+  signals: FulfillmentSignals,
+): FulfillmentMethod | null {
+  if (methods.length === 0) return null;
+  const hasTicketSignal = signals.cartHasTicket || signals.userOwnsValidFutureTicket;
+  if (methods.includes('pickup') && hasTicketSignal) return 'pickup';
+  if (methods.includes('ship')) return 'ship';
+  return methods[0] ?? null;
+}
 
 export type CartSection = {
   key: 'ticket' | 'product';

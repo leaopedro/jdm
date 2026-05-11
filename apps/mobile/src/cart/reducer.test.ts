@@ -36,6 +36,7 @@ const mockCart = {
     amountCents: 5000,
     currency: 'BRL',
   },
+  availableFulfillmentMethods: [],
   version: 1,
   expiresAt: null,
   createdAt: '2026-01-01T00:00:00Z',

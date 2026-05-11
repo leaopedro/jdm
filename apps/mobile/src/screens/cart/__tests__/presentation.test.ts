@@ -6,6 +6,7 @@ import {
   buildCartSections,
   buildPickupEventOptions,
   collectCartTicketEventIds,
+  computeDefaultFulfillmentMethod,
   formatProductAttributes,
 } from '../presentation';
 
@@ -47,7 +48,8 @@ describe('cart presentation helpers', () => {
           variantName: 'Preto / G',
           variantSku: 'SKU-1',
           unitPriceCents: 9900,
-          requiresShipping: true,
+          canShip: true,
+          canPickup: false,
           shippingFeeCents: 2500,
           attributes: { Cor: 'Preto', Tamanho: 'G' },
         },
@@ -100,7 +102,8 @@ describe('cart presentation helpers', () => {
             variantName: 'Preto / G',
             variantSku: 'SKU-1',
             unitPriceCents: 9900,
-            requiresShipping: false,
+            canShip: false,
+            canPickup: true,
             shippingFeeCents: null,
             attributes: null,
           },
@@ -170,5 +173,58 @@ describe('cart presentation helpers', () => {
         hasCartTicket: true,
       },
     ]);
+  });
+});
+
+describe('computeDefaultFulfillmentMethod', () => {
+  it('returns null when no methods are available', () => {
+    expect(
+      computeDefaultFulfillmentMethod([], {
+        cartHasTicket: false,
+        userOwnsValidFutureTicket: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('returns the only method when one is available', () => {
+    expect(
+      computeDefaultFulfillmentMethod(['ship'], {
+        cartHasTicket: true,
+        userOwnsValidFutureTicket: true,
+      }),
+    ).toBe('ship');
+    expect(
+      computeDefaultFulfillmentMethod(['pickup'], {
+        cartHasTicket: false,
+        userOwnsValidFutureTicket: false,
+      }),
+    ).toBe('pickup');
+  });
+
+  it('defaults to pickup when both available and user has cart ticket', () => {
+    expect(
+      computeDefaultFulfillmentMethod(['pickup', 'ship'], {
+        cartHasTicket: true,
+        userOwnsValidFutureTicket: false,
+      }),
+    ).toBe('pickup');
+  });
+
+  it('defaults to pickup when both available and user owns a valid future ticket', () => {
+    expect(
+      computeDefaultFulfillmentMethod(['pickup', 'ship'], {
+        cartHasTicket: false,
+        userOwnsValidFutureTicket: true,
+      }),
+    ).toBe('pickup');
+  });
+
+  it('falls back to ship when both available and no ticket signal', () => {
+    expect(
+      computeDefaultFulfillmentMethod(['pickup', 'ship'], {
+        cartHasTicket: false,
+        userOwnsValidFutureTicket: false,
+      }),
+    ).toBe('ship');
   });
 });

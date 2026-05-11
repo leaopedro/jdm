@@ -33,6 +33,13 @@ import {
 import { getVariantStockLabel, isVariantSelectable } from '~/screens/store/variant-selection';
 import { theme } from '~/theme';
 
+function productMethodsLabel(product: { canShip: boolean; canPickup: boolean }): string {
+  const parts: string[] = [];
+  if (product.canShip) parts.push(storeCopy.shipping);
+  if (product.canPickup) parts.push(storeCopy.pickup);
+  return parts.join(' · ') || storeCopy.shipping;
+}
+
 export default function StoreProductDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
@@ -141,8 +148,7 @@ export default function StoreProductDetailScreen() {
         </Text>
         <Text variant="h1">{product.title}</Text>
         <Text variant="bodySm" tone="secondary">
-          {product.productType.name} ·{' '}
-          {product.requiresShipping ? storeCopy.shipping : storeCopy.pickup}
+          {product.productType.name} · {productMethodsLabel(product)}
         </Text>
         {selectedVariant ? (
           <View style={styles.priceRow}>
