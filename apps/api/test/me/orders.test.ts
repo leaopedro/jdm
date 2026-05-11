@@ -340,6 +340,7 @@ describe('POST /me/orders/:id/cancel', () => {
 
     const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(reloadedOrder.status).toBe('cancelled');
+    expect(reloadedOrder.fulfillmentStatus).toBe('cancelled');
 
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloadedTier.quantitySold).toBe(0);
@@ -403,6 +404,7 @@ describe('POST /me/orders/:id/cancel', () => {
 
     const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(reloadedOrder.status).toBe('pending');
+    expect(reloadedOrder.fulfillmentStatus).toBe('unfulfilled');
 
     const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloadedTier.quantitySold).toBe(1);

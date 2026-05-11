@@ -76,7 +76,7 @@ export const cancelPendingOrder = async (
 
     const updated = await tx.order.updateMany({
       where: { id: orderId, status: 'pending' },
-      data: { status: 'cancelled' },
+      data: { status: 'cancelled', fulfillmentStatus: 'cancelled' },
     });
     if (updated.count !== 1) {
       const current = await tx.order.findUnique({
