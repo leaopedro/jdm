@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadEnv } from '../../../src/env.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../../helpers.js';
 
-const mkEvent = (status: 'draft' | 'published' = 'draft') =>
+const mkEvent = (status: 'draft' | 'published' | 'cancelled' = 'draft') =>
   prisma.event.create({
     data: {
       slug: 'ev-publish-test',
@@ -86,10 +86,25 @@ describe('POST /admin/events/:id/publish', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('409 when event is cancelled (cancelled cannot be re-published)', async () => {
+  it('recovers cancelled event back to published', async () => {
+    const event = await mkEvent('cancelled');
+    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/publish`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.status).toBe('published');
+    expect(row.publishedAt).not.toBeNull();
+  });
+
+  it('republishing after a cancel refreshes publishedAt', async () => {
+    const originalPublishedAt = new Date('2026-05-01T12:00:00.000Z');
     const event = await prisma.event.create({
       data: {
-        slug: 'ev-cancelled-publish',
+        slug: 'ev-republish-refresh',
         title: 't',
         description: 'd',
         startsAt: new Date(Date.now() + 86400_000),
@@ -100,15 +115,25 @@ describe('POST /admin/events/:id/publish', () => {
         stateCode: 'SP',
         type: 'meeting',
         capacity: 10,
-        status: 'cancelled',
+        status: 'published',
+        publishedAt: originalPublishedAt,
       },
     });
-    const { user } = await createUser({ email: 'o@jdm.test', verified: true, role: 'organizer' });
+    const { user } = await createUser({ email: 'o2@jdm.test', verified: true, role: 'organizer' });
+    await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/cancel`,
+      headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
+    });
     const res = await app.inject({
       method: 'POST',
       url: `/admin/events/${event.id}/publish`,
       headers: { authorization: bearer(loadEnv(), user.id, 'organizer') },
     });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(200);
+    const row = await prisma.event.findUniqueOrThrow({ where: { id: event.id } });
+    expect(row.status).toBe('published');
+    expect(row.publishedAt).not.toBeNull();
+    expect(row.publishedAt!.getTime()).toBeGreaterThan(originalPublishedAt.getTime());
   });
 });
