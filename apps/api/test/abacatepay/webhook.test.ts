@@ -1660,7 +1660,7 @@ describe('POST /abacatepay/webhook', () => {
       expect(updated.status).toBe('failed');
     });
 
-    it('transparent.refunded on already-paid order is a no-op (no stock change)', async () => {
+    it('transparent.refunded on already-paid order marks status=refunded without stock change', async () => {
       const { user } = await createUser({ verified: true });
       const billingId = `pix_refunded_paid_${Date.now()}`;
       const { tier, order } = await seedTicketOrderWithExtras(user.id, billingId);
@@ -1674,7 +1674,7 @@ describe('POST /abacatepay/webhook', () => {
 
       expect(res.statusCode).toBe(200);
       const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
-      expect(updated.status).toBe('paid');
+      expect(updated.status).toBe('refunded');
       const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
       expect(tierAfter.quantitySold).toBe(1);
     });
