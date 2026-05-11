@@ -159,6 +159,11 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
     if (existing.status === 'published') {
       return reply.status(409).send({ error: 'Conflict', message: 'already published' });
     }
+    if (!existing.coverObjectKey) {
+      return reply
+        .status(409)
+        .send({ error: 'Conflict', message: 'adicione uma capa antes de publicar' });
+    }
     const updated = await prisma.event.update({
       where: { id },
       data: {
