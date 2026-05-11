@@ -2,7 +2,7 @@ import { prisma } from '@jdm/db';
 
 import { releaseAllReservationsForOrders } from './expire.js';
 
-export type CancelOrderOutcome =
+export type PrepareCancelOrderOutcome =
   | { kind: 'not_found' }
   | { kind: 'forbidden' }
   | { kind: 'not_pending'; status: string }
@@ -12,6 +12,46 @@ export type CancelOrderOutcome =
         id: string;
         provider: 'stripe' | 'abacatepay';
         providerRef: string | null;
+      };
+    };
+
+export const prepareCancelPendingOrder = async (
+  orderId: string,
+  ownerId: string,
+): Promise<PrepareCancelOrderOutcome> => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      provider: true,
+      providerRef: true,
+    },
+  });
+
+  if (!order) return { kind: 'not_found' };
+  if (order.userId !== ownerId) return { kind: 'forbidden' };
+  if (order.status !== 'pending') return { kind: 'not_pending', status: order.status };
+
+  return {
+    kind: 'ok',
+    order: {
+      id: order.id,
+      provider: order.provider,
+      providerRef: order.providerRef,
+    },
+  };
+};
+
+export type CancelOrderOutcome =
+  | { kind: 'not_found' }
+  | { kind: 'forbidden' }
+  | { kind: 'not_pending'; status: string }
+  | {
+      kind: 'ok';
+      order: {
+        id: string;
         status: 'cancelled';
       };
     };
@@ -27,8 +67,6 @@ export const cancelPendingOrder = async (
         id: true,
         userId: true,
         status: true,
-        provider: true,
-        providerRef: true,
       },
     });
 
@@ -54,8 +92,6 @@ export const cancelPendingOrder = async (
       kind: 'ok',
       order: {
         id: order.id,
-        provider: order.provider,
-        providerRef: order.providerRef,
         status: 'cancelled',
       },
     };

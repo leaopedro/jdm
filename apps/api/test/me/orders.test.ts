@@ -352,6 +352,65 @@ describe('POST /me/orders/:id/cancel', () => {
     expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_cancel_me' });
   });
 
+  it('keeps the order pending when Stripe cancellation fails upstream', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+    const { stripe } = harness;
+    stripe.nextCancelPaymentIntentError = new Error('stripe cancel failed');
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier, extra } = await seedEvent();
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+    await prisma.ticketExtra.update({
+      where: { id: extra.id },
+      data: { quantitySold: 1 },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 10_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: 'pi_cancel_fail',
+        status: 'pending',
+        orderExtras: {
+          create: [{ extraId: extra.id, quantity: 1 }],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({
+      error: 'BadGateway',
+      message: 'could not confirm stripe payment intent cancellation',
+    });
+
+    const reloadedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloadedOrder.status).toBe('pending');
+
+    const reloadedTier = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
+    expect(reloadedTier.quantitySold).toBe(1);
+
+    const reloadedExtra = await prisma.ticketExtra.findUniqueOrThrow({ where: { id: extra.id } });
+    expect(reloadedExtra.quantitySold).toBe(1);
+  });
+
   it('cancels a pending AbacatePay order locally and leaves upstream untouched', async () => {
     const harness = await makeAppWithFakes();
     app = harness.app;

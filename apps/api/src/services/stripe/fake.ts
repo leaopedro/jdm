@@ -21,6 +21,7 @@ export type FakeStripe = StripeClient & {
   calls: FakeCall[];
   nextPaymentIntent: { id: string; clientSecret: string };
   nextRetrievedPaymentIntent: { id: string; clientSecret: string } | null;
+  nextCancelPaymentIntentError: Error | null;
   nextCheckoutSession: CheckoutSessionResult;
   nextCheckoutSessionPaymentIntentId: string | null;
   nextSignatureValid: boolean;
@@ -32,6 +33,7 @@ export const buildFakeStripe = (): FakeStripe => {
     calls: [],
     nextPaymentIntent: { id: 'pi_test_1', clientSecret: 'pi_test_1_secret_abc' },
     nextRetrievedPaymentIntent: null,
+    nextCancelPaymentIntentError: null,
     nextCheckoutSession: {
       id: 'cs_test_1',
       url: 'https://checkout.stripe.com/cs_test_1',
@@ -73,6 +75,9 @@ export const buildFakeStripe = (): FakeStripe => {
     // eslint-disable-next-line @typescript-eslint/require-await
     cancelPaymentIntent: async (paymentIntentId) => {
       fake.calls.push({ kind: 'cancelPaymentIntent', payload: { paymentIntentId } });
+      if (fake.nextCancelPaymentIntentError) {
+        throw fake.nextCancelPaymentIntentError;
+      }
     },
     // eslint-disable-next-line @typescript-eslint/require-await
     retrievePaymentIntent: async (paymentIntentId: string): Promise<PaymentIntentResult> => {
