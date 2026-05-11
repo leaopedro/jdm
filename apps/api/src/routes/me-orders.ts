@@ -78,6 +78,7 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
                 city: order.event.city,
                 stateCode: order.event.stateCode,
                 type: order.event.type,
+                status: order.event.status,
               }
             : null,
           items: order.items.map((item) => {

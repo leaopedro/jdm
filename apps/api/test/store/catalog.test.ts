@@ -426,7 +426,8 @@ describe('GET /store/products/:slug', () => {
     expect(res.statusCode).toBe(200);
     const body = storeProductDetailResponseSchema.parse(res.json());
     expect(body.product.slug).toBe('cam-jdm');
-    expect(body.product.requiresShipping).toBe(true);
+    expect(body.product.canShip).toBe(true);
+    expect(body.product.canPickup).toBe(false);
     expect(body.product.variants.map((v) => v.title)).toEqual(['P', 'M']);
     expect(body.product.variants[0]?.stockOnHand).toBe(4);
     expect(body.product.variants[1]?.stockOnHand).toBe(0);

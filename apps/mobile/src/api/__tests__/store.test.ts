@@ -170,7 +170,8 @@ describe('mobile store API client', () => {
               description: 'Malha pesada',
               shortDescription: 'Malha',
               status: 'active',
-              requiresShipping: true,
+              canShip: true,
+              canPickup: false,
               coverImageUrl: 'https://cdn.example.com/p1.jpg',
               collectionIds: ['col_1'],
               productType: {

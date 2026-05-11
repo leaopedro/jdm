@@ -36,6 +36,7 @@ const serializeTicket = (t: TicketWithRelations, app: FastifyInstance) => ({
     city: t.event.city,
     stateCode: t.event.stateCode,
     type: t.event.type,
+    status: t.event.status,
   },
   extras: t.extraItems.map((ei) => ({
     id: ei.id,

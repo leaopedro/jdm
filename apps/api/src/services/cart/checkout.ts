@@ -176,6 +176,7 @@ export async function reserveAndCreateOrders(
     method: CartCheckoutMethod;
     shippingAddressId?: string | null;
     pickupEventId?: string | null;
+    fulfillmentMethod?: 'pickup' | 'ship' | null;
   } = { method: 'card' },
 ): Promise<
   | { ok: true; data: CheckoutResult }
@@ -209,6 +210,7 @@ export async function reserveAndCreateOrders(
             item.id === primaryShippingCartItemId,
             options.shippingAddressId ?? null,
             options.pickupEventId ?? null,
+            options.fulfillmentMethod ?? null,
             tx,
             allExpiredRefs,
           );
@@ -356,6 +358,7 @@ async function prepareProductCartItem(
   isPrimaryShipping: boolean,
   shippingAddressId: string | null,
   pickupEventId: string | null,
+  requestedFulfillmentMethod: 'pickup' | 'ship' | null,
   tx: Prisma.TransactionClient,
   expiredRefs: string[],
 ): Promise<PreparedCartItem> {
@@ -389,9 +392,15 @@ async function prepareProductCartItem(
 
   const allowPickup = variant.product.allowPickup;
   const allowShip = variant.product.allowShip;
-  // Prefer ship when address provided and product allows it; fall back to pickup.
-  const fulfillmentMethod: 'pickup' | 'ship' =
-    allowShip && shippingAddressId ? 'ship' : allowPickup ? 'pickup' : 'ship';
+  let fulfillmentMethod: 'pickup' | 'ship';
+  if (requestedFulfillmentMethod === 'pickup' && allowPickup) {
+    fulfillmentMethod = 'pickup';
+  } else if (requestedFulfillmentMethod === 'ship' && allowShip) {
+    fulfillmentMethod = 'ship';
+  } else {
+    // Back-compat fallback when caller did not pass an explicit method.
+    fulfillmentMethod = allowShip && shippingAddressId ? 'ship' : allowPickup ? 'pickup' : 'ship';
+  }
   const appliedShippingCents = isPrimaryShipping ? (variant.product.shippingFeeCents ?? 0) : 0;
   const shippingCents = fulfillmentMethod === 'ship' ? appliedShippingCents : 0;
   const amountCents = variant.priceCents * item.quantity + shippingCents;

@@ -39,6 +39,13 @@ export const cartCopy = {
     tickets: 'Ingressos',
     products: 'Produtos',
   },
+  fulfillment: {
+    toggleLabel: 'Como receber',
+    pickup: 'Retirada',
+    ship: 'Entrega',
+    incompatible: 'Itens incompativeis. Remova um deles para continuar.',
+    addBlocked: 'Este item nao pode ser combinado com os outros do carrinho.',
+  },
   actions: {
     addToCart: 'Adicionar ao carrinho',
     adding: 'Adicionando...',

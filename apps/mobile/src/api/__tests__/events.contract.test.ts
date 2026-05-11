@@ -13,6 +13,7 @@ const PUBLIC_FIXTURE = {
   city: 'São Paulo',
   stateCode: 'SP',
   type: 'meeting',
+  status: 'published',
   description: 'd',
   capacity: 200,
   maxTicketsPerUser: 4,

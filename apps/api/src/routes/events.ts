@@ -38,6 +38,7 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
+    status: e.status,
   });
 
 const serializeTier = (t: DbTier) =>
@@ -79,6 +80,7 @@ const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
+    status: e.status,
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
@@ -100,6 +102,7 @@ const serializeCommerceDetail = (
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
+    status: e.status,
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
