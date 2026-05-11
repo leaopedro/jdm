@@ -1455,6 +1455,105 @@ describe('POST /abacatepay/webhook', () => {
 
         Sentry.captureMessage.mockClear();
       });
+
+      // JDMA-306 partial-mismatch: metadata.orderIds lists every order the
+      // checkout intended to bill. If some were rolled back between billing
+      // creation and webhook delivery, the surviving rows settle but the
+      // missing billed rows still need finance reconciliation.
+      it('flags manual refund for missing rows when metadata.orderIds exceeds pending orders', async () => {
+        const { user } = await createUser({ verified: true });
+        const billingId = 'pix_cart_partial_mismatch_1';
+        const { cart, orders } = await seedCartWithPendingOrders(user.id, billingId);
+        Sentry.captureMessage.mockClear();
+
+        const survivingId = orders[0]!.id;
+        const missingId = 'ord_missing_partial';
+
+        const payload = makeV2TransparentCompletedPayload(
+          billingId,
+          'evt_cart_partial_mismatch_1',
+          {
+            metadata: {
+              cartId: cart.id,
+              userId: user.id,
+              orderIds: JSON.stringify([survivingId, orders[1]!.id, missingId]),
+            },
+          },
+        );
+
+        const res = await app.inject({
+          method: 'POST',
+          url: webhookUrl,
+          headers: {
+            'content-type': 'application/json',
+            'x-webhook-signature': 'valid-sig',
+          },
+          payload,
+        });
+
+        expect(res.statusCode).toBe(200);
+
+        const settled = await prisma.order.findMany({
+          where: { id: { in: orders.map((o) => o.id) } },
+        });
+        for (const o of settled) {
+          expect(o.status).toBe('paid');
+        }
+
+        const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+        expect(cartAfter.status).toBe('converted');
+
+        const partialCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('cart-partial-orphan-billing'),
+        );
+        expect(partialCalls).toHaveLength(1);
+        expect(partialCalls[0]![1]).toBe('error');
+
+        Sentry.captureMessage.mockClear();
+      });
+
+      it('does not re-flag partial-mismatch refund on webhook replay', async () => {
+        const { user } = await createUser({ verified: true });
+        const billingId = 'pix_cart_partial_mismatch_replay';
+        const { cart, orders } = await seedCartWithPendingOrders(user.id, billingId);
+        Sentry.captureMessage.mockClear();
+
+        const payload = makeV2TransparentCompletedPayload(
+          billingId,
+          'evt_cart_partial_mismatch_replay',
+          {
+            metadata: {
+              cartId: cart.id,
+              userId: user.id,
+              orderIds: JSON.stringify([orders[0]!.id, orders[1]!.id, 'ord_missing_replay']),
+            },
+          },
+        );
+
+        const inject = () =>
+          app.inject({
+            method: 'POST',
+            url: webhookUrl,
+            headers: {
+              'content-type': 'application/json',
+              'x-webhook-signature': 'valid-sig',
+            },
+            payload,
+          });
+
+        const first = await inject();
+        expect(first.statusCode).toBe(200);
+
+        const second = await inject();
+        expect(second.statusCode).toBe(200);
+
+        const partialCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('cart-partial-orphan-billing'),
+        );
+        expect(partialCalls).toHaveLength(1);
+
+        Sentry.captureMessage.mockClear();
+      });
     });
   });
 

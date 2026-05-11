@@ -356,6 +356,27 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
 
         cartOrders.sort((a, b) => cartSettlementPriority(a.kind) - cartSettlementPriority(b.kind));
 
+        // JDMA-306: partial-mismatch reconciliation. metadata.orderIds records
+        // every order the checkout intended to bill. If we found fewer pending
+        // rows than metadata advertised, some were rolled back/deleted between
+        // billing creation and webhook arrival; finance must sweep the missing
+        // billed rows. We still settle the surviving rows below.
+        const metadataOrderIds = extractOrderIdsFromMetadata(event.data);
+        const metadataUserId = getMetadataString(event.data, 'userId');
+        let missingOrderIds: string[] = [];
+        if (metadataOrderIds && metadataOrderIds.length !== cartOrders.length) {
+          const fetchedIds = new Set(cartOrders.map((o) => o.id));
+          const unaccountedIds = metadataOrderIds.filter((id) => !fetchedIds.has(id));
+          if (unaccountedIds.length > 0) {
+            const existing = await prisma.order.findMany({
+              where: { id: { in: unaccountedIds } },
+              select: { id: true },
+            });
+            const existingIds = new Set(existing.map((o) => o.id));
+            missingOrderIds = unaccountedIds.filter((id) => !existingIds.has(id));
+          }
+        }
+
         let issuedAnyTicket = false;
         for (const order of cartOrders) {
           try {
@@ -417,6 +438,27 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           { cartId: metadataCartId, billingId, firstTime },
           'abacatepay webhook: cart settled',
         );
+
+        if (firstTime && missingOrderIds.length > 0 && metadataUserId) {
+          flagManualRefund({
+            cartId: metadataCartId,
+            orderIds: missingOrderIds,
+            providerRef: billingId,
+            userId: metadataUserId,
+            eventId: null,
+            reason: 'cart-partial-orphan-billing',
+          });
+          request.log.warn(
+            {
+              cartId: metadataCartId,
+              billingId,
+              userId: metadataUserId,
+              missingOrderIds,
+              webhookEventId: event.id,
+            },
+            'abacatepay webhook: cart partial orphan billing settled, manual refund flagged',
+          );
+        }
 
         try {
           const userId = issuedAnyTicket ? cartOrders[0]?.userId : undefined;
