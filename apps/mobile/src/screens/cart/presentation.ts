@@ -1,9 +1,23 @@
-import type { CartItem, FulfillmentMethod } from '@jdm/shared/cart';
+import type { CartItem, CartTotals, FulfillmentMethod } from '@jdm/shared/cart';
 import type { MyTicket } from '@jdm/shared/tickets';
 
 import { cartCopy } from '../../copy/cart';
 
 export type { FulfillmentMethod };
+
+export function computeDisplayedCartTotals(
+  totals: CartTotals,
+  selectedFulfillmentMethod: FulfillmentMethod | null,
+): CartTotals {
+  if (selectedFulfillmentMethod !== 'pickup' || totals.shippingSubtotalCents === 0) {
+    return totals;
+  }
+  return {
+    ...totals,
+    shippingSubtotalCents: 0,
+    amountCents: totals.amountCents - totals.shippingSubtotalCents,
+  };
+}
 
 export type FulfillmentSignals = {
   cartHasTicket: boolean;

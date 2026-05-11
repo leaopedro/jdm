@@ -33,6 +33,7 @@ import {
   buildPickupEventOptions,
   collectCartTicketEventIds,
   computeDefaultFulfillmentMethod,
+  computeDisplayedCartTotals,
   formatProductAttributes,
   isProductItem,
   type PickupEventOption,
@@ -629,6 +630,7 @@ export default function CartScreen() {
   const sections = buildCartSections(cart.items);
 
   const hasProductItems = cart.items.some((item) => isProductItem(item));
+  const displayedTotals = computeDisplayedCartTotals(cart.totals, selectedFulfillmentMethod);
   const blockedByIncompatibleCart = hasProductItems && availableFulfillmentMethods.length === 0;
   const blockedByFulfillmentChoice =
     hasProductItems && availableFulfillmentMethods.length > 0 && selectedFulfillmentMethod === null;
@@ -786,41 +788,45 @@ export default function CartScreen() {
       />
 
       <View style={styles.footer}>
-        {cart.totals.ticketSubtotalCents > 0 && (
+        {displayedTotals.ticketSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.tickets}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.ticketSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(displayedTotals.ticketSubtotalCents)}</Text>
           </View>
         )}
-        {cart.totals.productsSubtotalCents > 0 && (
+        {displayedTotals.productsSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.products}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.productsSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>
+              {formatBRL(displayedTotals.productsSubtotalCents)}
+            </Text>
           </View>
         )}
-        {cart.totals.shippingSubtotalCents > 0 && (
+        {displayedTotals.shippingSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.shipping}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.shippingSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>
+              {formatBRL(displayedTotals.shippingSubtotalCents)}
+            </Text>
           </View>
         )}
-        {cart.totals.extrasSubtotalCents > 0 && (
+        {displayedTotals.extrasSubtotalCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.extras}</Text>
-            <Text style={styles.totalsValue}>{formatBRL(cart.totals.extrasSubtotalCents)}</Text>
+            <Text style={styles.totalsValue}>{formatBRL(displayedTotals.extrasSubtotalCents)}</Text>
           </View>
         )}
-        {cart.totals.discountCents > 0 && (
+        {displayedTotals.discountCents > 0 && (
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>{cartCopy.totals.discount}</Text>
             <Text style={[styles.totalsValue, styles.discount]}>
-              -{formatBRL(cart.totals.discountCents)}
+              -{formatBRL(displayedTotals.discountCents)}
             </Text>
           </View>
         )}
         <View style={[styles.totalsRow, styles.totalBorder]}>
           <Text style={styles.totalLabel}>{cartCopy.totals.total}</Text>
-          <Text style={styles.totalValue}>{formatBRL(cart.totals.amountCents)}</Text>
+          <Text style={styles.totalValue}>{formatBRL(displayedTotals.amountCents)}</Text>
         </View>
 
         {hasProductItems && availableFulfillmentMethods.length === 2 ? (

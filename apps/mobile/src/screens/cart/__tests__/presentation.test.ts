@@ -1,4 +1,4 @@
-import type { CartItem } from '@jdm/shared/cart';
+import type { CartItem, CartTotals } from '@jdm/shared/cart';
 import type { MyTicket } from '@jdm/shared/tickets';
 import { describe, expect, it } from 'vitest';
 
@@ -7,8 +7,19 @@ import {
   buildPickupEventOptions,
   collectCartTicketEventIds,
   computeDefaultFulfillmentMethod,
+  computeDisplayedCartTotals,
   formatProductAttributes,
 } from '../presentation';
+
+const baseTotals: CartTotals = {
+  ticketSubtotalCents: 0,
+  extrasSubtotalCents: 0,
+  productsSubtotalCents: 9000,
+  shippingSubtotalCents: 1500,
+  discountCents: 0,
+  amountCents: 10500,
+  currency: 'BRL',
+};
 
 const baseItem = (overrides: Partial<CartItem>): CartItem => ({
   id: 'item_1',
@@ -203,6 +214,29 @@ describe('cart presentation helpers', () => {
     } satisfies MyTicket;
 
     expect(buildPickupEventOptions([cancelledTicket], [])).toEqual([]);
+  });
+});
+
+describe('computeDisplayedCartTotals', () => {
+  it('returns raw totals when method is ship', () => {
+    expect(computeDisplayedCartTotals(baseTotals, 'ship')).toEqual(baseTotals);
+  });
+
+  it('returns raw totals when method is null', () => {
+    expect(computeDisplayedCartTotals(baseTotals, null)).toEqual(baseTotals);
+  });
+
+  it('zeros shipping and adjusts amountCents when method is pickup', () => {
+    expect(computeDisplayedCartTotals(baseTotals, 'pickup')).toEqual({
+      ...baseTotals,
+      shippingSubtotalCents: 0,
+      amountCents: 9000,
+    });
+  });
+
+  it('is a no-op when pickup but no shipping fee', () => {
+    const noShipping: CartTotals = { ...baseTotals, shippingSubtotalCents: 0, amountCents: 9000 };
+    expect(computeDisplayedCartTotals(noShipping, 'pickup')).toEqual(noShipping);
   });
 });
 
