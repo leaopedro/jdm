@@ -38,6 +38,7 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
     city: e.city,
     stateCode: e.stateCode,
     type: e.type,
+    status: e.status,
   });
 
 const serializeTier = (t: DbTier) =>

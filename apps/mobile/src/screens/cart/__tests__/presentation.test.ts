@@ -133,6 +133,7 @@ describe('cart presentation helpers', () => {
         city: 'Curitiba',
         stateCode: 'PR',
         type: 'meeting',
+        status: 'published',
       },
       extras: [],
     } satisfies MyTicket;
@@ -173,6 +174,35 @@ describe('cart presentation helpers', () => {
         hasCartTicket: true,
       },
     ]);
+  });
+
+  it('skips owned tickets whose event has been cancelled', () => {
+    const cancelledTicket = {
+      id: 'ticket_cancelled',
+      code: 'qr_cancelled',
+      status: 'valid',
+      source: 'purchase',
+      tierName: 'Geral',
+      nickname: null,
+      usedAt: null,
+      createdAt: '2026-05-01T10:00:00.000Z',
+      event: {
+        id: 'evt_cancelled',
+        slug: 'cancelado',
+        title: 'Cancelado',
+        coverUrl: null,
+        startsAt: '2026-05-10T10:00:00.000Z',
+        endsAt: '2026-05-10T12:00:00.000Z',
+        venueName: 'Autódromo',
+        city: 'Curitiba',
+        stateCode: 'PR',
+        type: 'meeting',
+        status: 'cancelled',
+      },
+      extras: [],
+    } satisfies MyTicket;
+
+    expect(buildPickupEventOptions([cancelledTicket], [])).toEqual([]);
   });
 });
 

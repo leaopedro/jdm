@@ -76,6 +76,7 @@ export function buildPickupEventOptions(
 
   for (const ticket of tickets) {
     if (ticket.status !== 'valid') continue;
+    if (ticket.event.status === 'cancelled') continue;
     options.set(ticket.event.id, {
       id: ticket.event.id,
       title: ticket.event.title,
