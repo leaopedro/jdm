@@ -1,7 +1,33 @@
 import { prisma } from '@jdm/db';
 import type { OrderStatus, PaymentProvider } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// JDMA-306: spy on Sentry to assert manual-refund flagging. ESM module
+// namespaces aren't configurable, so a top-level mock is required.
+vi.mock('@sentry/node', () => {
+  const noop = () => {};
+  return {
+    init: vi.fn(),
+    addBreadcrumb: vi.fn(),
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+    withScope: (
+      cb: (scope: {
+        setTag: (k: string, v: unknown) => void;
+        setLevel: (l: string) => void;
+        setExtras: (e: Record<string, unknown>) => void;
+        setExtra: (k: string, v: unknown) => void;
+        setContext: (k: string, v: unknown) => void;
+      }) => void,
+    ) => cb({ setTag: noop, setLevel: noop, setExtras: noop, setExtra: noop, setContext: noop }),
+  };
+});
+
+const Sentry = (await import('@sentry/node')) as unknown as {
+  captureMessage: ReturnType<typeof vi.fn>;
+  captureException: ReturnType<typeof vi.fn>;
+};
 
 import { buildApp } from '../../src/app.js';
 import { type Env, loadEnv } from '../../src/env.js';
@@ -1334,6 +1360,200 @@ describe('POST /abacatepay/webhook', () => {
       const tickets = await prisma.ticket.findMany({ where: { userId: user.id } });
       expect(tickets).toHaveLength(1);
       expect(push.captured).toHaveLength(1);
+    });
+
+    // JDMA-306: cart checkout creates AbacatePay billing then writes order rows.
+    // If the local write/response path fails after createPixBilling() succeeds,
+    // rollbackCartCheckout() deletes pending orders while the billing can still
+    // settle. The webhook would previously hit `ignored: true` with no signal.
+    describe('orphan billing reconciliation (JDMA-306)', () => {
+      it('flags manual refund when billing settles and no cart orders exist', async () => {
+        const { user } = await createUser({ verified: true });
+        Sentry.captureMessage.mockClear();
+
+        const orphanCartId = `cart_${Math.random().toString(36).slice(2, 10)}`;
+        const orphanOrderIds = ['ord_a', 'ord_b'];
+        const billingId = 'pix_cart_orphan_1';
+
+        const payload = makeV2TransparentCompletedPayload(billingId, 'evt_cart_orphan_1', {
+          metadata: {
+            cartId: orphanCartId,
+            userId: user.id,
+            orderIds: JSON.stringify(orphanOrderIds),
+          },
+        });
+
+        const res = await app.inject({
+          method: 'POST',
+          url: webhookUrl,
+          headers: {
+            'content-type': 'application/json',
+            'x-webhook-signature': 'valid-sig',
+          },
+          payload,
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body: { ok: boolean } = res.json();
+        expect(body.ok).toBe(true);
+        // M2: don't leak internal state in response
+        expect(body).not.toHaveProperty('manualRefund');
+        expect(body).not.toHaveProperty('reason');
+
+        const orphanCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('manual refund needed'),
+        );
+        expect(orphanCalls).toHaveLength(1);
+        expect(orphanCalls[0]![0]).toContain('cart-orphan-billing');
+        expect(orphanCalls[0]![1]).toBe('error');
+
+        // Event is recorded so replays dedup
+        const stored = await prisma.paymentWebhookEvent.findUnique({
+          where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_cart_orphan_1' } },
+        });
+        expect(stored).not.toBeNull();
+
+        Sentry.captureMessage.mockClear();
+      });
+
+      it('does not re-flag manual refund on webhook replay', async () => {
+        const { user } = await createUser({ verified: true });
+        Sentry.captureMessage.mockClear();
+
+        const orphanCartId = `cart_${Math.random().toString(36).slice(2, 10)}`;
+        const billingId = 'pix_cart_orphan_replay';
+
+        const payload = makeV2TransparentCompletedPayload(billingId, 'evt_cart_orphan_replay', {
+          metadata: {
+            cartId: orphanCartId,
+            userId: user.id,
+            orderIds: JSON.stringify(['ord_a']),
+          },
+        });
+
+        const inject = () =>
+          app.inject({
+            method: 'POST',
+            url: webhookUrl,
+            headers: {
+              'content-type': 'application/json',
+              'x-webhook-signature': 'valid-sig',
+            },
+            payload,
+          });
+
+        const first = await inject();
+        expect(first.statusCode).toBe(200);
+
+        const second = await inject();
+        expect(second.statusCode).toBe(200);
+
+        const orphanCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('manual refund needed'),
+        );
+        expect(orphanCalls).toHaveLength(1);
+
+        Sentry.captureMessage.mockClear();
+      });
+
+      // JDMA-306 partial-mismatch: metadata.orderIds lists every order the
+      // checkout intended to bill. If some were rolled back between billing
+      // creation and webhook delivery, the surviving rows settle but the
+      // missing billed rows still need finance reconciliation.
+      it('flags manual refund for missing rows when metadata.orderIds exceeds pending orders', async () => {
+        const { user } = await createUser({ verified: true });
+        const billingId = 'pix_cart_partial_mismatch_1';
+        const { cart, orders } = await seedCartWithPendingOrders(user.id, billingId);
+        Sentry.captureMessage.mockClear();
+
+        const survivingId = orders[0]!.id;
+        const missingId = 'ord_missing_partial';
+
+        const payload = makeV2TransparentCompletedPayload(
+          billingId,
+          'evt_cart_partial_mismatch_1',
+          {
+            metadata: {
+              cartId: cart.id,
+              userId: user.id,
+              orderIds: JSON.stringify([survivingId, orders[1]!.id, missingId]),
+            },
+          },
+        );
+
+        const res = await app.inject({
+          method: 'POST',
+          url: webhookUrl,
+          headers: {
+            'content-type': 'application/json',
+            'x-webhook-signature': 'valid-sig',
+          },
+          payload,
+        });
+
+        expect(res.statusCode).toBe(200);
+
+        const settled = await prisma.order.findMany({
+          where: { id: { in: orders.map((o) => o.id) } },
+        });
+        for (const o of settled) {
+          expect(o.status).toBe('paid');
+        }
+
+        const cartAfter = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id } });
+        expect(cartAfter.status).toBe('converted');
+
+        const partialCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('cart-partial-orphan-billing'),
+        );
+        expect(partialCalls).toHaveLength(1);
+        expect(partialCalls[0]![1]).toBe('error');
+
+        Sentry.captureMessage.mockClear();
+      });
+
+      it('does not re-flag partial-mismatch refund on webhook replay', async () => {
+        const { user } = await createUser({ verified: true });
+        const billingId = 'pix_cart_partial_mismatch_replay';
+        const { cart, orders } = await seedCartWithPendingOrders(user.id, billingId);
+        Sentry.captureMessage.mockClear();
+
+        const payload = makeV2TransparentCompletedPayload(
+          billingId,
+          'evt_cart_partial_mismatch_replay',
+          {
+            metadata: {
+              cartId: cart.id,
+              userId: user.id,
+              orderIds: JSON.stringify([orders[0]!.id, orders[1]!.id, 'ord_missing_replay']),
+            },
+          },
+        );
+
+        const inject = () =>
+          app.inject({
+            method: 'POST',
+            url: webhookUrl,
+            headers: {
+              'content-type': 'application/json',
+              'x-webhook-signature': 'valid-sig',
+            },
+            payload,
+          });
+
+        const first = await inject();
+        expect(first.statusCode).toBe(200);
+
+        const second = await inject();
+        expect(second.statusCode).toBe(200);
+
+        const partialCalls = Sentry.captureMessage.mock.calls.filter(
+          ([msg]) => typeof msg === 'string' && msg.includes('cart-partial-orphan-billing'),
+        );
+        expect(partialCalls).toHaveLength(1);
+
+        Sentry.captureMessage.mockClear();
+      });
     });
   });
 
