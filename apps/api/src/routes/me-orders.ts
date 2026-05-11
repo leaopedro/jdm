@@ -1,8 +1,9 @@
 import { prisma } from '@jdm/db';
-import { myOrdersResponseSchema } from '@jdm/shared/orders';
+import { cancelMyOrderResponseSchema, myOrdersResponseSchema } from '@jdm/shared/orders';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { cancelPendingOrder } from '../services/orders/cancel.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
@@ -124,5 +125,43 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
         };
       }),
     });
+  });
+
+  app.post('/me/orders/:id/cancel', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const { id } = request.params as { id: string };
+
+    const result = await cancelPendingOrder(id, sub);
+    if (result.kind === 'not_found') {
+      return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+    }
+    if (result.kind === 'forbidden') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
+    }
+    if (result.kind === 'not_pending') {
+      return reply.status(409).send({
+        error: 'Conflict',
+        message: `order cannot be cancelled from status ${result.status}`,
+      });
+    }
+
+    // Stripe exposes explicit PaymentIntent cancellation. The current
+    // AbacatePay transparent flow only exposes status polling/webhooks, so
+    // local cancellation is the best available upstream-safe behavior there.
+    if (result.order.provider === 'stripe' && result.order.providerRef) {
+      app.stripe.cancelPaymentIntent(result.order.providerRef).catch((cancelErr) => {
+        request.log.warn(
+          { err: cancelErr, orderId: result.order.id, providerRef: result.order.providerRef },
+          'me orders: stripe PI cancel failed after local cancellation',
+        );
+      });
+    }
+
+    return reply.status(200).send(
+      cancelMyOrderResponseSchema.parse({
+        orderId: result.order.id,
+        status: result.order.status,
+      }),
+    );
   });
 };

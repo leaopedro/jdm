@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,9 +12,11 @@ import {
   View,
 } from 'react-native';
 
-import { listMyOrders } from '~/api/orders';
+import { ApiError } from '~/api/client';
+import { cancelMyOrder, listMyOrders } from '~/api/orders';
 import { Button } from '~/components/Button';
 import { ordersCopy } from '~/copy/orders';
+import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
 
@@ -36,11 +39,20 @@ function fulfillmentBadgeStyle(status: NonNullable<MyOrder['fulfillmentStatus']>
   return styles.badgeFulfillment;
 }
 
-function OrderCard({ order }: { order: MyOrder }) {
+function OrderCard({
+  order,
+  onRequestCancel,
+  cancelling,
+}: {
+  order: MyOrder;
+  onRequestCancel: (order: MyOrder) => void;
+  cancelling: boolean;
+}) {
   const router = useRouter();
   const eventDate = order.event
     ? formatEventDateRange(order.event.startsAt, order.event.endsAt)
     : null;
+  const canCancel = order.status === 'pending';
 
   const openTicket = (ticketIds: string[]) => {
     if (ticketIds.length === 1) {
@@ -130,6 +142,21 @@ function OrderCard({ order }: { order: MyOrder }) {
         <Text style={styles.footerText}>{ordersCopy.summary.total}</Text>
         <Text style={styles.total}>{formatBRL(order.amountCents)}</Text>
       </View>
+
+      {canCancel ? (
+        <View style={styles.cancelWrap}>
+          <Pressable
+            onPress={() => onRequestCancel(order)}
+            accessibilityRole="button"
+            disabled={cancelling}
+            style={[styles.cancelButton, cancelling && styles.actionDisabled]}
+          >
+            <Text style={styles.cancelButtonText}>
+              {cancelling ? ordersCopy.actions.cancelling : ordersCopy.actions.cancel}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -138,6 +165,8 @@ export default function ProfileOrdersScreen() {
   const [orders, setOrders] = useState<MyOrder[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [confirmingOrder, setConfirmingOrder] = useState<MyOrder | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -163,6 +192,37 @@ export default function ProfileOrdersScreen() {
       setRefreshing(false);
     }
   }, [load]);
+
+  const requestCancel = useCallback((order: MyOrder) => {
+    setConfirmingOrder(order);
+  }, []);
+
+  const closeCancelModal = useCallback(() => {
+    if (cancellingOrderId) return;
+    setConfirmingOrder(null);
+  }, [cancellingOrderId]);
+
+  const confirmCancel = useCallback(async () => {
+    if (!confirmingOrder) return;
+
+    setCancellingOrderId(confirmingOrder.id);
+    try {
+      await cancelMyOrder(confirmingOrder.id);
+      setConfirmingOrder(null);
+      showMessage(ordersCopy.cancelModal.success);
+      await load();
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        showMessage(ordersCopy.cancelModal.conflictError);
+        setConfirmingOrder(null);
+        await load();
+      } else {
+        showMessage(ordersCopy.cancelModal.genericError);
+      }
+    } finally {
+      setCancellingOrderId(null);
+    }
+  }, [confirmingOrder, load]);
 
   const content = useMemo(() => {
     if (orders === null) {
@@ -196,20 +256,72 @@ export default function ProfileOrdersScreen() {
     return (
       <View style={styles.list}>
         {orders.map((order) => (
-          <OrderCard key={order.id} order={order} />
+          <OrderCard
+            key={order.id}
+            order={order}
+            onRequestCancel={requestCancel}
+            cancelling={cancellingOrderId === order.id}
+          />
         ))}
       </View>
     );
-  }, [error, load, orders]);
+  }, [cancellingOrderId, error, load, orders, requestCancel]);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={orders && orders.length > 0 ? styles.content : styles.contentCentered}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
-    >
-      {content}
-    </ScrollView>
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={
+          orders && orders.length > 0 ? styles.content : styles.contentCentered
+        }
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />
+        }
+      >
+        {content}
+      </ScrollView>
+
+      <Modal
+        visible={confirmingOrder !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={closeCancelModal}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable style={styles.backdrop} onPress={closeCancelModal} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{ordersCopy.cancelModal.title}</Text>
+            <Text style={styles.modalBody}>{ordersCopy.cancelModal.body}</Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={closeCancelModal}
+                style={[styles.actionButton, styles.actionSecondary]}
+                accessibilityRole="button"
+                disabled={cancellingOrderId !== null}
+              >
+                <Text style={styles.actionSecondaryText}>{ordersCopy.actions.keep}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void confirmCancel()}
+                style={[
+                  styles.actionButton,
+                  styles.actionPrimary,
+                  cancellingOrderId !== null && styles.actionDisabled,
+                ]}
+                accessibilityRole="button"
+                disabled={cancellingOrderId !== null}
+              >
+                <Text style={styles.actionPrimaryText}>
+                  {cancellingOrderId !== null
+                    ? ordersCopy.actions.cancelling
+                    : ordersCopy.actions.confirm}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -357,9 +469,83 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
   },
+  cancelWrap: {
+    alignItems: 'flex-start',
+  },
+  cancelButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(225, 106, 0, 0.36)',
+    backgroundColor: 'rgba(225, 106, 0, 0.14)',
+  },
+  cancelButtonText: {
+    color: theme.colors.fg,
+    fontWeight: '600',
+  },
   total: {
     color: theme.colors.fg,
     fontSize: theme.font.size.lg,
     fontWeight: '700',
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.bg,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  modalTitle: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.lg,
+    fontWeight: '700',
+  },
+  modalBody: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.md,
+    lineHeight: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  actionButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radii.sm,
+  },
+  actionSecondary: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  actionSecondaryText: {
+    color: theme.colors.fg,
+    fontWeight: '600',
+  },
+  actionPrimary: {
+    backgroundColor: theme.colors.accent,
+  },
+  actionPrimaryText: {
+    color: theme.colors.fg,
+    fontWeight: '700',
+  },
+  actionDisabled: {
+    opacity: 0.6,
   },
 });
