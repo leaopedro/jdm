@@ -41,7 +41,7 @@ red-flag bleed; do not crop tighter than the EXPERIENCE box.
 | `textPrimary`   | #F5F5F5            | Body text, headlines on dark                  |
 | `textSecondary` | #C9C9CD            | Sub-headlines, supporting copy                |
 | `textMuted`     | #8A8A93            | Hints, disabled text, metadata                |
-| `textInverse`   | #0A0A0A            | Text on red brand surfaces                    |
+| `textInverse`   | #FFFFFF            | Text on red brand surfaces                    |
 | `success`       | #22C55E            | Confirmations, paid states                    |
 | `warning`       | #F59E0B            | Pre-deadlines, low-stock                      |
 | `danger`        | #EF4444            | Errors, destructive actions                   |
