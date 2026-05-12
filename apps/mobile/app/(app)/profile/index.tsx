@@ -1,6 +1,7 @@
 import type { PublicProfile } from '@jdm/shared/profile';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
+  Bell,
   CarFront,
   ChevronRight,
   LogOut,
@@ -177,6 +178,12 @@ export default function ProfileMenuScreen() {
           label={profileCopy.profile.editDetails}
           hint={profileCopy.menu.editHint}
           onPress={() => router.push('/profile/edit' as never)}
+        />
+        <MenuRow
+          icon={<Bell color={theme.colors.fg} size={18} strokeWidth={1.75} />}
+          label={profileCopy.menu.pushPreferences}
+          hint={profileCopy.menu.pushPreferencesHint}
+          onPress={() => router.push('/profile/push-preferences' as never)}
         />
         <MenuRow
           icon={<Package color={theme.colors.fg} size={18} strokeWidth={1.75} />}
