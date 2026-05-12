@@ -5,7 +5,7 @@ import {
   createBroadcastRequestSchema,
   updateBroadcastRequestSchema,
 } from '@jdm/shared';
-import type { Broadcast } from '@prisma/client';
+import type { Broadcast, Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
@@ -56,7 +56,7 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
       data: {
         title: input.title,
         body: input.body,
-        data: input.data ?? {},
+        data: (input.data ?? {}) as Prisma.InputJsonValue,
         targetKind: input.target.kind,
         targetValue,
         scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
@@ -142,19 +142,20 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
             ? null
             : undefined;
 
+    const data: Prisma.BroadcastUpdateInput = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.body !== undefined) data.body = input.body;
+    if (input.data !== undefined) data.data = input.data as Prisma.InputJsonValue;
+    if (input.target !== undefined) data.targetKind = input.target.kind;
+    if (targetValue !== undefined) data.targetValue = targetValue;
+    if (input.scheduledAt !== undefined) {
+      data.scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
+      data.status = input.scheduledAt ? 'scheduled' : 'draft';
+    }
+
     const updated = await prisma.broadcast.update({
       where: { id },
-      data: {
-        ...(input.title !== undefined && { title: input.title }),
-        ...(input.body !== undefined && { body: input.body }),
-        ...(input.data !== undefined && { data: input.data }),
-        ...(input.target !== undefined && { targetKind: input.target.kind }),
-        ...(targetValue !== undefined && { targetValue }),
-        ...(input.scheduledAt !== undefined && {
-          scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
-          status: input.scheduledAt ? ('scheduled' as const) : ('draft' as const),
-        }),
-      },
+      data,
     });
 
     return reply.send(serializeSummary(updated));

@@ -15,8 +15,8 @@ export const startBroadcastWorker = (deps: BroadcastWorkerDeps) => {
     try {
       await runBroadcastDispatchTick({
         sender: deps.sender,
-        batchSize: deps.batchSize,
-        log: deps.log,
+        ...(deps.batchSize !== undefined && { batchSize: deps.batchSize }),
+        ...(deps.log !== undefined && { log: deps.log }),
       });
     } catch (err) {
       deps.log?.error({ err }, '[broadcasts-worker] tick error');
