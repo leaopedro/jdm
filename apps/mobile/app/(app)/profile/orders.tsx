@@ -166,9 +166,7 @@ function OrderCard({
     : null;
   const canCancel = order.status === 'pending';
 
-  const isPendingAndActive =
-    order.status === 'pending' &&
-    (order.expiresAt === null || new Date(order.expiresAt) > new Date());
+  const isPendingAndActive = order.status === 'pending';
 
   const openTicket = (ticketIds: string[]) => {
     if (ticketIds.length === 1) {
