@@ -146,14 +146,7 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    if (prepared.order.provider === 'stripe') {
-      if (!prepared.order.providerRef) {
-        return reply.status(409).send({
-          error: 'Conflict',
-          message: 'stripe order cannot be cancelled safely without provider ref',
-        });
-      }
-
+    if (prepared.order.provider === 'stripe' && prepared.order.providerRef) {
       try {
         await app.stripe.cancelPaymentIntent(prepared.order.providerRef);
       } catch (cancelErr) {

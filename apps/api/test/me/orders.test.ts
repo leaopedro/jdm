@@ -353,6 +353,51 @@ describe('POST /me/orders/:id/cancel', () => {
     expect(cancelCalls[0]?.payload).toMatchObject({ paymentIntentId: 'pi_cancel_me' });
   });
 
+  it('cancels a pending Stripe order locally when providerRef is null', async () => {
+    const harness = await makeAppWithFakeStripe();
+    app = harness.app;
+    const { stripe } = harness;
+
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+
+    await prisma.ticketTier.update({
+      where: { id: tier.id },
+      data: { quantitySold: 1 },
+    });
+
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        providerRef: null,
+        status: 'pending',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${order.id}/cancel`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ orderId: order.id, status: 'cancelled' });
+
+    const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(reloaded.status).toBe('cancelled');
+
+    const cancelCalls = stripe.calls.filter((c) => c.kind === 'cancelPaymentIntent');
+    expect(cancelCalls).toHaveLength(0);
+  });
+
   it('keeps the order pending when Stripe cancellation fails upstream', async () => {
     const harness = await makeAppWithFakeStripe();
     app = harness.app;
