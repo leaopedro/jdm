@@ -18,10 +18,6 @@
       "types": "./src/auth.ts",
       "default": "./dist/auth.js"
     },
-    "./broadcasts": {
-      "types": "./src/broadcasts.ts",
-      "default": "./dist/broadcasts.js"
-    },
     "./cars": {
       "types": "./src/cars.ts",
       "default": "./dist/cars.js"

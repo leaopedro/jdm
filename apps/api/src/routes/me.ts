@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@jdm/db';
 import {
   pushPrefsSchema,
@@ -42,7 +43,6 @@ const serializeUser = (user: DbUser, uploads: Uploads) =>
 const normalizePushPrefs = (value: Prisma.JsonValue | null): PushPrefs =>
   pushPrefsSchema.parse(pushPrefsStorageSchema.parse(value ?? {}));
 
-// eslint-disable-next-line @typescript-eslint/require-await
 export const meRoutes: FastifyPluginAsync = async (app) => {
   app.get('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
@@ -74,24 +74,32 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     return normalizePushPrefs(user.pushPrefs);
   });
 
-  app.patch('/me/push-preferences', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const input = updatePushPrefsRequestSchema.parse(request.body);
-    const user = await prisma.user.findUnique({
-      where: { id: sub },
-      select: { pushPrefs: true },
-    });
+  await app.register(async (scoped) => {
+    await scoped.register(rateLimit, { max: 10, timeWindow: '1 minute' });
 
-    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+    scoped.patch(
+      '/me/push-preferences',
+      { preHandler: [scoped.authenticate] },
+      async (request, reply) => {
+        const { sub } = requireUser(request);
+        const input = updatePushPrefsRequestSchema.parse(request.body);
+        const user = await prisma.user.findUnique({
+          where: { id: sub },
+          select: { pushPrefs: true },
+        });
 
-    const current = normalizePushPrefs(user.pushPrefs);
-    const updated = pushPrefsSchema.parse({ ...current, marketing: input.marketing });
+        if (!user) return reply.status(401).send({ error: 'Unauthorized' });
 
-    await prisma.user.update({
-      where: { id: sub },
-      data: { pushPrefs: updated as Prisma.InputJsonValue },
-    });
+        const current = normalizePushPrefs(user.pushPrefs);
+        const updated = pushPrefsSchema.parse({ ...current, marketing: input.marketing });
 
-    return updated;
+        await prisma.user.update({
+          where: { id: sub },
+          data: { pushPrefs: updated as Prisma.InputJsonValue },
+        });
+
+        return updated;
+      },
+    );
   });
 };

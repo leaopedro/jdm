@@ -221,46 +221,6 @@ expandable-row details, CSV export, and responsive layout.
 
 **Prerequisites**
 
-### 3.8 F10 marketing push preference opt-out
-
-Covers the mobile marketing toggle, persisted consent, and the guarantee
-that opted-out users are excluded from future broadcast sends.
-
-**Prerequisites**
-
-- Backend with JDMA-518 and JDMA-520 merged.
-- Mobile dev build or simulator logged in as a test user.
-- Admin access to the broadcast composer or API.
-- At least one device token already registered for the test user.
-
-**Steps**
-
-1. Open `Perfil` -> `Notificações de marketing`.
-   Expect the screen to show one marketing toggle, one save button, and a
-   note that transactional pushes stay separate.
-2. Turn the toggle off and tap `Salvar preferência`.
-   Expect a success banner confirming marketing push was disabled.
-3. Fully close and reopen the app, then revisit the same screen.
-   Expect the toggle to remain off.
-4. As an admin, run a broadcast dry-run that would normally include the
-   same user.
-   Expect the estimated audience to exclude that opted-out user.
-5. Re-enable the toggle and save again.
-   Expect the success banner for enabled state and a subsequent dry-run to
-   count the user again.
-
-**Pass criteria**
-
-- The marketing preference persists across app relaunch.
-- Transactional messaging copy remains explicit on screen.
-- Dry-run counts reflect the opt-out immediately after save.
-
-**Evidence to attach**
-
-- Screenshot of the mobile preference screen in the off state.
-- API or admin evidence showing the dry-run count before and after
-  re-enabling.
-
 - Local API running (`pnpm --filter @jdm/api dev`) with seeded orders
   in paid/refunded states across multiple events, providers, and methods.
 - Admin app running (`pnpm --filter @jdm/admin dev`).
@@ -396,6 +356,46 @@ Confirm:
   `react@19.1.0` and nested `react@19.2.4`.
 - The mobile boot path now captures auth boot exceptions and root-layout render
   failures so the next failing build should expose a visible fallback or a Sentry event.
+
+### 3.8 F10 marketing push preference opt-out
+
+Covers the mobile marketing toggle, persisted consent, and the guarantee
+that opted-out users are excluded from future broadcast sends.
+
+**Prerequisites**
+
+- Backend with JDMA-518 and JDMA-520 merged.
+- Mobile dev build or simulator logged in as a test user.
+- Admin access to the broadcast composer or API.
+- At least one device token already registered for the test user.
+
+**Steps**
+
+1. Open `Perfil` -> `Notificações de marketing`.
+   Expect the screen to show one marketing toggle, one save button, and a
+   note that transactional pushes stay separate.
+2. Turn the toggle off and tap `Salvar preferência`.
+   Expect a success banner confirming marketing push was disabled.
+3. Fully close and reopen the app, then revisit the same screen.
+   Expect the toggle to remain off.
+4. As an admin, run a broadcast dry-run that would normally include the
+   same user.
+   Expect the estimated audience to exclude that opted-out user.
+5. Re-enable the toggle and save again.
+   Expect the success banner for enabled state and a subsequent dry-run to
+   count the user again.
+
+**Pass criteria**
+
+- The marketing preference persists across app relaunch.
+- Transactional messaging copy remains explicit on screen.
+- Dry-run counts reflect the opt-out immediately after save.
+
+**Evidence to attach**
+
+- Screenshot of the mobile preference screen in the off state.
+- API or admin evidence showing the dry-run count before and after
+  re-enabling.
 
 **Step 3 — KPI/table/trend consistency for the same recut**
 

@@ -2,7 +2,7 @@ import { Button } from '@jdm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { getBroadcastPreferences, updateBroadcastPreferences } from '~/api/broadcast-preferences';
+import { getBroadcastPreferences, updateBroadcastPreferences } from '~/api/push-preferences';
 import { profileCopy } from '~/copy/profile';
 import { theme } from '~/theme';
 
@@ -34,7 +34,15 @@ export default function PushPreferencesScreen() {
     })();
   }, []);
 
+  useEffect(
+    () => () => {
+      if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    },
+    [],
+  );
+
   const onSave = async () => {
+    if (saving) return;
     setSaving(true);
     try {
       const prefs = await updateBroadcastPreferences({ marketing: marketingEnabled });
