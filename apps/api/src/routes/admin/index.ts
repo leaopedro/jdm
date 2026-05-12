@@ -1,6 +1,7 @@
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { adminBroadcastRoutes } from './broadcasts.js';
 import { adminCheckInRoutes } from './check-in.js';
 import { adminCollectionRoutes } from './collections.js';
 import { adminEventRoutes } from './events.js';
@@ -43,6 +44,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminStoreInventoryRoutes);
     await scope.register(adminStoreOrderRoutes);
     await scope.register(adminCollectionRoutes);
+    await scope.register(adminBroadcastRoutes);
   });
 
   // User create/disable/enable: admin-only with tighter rate limit.
