@@ -23,6 +23,8 @@ import {
 
 describe('broadcast-actions', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-12T00:00:00.000Z'));
     createAdminBroadcast.mockReset();
     cancelAdminBroadcast.mockReset();
     dryRunAdminBroadcast.mockReset();
@@ -31,7 +33,6 @@ describe('broadcast-actions', () => {
     dryRunAdminBroadcast.mockResolvedValue({ estimatedRecipients: 42 });
     vi.mocked(revalidatePath).mockReset();
   });
-
   it('creates an immediate broadcast with attendees target', async () => {
     const fd = new FormData();
     fd.set('title', '  Aviso importante  ');
@@ -64,6 +65,7 @@ describe('broadcast-actions', () => {
     fd.set('targetCity', '  São Paulo  ');
     fd.set('deliveryMode', 'schedule');
     fd.set('scheduledAt', '2026-05-13T09:30');
+    fd.set('scheduledAtOffsetMinutes', '180');
 
     const result = await createBroadcastAction({ error: null, success: null }, fd);
 
@@ -76,7 +78,7 @@ describe('broadcast-actions', () => {
       body: 'Saída às 8h',
       data: {},
       target: { kind: 'city', city: 'São Paulo' },
-      scheduledAt: new Date('2026-05-13T09:30').toISOString(),
+      scheduledAt: '2026-05-13T12:30:00.000Z',
       sendNow: undefined,
     });
   });
@@ -89,6 +91,7 @@ describe('broadcast-actions', () => {
     fd.set('targetCity', '');
     fd.set('deliveryMode', 'schedule');
     fd.set('scheduledAt', '');
+    fd.set('scheduledAtOffsetMinutes', '180');
 
     const result = await createBroadcastAction({ error: null, success: null }, fd);
 
@@ -102,7 +105,8 @@ describe('broadcast-actions', () => {
     fd.set('body', 'Mensagem');
     fd.set('targetKind', 'all');
     fd.set('deliveryMode', 'schedule');
-    fd.set('scheduledAt', '2000-01-01T09:30');
+    fd.set('scheduledAt', '2026-05-11T09:30');
+    fd.set('scheduledAtOffsetMinutes', '180');
 
     const result = await createBroadcastAction({ error: null, success: null }, fd);
 
@@ -114,7 +118,8 @@ describe('broadcast-actions', () => {
         body: 'Mensagem',
         targetKind: 'all',
         deliveryMode: 'schedule',
-        scheduledAt: '2000-01-01T09:30',
+        scheduledAt: '2026-05-11T09:30',
+        scheduledAtOffsetMinutes: '180',
       },
     });
     expect(createAdminBroadcast).not.toHaveBeenCalled();

@@ -34,6 +34,32 @@ const captureValues = (fd: FormData): BroadcastFormValues => {
 const getTrimmedString = (value: FormDataEntryValue | null): string | null =>
   typeof value === 'string' ? value.trim() : null;
 
+const parseScheduledAtInput = (
+  raw: FormDataEntryValue | null,
+  offsetMinutesInput: FormDataEntryValue | null,
+): string => {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new Error('Informe a data e hora do envio.');
+  }
+
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) throw new Error('Informe uma data de envio válida.');
+
+  const offsetMinutes = Number(offsetMinutesInput);
+  if (!Number.isInteger(offsetMinutes) || Math.abs(offsetMinutes) > 14 * 60) {
+    throw new Error('Fuso horário do agendamento inválido.');
+  }
+
+  const [, year, month, day, hour, minute] = match;
+  const utcMs =
+    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)) +
+    offsetMinutes * 60 * 1000;
+  const parsed = new Date(utcMs);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Informe uma data de envio válida.');
+  if (parsed.getTime() <= Date.now()) throw new Error('O agendamento deve estar no futuro.');
+  return parsed.toISOString();
+};
+
 const parseTarget = (fd: FormData): BroadcastTarget => {
   const kind = fd.get('targetKind');
   if (kind === 'attendees_of_event') {
@@ -57,14 +83,10 @@ const parseCreateInput = (fd: FormData): CreateBroadcastRequest =>
     const deliveryMode = fd.get('deliveryMode');
     let scheduledAt: string | undefined;
     if (deliveryMode === 'schedule') {
-      const raw = fd.get('scheduledAt');
-      if (typeof raw !== 'string' || raw.trim() === '') {
-        throw new Error('Informe a data e hora do envio.');
-      }
-      const parsed = new Date(raw);
-      if (Number.isNaN(parsed.getTime())) throw new Error('Informe uma data de envio válida.');
-      if (parsed.getTime() <= Date.now()) throw new Error('O agendamento deve estar no futuro.');
-      scheduledAt = parsed.toISOString();
+      scheduledAt = parseScheduledAtInput(
+        fd.get('scheduledAt'),
+        fd.get('scheduledAtOffsetMinutes'),
+      );
     }
 
     const title = fd.get('title');

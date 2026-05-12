@@ -32,6 +32,12 @@ const defaultScheduledAt = () => {
 const minScheduledAt = () =>
   new Date(Date.now() - new Date().getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16);
 
+const getScheduledOffsetMinutes = (value: string): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(new Date().getTimezoneOffset());
+  return String(parsed.getTimezoneOffset());
+};
+
 const SubmitButton = () => {
   const { pending } = useFormStatus();
   return (
@@ -252,6 +258,11 @@ export function BroadcastComposer({ events }: { events: EventOption[] }) {
               min={minScheduledAt()}
               className={inputClass}
               required
+            />
+            <input
+              type="hidden"
+              name="scheduledAtOffsetMinutes"
+              value={getScheduledOffsetMinutes(scheduledAt)}
             />
           </label>
         ) : (
