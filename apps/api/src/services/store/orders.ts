@@ -152,7 +152,7 @@ export const listAdminStoreOrders = async (
 
   const orders = await prisma.order.findMany({
     where: filteredWhere,
-    orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+    orderBy: { createdAt: 'desc' },
     take: 200,
     select: {
       id: true,
