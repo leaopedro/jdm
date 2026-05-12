@@ -33,6 +33,7 @@ import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
+import { startBroadcastWorker } from './workers/broadcasts.js';
 import { startEventRemindersWorker } from './workers/event-reminders.js';
 
 declare module 'fastify' {
@@ -112,6 +113,17 @@ export const buildApp = async (
     const worker = startEventRemindersWorker({ sender: app.push, log: app.log });
     app.addHook('onClose', () => {
       worker.stop();
+    });
+  }
+
+  if (env.BROADCAST_WORKER_ENABLED && env.NODE_ENV === 'production') {
+    const bWorker = startBroadcastWorker({
+      sender: app.push,
+      batchSize: env.BROADCAST_BATCH_SIZE,
+      log: app.log,
+    });
+    app.addHook('onClose', () => {
+      void bWorker.stop();
     });
   }
 

@@ -45,6 +45,9 @@ model User {
   stateCode       String? @db.VarChar(2)
   avatarObjectKey String? @db.VarChar(300)
 
+  // push preferences (F10)
+  pushPrefs       Json    @default("{\"transactional\":true,\"marketing\":true}")
+
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
   verificationTokens  VerificationToken[]
@@ -56,6 +59,7 @@ model User {
   notifications       Notification[]
   carts               Cart[]
   shippingAddresses   ShippingAddress[]
+  broadcastDeliveries BroadcastDelivery[]
 
   @@index([createdAt])
 }
@@ -701,4 +705,71 @@ model CartItemExtra {
 
   @@unique([cartItemId, extraId])
   @@index([cartItemId])
+}
+
+// F10 — marketing push broadcasts
+
+enum BroadcastStatus {
+  draft
+  scheduled
+  processing
+  sent
+  failed
+  cancelled
+}
+
+enum BroadcastTargetKind {
+  all
+  premium
+  attendees_of_event
+  city
+}
+
+enum BroadcastDeliveryStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
+model Broadcast {
+  id               String              @id @default(cuid())
+  title            String              @db.VarChar(200)
+  body             String              @db.VarChar(500)
+  data             Json                @default("{}")
+  targetKind       BroadcastTargetKind
+  targetValue      String?             @db.VarChar(200)
+  scheduledAt      DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  status           BroadcastStatus     @default(draft)
+  createdByAdminId String
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  deliveries BroadcastDelivery[]
+
+  @@index([status, scheduledAt])
+  @@index([createdAt])
+}
+
+model BroadcastDelivery {
+  id             String                  @id @default(cuid())
+  broadcastId    String
+  userId         String
+  notificationId String?                 @db.VarChar(200)
+  status         BroadcastDeliveryStatus @default(pending)
+  attemptCount   Int                     @default(0)
+  lastAttemptAt  DateTime?
+  sentAt         DateTime?
+  failureCode    String?                 @db.VarChar(80)
+  failureMessage String?                 @db.VarChar(500)
+  createdAt      DateTime                @default(now())
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, userId])
+  @@index([broadcastId, status])
+  @@index([userId])
 }
