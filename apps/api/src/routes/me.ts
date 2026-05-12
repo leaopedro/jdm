@@ -1,5 +1,12 @@
 import { prisma } from '@jdm/db';
+import {
+  pushPrefsSchema,
+  pushPrefsStorageSchema,
+  updatePushPrefsRequestSchema,
+  type PushPrefs,
+} from '@jdm/shared';
 import { publicProfileSchema, updateProfileSchema } from '@jdm/shared/profile';
+import type { Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
@@ -32,6 +39,9 @@ const serializeUser = (user: DbUser, uploads: Uploads) =>
     avatarUrl: user.avatarObjectKey ? uploads.buildPublicUrl(user.avatarObjectKey) : null,
   });
 
+const normalizePushPrefs = (value: Prisma.JsonValue | null): PushPrefs =>
+  pushPrefsSchema.parse(pushPrefsStorageSchema.parse(value ?? {}));
+
 // eslint-disable-next-line @typescript-eslint/require-await
 export const meRoutes: FastifyPluginAsync = async (app) => {
   app.get('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -50,5 +60,38 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     );
     const user = await prisma.user.update({ where: { id: sub }, data });
     return serializeUser(user, app.uploads);
+  });
+
+  app.get('/me/push-preferences', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const user = await prisma.user.findUnique({
+      where: { id: sub },
+      select: { pushPrefs: true },
+    });
+
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
+    return normalizePushPrefs(user.pushPrefs);
+  });
+
+  app.patch('/me/push-preferences', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { sub } = requireUser(request);
+    const input = updatePushPrefsRequestSchema.parse(request.body);
+    const user = await prisma.user.findUnique({
+      where: { id: sub },
+      select: { pushPrefs: true },
+    });
+
+    if (!user) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const current = normalizePushPrefs(user.pushPrefs);
+    const updated = pushPrefsSchema.parse({ ...current, marketing: input.marketing });
+
+    await prisma.user.update({
+      where: { id: sub },
+      data: { pushPrefs: updated as Prisma.InputJsonValue },
+    });
+
+    return updated;
   });
 };

@@ -46,6 +46,17 @@ export default function ProfileLayout() {
           ),
         }}
       />
+      <Stack.Screen
+        name="push-preferences"
+        options={{
+          title: profileCopy.pushPreferences.title,
+          headerLeft: () => (
+            <Pressable onPress={() => router.replace('/profile')} hitSlop={8}>
+              <ChevronLeft color="#F5F5F5" size={24} />
+            </Pressable>
+          ),
+        }}
+      />
     </Stack>
   );
 }

@@ -18,6 +18,8 @@ export const profileCopy = {
   menu: {
     subtitle: 'Gerencie seus dados, endereços e sua garagem.',
     editHint: 'Atualize nome, bio e localização',
+    pushPreferences: 'Notificações de marketing',
+    pushPreferencesHint: 'Escolha se quer receber campanhas e novidades',
     orders: 'Meus pedidos',
     ordersHint: 'Acompanhe compras da loja e pedidos mistos',
     shipping: 'Endereços',
@@ -25,6 +27,18 @@ export const profileCopy = {
     garage: 'Garagem',
     garageHint: 'Veja e edite seus carros',
     logoutHint: 'Encerrar sessão neste aparelho',
+  },
+  pushPreferences: {
+    title: 'Notificações de marketing',
+    description: 'Receba campanhas, novidades e avisos promocionais da JDM Experience no app.',
+    transactionalNotice:
+      'Avisos transacionais, como confirmação de ingresso e lembretes de evento, continuam separados e ativos.',
+    toggleLabel: 'Receber campanhas e novidades por push',
+    save: 'Salvar preferência',
+    enabled: 'Marketing por push ativado.',
+    disabled: 'Marketing por push desativado.',
+    loadFailed: 'Não foi possível carregar sua preferência.',
+    saveFailed: 'Não foi possível salvar sua preferência.',
   },
   shipping: {
     title: 'Endereços',

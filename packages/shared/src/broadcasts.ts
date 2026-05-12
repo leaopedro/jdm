@@ -80,10 +80,15 @@ export const broadcastListResponseSchema = z.object({
 export type BroadcastListResponse = z.infer<typeof broadcastListResponseSchema>;
 
 export const pushPrefsSchema = z.object({
+  transactional: z.boolean(),
+  marketing: z.boolean(),
+});
+export type PushPrefs = z.infer<typeof pushPrefsSchema>;
+
+export const pushPrefsStorageSchema = z.object({
   transactional: z.boolean().default(true),
   marketing: z.boolean().default(true),
 });
-export type PushPrefs = z.infer<typeof pushPrefsSchema>;
 
 export const updatePushPrefsRequestSchema = z.object({
   marketing: z.boolean(),

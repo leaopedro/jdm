@@ -81,6 +81,8 @@ Living references; update these as features land.
   (captura de logs no device, repro local em simulator/release build).
 - **F6 Push notifications** — `docs/test-push.md` + the F6 manual smoke at
   the bottom of `handoff.md`. Requires an EAS dev build, not Expo Go.
+- **F10 Marketing push preference opt-out** — §3.8 below
+  (mobile toggle persistence + admin dry-run exclusion).
 - **Finance dashboard** — §3.2 below (permission, filters, KPIs, export).
 - **X.6 Accessibility** — Section 10 below.
 
@@ -218,6 +220,46 @@ Covers permission gating, filter behavior, KPI/table/trend consistency,
 expandable-row details, CSV export, and responsive layout.
 
 **Prerequisites**
+
+### 3.8 F10 marketing push preference opt-out
+
+Covers the mobile marketing toggle, persisted consent, and the guarantee
+that opted-out users are excluded from future broadcast sends.
+
+**Prerequisites**
+
+- Backend with JDMA-518 and JDMA-520 merged.
+- Mobile dev build or simulator logged in as a test user.
+- Admin access to the broadcast composer or API.
+- At least one device token already registered for the test user.
+
+**Steps**
+
+1. Open `Perfil` -> `Notificações de marketing`.
+   Expect the screen to show one marketing toggle, one save button, and a
+   note that transactional pushes stay separate.
+2. Turn the toggle off and tap `Salvar preferência`.
+   Expect a success banner confirming marketing push was disabled.
+3. Fully close and reopen the app, then revisit the same screen.
+   Expect the toggle to remain off.
+4. As an admin, run a broadcast dry-run that would normally include the
+   same user.
+   Expect the estimated audience to exclude that opted-out user.
+5. Re-enable the toggle and save again.
+   Expect the success banner for enabled state and a subsequent dry-run to
+   count the user again.
+
+**Pass criteria**
+
+- The marketing preference persists across app relaunch.
+- Transactional messaging copy remains explicit on screen.
+- Dry-run counts reflect the opt-out immediately after save.
+
+**Evidence to attach**
+
+- Screenshot of the mobile preference screen in the off state.
+- API or admin evidence showing the dry-run count before and after
+  re-enabling.
 
 - Local API running (`pnpm --filter @jdm/api dev`) with seeded orders
   in paid/refunded states across multiple events, providers, and methods.
