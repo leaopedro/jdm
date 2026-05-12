@@ -24,13 +24,18 @@ export const broadcastTargetSchema = z.discriminatedUnion('kind', [
 ]);
 export type BroadcastTarget = z.infer<typeof broadcastTargetSchema>;
 
-export const createBroadcastRequestSchema = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().min(1).max(500),
-  data: z.record(z.unknown()).default({}),
-  target: broadcastTargetSchema,
-  scheduledAt: z.string().datetime().optional(),
-});
+export const createBroadcastRequestSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    body: z.string().min(1).max(500),
+    data: z.record(z.unknown()).default({}),
+    target: broadcastTargetSchema,
+    scheduledAt: z.string().datetime().optional(),
+    sendNow: z.boolean().optional(),
+  })
+  .refine((d) => !(d.sendNow && d.scheduledAt), {
+    message: 'Use either sendNow or scheduledAt, not both',
+  });
 export type CreateBroadcastRequest = z.infer<typeof createBroadcastRequestSchema>;
 
 export const updateBroadcastRequestSchema = z.object({

@@ -50,7 +50,15 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
           ? input.target.city
           : null;
 
-    const status = input.scheduledAt ? 'scheduled' : 'draft';
+    let scheduledAt: Date | null = null;
+    let status: 'draft' | 'scheduled' = 'draft';
+    if (input.sendNow) {
+      scheduledAt = new Date();
+      status = 'scheduled';
+    } else if (input.scheduledAt) {
+      scheduledAt = new Date(input.scheduledAt);
+      status = 'scheduled';
+    }
 
     const broadcast = await prisma.broadcast.create({
       data: {
@@ -59,7 +67,7 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
         data: (input.data ?? {}) as Prisma.InputJsonValue,
         targetKind: input.target.kind,
         targetValue,
-        scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
+        scheduledAt,
         status,
         createdByAdminId: sub,
       },

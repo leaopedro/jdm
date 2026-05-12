@@ -23,10 +23,13 @@ export const runBroadcastDispatchTick = async (deps: DispatchDeps): Promise<void
   const batchSize = deps.batchSize ?? CHUNK;
   const log = deps.log;
 
+  // Only dispatch broadcasts that admins explicitly marked sendable.
+  // Drafts are excluded — they require an explicit sendNow or scheduledAt
+  // transition before a worker tick may claim them.
   const broadcast = await prisma.broadcast.findFirst({
     where: {
-      status: { in: ['draft', 'scheduled'] },
-      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+      status: 'scheduled',
+      scheduledAt: { not: null, lte: now },
     },
     orderBy: { scheduledAt: 'asc' },
   });
@@ -34,7 +37,11 @@ export const runBroadcastDispatchTick = async (deps: DispatchDeps): Promise<void
   if (!broadcast) return;
 
   const claimed = await prisma.broadcast.updateMany({
-    where: { id: broadcast.id, status: { in: ['draft', 'scheduled'] } },
+    where: {
+      id: broadcast.id,
+      status: 'scheduled',
+      scheduledAt: { not: null, lte: now },
+    },
     data: { status: 'processing', startedAt: now },
   });
 
