@@ -1,4 +1,17 @@
 import {
+  broadcastDryRunResponseSchema,
+  broadcastListResponseSchema,
+  broadcastSummarySchema,
+  createBroadcastRequestSchema,
+  updateBroadcastRequestSchema,
+  type BroadcastDryRunRequest,
+  type BroadcastDryRunResponse,
+  type BroadcastListResponse,
+  type BroadcastSummary,
+  type CreateBroadcastRequest,
+  type UpdateBroadcastRequest,
+} from '@jdm/shared';
+import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
   adminExtraSchema,
@@ -356,6 +369,50 @@ export const updateAdminStoreSettings = (input: StoreSettingsUpdate): Promise<St
     method: 'PUT',
     body: JSON.stringify(input),
     schema: storeSettingsSchema,
+  });
+
+// ── Admin broadcasts ───────────────────────────────────────────────
+
+export const listAdminBroadcasts = (): Promise<BroadcastListResponse> =>
+  apiFetch('/admin/broadcasts', {
+    schema: broadcastListResponseSchema,
+  });
+
+export const getAdminBroadcast = (id: string): Promise<BroadcastSummary> =>
+  apiFetch(`/admin/broadcasts/${id}`, {
+    schema: broadcastSummarySchema,
+  });
+
+export const createAdminBroadcast = (input: CreateBroadcastRequest): Promise<BroadcastSummary> =>
+  apiFetch('/admin/broadcasts', {
+    method: 'POST',
+    body: JSON.stringify(createBroadcastRequestSchema.parse(input)),
+    schema: broadcastSummarySchema,
+  });
+
+export const updateAdminBroadcast = (
+  id: string,
+  input: UpdateBroadcastRequest,
+): Promise<BroadcastSummary> =>
+  apiFetch(`/admin/broadcasts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updateBroadcastRequestSchema.parse(input)),
+    schema: broadcastSummarySchema,
+  });
+
+export const cancelAdminBroadcast = (id: string): Promise<BroadcastSummary> =>
+  apiFetch(`/admin/broadcasts/${id}/cancel`, {
+    method: 'POST',
+    schema: broadcastSummarySchema,
+  });
+
+export const dryRunAdminBroadcast = (
+  input: BroadcastDryRunRequest,
+): Promise<BroadcastDryRunResponse> =>
+  apiFetch('/admin/broadcasts/dry-run', {
+    method: 'POST',
+    body: JSON.stringify(input),
+    schema: broadcastDryRunResponseSchema,
   });
 // ── Admin store: products / variants / photos ────────────────────────
 
