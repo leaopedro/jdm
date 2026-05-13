@@ -163,3 +163,58 @@ describe('PATCH /admin/store/products/:id activation guard', () => {
     expect(refreshed?.title).toBe('Renomeado');
   });
 });
+
+describe('GET /admin/store/products/lookup', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns id/slug/title/status for every product, regardless of status', async () => {
+    const draft = await seedDraftProduct('camiseta-lookup-draft');
+    const active = await seedDraftProduct('camiseta-lookup-active');
+    await prisma.productPhoto.create({
+      data: { productId: active.id, objectKey: 'store/products/x/p.jpg', sortOrder: 0 },
+    });
+    await prisma.product.update({
+      where: { id: active.id },
+      data: { status: 'active', allowPickup: true },
+    });
+    const archived = await seedDraftProduct('camiseta-lookup-archived');
+    await prisma.product.update({ where: { id: archived.id }, data: { status: 'archived' } });
+
+    const header = await orgAuth();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/store/products/lookup',
+      headers: { authorization: header },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body: {
+      items: Array<{ id: string; slug: string; title: string; status: string }>;
+    } = res.json();
+    const byId = new Map<string, { slug: string; title: string; status: string }>(
+      body.items.map((item) => [item.id, item]),
+    );
+    expect(byId.get(draft.id)).toMatchObject({ slug: 'camiseta-lookup-draft', status: 'draft' });
+    expect(byId.get(active.id)).toMatchObject({ slug: 'camiseta-lookup-active', status: 'active' });
+    expect(byId.get(archived.id)).toMatchObject({
+      slug: 'camiseta-lookup-archived',
+      status: 'archived',
+    });
+  });
+
+  it('requires organizer/admin auth', async () => {
+    const app2 = app;
+    const res = await app2.inject({ method: 'GET', url: '/admin/store/products/lookup' });
+    expect(res.statusCode).toBe(401);
+  });
+});
