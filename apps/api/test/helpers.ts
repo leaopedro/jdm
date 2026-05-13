@@ -37,6 +37,7 @@ export const resetDatabase = async (): Promise<void> => {
   await prisma.cartItemExtra.deleteMany();
   await prisma.cartItem.deleteMany();
   await prisma.cart.deleteMany();
+  await prisma.pickupVoucher.deleteMany();
   await prisma.ticketExtraItem.deleteMany();
   await prisma.ticket.deleteMany();
   await prisma.orderItem.deleteMany();

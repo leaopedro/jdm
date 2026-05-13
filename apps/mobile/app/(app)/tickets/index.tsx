@@ -173,9 +173,18 @@ export default function TicketsIndex() {
               pendingExtras.length === 1
                 ? ticketsCopy.list.pendingExtrasOne
                 : ticketsCopy.list.pendingExtras;
+            const pendingVouchers = item.pickupVouchers.filter((v) => v.status === 'valid');
+            const pendingVoucherLabel =
+              pendingVouchers.length === 1
+                ? ticketsCopy.list.pendingVouchersOne
+                : ticketsCopy.list.pendingVouchers;
             const a11yExtras =
               pendingExtras.length > 0
                 ? `, ${pendingExtras.length} ${pendingLabel}: ${pendingExtras.map((e) => e.extraName).join(', ')}`
+                : '';
+            const a11yVouchers =
+              pendingVouchers.length > 0
+                ? `, ${pendingVouchers.length} ${pendingVoucherLabel}`
                 : '';
             return (
               <Pressable
@@ -187,7 +196,7 @@ export default function TicketsIndex() {
                   } as never)
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`${nickname ? `${nickname}, ` : ''}${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}${a11yExtras}`}
+                accessibilityLabel={`${nickname ? `${nickname}, ` : ''}${item.event.title}, ${item.tierName}, ${statusLabel(item.status)}${a11yExtras}${a11yVouchers}`}
                 accessibilityHint="Opens ticket QR code"
               >
                 {nickname ? (
@@ -215,6 +224,23 @@ export default function TicketsIndex() {
                         <View key={extra.id} style={styles.pendingExtraChip}>
                           <Text style={styles.pendingExtraChipText} numberOfLines={1}>
                             {extra.extraName}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                {pendingVouchers.length > 0 && (
+                  <View style={styles.pendingExtras}>
+                    <Text style={styles.pendingExtrasLabel}>
+                      {pendingVouchers.length} {pendingVoucherLabel}
+                    </Text>
+                    <View style={styles.pendingExtrasChips}>
+                      {pendingVouchers.map((voucher) => (
+                        <View key={voucher.id} style={styles.pendingExtraChip}>
+                          <Text style={styles.pendingExtraChipText} numberOfLines={1}>
+                            {voucher.productTitle ?? '—'}
+                            {voucher.variantName ? ` · ${voucher.variantName}` : ''}
                           </Text>
                         </View>
                       ))}

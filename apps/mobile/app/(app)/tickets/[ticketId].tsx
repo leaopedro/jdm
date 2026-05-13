@@ -196,6 +196,59 @@ export default function TicketDetail() {
         </View>
       )}
 
+      {ticket.pickupVouchers.length > 0 && (
+        <View style={styles.pickupSection}>
+          <Text style={styles.extrasTitle}>{ticketsCopy.detail.vouchersTitle}</Text>
+          <Text style={styles.pickupHelp}>{ticketsCopy.detail.vouchersHelp}</Text>
+          {ticket.pickupVouchers.map((voucher) => {
+            const used = voucher.status === 'used';
+            const revoked = voucher.status === 'revoked';
+            const statusLabel = used
+              ? ticketsCopy.detail.voucherUsed
+              : revoked
+                ? ticketsCopy.detail.voucherRevoked
+                : ticketsCopy.detail.voucherValid;
+            const title = voucher.productTitle ?? '—';
+            const variantSuffix = voucher.variantName ? ` · ${voucher.variantName}` : '';
+            return (
+              <View
+                key={voucher.id}
+                style={[styles.extraCard, (used || revoked) && styles.extraCardUsed]}
+              >
+                <Text style={[styles.extraName, (used || revoked) && styles.textMuted]}>
+                  {title}
+                  {variantSuffix}
+                </Text>
+                <Text style={[styles.pickupItemQty, (used || revoked) && styles.textMuted]}>
+                  {ticketsCopy.detail.voucherOrderLabel(voucher.orderShortId)}
+                </Text>
+                {used || revoked ? (
+                  <View
+                    style={styles.extraQrUsedBox}
+                    accessible={true}
+                    accessibilityRole="text"
+                    accessibilityLabel={statusLabel}
+                  >
+                    <Text style={styles.qrUsedText}>{statusLabel}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.extraQrBox}>
+                    <HiddenQR
+                      value={voucher.code}
+                      size={160}
+                      accessibilityLabel={`Voucher QR for ${title}`}
+                    />
+                  </View>
+                )}
+                <Text style={[styles.extraStatus, (used || revoked) && styles.textMuted]}>
+                  {statusLabel}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {ticket.pickupOrders.length > 0 && (
         <View style={styles.pickupSection}>
           <Text style={styles.extrasTitle}>{ticketsCopy.detail.pickupTitle}</Text>

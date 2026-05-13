@@ -7,21 +7,27 @@ import { useEffect, useRef, useState } from 'react';
 import {
   submitCheckIn,
   submitExtraClaim,
-  submitPickupCollect,
+  submitVoucherClaim,
   type CheckInActionResult,
   type ExtraClaimActionResult,
+  type VoucherClaimActionResult,
 } from '~/lib/check-in-actions';
 
 type ScanState =
   | { kind: 'idle' }
   | { kind: 'pending' }
   | { kind: 'ticket-result'; data: CheckInActionResult; code: string }
-  | { kind: 'extra-result'; data: ExtraClaimActionResult; code: string };
+  | { kind: 'extra-result'; data: ExtraClaimActionResult; code: string }
+  | { kind: 'voucher-result'; data: VoucherClaimActionResult; code: string };
 
 const RESCAN_COOLDOWN_MS = 5000;
 
 function isExtraCode(code: string): boolean {
   return code.startsWith('e.');
+}
+
+function isVoucherCode(code: string): boolean {
+  return code.startsWith('v.');
 }
 
 function mapCameraError(err: unknown): string {
@@ -55,7 +61,10 @@ export function Scanner({ eventId }: { eventId: string }) {
 
     const handleScan = async (code: string) => {
       setState({ kind: 'pending' });
-      if (isExtraCode(code)) {
+      if (isVoucherCode(code)) {
+        const data = await submitVoucherClaim(code, eventId);
+        setState({ kind: 'voucher-result', data, code });
+      } else if (isExtraCode(code)) {
         const data = await submitExtraClaim(code, eventId);
         setState({ kind: 'extra-result', data, code });
       } else {
@@ -119,13 +128,16 @@ export function Scanner({ eventId }: { eventId: string }) {
         playsInline
       />
       {state.kind === 'idle' && (
-        <p className="opacity-80">Aponte para o QR code do ingresso ou extra.</p>
+        <p className="opacity-80">Aponte para o QR code do ingresso, extra ou voucher.</p>
       )}
       {state.kind === 'pending' && <p className="opacity-80">Validando…</p>}
       {state.kind === 'ticket-result' && (
         <TicketResultCard data={state.data} eventId={eventId} onDismiss={dismiss} />
       )}
       {state.kind === 'extra-result' && <ExtraResultCard data={state.data} onDismiss={dismiss} />}
+      {state.kind === 'voucher-result' && (
+        <VoucherResultCard data={state.data} onDismiss={dismiss} />
+      )}
     </div>
   );
 }
@@ -208,9 +220,7 @@ function TicketResultCard({
 
       {extras.length > 0 && <ExtrasPanel extras={extras} onClaim={handleClaim} />}
 
-      {data.storePickup.length > 0 && (
-        <StorePickupPanel ticketId={data.ticketId} initialOrders={data.storePickup} />
-      )}
+      {data.storePickup.length > 0 && <StorePickupPanel orders={data.storePickup} />}
 
       <div className="mt-3 flex gap-2">
         <button
@@ -349,47 +359,16 @@ function ExtraResultCard({
   );
 }
 
-function StorePickupPanel({
-  ticketId,
-  initialOrders,
-}: {
-  ticketId: string;
-  initialOrders: StorePickupOrder[];
-}) {
-  const [orders, setOrders] = useState<StorePickupOrder[]>(initialOrders);
-  const [collecting, setCollecting] = useState(false);
-  const [collectError, setCollectError] = useState<string | null>(null);
-
-  const allDone = orders.every(
-    (o) => o.fulfillmentStatus === 'picked_up' || o.fulfillmentStatus === 'cancelled',
-  );
-
-  const handleCollect = async () => {
-    setCollecting(true);
-    setCollectError(null);
-    const result = await submitPickupCollect(ticketId);
-    if (result.ok) {
-      setOrders(result.orders);
-    } else {
-      setCollectError(result.message);
-    }
-    setCollecting(false);
-  };
-
+function StorePickupPanel({ orders }: { orders: StorePickupOrder[] }) {
   return (
     <div className="mt-3 border-t border-[color:var(--color-border)] pt-3">
       <p className="mb-2 text-sm font-semibold">Retirada na loja</p>
+      <p className="mb-2 text-xs opacity-70">
+        Para entregar produtos, escaneie o voucher individual de cada item.
+      </p>
       {orders.map((order) => (
         <div key={order.orderId} className="mb-3">
-          <p className="mb-1 text-xs opacity-70">
-            Pedido #{order.shortId}
-            {order.fulfillmentStatus === 'picked_up' && (
-              <span className="ml-2 font-semibold text-green-600">Coletado</span>
-            )}
-            {order.fulfillmentStatus === 'cancelled' && (
-              <span className="ml-2 font-semibold text-red-500">Cancelado</span>
-            )}
-          </p>
+          <p className="mb-1 text-xs opacity-70">Pedido #{order.shortId}</p>
           <ul className="flex flex-col gap-1">
             {order.items.map((item) => (
               <li key={item.id} className="text-sm">
@@ -413,21 +392,80 @@ function StorePickupPanel({
           </ul>
         </div>
       ))}
-      {collectError ? (
-        <p className="mt-2 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm">
-          {collectError}
-        </p>
-      ) : null}
-      {!allDone ? (
+    </div>
+  );
+}
+
+function VoucherResultCard({
+  data,
+  onDismiss,
+}: {
+  data: VoucherClaimActionResult;
+  onDismiss: () => void;
+}) {
+  if (!data.ok) {
+    const human = friendlyVoucherError(data.error);
+    return (
+      <div className="rounded border border-red-500/40 bg-red-500/10 p-4">
+        <p className="text-lg font-semibold">{human.title}</p>
+        <p className="text-sm opacity-80">{human.subtitle ?? data.message}</p>
         <button
           type="button"
-          disabled={collecting}
-          onClick={() => void handleCollect()}
-          className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          onClick={onDismiss}
+          className="mt-3 rounded border border-[color:var(--color-border)] px-3 py-1 text-sm"
         >
-          {collecting ? '…' : 'Marcar coletado'}
+          Escanear próximo
         </button>
+      </div>
+    );
+  }
+
+  const claimed = data.result === 'claimed';
+  const { voucher } = data;
+  const attrs = voucher.product.variantAttributes
+    ? Object.entries(voucher.product.variantAttributes)
+    : [];
+  return (
+    <div
+      className={
+        claimed
+          ? 'rounded border border-green-500/40 bg-green-500/10 p-4'
+          : 'rounded border border-amber-500/40 bg-amber-500/10 p-4'
+      }
+    >
+      <p className="text-lg font-semibold">
+        {claimed ? 'Voucher entregue' : 'Voucher já entregue'}
+      </p>
+      <p className="text-sm">
+        <span className="font-medium">{voucher.product.title ?? 'Produto'}</span>
+        {voucher.product.variantName ? (
+          <span className="ml-1 opacity-70"> — {voucher.product.variantName}</span>
+        ) : null}
+      </p>
+      {voucher.product.variantSku ? (
+        <p className="text-xs opacity-70">SKU: {voucher.product.variantSku}</p>
       ) : null}
+      {attrs.length > 0 ? (
+        <p className="text-xs opacity-70">{attrs.map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
+      ) : null}
+      <p className="mt-2 text-sm">
+        {voucher.holder.name} · {voucher.ticket.tier.name}
+      </p>
+      <p className="text-xs opacity-70">Pedido #{voucher.orderShortId}</p>
+      {!claimed && voucher.usedAt ? (
+        <p className="text-sm opacity-80">
+          Entregue em {new Date(voucher.usedAt).toLocaleString('pt-BR')}
+        </p>
+      ) : null}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm"
+        >
+          Escanear próximo
+        </button>
+      </div>
     </div>
   );
 }
@@ -463,6 +501,24 @@ function friendlyExtraError(code: string): { title: string; subtitle?: string } 
       };
     case 'ExtraItemRevoked':
       return { title: 'Extra revogado' };
+    default:
+      return { title: 'Erro', subtitle: code };
+  }
+}
+
+function friendlyVoucherError(code: string): { title: string; subtitle?: string } {
+  switch (code) {
+    case 'InvalidVoucherCode':
+      return { title: 'QR inválido', subtitle: 'Este código não é um voucher válido.' };
+    case 'VoucherNotFound':
+      return { title: 'Voucher não encontrado' };
+    case 'VoucherWrongEvent':
+      return {
+        title: 'Evento errado',
+        subtitle: 'Este voucher é de outro evento.',
+      };
+    case 'VoucherRevoked':
+      return { title: 'Voucher revogado' };
     default:
       return { title: 'Erro', subtitle: code };
   }

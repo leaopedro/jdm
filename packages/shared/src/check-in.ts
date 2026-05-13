@@ -42,24 +42,6 @@ export const storePickupOrderSchema = z.object({
 });
 export type StorePickupOrder = z.infer<typeof storePickupOrderSchema>;
 
-export const pickupCollectRequestSchema = z.object({
-  ticketId: z.string().min(1).max(64),
-});
-export type PickupCollectRequest = z.infer<typeof pickupCollectRequestSchema>;
-
-export const pickupCollectResponseSchema = z.object({
-  orders: z.array(
-    z.object({
-      orderId: z.string().min(1),
-      shortId: z.string().min(1),
-      collected: z.boolean(),
-      fulfillmentStatus: z.enum(['unfulfilled', 'pickup_ready', 'picked_up', 'cancelled']),
-      items: z.array(storePickupItemSchema),
-    }),
-  ),
-});
-export type PickupCollectResponse = z.infer<typeof pickupCollectResponseSchema>;
-
 export const ticketCheckInResponseSchema = z.object({
   result: checkInResultSchema,
   ticket: z.object({
@@ -135,3 +117,43 @@ export const extraClaimResponseSchema = z.object({
   }),
 });
 export type ExtraClaimResponse = z.infer<typeof extraClaimResponseSchema>;
+
+// ── Pickup voucher claim (JDMA-540 per-product QR vouchers) ──────────
+
+export const pickupVoucherStatusSchema = z.enum(['valid', 'used', 'revoked']);
+export type PickupVoucherStatus = z.infer<typeof pickupVoucherStatusSchema>;
+
+export const pickupVoucherClaimRequestSchema = z.object({
+  code: z.string().min(10).max(500),
+  eventId: z.string().min(1).max(64),
+});
+export type PickupVoucherClaimRequest = z.infer<typeof pickupVoucherClaimRequestSchema>;
+
+export const pickupVoucherClaimResultSchema = z.enum(['claimed', 'already_used']);
+export type PickupVoucherClaimResult = z.infer<typeof pickupVoucherClaimResultSchema>;
+
+export const pickupVoucherClaimResponseSchema = z.object({
+  result: pickupVoucherClaimResultSchema,
+  voucher: z.object({
+    id: z.string().min(1),
+    orderId: z.string().min(1),
+    orderShortId: z.string().min(1),
+    status: pickupVoucherStatusSchema,
+    usedAt: z.string().datetime().nullable(),
+    product: z.object({
+      title: z.string().nullable(),
+      variantName: z.string().nullable(),
+      variantSku: z.string().nullable(),
+      variantAttributes: z.record(z.string()).nullable(),
+    }),
+    holder: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+    }),
+    ticket: z.object({
+      id: z.string().min(1),
+      tier: z.object({ id: z.string().min(1), name: z.string().min(1) }),
+    }),
+  }),
+});
+export type PickupVoucherClaimResponse = z.infer<typeof pickupVoucherClaimResponseSchema>;

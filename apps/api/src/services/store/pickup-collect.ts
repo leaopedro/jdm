@@ -1,8 +1,6 @@
 import { prisma } from '@jdm/db';
 import type { StorePickupItem, StorePickupOrder } from '@jdm/shared/check-in';
 
-import { recordAudit } from '../admin-audit.js';
-
 const parsePickupTicketId = (notes: string | null): string | null => {
   if (!notes) return null;
   try {
@@ -137,59 +135,4 @@ export const getPickupOrdersByTicket = async (
   }
 
   return result;
-};
-
-export type PickupCollectResult = {
-  orderId: string;
-  shortId: string;
-  collected: boolean;
-  fulfillmentStatus: StorePickupOrder['fulfillmentStatus'];
-  items: StorePickupItem[];
-};
-
-export const collectPickupOrders = async (
-  ticketId: string,
-  actorId: string,
-): Promise<PickupCollectResult[]> => {
-  const orders = await queryPickupOrders(ticketId);
-  const results: PickupCollectResult[] = [];
-
-  for (const order of orders) {
-    const alreadyCollected = order.fulfillmentStatus === 'picked_up';
-    const cancelled = order.fulfillmentStatus === 'cancelled';
-
-    if (!alreadyCollected && !cancelled) {
-      await prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id: order.id },
-          data: { fulfillmentStatus: 'picked_up' },
-        });
-        await recordAudit(
-          {
-            actorId,
-            action: 'store.order.fulfillment_update',
-            entityType: 'order',
-            entityId: order.id,
-            metadata: {
-              from: order.fulfillmentStatus,
-              to: 'picked_up',
-              method: 'pickup',
-              source: 'check_in_scan',
-            },
-          },
-          tx,
-        );
-      });
-    }
-
-    results.push({
-      orderId: order.id,
-      shortId: order.id.slice(-8).toUpperCase(),
-      collected: !alreadyCollected && !cancelled,
-      fulfillmentStatus: cancelled ? 'cancelled' : 'picked_up',
-      items: mapItems(order.items),
-    });
-  }
-
-  return results;
 };

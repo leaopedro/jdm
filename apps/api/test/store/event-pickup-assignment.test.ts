@@ -1,11 +1,14 @@
 import { prisma } from '@jdm/db';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { loadEnv } from '../../src/env.js';
 import {
   EventPickupAssignmentUnavailableError,
   assignEventPickupTicket,
 } from '../../src/services/store/event-pickup.js';
 import { resetDatabase } from '../helpers.js';
+
+const env = loadEnv();
 
 const createUser = async (email = 'pickup@jdm.test') =>
   prisma.user.create({
@@ -127,7 +130,7 @@ describe('assignEventPickupTicket precedence', () => {
       createdAt: new Date(Date.now() - 1_000),
     });
 
-    const assignedId = await assignEventPickupTicket(order.id);
+    const assignedId = await assignEventPickupTicket(order.id, env);
     expect(assignedId).toBe(sameOrderTicket.id);
 
     const refreshed = await prisma.order.findUniqueOrThrow({
@@ -180,7 +183,7 @@ describe('assignEventPickupTicket precedence', () => {
       createdAt: new Date(Date.now() - 1_000),
     });
 
-    const assignedId = await assignEventPickupTicket(order.id);
+    const assignedId = await assignEventPickupTicket(order.id, env);
     expect(assignedId).toBe(latest.id);
 
     const refreshed = await prisma.order.findUniqueOrThrow({
@@ -203,7 +206,7 @@ describe('assignEventPickupTicket precedence', () => {
       status: 'revoked',
     });
 
-    const assignedId = await assignEventPickupTicket(order.id);
+    const assignedId = await assignEventPickupTicket(order.id, env);
     expect(assignedId).toBe(validOlder.id);
   });
 
@@ -212,7 +215,7 @@ describe('assignEventPickupTicket precedence', () => {
     const { event } = await createEvent();
     const order = await createPickupOrder(user.id, event.id);
 
-    await expect(assignEventPickupTicket(order.id)).rejects.toBeInstanceOf(
+    await expect(assignEventPickupTicket(order.id, env)).rejects.toBeInstanceOf(
       EventPickupAssignmentUnavailableError,
     );
   });
@@ -228,7 +231,7 @@ describe('assignEventPickupTicket precedence', () => {
       data: { pickupTicketId: existing.id },
     });
 
-    const assignedId = await assignEventPickupTicket(order.id);
+    const assignedId = await assignEventPickupTicket(order.id, env);
     expect(assignedId).toBe(existing.id);
   });
 });

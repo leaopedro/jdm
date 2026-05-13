@@ -3,8 +3,8 @@ import {
   checkInEventsResponseSchema,
   extraClaimRequestSchema,
   extraClaimResponseSchema,
-  pickupCollectRequestSchema,
-  pickupCollectResponseSchema,
+  pickupVoucherClaimRequestSchema,
+  pickupVoucherClaimResponseSchema,
   ticketCheckInRequestSchema,
   ticketCheckInResponseSchema,
 } from '@jdm/shared/check-in';
@@ -12,10 +12,14 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import { getPickupOrdersForTicket } from '../../services/store/pickup-collect.js';
 import {
-  collectPickupOrders,
-  getPickupOrdersForTicket,
-} from '../../services/store/pickup-collect.js';
+  claimPickupVoucher,
+  InvalidVoucherCodeError,
+  VoucherNotFoundError,
+  VoucherRevokedError,
+  VoucherWrongEventError,
+} from '../../services/store/pickup-voucher.js';
 import {
   checkInTicket,
   InvalidTicketCodeError,
@@ -163,13 +167,65 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post('/store/pickup/collect', async (request, reply) => {
+  app.post('/store/pickup/voucher/claim', async (request, reply) => {
     const { sub: actorId } = requireUser(request);
-    const input = pickupCollectRequestSchema.parse(request.body);
+    const input = pickupVoucherClaimRequestSchema.parse(request.body);
 
-    const orders = await collectPickupOrders(input.ticketId, actorId);
+    try {
+      const outcome = await claimPickupVoucher(
+        { code: input.code, eventId: input.eventId, actorUserId: actorId },
+        app.env,
+      );
 
-    return reply.send(pickupCollectResponseSchema.parse({ orders }));
+      if (outcome.kind === 'claimed') {
+        await recordAudit({
+          actorId,
+          action: 'store.pickup_voucher.claim',
+          entityType: 'pickup_voucher',
+          entityId: outcome.item.id,
+          metadata: {
+            eventId: input.eventId,
+            orderId: outcome.item.orderId,
+            orderItemId: outcome.item.orderItemId,
+          },
+        });
+      }
+
+      const usedAt =
+        outcome.kind === 'claimed'
+          ? outcome.claimedAt.toISOString()
+          : outcome.originalUsedAt.toISOString();
+
+      return reply.send(
+        pickupVoucherClaimResponseSchema.parse({
+          result: outcome.kind,
+          voucher: {
+            id: outcome.item.id,
+            orderId: outcome.item.orderId,
+            orderShortId: outcome.item.orderId.slice(-8).toUpperCase(),
+            status: outcome.item.status,
+            usedAt,
+            product: outcome.item.product,
+            holder: outcome.item.holder,
+            ticket: outcome.item.ticket,
+          },
+        }),
+      );
+    } catch (err) {
+      if (err instanceof InvalidVoucherCodeError) {
+        return reply.status(400).send({ error: 'InvalidVoucherCode', message: err.message });
+      }
+      if (err instanceof VoucherNotFoundError) {
+        return reply.status(404).send({ error: 'VoucherNotFound', message: err.message });
+      }
+      if (err instanceof VoucherWrongEventError) {
+        return reply.status(409).send({ error: 'VoucherWrongEvent', message: err.message });
+      }
+      if (err instanceof VoucherRevokedError) {
+        return reply.status(409).send({ error: 'VoucherRevoked', message: err.message });
+      }
+      throw err;
+    }
   });
 
   app.get('/check-in/events', async (_request, reply) => {

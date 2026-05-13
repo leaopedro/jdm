@@ -151,6 +151,7 @@ describe('cart presentation helpers', () => {
       },
       extras: [],
       pickupOrders: [],
+      pickupVouchers: [],
     } satisfies MyTicket;
 
     expect(
@@ -216,6 +217,7 @@ describe('cart presentation helpers', () => {
       },
       extras: [],
       pickupOrders: [],
+      pickupVouchers: [],
     } satisfies MyTicket;
 
     expect(buildPickupEventOptions([cancelledTicket], [])).toEqual([]);
