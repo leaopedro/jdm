@@ -18,9 +18,10 @@ import {
 } from 'react-native';
 
 import { ApiError } from '~/api/client';
-import { cancelMyOrder, listMyOrders, resumeOrder } from '~/api/orders';
+import { cancelMyOrder, getOrder, listMyOrders, resumeOrder } from '~/api/orders';
 import { selectResumeKind } from '~/cart/resume-selector';
-import { getPendingCheckoutUrl } from '~/cart/web-pending-checkout';
+import { resolveWebResume } from '~/cart/resume-web-checkout';
+import { clearPendingCheckoutUrl, getPendingCheckoutUrl } from '~/cart/web-pending-checkout';
 import { ordersCopy } from '~/copy/orders';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -134,21 +135,45 @@ function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () 
 // Resumes a Stripe Checkout Session order on web by reopening the hosted
 // checkout URL captured at order creation. Checkout Session orders have
 // Order.providerRef = null, so /orders/:id/resume returns 409 for them;
-// we therefore avoid that endpoint entirely on web.
-function ResumeWebStripeButton({ orderId }: { orderId: string }) {
-  const handlePay = () => {
-    const url = getPendingCheckoutUrl(orderId);
-    if (!url) {
+// we therefore avoid that endpoint entirely on web. resolveWebResume
+// re-validates server-side freshness (status === 'pending' and reservation
+// not expired) before redirecting, so a stale order cannot be paid by
+// reopening a stored Stripe Checkout URL.
+function ResumeWebStripeButton({ orderId, reload }: { orderId: string; reload: () => unknown }) {
+  const [busy, setBusy] = useState(false);
+
+  const handlePay = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const action = await resolveWebResume(orderId, {
+        getStoredUrl: (id) => getPendingCheckoutUrl(id),
+        fetchOrderStatus: async (id) => {
+          const order = await getOrder(id);
+          return { status: order.status, expiresAt: order.expiresAt };
+        },
+      });
+      if (action.kind === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = action.url;
+        }
+        return;
+      }
+      clearPendingCheckoutUrl(orderId);
       showMessage(ordersCopy.payWebUnavailable);
-      return;
-    }
-    if (typeof window !== 'undefined') {
-      window.location.href = url;
+      reload();
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Pressable onPress={handlePay} accessibilityRole="button" style={styles.payLink}>
+    <Pressable
+      onPress={() => void handlePay()}
+      accessibilityRole="button"
+      disabled={busy}
+      style={[styles.payLink, busy && styles.actionDisabled]}
+    >
       <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
     </Pressable>
   );
@@ -163,23 +188,18 @@ function ResumeOrderButton({
 }): React.ReactElement | null {
   const kind = selectResumeKind(order, {
     platform: Platform.OS === 'web' ? 'web' : 'native',
-    storedCheckoutUrl:
-      Platform.OS === 'web' && order.provider === 'stripe' ? getPendingCheckoutUrl(order.id) : null,
+    hasStoredCheckoutUrl:
+      Platform.OS === 'web' &&
+      order.provider === 'stripe' &&
+      getPendingCheckoutUrl(order.id) !== null,
     stripeAvailable: STRIPE_AVAILABLE,
   });
 
   switch (kind) {
     case 'pix':
       return <ResumePixButton orderId={order.id} />;
-    case 'web-redirect':
-    case 'web-unavailable':
-      // The web button decides at click time whether to redirect or show
-      // the "session expired" message, using the same storage lookup as
-      // selectResumeKind. Rendering both states as the same Pagar CTA
-      // keeps the list visually consistent and avoids a stale-render
-      // mismatch between the kind computed at render time and the
-      // storage state at click time.
-      return <ResumeWebStripeButton orderId={order.id} />;
+    case 'web':
+      return <ResumeWebStripeButton orderId={order.id} reload={reload} />;
     case 'native-stripe':
       return <PayWithStripeButton orderId={order.id} reload={reload} />;
     case 'none':

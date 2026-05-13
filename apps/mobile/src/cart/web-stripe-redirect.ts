@@ -27,19 +27,16 @@ export function redirectToStripeCheckout(input: RedirectToStripeCheckoutInput): 
   const storage = input.storage === undefined ? defaultStorage() : input.storage;
   const navigate = input.navigate ?? defaultNavigate;
 
+  // A multi-order cart maps to a single Stripe Checkout Session covering
+  // the full cart. We persist the hosted URL only against the first
+  // (canonical) order id, matching the existing `jdm:pendingOrderId`
+  // convention. Storing the same URL against sibling orders would let
+  // any sibling reopen the shared Stripe session and pay for the entire
+  // cart even after sibling-level local cancellations.
   const firstOrderId = input.orderIds[0];
   if (firstOrderId && storage) {
     storage.setItem(PENDING_ORDER_ID_KEY, firstOrderId);
-  }
-
-  // Persist the hosted checkout URL keyed by every order so the resume
-  // flow on /profile/orders can reopen the same Stripe session without
-  // hitting /orders/:id/resume (Checkout Session orders have no
-  // PaymentIntent and would 409 there).
-  if (storage) {
-    for (const orderId of input.orderIds) {
-      setPendingCheckoutUrl(orderId, input.checkoutUrl, { storage });
-    }
+    setPendingCheckoutUrl(firstOrderId, input.checkoutUrl, { storage });
   }
 
   navigate(input.checkoutUrl);

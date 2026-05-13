@@ -3,48 +3,44 @@ import { describe, expect, it } from 'vitest';
 import { selectResumeKind } from './resume-selector';
 
 describe('selectResumeKind', () => {
-  it('returns pix for AbacatePay orders regardless of platform', () => {
+  it('returns pix for AbacatePay orders regardless of platform or stored URL', () => {
     expect(
       selectResumeKind(
         { provider: 'abacatepay' },
-        { platform: 'web', storedCheckoutUrl: null, stripeAvailable: false },
+        { platform: 'web', hasStoredCheckoutUrl: false, stripeAvailable: false },
       ),
     ).toBe('pix');
     expect(
       selectResumeKind(
         { provider: 'abacatepay' },
-        { platform: 'native', storedCheckoutUrl: null, stripeAvailable: true },
+        { platform: 'native', hasStoredCheckoutUrl: false, stripeAvailable: true },
       ),
     ).toBe('pix');
   });
 
-  it('returns web-redirect for web Stripe order with stored URL', () => {
+  it('returns web for web Stripe order when a stored URL exists (canonical cart order)', () => {
     expect(
       selectResumeKind(
         { provider: 'stripe' },
-        {
-          platform: 'web',
-          storedCheckoutUrl: 'https://checkout.stripe.test/sess',
-          stripeAvailable: false,
-        },
+        { platform: 'web', hasStoredCheckoutUrl: true, stripeAvailable: false },
       ),
-    ).toBe('web-redirect');
+    ).toBe('web');
   });
 
-  it('returns web-unavailable for web Stripe order with no stored URL', () => {
+  it('returns none for web Stripe sibling orders without a stored URL', () => {
     expect(
       selectResumeKind(
         { provider: 'stripe' },
-        { platform: 'web', storedCheckoutUrl: null, stripeAvailable: false },
+        { platform: 'web', hasStoredCheckoutUrl: false, stripeAvailable: false },
       ),
-    ).toBe('web-unavailable');
+    ).toBe('none');
   });
 
   it('returns native-stripe for native Stripe order when SDK is available', () => {
     expect(
       selectResumeKind(
         { provider: 'stripe' },
-        { platform: 'native', storedCheckoutUrl: null, stripeAvailable: true },
+        { platform: 'native', hasStoredCheckoutUrl: false, stripeAvailable: true },
       ),
     ).toBe('native-stripe');
   });
@@ -53,7 +49,7 @@ describe('selectResumeKind', () => {
     expect(
       selectResumeKind(
         { provider: 'stripe' },
-        { platform: 'native', storedCheckoutUrl: null, stripeAvailable: false },
+        { platform: 'native', hasStoredCheckoutUrl: false, stripeAvailable: false },
       ),
     ).toBe('none');
   });

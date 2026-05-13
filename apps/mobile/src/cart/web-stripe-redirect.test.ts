@@ -21,13 +21,13 @@ function fakeStorage(): Storage {
 }
 
 describe('redirectToStripeCheckout', () => {
-  it('persists first orderId and checkout URL per order, then navigates', () => {
+  it('persists firstOrderId and its checkout URL only, then navigates', () => {
     const storage = fakeStorage();
     const navigate = vi.fn();
 
     redirectToStripeCheckout({
       checkoutUrl: 'https://checkout.stripe.test/abc',
-      orderIds: ['order-1', 'order-2'],
+      orderIds: ['order-1', 'order-2', 'order-3'],
       storage,
       navigate,
     });
@@ -36,9 +36,11 @@ describe('redirectToStripeCheckout', () => {
     expect(storage.getItem('jdm:pendingCheckoutUrl:order-1')).toBe(
       'https://checkout.stripe.test/abc',
     );
-    expect(storage.getItem('jdm:pendingCheckoutUrl:order-2')).toBe(
-      'https://checkout.stripe.test/abc',
-    );
+    // Sibling orders must NOT retain the shared Checkout Session URL,
+    // otherwise any sibling could reopen the session and pay the full
+    // cart after sibling-level cancellations.
+    expect(storage.getItem('jdm:pendingCheckoutUrl:order-2')).toBeNull();
+    expect(storage.getItem('jdm:pendingCheckoutUrl:order-3')).toBeNull();
     expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/abc');
   });
 
