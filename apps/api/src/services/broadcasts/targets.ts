@@ -1,16 +1,22 @@
 import { prisma } from '@jdm/db';
 import type { BroadcastTarget } from '@jdm/shared';
 
+export type AudienceRow = {
+  userId: string;
+  tokens: string[];
+  marketingOptedIn: boolean;
+};
+
 export type RecipientRow = {
   userId: string;
   tokens: string[];
 };
 
 /**
- * Resolve eligible recipients for a broadcast target.
- * Excludes users with pushPrefs.marketing = false or no device tokens.
+ * Resolve every active user matched by the target. Inbox rows are created for
+ * the full audience; push is gated downstream by marketing prefs and tokens.
  */
-export const resolveRecipients = async (target: BroadcastTarget): Promise<RecipientRow[]> => {
+export const resolveAudience = async (target: BroadcastTarget): Promise<AudienceRow[]> => {
   let userIds: string[];
 
   if (target.kind === 'all') {
@@ -34,7 +40,6 @@ export const resolveRecipients = async (target: BroadcastTarget): Promise<Recipi
     });
     userIds = tickets.map((t) => t.userId);
   } else {
-    // city
     const users = await prisma.user.findMany({
       where: { city: target.city, status: 'active', role: 'user' },
       select: { id: true },
@@ -45,10 +50,7 @@ export const resolveRecipients = async (target: BroadcastTarget): Promise<Recipi
   if (userIds.length === 0) return [];
 
   const rows = await prisma.user.findMany({
-    where: {
-      id: { in: userIds },
-      status: 'active',
-    },
+    where: { id: { in: userIds }, status: 'active' },
     select: {
       id: true,
       pushPrefs: true,
@@ -56,16 +58,25 @@ export const resolveRecipients = async (target: BroadcastTarget): Promise<Recipi
     },
   });
 
-  return rows
-    .filter((u) => {
-      const prefs = u.pushPrefs as { marketing?: boolean } | null;
-      return prefs?.marketing !== false;
-    })
-    .filter((u) => u.deviceTokens.length > 0)
-    .map((u) => ({
+  return rows.map((u) => {
+    const prefs = u.pushPrefs as { marketing?: boolean } | null;
+    return {
       userId: u.id,
       tokens: u.deviceTokens.map((dt) => dt.expoPushToken),
-    }));
+      marketingOptedIn: prefs?.marketing !== false,
+    };
+  });
+};
+
+/**
+ * Push-eligible subset of the audience. Used by dry-run estimates and the
+ * dispatcher's push-send loop.
+ */
+export const resolveRecipients = async (target: BroadcastTarget): Promise<RecipientRow[]> => {
+  const audience = await resolveAudience(target);
+  return audience
+    .filter((u) => u.marketingOptedIn && u.tokens.length > 0)
+    .map((u) => ({ userId: u.userId, tokens: u.tokens }));
 };
 
 export const countRecipients = async (target: BroadcastTarget): Promise<number> => {

@@ -1,15 +1,22 @@
 import { prisma } from '@jdm/db';
-import type { BroadcastSummary } from '@jdm/shared';
+import type { BroadcastSummary, NotificationDestination } from '@jdm/shared';
 import {
   broadcastDryRunRequestSchema,
   createBroadcastRequestSchema,
+  notificationDestinationSchema,
   updateBroadcastRequestSchema,
 } from '@jdm/shared';
-import type { Broadcast, Prisma } from '@prisma/client';
+import { Prisma, type Broadcast } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { countRecipients } from '../../services/broadcasts/targets.js';
+
+const parseDestination = (raw: Prisma.JsonValue | null): NotificationDestination | null => {
+  if (!raw) return null;
+  const parsed = notificationDestinationSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+};
 
 const serializeSummary = (
   b: Broadcast,
@@ -20,6 +27,8 @@ const serializeSummary = (
   body: b.body,
   targetKind: b.targetKind,
   targetValue: b.targetValue,
+  deliveryMode: b.deliveryMode,
+  destination: parseDestination(b.destination),
   status: b.status,
   scheduledAt: b.scheduledAt?.toISOString() ?? null,
   startedAt: b.startedAt?.toISOString() ?? null,
@@ -67,6 +76,10 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
         data: (input.data ?? {}) as Prisma.InputJsonValue,
         targetKind: input.target.kind,
         targetValue,
+        deliveryMode: input.deliveryMode,
+        destination: input.destination
+          ? (input.destination as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         scheduledAt,
         status,
         createdByAdminId: sub,
@@ -156,6 +169,12 @@ export const adminBroadcastRoutes: FastifyPluginAsync = async (app) => {
     if (input.data !== undefined) data.data = input.data as Prisma.InputJsonValue;
     if (input.target !== undefined) data.targetKind = input.target.kind;
     if (targetValue !== undefined) data.targetValue = targetValue;
+    if (input.deliveryMode !== undefined) data.deliveryMode = input.deliveryMode;
+    if (input.destination !== undefined) {
+      data.destination = input.destination
+        ? (input.destination as Prisma.InputJsonValue)
+        : Prisma.JsonNull;
+    }
     if (input.scheduledAt !== undefined) {
       data.scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
       data.status = input.scheduledAt ? 'scheduled' : 'draft';

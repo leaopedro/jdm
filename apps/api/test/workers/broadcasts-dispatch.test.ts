@@ -113,7 +113,7 @@ describe('runBroadcastDispatchTick — draft vs dispatchable boundary', () => {
     expect(delivery.status).toBe('sent');
   });
 
-  it('excludes recipients who opted out of marketing push', async () => {
+  it('skips push for marketing-opted-out recipients but still mints inbox + delivery rows', async () => {
     const admin = await seedAdmin();
     const recipient = await seedRecipient();
     await prisma.user.update({
@@ -124,8 +124,8 @@ describe('runBroadcastDispatchTick — draft vs dispatchable boundary', () => {
     const past = new Date(Date.now() - 60 * 1000);
     const scheduled = await prisma.broadcast.create({
       data: {
-        title: 'No opt-out users',
-        body: 'should skip',
+        title: 'Inbox-only for opt-out',
+        body: 'no push, inbox yes',
         targetKind: 'all',
         status: 'scheduled',
         scheduledAt: past,
@@ -139,10 +139,89 @@ describe('runBroadcastDispatchTick — draft vs dispatchable boundary', () => {
     expect(sender.captured.length).toBe(0);
     const after = await prisma.broadcast.findUniqueOrThrow({ where: { id: scheduled.id } });
     expect(after.status).toBe('sent');
-    const deliveries = await prisma.broadcastDelivery.count({
-      where: { broadcastId: scheduled.id, userId: recipient.id },
+    const delivery = await prisma.broadcastDelivery.findUniqueOrThrow({
+      where: { broadcastId_userId: { broadcastId: scheduled.id, userId: recipient.id } },
     });
-    expect(deliveries).toBe(0);
+    expect(delivery.status).toBe('skipped');
+    const inbox = await prisma.notification.findMany({
+      where: { userId: recipient.id, kind: 'broadcast', dedupeKey: scheduled.id },
+    });
+    expect(inbox).toHaveLength(1);
+  });
+
+  it('in_app_only mode mints inbox rows for the audience and emits zero push', async () => {
+    const admin = await seedAdmin();
+    const recipient = await seedRecipient();
+
+    const past = new Date(Date.now() - 60 * 1000);
+    const scheduled = await prisma.broadcast.create({
+      data: {
+        title: 'Central only',
+        body: 'inbox only',
+        targetKind: 'all',
+        status: 'scheduled',
+        scheduledAt: past,
+        deliveryMode: 'in_app_only',
+        createdByAdminId: admin.id,
+      },
+    });
+
+    const sender = new DevPushSender();
+    await runBroadcastDispatchTick({ sender, now: new Date() });
+
+    expect(sender.captured.length).toBe(0);
+    const after = await prisma.broadcast.findUniqueOrThrow({ where: { id: scheduled.id } });
+    expect(after.status).toBe('sent');
+    const delivery = await prisma.broadcastDelivery.findUniqueOrThrow({
+      where: { broadcastId_userId: { broadcastId: scheduled.id, userId: recipient.id } },
+    });
+    expect(delivery.status).toBe('sent');
+    expect(delivery.notificationId).not.toBeNull();
+    const inbox = await prisma.notification.findMany({
+      where: { userId: recipient.id, kind: 'broadcast', dedupeKey: scheduled.id },
+    });
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]!.id).toBe(delivery.notificationId);
+  });
+
+  it('in_app_plus_push embeds destination + notificationId + route in push payload', async () => {
+    const admin = await seedAdmin();
+    const recipient = await seedRecipient();
+
+    const past = new Date(Date.now() - 60 * 1000);
+    const scheduled = await prisma.broadcast.create({
+      data: {
+        title: 'Both modes',
+        body: 'with destination',
+        targetKind: 'all',
+        status: 'scheduled',
+        scheduledAt: past,
+        deliveryMode: 'in_app_plus_push',
+        destination: { kind: 'tickets' },
+        createdByAdminId: admin.id,
+      },
+    });
+
+    const sender = new DevPushSender();
+    await runBroadcastDispatchTick({ sender, now: new Date() });
+
+    expect(sender.captured.length).toBeGreaterThanOrEqual(1);
+    const captured = sender.captured[0]!;
+    expect(captured.data).toMatchObject({
+      route: 'notifications',
+      destination: { kind: 'tickets' },
+    });
+    expect(typeof (captured.data as Record<string, unknown>).notificationId).toBe('string');
+    const inbox = await prisma.notification.findUniqueOrThrow({
+      where: {
+        userId_kind_dedupeKey: {
+          userId: recipient.id,
+          kind: 'broadcast',
+          dedupeKey: scheduled.id,
+        },
+      },
+    });
+    expect(inbox.destination).toEqual({ kind: 'tickets' });
   });
 
   it('is idempotent — re-running the tick after a sent broadcast does not duplicate deliveries', async () => {

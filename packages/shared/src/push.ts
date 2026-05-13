@@ -23,5 +23,11 @@ export const pushKindSchema = z.enum([
   'ticket.confirmed',
   'event.reminder_24h',
   'event.reminder_1h',
+  'broadcast',
 ]);
 export type PushKind = z.infer<typeof pushKindSchema>;
+
+// Route key embedded in push payload `data.route`. Mobile uses it to decide
+// where to land first when the app is opened from a push.
+export const pushRouteSchema = z.enum(['notifications']);
+export type PushRoute = z.infer<typeof pushRouteSchema>;
