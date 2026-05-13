@@ -7,6 +7,7 @@ type FinanceOrderRecord = {
   id: string;
   eventId: string | null;
   amountCents: number;
+  devFeeAmountCents: number;
   provider: PaymentProvider;
   method: PaymentMethod;
   status: OrderStatus;
@@ -95,6 +96,7 @@ async function findFinanceOrders(
       id: true,
       eventId: true,
       amountCents: true,
+      devFeeAmountCents: true,
       provider: true,
       method: true,
       status: true,
@@ -160,6 +162,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     let refundedCount = 0;
     let storeRevenueCents = 0;
     let storeOrderCount = 0;
+    let devFeeCollectedCents = 0;
+    let devFeeRefundedCents = 0;
 
     for (const order of orders) {
       const revenueCents = getFinanceOrderRevenueCents(order);
@@ -169,14 +173,17 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
         const storeRev = getOrderItemRevenueCents(order, 'product');
         storeRevenueCents += storeRev;
         if (hasProductItems(order)) storeOrderCount += 1;
+        devFeeCollectedCents += order.devFeeAmountCents;
       } else {
         refundedCents += revenueCents;
         refundedCount += 1;
+        devFeeRefundedCents += order.devFeeAmountCents;
       }
     }
 
     const avgOrderCents = orderCount > 0 ? Math.round(totalRevenueCents / orderCount) : 0;
     const netRevenueCents = totalRevenueCents - refundedCents;
+    const netDevFeeCollectedCents = devFeeCollectedCents - devFeeRefundedCents;
 
     return {
       totalRevenueCents,
@@ -188,6 +195,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       refundedCount,
       storeRevenueCents,
       storeOrderCount,
+      devFeePercent: app.env.DEV_FEE_PERCENT,
+      devFeeCollectedCents: netDevFeeCollectedCents,
     };
   });
 

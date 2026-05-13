@@ -17,7 +17,10 @@ const baseTotals: CartTotals = {
   productsSubtotalCents: 9000,
   shippingSubtotalCents: 1500,
   discountCents: 0,
-  amountCents: 10500,
+  baseAmountCents: 9000,
+  devFeePercent: 10,
+  devFeeAmountCents: 900,
+  amountCents: 11400,
   currency: 'BRL',
 };
 

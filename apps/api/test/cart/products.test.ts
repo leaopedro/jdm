@@ -196,7 +196,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(item.product!.variantId).toBe(variant.id);
       expect(item.product!.unitPriceCents).toBe(9000);
       expect(body.cart.totals.productsSubtotalCents).toBe(18_000);
-      expect(body.cart.totals.amountCents).toBe(18_000);
+      expect(body.cart.totals.amountCents).toBe(19_800);
     });
 
     it('rejects product items with eventId/tierId set', async () => {
@@ -478,7 +478,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(order.kind).toBe('product');
       expect(order.eventId).toBeNull();
       expect(order.tierId).toBeNull();
-      expect(order.amountCents).toBe(18_000);
+      expect(order.amountCents).toBe(19_800);
       expect(order.items).toHaveLength(1);
       expect(order.items[0]!.kind).toBe('product');
       expect(order.items[0]!.variantId).toBe(variant.id);
@@ -557,13 +557,13 @@ describe('cart product lines (JDMA-345)', () => {
       expect(res.statusCode).toBe(201);
       const body = beginCheckoutResponseSchema.parse(res.json());
       expect(body.cart.totals.shippingSubtotalCents).toBe(1500);
-      expect(body.cart.totals.amountCents).toBe(19_500);
+      expect(body.cart.totals.amountCents).toBe(21_300);
 
       const order = await prisma.order.findUniqueOrThrow({
         where: { id: body.orderIds[0]! },
         include: { items: true },
       });
-      expect(order.amountCents).toBe(19_500);
+      expect(order.amountCents).toBe(21_300);
       expect(order.shippingCents).toBe(1500);
       expect(order.shippingAddressId).toBe(address.id);
       expect(order.fulfillmentMethod).toBe('ship');
@@ -653,7 +653,7 @@ describe('cart product lines (JDMA-345)', () => {
       // Mixed order does not pin Order.eventId/tierId; ticket scoping moves to OrderItem
       expect(order.eventId).toBeNull();
       expect(order.tierId).toBeNull();
-      expect(order.amountCents).toBe(25_000);
+      expect(order.amountCents).toBe(27_500);
       expect(order.items).toHaveLength(2);
 
       const ticketItem = order.items.find((i) => i.kind === 'ticket')!;
@@ -696,7 +696,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(res.statusCode).toBe(201);
       const body = beginCheckoutResponseSchema.parse(res.json());
       expect(body.cart.totals.shippingSubtotalCents).toBe(1200);
-      expect(body.cart.totals.amountCents).toBe(12_200);
+      expect(body.cart.totals.amountCents).toBe(13_300);
       expect(body.orderIds).toHaveLength(1);
 
       const order = await prisma.order.findUniqueOrThrow({
@@ -708,7 +708,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(order.shippingCents).toBe(1200);
       expect(order.shippingAddressId).toBe(address.id);
       expect(order.fulfillmentMethod).toBe('ship');
-      expect(order.amountCents).toBe(12_200);
+      expect(order.amountCents).toBe(13_300);
 
       const ticketItem = order.items.find((i) => i.kind === 'ticket')!;
       const productItem = order.items.find((i) => i.kind === 'product')!;
@@ -744,7 +744,7 @@ describe('cart product lines (JDMA-345)', () => {
       const body = beginCheckoutResponseSchema.parse(res.json());
       expect(body.cart.totals.productsSubtotalCents).toBe(24_980);
       expect(body.cart.totals.shippingSubtotalCents).toBe(2_500);
-      expect(body.cart.totals.amountCents).toBe(27_480);
+      expect(body.cart.totals.amountCents).toBe(29_978);
       expect(body.orderIds).toHaveLength(1);
 
       const order = await prisma.order.findUniqueOrThrow({
@@ -758,7 +758,7 @@ describe('cart product lines (JDMA-345)', () => {
       expect(order.shippingCents).toBe(2_500);
       expect(order.shippingAddressId).toBe(address.id);
       expect(order.fulfillmentMethod).toBe('ship');
-      expect(order.amountCents).toBe(27_480);
+      expect(order.amountCents).toBe(29_978);
 
       expect(order.items).toHaveLength(2);
       expect(order.items.map((item) => item.subtotalCents).sort((a, b) => a - b)).toEqual([

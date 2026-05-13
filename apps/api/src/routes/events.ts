@@ -16,6 +16,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { displayPriceCents } from '../services/pricing/dev-fee.js';
 import type { Uploads } from '../services/uploads/index.js';
 
 const encodeCursor = (e: Pick<DbEvent, 'startsAt' | 'id'>): string =>
@@ -41,11 +42,13 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
     status: e.status,
   });
 
-const serializeTier = (t: DbTier) =>
+const serializeTier = (t: DbTier, devFeePercent: number) =>
   ticketTierSchema.parse({
     id: t.id,
     name: t.name,
     priceCents: t.priceCents,
+    displayPriceCents: displayPriceCents(t.priceCents, devFeePercent),
+    devFeePercent,
     currency: t.currency,
     quantityTotal: t.quantityTotal,
     remainingCapacity: Math.max(0, t.quantityTotal - t.quantitySold),
@@ -55,12 +58,14 @@ const serializeTier = (t: DbTier) =>
     requiresCar: t.requiresCar,
   });
 
-const serializeExtra = (x: DbExtra) =>
+const serializeExtra = (x: DbExtra, devFeePercent: number) =>
   eventExtraPublicSchema.parse({
     id: x.id,
     name: x.name,
     description: x.description,
     priceCents: x.priceCents,
+    displayPriceCents: displayPriceCents(x.priceCents, devFeePercent),
+    devFeePercent,
     currency: x.currency,
     quantityRemaining:
       x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
@@ -89,6 +94,7 @@ const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
 const serializeCommerceDetail = (
   e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] },
   uploads: Uploads,
+  devFeePercent: number,
 ) =>
   eventDetailCommerceSchema.parse({
     id: e.id,
@@ -109,11 +115,11 @@ const serializeCommerceDetail = (
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(serializeTier),
+      .map((t) => serializeTier(t, devFeePercent)),
     extras: e.extras
       .filter((x) => x.quantityTotal == null || x.quantitySold < x.quantityTotal)
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(serializeExtra),
+      .map((x) => serializeExtra(x, devFeePercent)),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -190,7 +196,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    return serializeCommerceDetail(event, app.uploads);
+    return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.get(
@@ -206,7 +212,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
         },
       });
       if (!event) return reply.status(404).send({ error: 'NotFound' });
-      return serializeCommerceDetail(event, app.uploads);
+      return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
     },
   );
 };

@@ -24,6 +24,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { displayPriceCents } from '../services/pricing/dev-fee.js';
 import { ensureStoreSettings } from '../services/store-settings.js';
 import type { Uploads } from '../services/uploads/index.js';
 
@@ -71,12 +72,14 @@ const serializeImage = (photo: DbProductPhoto, uploads: Uploads) =>
     sortOrder: photo.sortOrder,
   });
 
-const serializeVariant = (v: DbVariant, currency: string) =>
+const serializeVariant = (v: DbVariant, currency: string, devFeePercent: number) =>
   storeProductVariantSchema.parse({
     id: v.id,
     sku: v.sku ?? null,
     title: v.name,
     priceCents: v.priceCents,
+    displayPriceCents: displayPriceCents(v.priceCents, devFeePercent),
+    devFeePercent,
     compareAtPriceCents: null,
     currency,
     stockOnHand: Math.max(0, v.quantityTotal - v.quantitySold),
@@ -87,14 +90,34 @@ const computePriceRange = (
   variants: DbVariant[],
   currency: string,
   fallback: number,
-): { minPriceCents: number; maxPriceCents: number; currency: string } => {
+  devFeePercent: number,
+): {
+  minPriceCents: number;
+  maxPriceCents: number;
+  minDisplayPriceCents: number;
+  maxDisplayPriceCents: number;
+  devFeePercent: number;
+  currency: string;
+} => {
   if (variants.length === 0) {
-    return { minPriceCents: fallback, maxPriceCents: fallback, currency };
+    return {
+      minPriceCents: fallback,
+      maxPriceCents: fallback,
+      minDisplayPriceCents: displayPriceCents(fallback, devFeePercent),
+      maxDisplayPriceCents: displayPriceCents(fallback, devFeePercent),
+      devFeePercent,
+      currency,
+    };
   }
   const prices = variants.map((v) => v.priceCents);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
   return {
-    minPriceCents: Math.min(...prices),
-    maxPriceCents: Math.max(...prices),
+    minPriceCents: min,
+    maxPriceCents: max,
+    minDisplayPriceCents: displayPriceCents(min, devFeePercent),
+    maxDisplayPriceCents: displayPriceCents(max, devFeePercent),
+    devFeePercent,
     currency,
   };
 };
@@ -102,7 +125,11 @@ const computePriceRange = (
 const hasStock = (variants: DbVariant[]): boolean =>
   variants.some((v) => v.active && v.quantitySold < v.quantityTotal);
 
-const serializeSummary = (product: ProductWithRelations, uploads: Uploads) => {
+const serializeSummary = (
+  product: ProductWithRelations,
+  uploads: Uploads,
+  devFeePercent: number,
+) => {
   const activeVariants = product.variants.filter((v) => v.active);
   const sortedPhotos = [...product.photos].sort((a, b) => a.sortOrder - b.sortOrder);
   const cover = sortedPhotos[0] ? uploads.buildPublicUrl(sortedPhotos[0].objectKey) : null;
@@ -115,12 +142,21 @@ const serializeSummary = (product: ProductWithRelations, uploads: Uploads) => {
     canPickup: product.allowPickup,
     coverImageUrl: cover,
     productType: serializeProductType(product.productType),
-    priceRange: computePriceRange(activeVariants, product.currency, product.basePriceCents),
+    priceRange: computePriceRange(
+      activeVariants,
+      product.currency,
+      product.basePriceCents,
+      devFeePercent,
+    ),
     inStock: hasStock(activeVariants),
   });
 };
 
-const serializeDetail = (product: ProductWithRelations, uploads: Uploads) => {
+const serializeDetail = (
+  product: ProductWithRelations,
+  uploads: Uploads,
+  devFeePercent: number,
+) => {
   const activeVariants = product.variants.filter((v) => v.active);
   const variantsForResponse = activeVariants.length > 0 ? activeVariants : product.variants;
   const sortedPhotos = [...product.photos].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -137,7 +173,7 @@ const serializeDetail = (product: ProductWithRelations, uploads: Uploads) => {
     coverImageUrl: cover,
     collectionIds: product.collections.map((c) => c.collectionId),
     productType: serializeProductType(product.productType),
-    variants: variantsForResponse.map((v) => serializeVariant(v, product.currency)),
+    variants: variantsForResponse.map((v) => serializeVariant(v, product.currency, devFeePercent)),
     images: sortedPhotos.map((p) => serializeImage(p, uploads)),
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -382,7 +418,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
         })();
 
     return storeProductListResponseSchema.parse({
-      items: pageResult.items.map((p) => serializeSummary(p, app.uploads)),
+      items: pageResult.items.map((p) => serializeSummary(p, app.uploads, app.env.DEV_FEE_PERCENT)),
       nextCursor: pageResult.nextCursor,
     });
   });
@@ -418,7 +454,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
       : [];
 
     return storeProductDetailResponseSchema.parse({
-      product: serializeDetail(product, app.uploads),
+      product: serializeDetail(product, app.uploads, app.env.DEV_FEE_PERCENT),
       collections: collections.map(serializeCollection),
     });
   });

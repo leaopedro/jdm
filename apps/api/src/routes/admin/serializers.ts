@@ -7,10 +7,14 @@ import type {
   TicketTier as DbTier,
 } from '@prisma/client';
 
-export const serializeAdminTier = (t: DbTier) => ({
+import { displayPriceCents } from '../../services/pricing/dev-fee.js';
+
+export const serializeAdminTier = (t: DbTier, devFeePercent: number) => ({
   id: t.id,
   name: t.name,
   priceCents: t.priceCents,
+  displayPriceCents: displayPriceCents(t.priceCents, devFeePercent),
+  devFeePercent,
   currency: t.currency,
   quantityTotal: t.quantityTotal,
   quantitySold: t.quantitySold,

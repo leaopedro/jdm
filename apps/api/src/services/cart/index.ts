@@ -10,6 +10,7 @@ import type {
 } from '@jdm/shared/cart';
 import type { Prisma } from '@prisma/client';
 
+import { applyDevFee } from '../pricing/dev-fee.js';
 import { ensureStoreSettings } from '../store-settings.js';
 
 export type CartFulfillmentContext = { eventPickupEnabled: boolean };
@@ -151,7 +152,10 @@ const getMaxShippingSubtotalCents = (items: CartWithItems['items']): number =>
     return Math.max(max, item.variant.product.shippingFeeCents ?? 0);
   }, 0);
 
-export function computeCartTotals(items: CartWithItems['items']): CartTotals {
+export function computeCartTotals(
+  items: CartWithItems['items'],
+  options: { devFeePercent: number },
+): CartTotals {
   let ticketSubtotalCents = 0;
   let extrasSubtotalCents = 0;
   let productsSubtotalCents = 0;
@@ -170,12 +174,10 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
 
   const shippingSubtotalCents = getMaxShippingSubtotalCents(items);
   const discountCents = 0;
-  const amountCents =
-    ticketSubtotalCents +
-    extrasSubtotalCents +
-    productsSubtotalCents +
-    shippingSubtotalCents -
-    discountCents;
+  const baseAmountCents =
+    ticketSubtotalCents + extrasSubtotalCents + productsSubtotalCents - discountCents;
+  const fee = applyDevFee(baseAmountCents, options.devFeePercent);
+  const amountCents = fee.grossAmountCents + shippingSubtotalCents;
 
   return {
     ticketSubtotalCents,
@@ -183,6 +185,9 @@ export function computeCartTotals(items: CartWithItems['items']): CartTotals {
     productsSubtotalCents,
     shippingSubtotalCents,
     discountCents,
+    baseAmountCents: fee.baseAmountCents,
+    devFeePercent: fee.devFeePercent,
+    devFeeAmountCents: fee.devFeeAmountCents,
     amountCents,
     currency: 'BRL',
   };
@@ -246,7 +251,11 @@ export function computeAvailableFulfillmentMethods(
   return methods;
 }
 
-export function serializeCart(cart: CartWithItems, context: CartFulfillmentContext): Cart {
+export function serializeCart(
+  cart: CartWithItems,
+  context: CartFulfillmentContext,
+  options: { devFeePercent: number },
+): Cart {
   const items: CartItem[] = cart.items.map((item) => {
     const product: CartItemProduct | null = item.variant
       ? {
@@ -303,7 +312,7 @@ export function serializeCart(cart: CartWithItems, context: CartFulfillmentConte
     };
   });
 
-  const totals = computeCartTotals(cart.items);
+  const totals = computeCartTotals(cart.items, { devFeePercent: options.devFeePercent });
   const availableFulfillmentMethods = computeAvailableFulfillmentMethods(cart.items, context);
 
   return {

@@ -147,7 +147,7 @@ describe('JDMA-367 store integration regression (S6.1)', () => {
       expect(order.providerRef).toBe('pix_product_only');
       expect(order.shippingAddressId).toBe(address.id);
       expect(order.shippingCents).toBe(1500);
-      expect(order.amountCents).toBe(19_500);
+      expect(order.amountCents).toBe(21_300);
       expect(order.items).toHaveLength(1);
       expect(order.items[0]!.kind).toBe('product');
       expect(order.items[0]!.variantId).toBe(variant.id);
@@ -159,7 +159,7 @@ describe('JDMA-367 store integration regression (S6.1)', () => {
         amountCents: number;
         metadata: Record<string, string>;
       };
-      expect(input.amountCents).toBe(19_500);
+      expect(input.amountCents).toBe(21_300);
       expect(input.metadata.cartId).toBe(body.checkoutId);
       expect(input.metadata.userId).toBe(user.id);
 

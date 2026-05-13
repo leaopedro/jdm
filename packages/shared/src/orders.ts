@@ -66,11 +66,24 @@ export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 // clientSecret is returned only for card orders (Stripe). Pix uses a different shape in F4b.
 // The mobile client reads its publishable key from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 // not from this response, so it is intentionally omitted.
+// Order responses carry the dev-fee snapshot so consumers render gross totals without
+// re-deriving from the current env. `amountCents` keeps its existing meaning: charged gross
+// total. `baseAmountCents + devFeeAmountCents + shippingCents == amountCents` for new orders.
+export const orderFeeBreakdownSchema = z.object({
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
+});
+export type OrderFeeBreakdown = z.infer<typeof orderFeeBreakdownSchema>;
+
 export const createOrderResponseSchema = z.object({
   orderId: z.string().min(1),
   status: orderStatusSchema,
   clientSecret: z.string().min(1),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
@@ -81,6 +94,9 @@ export const createPixOrderResponseSchema = z.object({
   brCode: z.string().min(1),
   expiresAt: z.string().datetime(),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type CreatePixOrderResponse = z.infer<typeof createPixOrderResponseSchema>;
@@ -103,6 +119,9 @@ export const createWebCheckoutResponseSchema = z.object({
   status: orderStatusSchema,
   checkoutUrl: z.string().url(),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type CreateWebCheckoutResponse = z.infer<typeof createWebCheckoutResponseSchema>;
@@ -113,6 +132,9 @@ export const getOrderResponseSchema = z.object({
   provider: paymentProviderSchema,
   expiresAt: z.string().datetime().nullable(),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
   ticketId: z.string().min(1).optional(),
 });
@@ -143,6 +165,9 @@ export const myOrderSchema = z.object({
   status: orderStatusSchema,
   provider: paymentProviderSchema,
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
   quantity: z.number().int().nonnegative(),
   shippingCents: z.number().int().nonnegative(),
@@ -173,6 +198,9 @@ export const resumePixOrderResponseSchema = z.object({
   brCode: z.string().min(1),
   expiresAt: z.string().datetime(),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type ResumePixOrderResponse = z.infer<typeof resumePixOrderResponseSchema>;
@@ -182,6 +210,9 @@ export const resumeCardOrderResponseSchema = z.object({
   orderId: z.string().min(1),
   clientSecret: z.string().min(1),
   amountCents: z.number().int().nonnegative(),
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });
 export type ResumeCardOrderResponse = z.infer<typeof resumeCardOrderResponseSchema>;

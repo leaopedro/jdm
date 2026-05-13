@@ -96,7 +96,7 @@ describe('POST /orders — extras-only flow', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(3000);
+    expect(body.amountCents).toBe(3300);
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
     expect(order.kind).toBe('extras_only');
@@ -373,7 +373,7 @@ describe('POST /orders — extras-only flow', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(1500);
+    expect(body.amountCents).toBe(1650);
   });
 
   it('expiry: extras-only order does not decrement tier quantitySold', async () => {

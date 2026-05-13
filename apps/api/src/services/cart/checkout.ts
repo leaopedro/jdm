@@ -11,6 +11,7 @@ import {
   findPendingTicketOrderForEvent,
 } from '../orders/pending-guard.js';
 import { reserveExtras, validateTickets } from '../orders/validate-tickets.js';
+import { applyDevFee } from '../pricing/dev-fee.js';
 
 type CartWithItems = Prisma.CartGetPayload<{
   include: {
@@ -67,7 +68,12 @@ export type CartOrder = {
 export type CheckoutResult = {
   cartId: string;
   orders: CartOrder[];
+  // Gross charged total: baseAmountCents + devFeeAmountCents + shippingCents.
   totalAmountCents: number;
+  baseAmountCents: number;
+  devFeePercent: number;
+  devFeeAmountCents: number;
+  shippingCents: number;
   currency: string;
   expiredProviderRefs: string[];
 };
@@ -177,7 +183,8 @@ export async function reserveAndCreateOrders(
     shippingAddressId?: string | null;
     pickupEventId?: string | null;
     fulfillmentMethod?: 'pickup' | 'ship' | null;
-  } = { method: 'card' },
+    devFeePercent: number;
+  },
 ): Promise<
   | { ok: true; data: CheckoutResult }
   | { ok: false; status: number; error: string; message: string; code?: string }
@@ -231,7 +238,14 @@ export async function reserveAndCreateOrders(
       const orderKind: 'ticket' | 'extras_only' | 'product' | 'mixed' =
         preparedItems.length === 1 ? preparedItems[0]!.cartItemKind : 'mixed';
 
-      const totalAmountCents = preparedItems.reduce((sum, p) => sum + p.amountCents, 0);
+      // PreparedCartItem.amountCents already mixes sellable subtotal + shipping
+      // (product path bundles shipping into the line). Separate them so the dev
+      // fee applies to sellable amounts only and shipping stays a pass-through.
+      const baseAmountCents = preparedItems.reduce(
+        (sum, p) => sum + (p.amountCents - p.shippingCents),
+        0,
+      );
+      const fee = applyDevFee(baseAmountCents, options.devFeePercent);
       const totalQuantity = preparedItems.reduce((sum, p) => sum + p.quantity, 0);
       const currency = preparedItems.find((p) => p.currency)?.currency ?? 'BRL';
       const description = preparedItems.map((p) => p.description).join(' + ');
@@ -246,6 +260,7 @@ export async function reserveAndCreateOrders(
 
       // Shipping applies to the whole order (cart has one shipping address)
       const shippingCents = preparedItems.reduce((sum, p) => sum + p.shippingCents, 0);
+      const totalAmountCents = fee.grossAmountCents + shippingCents;
       const hasShippable = preparedItems.some((p) => p.fulfillmentMethod === 'ship');
       const cartFulfillmentMethod = hasShippable ? 'ship' : ('pickup' as const);
       const cartShippingAddressId = hasShippable ? (options.shippingAddressId ?? null) : null;
@@ -270,6 +285,9 @@ export async function reserveAndCreateOrders(
           pickupEventId: options.pickupEventId ?? null,
           kind: orderKind,
           amountCents: totalAmountCents,
+          baseAmountCents: fee.baseAmountCents,
+          devFeePercent: fee.devFeePercent,
+          devFeeAmountCents: fee.devFeeAmountCents,
           quantity: totalQuantity,
           currency,
           method,
@@ -303,24 +321,35 @@ export async function reserveAndCreateOrders(
       }
 
       return {
-        id: order.id,
-        eventId: singleEventId,
-        tierId: singleTierId,
-        variantId: singleVariantId,
-        amountCents: totalAmountCents,
-        quantity: totalQuantity,
-        kind: orderKind,
-        description,
-      } satisfies CartOrder;
+        order: {
+          id: order.id,
+          eventId: singleEventId,
+          tierId: singleTierId,
+          variantId: singleVariantId,
+          amountCents: totalAmountCents,
+          quantity: totalQuantity,
+          kind: orderKind,
+          description,
+        } satisfies CartOrder,
+        currency,
+        shippingCents,
+        baseAmountCents: fee.baseAmountCents,
+        devFeePercent: fee.devFeePercent,
+        devFeeAmountCents: fee.devFeeAmountCents,
+      };
     });
 
     return {
       ok: true,
       data: {
         cartId: cart.id,
-        orders: [singleOrder],
-        totalAmountCents: singleOrder.amountCents,
-        currency: 'BRL',
+        orders: [singleOrder.order],
+        totalAmountCents: singleOrder.order.amountCents,
+        baseAmountCents: singleOrder.baseAmountCents,
+        devFeePercent: singleOrder.devFeePercent,
+        devFeeAmountCents: singleOrder.devFeeAmountCents,
+        shippingCents: singleOrder.shippingCents,
+        currency: singleOrder.currency,
         expiredProviderRefs: allExpiredRefs,
       },
     };

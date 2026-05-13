@@ -143,7 +143,11 @@ describe('POST /cart/checkout', () => {
     expect(order).not.toBeNull();
     expect(order!.cartId).toBe(body.checkoutId);
     expect(order!.status).toBe('pending');
-    expect(order!.amountCents).toBe(5000);
+    // 5000 base + 10% dev fee = 5500 gross.
+    expect(order!.amountCents).toBe(5500);
+    expect(order!.baseAmountCents).toBe(5000);
+    expect(order!.devFeePercent).toBe(10);
+    expect(order!.devFeeAmountCents).toBe(500);
   });
 
   it('creates a single mixed-event order with one OrderItem per ticket cart item', async () => {
@@ -171,7 +175,10 @@ describe('POST /cart/checkout', () => {
       include: { items: { orderBy: { subtotalCents: 'asc' } } },
     });
     expect(order.cartId).toBe(body.checkoutId);
-    expect(order.amountCents).toBe(10_000);
+    // 3000 + 7000 base = 10000 base; gross with 10% dev fee = 11000.
+    expect(order.amountCents).toBe(11_000);
+    expect(order.baseAmountCents).toBe(10_000);
+    expect(order.devFeeAmountCents).toBe(1000);
     // Multi-line carts use kind='mixed' so settlement routes through the
     // multi-item issuer and reads scope from OrderItem rows (a homogeneous
     // 'ticket' kind would require Order.eventId/tierId to be pinned).
@@ -212,7 +219,10 @@ describe('POST /cart/checkout', () => {
     expect(res.statusCode).toBe(201);
     const body = beginCheckoutResponseSchema.parse(res.json());
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderIds[0]! } });
-    expect(order.amountCents).toBe(7000);
+    // 5000 tier + 2000 extra = 7000 base; gross with 10% dev fee = 7700.
+    expect(order.amountCents).toBe(7700);
+    expect(order.baseAmountCents).toBe(7000);
+    expect(order.devFeeAmountCents).toBe(700);
   });
 
   it('transitions cart status to checking_out', async () => {
@@ -553,7 +563,8 @@ describe('POST /cart/checkout — pix', () => {
     const billingCall = abacatepay.calls.find((c) => c.method === 'createPixBilling');
     expect(billingCall).toBeDefined();
     const input = billingCall!.args[0] as { amountCents: number; metadata: Record<string, string> };
-    expect(input.amountCents).toBe(10000);
+    // 10000 base + 10% dev fee = 11000 gross. Provider must bill gross.
+    expect(input.amountCents).toBe(11000);
     expect(input.metadata.cartId).toBe(body.checkoutId);
     expect(input.metadata.userId).toBe(user.id);
 
@@ -566,7 +577,9 @@ describe('POST /cart/checkout — pix', () => {
     expect(order.status).toBe('pending');
     expect(order.cartId).toBe(body.checkoutId);
     expect(order.providerRef).toBe('pix_cart_test');
-    expect(order.amountCents).toBe(10_000);
+    expect(order.amountCents).toBe(11_000);
+    expect(order.baseAmountCents).toBe(10_000);
+    expect(order.devFeeAmountCents).toBe(1000);
     expect(order.items).toHaveLength(2);
 
     // reservationExpiresAt uses ORDER_EXPIRY_MS (15 min), not the AbacatePay

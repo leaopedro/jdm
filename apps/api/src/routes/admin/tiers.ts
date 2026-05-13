@@ -42,7 +42,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
       metadata: { eventId },
     });
 
-    return reply.status(201).send(serializeAdminTier(tier));
+    return reply.status(201).send(serializeAdminTier(tier, app.env.DEV_FEE_PERCENT));
   });
 
   app.patch('/events/:eventId/tiers/:tierId', async (request, reply) => {
@@ -72,7 +72,7 @@ export const adminTierRoutes: FastifyPluginAsync = async (app) => {
       entityId: tierId,
       metadata: { fields: Object.keys(input) },
     });
-    return serializeAdminTier(updated);
+    return serializeAdminTier(updated, app.env.DEV_FEE_PERCENT);
   });
 
   app.delete('/events/:eventId/tiers/:tierId', async (request, reply) => {
