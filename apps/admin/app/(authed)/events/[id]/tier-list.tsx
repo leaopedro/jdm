@@ -40,13 +40,17 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
             defaultValue={tier.name}
             className="w-32 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
-          <input
-            name="priceCents"
-            type="number"
-            min={0}
-            defaultValue={tier.priceCents}
-            className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-[color:var(--color-muted)]">R$</span>
+            <input
+              name="priceCents"
+              type="number"
+              min={0}
+              step="0.01"
+              defaultValue={(tier.priceCents / 100).toFixed(2)}
+              className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+            />
+          </label>
           <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
             <span>Taxa: {tier.devFeePercent}%</span>
             <span>Preço final: {formatBRL(tier.displayPriceCents)}</span>
@@ -123,11 +127,12 @@ export const TierList = ({ eventId, tiers }: { eventId: string; tiers: AdminTick
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[color:var(--color-muted)]">Preço (centavos)</span>
+          <span className="text-xs text-[color:var(--color-muted)]">Preço (R$)</span>
           <input
             name="priceCents"
             type="number"
             min={0}
+            step="0.01"
             required
             className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />

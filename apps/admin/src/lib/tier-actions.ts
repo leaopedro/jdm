@@ -16,7 +16,7 @@ export const createTierAction = async (
 ): Promise<TierFormState> => {
   const parsed = adminTierCreateSchema.safeParse({
     name: fd.get('name'),
-    priceCents: toNumber(fd.get('priceCents')),
+    priceCents: Math.round(toNumber(fd.get('priceCents')) * 100),
     quantityTotal: toNumber(fd.get('quantityTotal')),
     requiresCar: fd.get('requiresCar') === 'true',
   });
@@ -42,7 +42,7 @@ export const updateTierAction = async (
   const raw: Record<string, unknown> = {};
   if (typeof fd.get('name') === 'string' && fd.get('name') !== '') raw.name = fd.get('name');
   const price = fd.get('priceCents');
-  if (typeof price === 'string' && price !== '') raw.priceCents = Number(price);
+  if (typeof price === 'string' && price !== '') raw.priceCents = Math.round(Number(price) * 100);
   const qty = fd.get('quantityTotal');
   if (typeof qty === 'string' && qty !== '') raw.quantityTotal = Number(qty);
   raw.requiresCar = fd.get('requiresCar') === 'true';
