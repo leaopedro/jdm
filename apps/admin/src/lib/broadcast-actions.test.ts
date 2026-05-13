@@ -39,7 +39,7 @@ describe('broadcast-actions', () => {
     fd.set('body', '  Chegue cedo  ');
     fd.set('targetKind', 'attendees_of_event');
     fd.set('targetEventId', 'evt_123');
-    fd.set('deliveryMode', 'now');
+    fd.set('sendTiming', 'now');
 
     const result = await createBroadcastAction({ error: null, success: null }, fd);
 
@@ -65,7 +65,10 @@ describe('broadcast-actions', () => {
     fd.set('body', 'Saída às 8h');
     fd.set('targetKind', 'city');
     fd.set('targetCity', '  São Paulo  ');
-    fd.set('deliveryMode', 'schedule');
+    fd.set('notificationDeliveryMode', 'in_app_only');
+    fd.set('destinationKind', 'internal_path');
+    fd.set('destinationInternalPath', '  /eventos/encontro-curitiba  ');
+    fd.set('sendTiming', 'schedule');
     fd.set('scheduledAt', '2026-05-13T09:30');
     fd.set('scheduledAtOffsetMinutes', '180');
 
@@ -80,7 +83,8 @@ describe('broadcast-actions', () => {
       body: 'Saída às 8h',
       data: {},
       target: { kind: 'city', city: 'São Paulo' },
-      deliveryMode: 'in_app_plus_push',
+      deliveryMode: 'in_app_only',
+      destination: { kind: 'internal_path', path: '/eventos/encontro-curitiba' },
       scheduledAt: '2026-05-13T12:30:00.000Z',
       sendNow: undefined,
     });
@@ -92,7 +96,7 @@ describe('broadcast-actions', () => {
     fd.set('body', 'Mensagem');
     fd.set('targetKind', 'city');
     fd.set('targetCity', '');
-    fd.set('deliveryMode', 'schedule');
+    fd.set('sendTiming', 'schedule');
     fd.set('scheduledAt', '');
     fd.set('scheduledAtOffsetMinutes', '180');
 
@@ -107,7 +111,7 @@ describe('broadcast-actions', () => {
     fd.set('title', 'Comboio');
     fd.set('body', 'Mensagem');
     fd.set('targetKind', 'all');
-    fd.set('deliveryMode', 'schedule');
+    fd.set('sendTiming', 'schedule');
     fd.set('scheduledAt', '2026-05-11T09:30');
     fd.set('scheduledAtOffsetMinutes', '180');
 
@@ -120,9 +124,35 @@ describe('broadcast-actions', () => {
         title: 'Comboio',
         body: 'Mensagem',
         targetKind: 'all',
-        deliveryMode: 'schedule',
+        sendTiming: 'schedule',
         scheduledAt: '2026-05-11T09:30',
         scheduledAtOffsetMinutes: '180',
+      },
+    });
+    expect(createAdminBroadcast).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid advanced internal paths before hitting the API', async () => {
+    const fd = new FormData();
+    fd.set('title', 'Comboio');
+    fd.set('body', 'Mensagem');
+    fd.set('targetKind', 'premium');
+    fd.set('destinationKind', 'internal_path');
+    fd.set('destinationInternalPath', '../admin');
+    fd.set('sendTiming', 'now');
+
+    const result = await createBroadcastAction({ error: null, success: null }, fd);
+
+    expect(result).toEqual({
+      error: 'O caminho interno deve começar com /.',
+      success: null,
+      values: {
+        title: 'Comboio',
+        body: 'Mensagem',
+        targetKind: 'premium',
+        destinationKind: 'internal_path',
+        destinationInternalPath: '../admin',
+        sendTiming: 'now',
       },
     });
     expect(createAdminBroadcast).not.toHaveBeenCalled();

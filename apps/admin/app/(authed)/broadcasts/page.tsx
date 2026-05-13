@@ -1,7 +1,7 @@
 import { BroadcastComposer } from './broadcast-composer';
 import { RecentBroadcasts } from './recent-broadcasts';
 
-import { listAdminBroadcasts, listAdminEvents } from '~/lib/admin-api';
+import { listAdminBroadcasts, listAdminEvents, lookupAdminStoreProducts } from '~/lib/admin-api';
 import { readRole } from '~/lib/auth-session';
 
 export const dynamic = 'force-dynamic';
@@ -24,9 +24,10 @@ export default async function BroadcastsPage() {
     );
   }
 
-  const [{ broadcasts }, { items: events }] = await Promise.all([
+  const [{ broadcasts }, { items: events }, { items: products }] = await Promise.all([
     listAdminBroadcasts(),
     listAdminEvents(),
+    lookupAdminStoreProducts(),
   ]);
 
   const totalSent = broadcasts.reduce((sum, item) => sum + item.sentCount, 0);
@@ -42,13 +43,23 @@ export default async function BroadcastsPage() {
     }))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 
+  const productOptions = products
+    .map((product) => ({
+      id: product.id,
+      title: product.title,
+      slug: product.slug,
+      status: product.status,
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold">Broadcasts</h1>
         <p className="max-w-3xl text-sm text-[color:var(--color-muted)]">
           Dispare avisos para toda a base, membros premium, participantes de um evento ou uma cidade
-          específica. Faça um dry-run antes de enviar para validar o alcance estimado.
+          específica. Escolha se a entrega fica só na central ou na central com push e valide o
+          alcance antes de enviar.
         </p>
       </header>
 
@@ -88,8 +99,9 @@ export default async function BroadcastsPage() {
         <BroadcastComposer
           key={`${broadcasts.length}:${latestCreatedAt ?? 'empty'}`}
           events={eventOptions}
+          products={productOptions}
         />
-        <RecentBroadcasts broadcasts={broadcasts} events={eventOptions} />
+        <RecentBroadcasts broadcasts={broadcasts} events={eventOptions} products={productOptions} />
       </div>
     </section>
   );

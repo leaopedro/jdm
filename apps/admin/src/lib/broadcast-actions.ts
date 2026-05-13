@@ -1,13 +1,18 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+import { ZodError } from 'zod';
+
 import {
   broadcastTargetSchema,
   createBroadcastRequestSchema,
   type BroadcastTarget,
   type CreateBroadcastRequest,
-} from '@jdm/shared';
-import { revalidatePath } from 'next/cache';
-import { ZodError } from 'zod';
+} from '../../../../packages/shared/src/broadcasts';
+import type {
+  NotificationDeliveryMode,
+  NotificationDestination,
+} from '../../../../packages/shared/src/notifications';
 
 import { cancelAdminBroadcast, createAdminBroadcast, dryRunAdminBroadcast } from './admin-api';
 import { ApiError } from './api';
@@ -78,11 +83,60 @@ const parseTarget = (fd: FormData): BroadcastTarget => {
   return broadcastTargetSchema.parse({ kind });
 };
 
+const parseNotificationDeliveryMode = (fd: FormData): NotificationDeliveryMode => {
+  const value = fd.get('notificationDeliveryMode');
+  return value === 'in_app_only' ? 'in_app_only' : 'in_app_plus_push';
+};
+
+const parseDestination = (fd: FormData): NotificationDestination | undefined => {
+  const kind = fd.get('destinationKind');
+  if (kind === 'event') {
+    const eventId = getTrimmedString(fd.get('destinationEventId'));
+    if (!eventId) throw new Error('Selecione o evento de destino.');
+    return { kind: 'event', eventId };
+  }
+
+  if (kind === 'product') {
+    const productId = getTrimmedString(fd.get('destinationProductId'));
+    if (!productId) throw new Error('Selecione o produto de destino.');
+    return { kind: 'product', productId };
+  }
+
+  if (kind === 'tickets') return { kind: 'tickets' };
+
+  if (kind === 'internal_path') {
+    const path = getTrimmedString(fd.get('destinationInternalPath'));
+    if (!path) throw new Error('Informe o caminho interno de destino.');
+    if (!path.startsWith('/')) throw new Error('O caminho interno deve começar com /.');
+    if (path.includes('://')) throw new Error('O caminho interno deve ser relativo ao app.');
+    if (path.split('/').includes('..')) throw new Error('O caminho interno não pode subir pastas.');
+    return { kind: 'internal_path', path };
+  }
+
+  if (kind === 'external_url') {
+    const url = getTrimmedString(fd.get('destinationExternalUrl'));
+    if (!url) throw new Error('Informe a URL externa de destino.');
+
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('A URL externa deve começar com http:// ou https://.');
+      }
+    } catch {
+      throw new Error('Informe uma URL externa válida.');
+    }
+
+    return { kind: 'external_url', url };
+  }
+
+  return undefined;
+};
+
 const parseCreateInput = (fd: FormData): CreateBroadcastRequest =>
   (() => {
-    const deliveryMode = fd.get('deliveryMode');
+    const sendTiming = fd.get('sendTiming');
     let scheduledAt: string | undefined;
-    if (deliveryMode === 'schedule') {
+    if (sendTiming === 'schedule') {
       scheduledAt = parseScheduledAtInput(
         fd.get('scheduledAt'),
         fd.get('scheduledAtOffsetMinutes'),
@@ -96,8 +150,10 @@ const parseCreateInput = (fd: FormData): CreateBroadcastRequest =>
       body: getTrimmedString(body) ?? body,
       data: {},
       target: parseTarget(fd),
+      deliveryMode: parseNotificationDeliveryMode(fd),
+      destination: parseDestination(fd),
       scheduledAt,
-      sendNow: deliveryMode === 'now' ? true : undefined,
+      sendNow: sendTiming === 'now' ? true : undefined,
     });
   })();
 
