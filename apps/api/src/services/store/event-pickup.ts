@@ -1,7 +1,11 @@
 import { prisma } from '@jdm/db';
 import type { Prisma } from '@prisma/client';
 
+import { mintPickupVouchersForOrderTx } from './pickup-voucher.js';
+
 type Tx = Prisma.TransactionClient;
+
+type AssignEnv = { readonly TICKET_CODE_SECRET: string };
 
 type CheckoutCart = {
   items: Array<{
@@ -98,13 +102,17 @@ export const validateEventPickupSelection = async (
   }
 };
 
-export const assignEventPickupTicket = async (orderId: string): Promise<string | null> => {
-  return prisma.$transaction(async (tx) => assignEventPickupTicketTx(orderId, tx));
+export const assignEventPickupTicket = async (
+  orderId: string,
+  env: AssignEnv,
+): Promise<string | null> => {
+  return prisma.$transaction(async (tx) => assignEventPickupTicketTx(orderId, tx, env));
 };
 
 export const assignEventPickupTicketTx = async (
   orderId: string,
   tx: Tx,
+  env: AssignEnv,
 ): Promise<string | null> => {
   const order = await tx.order.findUnique({
     where: { id: orderId },
@@ -122,6 +130,13 @@ export const assignEventPickupTicketTx = async (
   }
 
   if (order.pickupTicketId) {
+    await mintPickupVouchersForOrderTx(
+      order.id,
+      order.pickupTicketId,
+      order.pickupEventId,
+      tx,
+      env,
+    );
     return order.pickupTicketId;
   }
 
@@ -156,6 +171,8 @@ export const assignEventPickupTicketTx = async (
     where: { id: order.id },
     data: { pickupTicketId: ticket.id },
   });
+
+  await mintPickupVouchersForOrderTx(order.id, ticket.id, order.pickupEventId, tx, env);
 
   return ticket.id;
 };

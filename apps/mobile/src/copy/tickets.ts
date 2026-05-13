@@ -8,6 +8,8 @@ export const ticketsCopy = {
     past: 'Anteriores',
     pendingExtras: 'Extras não utilizados',
     pendingExtrasOne: 'Extra não utilizado',
+    pendingVouchers: 'Vouchers de retirada',
+    pendingVouchersOne: 'Voucher de retirada',
   },
   filters: {
     all: 'Todos',
@@ -37,7 +39,8 @@ export const ticketsCopy = {
     nicknameError: 'Não foi possível salvar. Tente novamente.',
     nicknameMaxLengthHint: 'Até 60 caracteres.',
     pickupTitle: 'Retiradas no evento',
-    pickupHelp: 'Apresente o QR Code deste ingresso na loja do evento para retirar os itens.',
+    pickupHelp:
+      'Apresente cada voucher abaixo na loja do evento para retirar cada item. Cada voucher é independente.',
     pickupOrderLabel: (shortId: string) => `Pedido #${shortId}`,
     pickupStatus: {
       unfulfilled: 'Aguardando retirada',
@@ -46,6 +49,12 @@ export const ticketsCopy = {
       cancelled: 'Cancelado',
     },
     pickupItemQuantity: (quantity: number) => `${quantity} un.`,
+    vouchersTitle: 'Vouchers de retirada',
+    vouchersHelp: 'Cada voucher é um QR independente. Apresente um por item.',
+    voucherUsed: 'Voucher utilizado',
+    voucherRevoked: 'Voucher cancelado',
+    voucherValid: 'Voucher válido',
+    voucherOrderLabel: (shortId: string) => `Pedido #${shortId}`,
   },
   purchase: {
     pickTier: 'Escolha um ingresso',

@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import type { MyTicketPickupOrder } from '@jdm/shared/tickets';
+import type { MyTicketPickupOrder, MyTicketPickupVoucher } from '@jdm/shared/tickets';
 import {
   myTicketSchema,
   myTicketsResponseSchema,
@@ -10,6 +10,7 @@ import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
 import { getPickupOrdersByTicket } from '../services/store/pickup-collect.js';
+import { getPickupVouchersByTicket } from '../services/store/pickup-voucher-collect.js';
 import { signTicketCode } from '../services/tickets/codes.js';
 
 type TicketWithRelations = Ticket & {
@@ -21,6 +22,7 @@ type TicketWithRelations = Ticket & {
 const serializeTicket = (
   t: TicketWithRelations,
   pickupOrders: MyTicketPickupOrder[],
+  pickupVouchers: MyTicketPickupVoucher[],
   app: FastifyInstance,
 ) => ({
   id: t.id,
@@ -53,6 +55,7 @@ const serializeTicket = (
     usedAt: ei.usedAt?.toISOString() ?? null,
   })),
   pickupOrders,
+  pickupVouchers,
 });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -76,10 +79,16 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
         : b.event.startsAt.getTime() - a.event.startsAt.getTime();
     });
 
-    const pickupByTicket = await getPickupOrdersByTicket(sorted.map((t) => t.id));
+    const ticketIds = sorted.map((t) => t.id);
+    const [pickupByTicket, vouchersByTicket] = await Promise.all([
+      getPickupOrdersByTicket(ticketIds),
+      getPickupVouchersByTicket(ticketIds),
+    ]);
 
     return myTicketsResponseSchema.parse({
-      items: sorted.map((t) => serializeTicket(t, pickupByTicket.get(t.id) ?? [], app)),
+      items: sorted.map((t) =>
+        serializeTicket(t, pickupByTicket.get(t.id) ?? [], vouchersByTicket.get(t.id) ?? [], app),
+      ),
     });
   });
 
@@ -99,10 +108,18 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
       include: { event: true, tier: true, extraItems: { include: { extra: true } } },
     });
 
-    const pickupByTicket = await getPickupOrdersByTicket([updated.id]);
+    const [pickupByTicket, vouchersByTicket] = await Promise.all([
+      getPickupOrdersByTicket([updated.id]),
+      getPickupVouchersByTicket([updated.id]),
+    ]);
 
     return myTicketSchema.parse(
-      serializeTicket(updated, pickupByTicket.get(updated.id) ?? [], app),
+      serializeTicket(
+        updated,
+        pickupByTicket.get(updated.id) ?? [],
+        vouchersByTicket.get(updated.id) ?? [],
+        app,
+      ),
     );
   });
 };

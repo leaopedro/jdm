@@ -144,7 +144,7 @@ describe('pickup voucher end-to-end smoke (no-device evidence)', () => {
       },
     });
 
-    const assignedId = await assignEventPickupTicket(mixedOrder.id);
+    const assignedId = await assignEventPickupTicket(mixedOrder.id, env);
     expect(assignedId).toBe(sameOrderTicket.id);
 
     const ordersRes = await app.inject({
@@ -240,7 +240,7 @@ describe('pickup voucher end-to-end smoke (no-device evidence)', () => {
       },
     });
 
-    const assignedId = await assignEventPickupTicket(pickup.id);
+    const assignedId = await assignEventPickupTicket(pickup.id, env);
     expect(assignedId).toBe(existingTicket.id);
 
     const ordersRes = await app.inject({
@@ -319,7 +319,7 @@ describe('pickup voucher end-to-end smoke (no-device evidence)', () => {
       },
     });
 
-    const assignedId = await assignEventPickupTicket(pickup.id);
+    const assignedId = await assignEventPickupTicket(pickup.id, env);
     expect(assignedId).toBe(newer.id);
     expect(assignedId).not.toBe(older.id);
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { storePickupItemSchema } from './check-in.js';
+import { pickupVoucherStatusSchema, storePickupItemSchema } from './check-in.js';
 import { eventSummarySchema } from './events.js';
 import { ticketExtraItemStatusSchema } from './extras.js';
 
@@ -36,6 +36,22 @@ export const myTicketPickupOrderSchema = z.object({
 });
 export type MyTicketPickupOrder = z.infer<typeof myTicketPickupOrderSchema>;
 
+// JDMA-540: each claimable pickup product unit gets its own QR voucher.
+// `code` is HMAC-signed and rendered as a QR in mobile ticket detail.
+export const myTicketPickupVoucherSchema = z.object({
+  id: z.string().min(1),
+  orderId: z.string().min(1),
+  orderShortId: z.string().min(1),
+  code: z.string().min(1),
+  status: pickupVoucherStatusSchema,
+  usedAt: z.string().datetime().nullable(),
+  productTitle: z.string().nullable(),
+  variantName: z.string().nullable(),
+  variantSku: z.string().nullable(),
+  variantAttributes: z.record(z.string()).nullable(),
+});
+export type MyTicketPickupVoucher = z.infer<typeof myTicketPickupVoucherSchema>;
+
 export const myTicketSchema = z.object({
   id: z.string().min(1),
   code: z.string().min(1),
@@ -48,6 +64,7 @@ export const myTicketSchema = z.object({
   event: eventSummarySchema,
   extras: z.array(myTicketExtraSchema),
   pickupOrders: z.array(myTicketPickupOrderSchema),
+  pickupVouchers: z.array(myTicketPickupVoucherSchema),
 });
 export type MyTicket = z.infer<typeof myTicketSchema>;
 
