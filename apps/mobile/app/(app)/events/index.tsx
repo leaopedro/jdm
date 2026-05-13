@@ -3,7 +3,7 @@ import type { PublicProfile } from '@jdm/shared/profile';
 import { Badge, Button, Text } from '@jdm/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ShoppingCart } from 'lucide-react-native';
+import { Bell, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -22,6 +22,8 @@ import { getProfile } from '~/api/profile';
 import { useCart } from '~/cart/context';
 import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
+import { notificationsCopy } from '~/copy/notifications';
+import { useUnreadCount } from '~/hooks/useUnreadCount';
 import { formatEventDateRange } from '~/lib/format';
 
 type TabKey = 'upcoming' | 'past' | 'nearby';
@@ -160,6 +162,7 @@ function Header() {
   const { itemCount } = useCart();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { count: unreadCount } = useUnreadCount(true);
   const topInset = Platform.OS === 'web' ? 8 : Math.max(insets.top, 16) + 8;
   return (
     <View
@@ -174,20 +177,42 @@ function Header() {
           {eventsCopy.header.title}
         </Text>
       </View>
-      <Pressable
-        onPress={() => router.push('/cart' as never)}
-        accessibilityRole="button"
-        accessibilityLabel={`${cartCopy.title}, ${itemCount} itens`}
-        hitSlop={8}
-        style={cartBtnStyles.button}
-      >
-        <ShoppingCart color="#F5F5F5" size={22} strokeWidth={1.75} />
-        {itemCount > 0 && (
-          <View style={cartBtnStyles.badge}>
-            <Text style={cartBtnStyles.badgeText}>{cartCopy.badge(itemCount)}</Text>
-          </View>
-        )}
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Pressable
+          onPress={() => router.push('/notifications' as never)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadCount > 0
+              ? notificationsCopy.accessibilityUnread(unreadCount)
+              : notificationsCopy.accessibilityBell
+          }
+          hitSlop={8}
+          style={cartBtnStyles.button}
+        >
+          <Bell color="#F5F5F5" size={22} strokeWidth={1.75} />
+          {unreadCount > 0 && (
+            <View style={cartBtnStyles.badge}>
+              <Text style={cartBtnStyles.badgeText}>
+                {unreadCount > 99 ? '99+' : String(unreadCount)}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/cart' as never)}
+          accessibilityRole="button"
+          accessibilityLabel={`${cartCopy.title}, ${itemCount} itens`}
+          hitSlop={8}
+          style={cartBtnStyles.button}
+        >
+          <ShoppingCart color="#F5F5F5" size={22} strokeWidth={1.75} />
+          {itemCount > 0 && (
+            <View style={cartBtnStyles.badge}>
+              <Text style={cartBtnStyles.badgeText}>{cartCopy.badge(itemCount)}</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
