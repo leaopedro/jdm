@@ -60,6 +60,7 @@ model User {
   carts               Cart[]
   shippingAddresses   ShippingAddress[]
   broadcastDeliveries BroadcastDelivery[]
+  supportTickets      SupportTicket[]
 
   @@index([createdAt])
 }
@@ -822,4 +823,27 @@ model BroadcastDelivery {
   @@unique([broadcastId, userId])
   @@index([broadcastId, status])
   @@index([userId])
+}
+
+enum SupportTicketStatus {
+  open
+  closed
+}
+
+model SupportTicket {
+  id                  String              @id @default(cuid())
+  userId              String
+  phone               String              @db.VarChar(20)
+  message             String              @db.VarChar(2000)
+  attachmentObjectKey String?             @db.VarChar(500)
+  status              SupportTicketStatus @default(open)
+  closedAt            DateTime?
+  closedByAdminId     String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }
