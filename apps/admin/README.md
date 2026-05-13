@@ -16,6 +16,20 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### LAN dev access
+
+Next.js 16 blocks dev HMR requests from non-localhost origins unless the host is
+explicitly allowlisted. If you open admin from another device or from your LAN
+IP, start the app with `ALLOWED_DEV_ORIGINS` set to the hostnames you will use.
+
+Example:
+
+```bash
+ALLOWED_DEV_ORIGINS=192.168.1.85 pnpm --filter @jdm/admin dev
+```
+
+Use a comma-separated list when you need more than one host.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
