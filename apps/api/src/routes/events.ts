@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { prisma } from '@jdm/db';
 import {
   confirmedCarSchema,
@@ -245,7 +247,6 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
             make: true,
             model: true,
             year: true,
-            nickname: true,
             photos: {
               select: { objectKey: true },
               orderBy: { sortOrder: 'asc' },
@@ -269,11 +270,10 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     const items = await Promise.all(
       cars.map(async (c) =>
         confirmedCarSchema.parse({
-          id: c!.id,
+          ref: createHash('sha256').update(c!.id).digest('base64url').slice(0, 16),
           make: c!.make,
           model: c!.model,
           year: c!.year,
-          nickname: c!.nickname ?? null,
           photoUrl: c!.photos[0]?.objectKey
             ? await app.uploads.presignGet(c!.photos[0].objectKey)
             : null,

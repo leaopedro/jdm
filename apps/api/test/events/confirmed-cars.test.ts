@@ -67,7 +67,6 @@ const seedCar = async (userId: string, opts?: { withPhoto?: boolean }) => {
       make: 'Toyota',
       model: 'Supra',
       year: 1994,
-      nickname: 'Projeto',
     },
   });
   if (opts?.withPhoto) {
@@ -141,12 +140,17 @@ describe('GET /events/:slug/confirmed-cars', () => {
     const body = confirmedCarsResponseSchema.parse(res.json());
     expect(body.items).toHaveLength(1);
     const c = body.items[0]!;
-    expect(c.id).toBe(car.id);
+    // ref is an opaque hash — just verify it's a non-empty string, not the raw car.id
+    expect(typeof c.ref).toBe('string');
+    expect(c.ref.length).toBeGreaterThan(0);
+    expect(c.ref).not.toBe(car.id);
     expect(c.make).toBe('Toyota');
     expect(c.model).toBe('Supra');
     expect(c.year).toBe(1994);
-    expect(c.nickname).toBe('Projeto');
     expect(c.photoUrl).toBeNull();
+    // id and nickname must not be in response
+    expect((c as Record<string, unknown>)['id']).toBeUndefined();
+    expect((c as Record<string, unknown>)['nickname']).toBeUndefined();
   });
 
   it('includes photoUrl when car has a photo', async () => {
@@ -191,6 +195,8 @@ describe('GET /events/:slug/confirmed-cars', () => {
     const body = confirmedCarsResponseSchema.parse(res.json());
     const c = body.items[0] as Record<string, unknown> | undefined;
     expect(c).toBeDefined();
+    expect(c!['id']).toBeUndefined();
+    expect(c!['nickname']).toBeUndefined();
     expect(c!['licensePlate']).toBeUndefined();
     expect(c!['plate']).toBeUndefined();
     expect(c!['userId']).toBeUndefined();

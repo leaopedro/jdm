@@ -54,6 +54,5 @@ export const eventsCopy = {
     viewAll: 'Ver todos',
     sheetTitle: 'Carros Confirmados',
     loading: 'Carregando carros…',
-    noNickname: 'Sem apelido',
   },
 };

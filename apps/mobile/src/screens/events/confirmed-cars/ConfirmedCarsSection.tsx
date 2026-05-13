@@ -16,7 +16,7 @@ import { CarDetailSheet } from './CarDetailSheet';
 import { eventsCopy } from '~/copy/events';
 import { theme } from '~/theme';
 
-const INLINE_MAX = 5;
+const INLINE_MAX = 4;
 
 type Props = {
   cars: ConfirmedCar[];
@@ -55,7 +55,7 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
           >
             {inlineSlice.map((car) => (
               <Pressable
-                key={car.id}
+                key={car.ref}
                 style={styles.avatarWrap}
                 onPress={() => setSelectedCar(car)}
                 accessibilityRole="button"
