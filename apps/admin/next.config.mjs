@@ -1,5 +1,5 @@
 import { withSentryConfig } from '@sentry/nextjs';
-import { adminNextConfig } from './next.base-config.mjs';
+import { adminNextConfig } from './next.base.config.mjs';
 
 /** @type {import('next').NextConfig} */
 const config = adminNextConfig;
