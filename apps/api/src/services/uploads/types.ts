@@ -1,4 +1,9 @@
-export type UploadKind = 'avatar' | 'car_photo' | 'event_cover' | 'product_photo' | 'support_attachment';
+export type UploadKind =
+  | 'avatar'
+  | 'car_photo'
+  | 'event_cover'
+  | 'product_photo'
+  | 'support_attachment';
 
 export type PresignInput = {
   kind: UploadKind;
