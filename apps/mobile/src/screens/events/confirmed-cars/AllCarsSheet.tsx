@@ -31,7 +31,7 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
         <Text style={styles.title}>{eventsCopy.confirmedCars.sheetTitle}</Text>
         <FlatList
           data={cars}
-          keyExtractor={(c) => c.id}
+          keyExtractor={(c) => c.ref}
           numColumns={3}
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (

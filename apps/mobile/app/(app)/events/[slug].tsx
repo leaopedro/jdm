@@ -272,7 +272,7 @@ export default function EventDetailScreen() {
       <ConfirmedCarsSection
         cars={confirmedCars}
         loading={confirmedCarsLoading}
-        visible={hasCarTier || confirmedCars.length > 0}
+        visible={confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier}
       />
 
       {commerceEvent ? (

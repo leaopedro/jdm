@@ -1,7 +1,6 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { eventsCopy } from '~/copy/events';
 import { theme } from '~/theme';
 
 type Props = {
@@ -40,11 +39,6 @@ export function CarDetailSheet({ car, onClose }: Props) {
             <Text style={styles.name}>
               {car.year} {car.make} {car.model}
             </Text>
-            {car.nickname ? (
-              <Text style={styles.nickname}>{car.nickname}</Text>
-            ) : (
-              <Text style={styles.nicknameMuted}>{eventsCopy.confirmedCars.noNickname}</Text>
-            )}
           </ScrollView>
         ) : null}
       </View>
@@ -89,16 +83,6 @@ const styles = StyleSheet.create({
     color: theme.colors.fg,
     fontSize: theme.font.size.lg,
     fontWeight: '700',
-    textAlign: 'center',
-  },
-  nickname: {
-    color: theme.colors.muted,
-    fontSize: theme.font.size.md,
-    textAlign: 'center',
-  },
-  nicknameMuted: {
-    color: theme.colors.border,
-    fontSize: theme.font.size.sm,
     textAlign: 'center',
   },
 });
