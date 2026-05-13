@@ -31,6 +31,9 @@ export default async function AuthedLayout({ children }: { children: React.React
               <Link href="/broadcasts" className="text-sm opacity-80 hover:opacity-100">
                 Broadcasts
               </Link>
+              <Link href="/support" className="text-sm opacity-80 hover:opacity-100">
+                Suporte
+              </Link>
             </>
           ) : null}
           <Link href="/check-in" className="text-sm opacity-80 hover:opacity-100">

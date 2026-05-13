@@ -72,6 +72,12 @@ import {
 } from '@jdm/shared/check-in';
 import { publicProfileSchema } from '@jdm/shared/profile';
 import {
+  adminSupportTicketDetailSchema,
+  adminSupportTicketListResponseSchema,
+  type AdminSupportTicketDetail,
+  type AdminSupportTicketListResponse,
+} from '@jdm/shared/support';
+import {
   storeSettingsSchema,
   type AdminStoreFulfillmentUpdate,
   type StoreSettings,
@@ -508,4 +514,28 @@ export const updateAdminStoreOrderFulfillment = (
     method: 'PATCH',
     body: JSON.stringify(input),
     schema: adminStoreOrderDetailSchema,
+  });
+
+// ── Admin support tickets ─────────────────────────────────────────
+
+export const listAdminSupportTickets = (opts?: {
+  status?: 'open' | 'closed';
+  cursor?: string;
+}): Promise<AdminSupportTicketListResponse> => {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set('status', opts.status);
+  if (opts?.cursor) params.set('cursor', opts.cursor);
+  const qs = params.toString();
+  return apiFetch(`/admin/support${qs ? '?' + qs : ''}`, {
+    schema: adminSupportTicketListResponseSchema,
+  });
+};
+
+export const getAdminSupportTicket = (id: string): Promise<AdminSupportTicketDetail> =>
+  apiFetch(`/admin/support/${id}`, { schema: adminSupportTicketDetailSchema });
+
+export const closeAdminSupportTicket = (id: string): Promise<AdminSupportTicketDetail> =>
+  apiFetch(`/admin/support/${id}/close`, {
+    method: 'PATCH',
+    schema: adminSupportTicketDetailSchema,
   });
