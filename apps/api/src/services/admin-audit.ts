@@ -18,7 +18,8 @@ export type RecordAuditInput = {
     | 'variant'
     | 'product_type'
     | 'order'
-    | 'pickup_voucher';
+    | 'pickup_voucher'
+    | 'support_ticket';
   entityId: string;
   metadata?: Record<string, unknown>;
 };
