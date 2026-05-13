@@ -41,10 +41,11 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
             className="w-32 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
           <input
-            name="priceCents"
+            name="priceReais"
             type="number"
             min={0}
-            defaultValue={tier.priceCents}
+            step={0.01}
+            defaultValue={(tier.priceCents / 100).toFixed(2)}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
           <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
@@ -123,11 +124,12 @@ export const TierList = ({ eventId, tiers }: { eventId: string; tiers: AdminTick
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[color:var(--color-muted)]">Preço (centavos)</span>
+          <span className="text-xs text-[color:var(--color-muted)]">Preço (R$)</span>
           <input
-            name="priceCents"
+            name="priceReais"
             type="number"
             min={0}
+            step={0.01}
             required
             className="rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
