@@ -277,6 +277,172 @@ describe('GET /me/orders', () => {
 
     expect(res.statusCode).toBe(401);
   });
+
+  it('exposes pickupTicketId on paid pickup orders bound to a ticket the user owns', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedEvent();
+    const { variant } = await seedProductVariant();
+
+    const ticketOrder = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'paid',
+        paidAt: new Date('2026-05-08T10:00:00.000Z'),
+        createdAt: new Date('2026-05-08T09:30:00.000Z'),
+        items: {
+          create: [
+            {
+              kind: 'ticket',
+              tierId: tier.id,
+              eventId: event.id,
+              quantity: 1,
+              unitPriceCents: 8_000,
+              subtotalCents: 8_000,
+            },
+          ],
+        },
+      },
+    });
+
+    const ticket = await prisma.ticket.create({
+      data: {
+        orderId: ticketOrder.id,
+        userId: user.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    const pickup = await prisma.order.create({
+      data: {
+        userId: user.id,
+        kind: 'product',
+        amountCents: 12_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'paid',
+        paidAt: new Date('2026-05-09T12:00:00.000Z'),
+        createdAt: new Date('2026-05-09T11:30:00.000Z'),
+        fulfillmentMethod: 'pickup',
+        fulfillmentStatus: 'unfulfilled',
+        pickupEventId: event.id,
+        pickupTicketId: ticket.id,
+        items: {
+          create: [
+            {
+              kind: 'product',
+              variantId: variant.id,
+              quantity: 1,
+              unitPriceCents: 12_000,
+              subtotalCents: 12_000,
+            },
+          ],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/orders',
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = myOrdersResponseSchema.parse(res.json());
+    const pickupRow = body.items.find((o) => o.id === pickup.id);
+    const ticketRow = body.items.find((o) => o.id === ticketOrder.id);
+    expect(pickupRow?.pickupTicketId).toBe(ticket.id);
+    expect(pickupRow?.fulfillmentMethod).toBe('pickup');
+    expect(ticketRow?.pickupTicketId).toBeNull();
+  });
+
+  it('omits pickupTicketId when the bound ticket belongs to another user', async () => {
+    const { user } = await createUser({ verified: true });
+    const { user: stranger } = await createUser({
+      email: 'stranger-pickup@jdm.test',
+      verified: true,
+    });
+    const { event, tier } = await seedEvent();
+    const { variant } = await seedProductVariant();
+
+    const strangerOrder = await prisma.order.create({
+      data: {
+        userId: stranger.id,
+        eventId: event.id,
+        tierId: tier.id,
+        kind: 'ticket',
+        amountCents: 8_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+    const strangerTicket = await prisma.ticket.create({
+      data: {
+        orderId: strangerOrder.id,
+        userId: stranger.id,
+        eventId: event.id,
+        tierId: tier.id,
+        source: 'purchase',
+        status: 'valid',
+      },
+    });
+
+    const pickup = await prisma.order.create({
+      data: {
+        userId: user.id,
+        kind: 'product',
+        amountCents: 9_000,
+        currency: 'BRL',
+        quantity: 1,
+        method: 'card',
+        provider: 'stripe',
+        status: 'paid',
+        paidAt: new Date(),
+        fulfillmentMethod: 'pickup',
+        fulfillmentStatus: 'unfulfilled',
+        pickupEventId: event.id,
+        pickupTicketId: strangerTicket.id,
+        items: {
+          create: [
+            {
+              kind: 'product',
+              variantId: variant.id,
+              quantity: 1,
+              unitPriceCents: 9_000,
+              subtotalCents: 9_000,
+            },
+          ],
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/orders',
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = myOrdersResponseSchema.parse(res.json());
+    const row = body.items.find((o) => o.id === pickup.id);
+    expect(row?.pickupTicketId).toBeNull();
+  });
 });
 
 describe('POST /me/orders/:id/cancel', () => {
