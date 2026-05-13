@@ -392,6 +392,24 @@ describe('pickup voucher mint + claim', () => {
     expect(after.filter((v) => v.status === 'valid')).toHaveLength(2);
   });
 
+  it('rejects non-staff user attempting admin voucher claim (403)', async () => {
+    const { user } = await createUser({ email: `o-${Math.random()}@jdm.test`, verified: true });
+    const { event, tier } = await createEvent();
+    const { variant } = await createProductWithVariant();
+    await createValidTicket(user.id, event.id, tier.id);
+    const order = await createPaidPickupOrder(user.id, event.id, variant.id, 1);
+    await assignEventPickupTicket(order.id, env);
+    const voucher = await prisma.pickupVoucher.findFirstOrThrow({ where: { orderId: order.id } });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/store/pickup/voucher/claim',
+      headers: { authorization: bearer(env, user.id, 'user') },
+      payload: { code: voucher.code, eventId: event.id },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('race-safe: concurrent mint calls never over-mint beyond quantity', async () => {
     const { user } = await createUser({ email: `o-${Math.random()}@jdm.test`, verified: true });
     const { event, tier } = await createEvent();
