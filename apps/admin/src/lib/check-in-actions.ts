@@ -3,6 +3,7 @@
 import type {
   CheckInExtraItem,
   ExtraClaimResponse,
+  PickupVoucherClaimResponse,
   StorePickupOrder,
   TicketCheckInResponse,
 } from '@jdm/shared/check-in';
@@ -10,7 +11,7 @@ import type {
 import {
   checkInTicket as apiCheckInTicket,
   claimExtraItem as apiClaimExtra,
-  collectPickupOrder as apiCollectPickup,
+  claimPickupVoucher as apiClaimVoucher,
 } from './admin-api';
 import { ApiError } from './api';
 
@@ -88,25 +89,21 @@ export const submitExtraClaim = async (
   }
 };
 
-export type PickupCollectActionResult =
+export type VoucherClaimActionResult =
   | {
       ok: true;
-      orders: StorePickupOrder[];
+      result: 'claimed' | 'already_used';
+      voucher: PickupVoucherClaimResponse['voucher'];
     }
   | { ok: false; error: string; message: string };
 
-export const submitPickupCollect = async (ticketId: string): Promise<PickupCollectActionResult> => {
+export const submitVoucherClaim = async (
+  code: string,
+  eventId: string,
+): Promise<VoucherClaimActionResult> => {
   try {
-    const res = await apiCollectPickup({ ticketId });
-    return {
-      ok: true,
-      orders: res.orders.map((o) => ({
-        orderId: o.orderId,
-        shortId: o.shortId,
-        fulfillmentStatus: o.fulfillmentStatus,
-        items: o.items,
-      })),
-    };
+    const res: PickupVoucherClaimResponse = await apiClaimVoucher({ code, eventId });
+    return { ok: true, result: res.result, voucher: res.voucher };
   } catch (err) {
     if (err instanceof ApiError) {
       return { ok: false, error: err.code, message: err.message };

@@ -42,24 +42,6 @@ export const storePickupOrderSchema = z.object({
 });
 export type StorePickupOrder = z.infer<typeof storePickupOrderSchema>;
 
-export const pickupCollectRequestSchema = z.object({
-  ticketId: z.string().min(1).max(64),
-});
-export type PickupCollectRequest = z.infer<typeof pickupCollectRequestSchema>;
-
-export const pickupCollectResponseSchema = z.object({
-  orders: z.array(
-    z.object({
-      orderId: z.string().min(1),
-      shortId: z.string().min(1),
-      collected: z.boolean(),
-      fulfillmentStatus: z.enum(['unfulfilled', 'pickup_ready', 'picked_up', 'cancelled']),
-      items: z.array(storePickupItemSchema),
-    }),
-  ),
-});
-export type PickupCollectResponse = z.infer<typeof pickupCollectResponseSchema>;
-
 export const ticketCheckInResponseSchema = z.object({
   result: checkInResultSchema,
   ticket: z.object({

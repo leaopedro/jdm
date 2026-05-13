@@ -3,8 +3,6 @@ import {
   checkInEventsResponseSchema,
   extraClaimRequestSchema,
   extraClaimResponseSchema,
-  pickupCollectRequestSchema,
-  pickupCollectResponseSchema,
   pickupVoucherClaimRequestSchema,
   pickupVoucherClaimResponseSchema,
   ticketCheckInRequestSchema,
@@ -14,10 +12,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
-import {
-  collectPickupOrders,
-  getPickupOrdersForTicket,
-} from '../../services/store/pickup-collect.js';
+import { getPickupOrdersForTicket } from '../../services/store/pickup-collect.js';
 import {
   claimPickupVoucher,
   InvalidVoucherCodeError,
@@ -170,15 +165,6 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
       }
       throw err;
     }
-  });
-
-  app.post('/store/pickup/collect', async (request, reply) => {
-    const { sub: actorId } = requireUser(request);
-    const input = pickupCollectRequestSchema.parse(request.body);
-
-    const orders = await collectPickupOrders(input.ticketId, actorId);
-
-    return reply.send(pickupCollectResponseSchema.parse({ orders }));
   });
 
   app.post('/store/pickup/voucher/claim', async (request, reply) => {
