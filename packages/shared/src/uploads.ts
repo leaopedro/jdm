@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const UPLOAD_KINDS = ['avatar', 'car_photo', 'event_cover', 'product_photo'] as const;
+export const UPLOAD_KINDS = [
+  'avatar',
+  'car_photo',
+  'event_cover',
+  'product_photo',
+  'support_attachment',
+] as const;
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
 
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
