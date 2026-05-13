@@ -24,6 +24,7 @@ import {
   type TicketStatusFilter,
 } from '~/screens/tickets/filters';
 import { theme } from '~/theme';
+import { listSavedTickets } from '~/tickets/offline-storage';
 
 const statusLabel = (status: MyTicket['status']): string => {
   if (status === 'valid') return ticketsCopy.detail.valid;
@@ -37,6 +38,7 @@ export default function TicketsIndex() {
   const rawEventId = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
   const [items, setItems] = useState<MyTicket[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [offlineFallback, setOfflineFallback] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<TicketStatusFilter>('valid');
   const [eventFilterCleared, setEventFilterCleared] = useState(false);
@@ -48,9 +50,18 @@ export default function TicketsIndex() {
       const res = await listMyTickets();
       setItems(res.items);
       setLoadError(false);
+      setOfflineFallback(false);
     } catch {
-      setLoadError(true);
-      setItems([]);
+      const saved = await listSavedTickets();
+      if (saved.length > 0) {
+        setItems(saved);
+        setOfflineFallback(true);
+        setLoadError(false);
+      } else {
+        setLoadError(true);
+        setOfflineFallback(false);
+        setItems([]);
+      }
     }
   }, []);
 
@@ -214,6 +225,11 @@ export default function TicketsIndex() {
                 <Text style={[styles.status, item.status !== 'valid' && styles.statusMuted]}>
                   {statusLabel(item.status)}
                 </Text>
+                {offlineFallback ? (
+                  <View style={styles.offlineBadgeRow}>
+                    <Text style={styles.offlineBadge}>{ticketsCopy.offline.offlineBadge}</Text>
+                  </View>
+                ) : null}
                 {pendingExtras.length > 0 && (
                   <View style={styles.pendingExtras}>
                     <Text style={styles.pendingExtrasLabel}>
@@ -343,6 +359,16 @@ const styles = StyleSheet.create({
   sub: { color: theme.colors.muted },
   status: { color: theme.colors.fg, fontWeight: '600', marginTop: theme.spacing.xs },
   statusMuted: { color: theme.colors.muted },
+  offlineBadgeRow: {
+    marginTop: theme.spacing.xs,
+  },
+  offlineBadge: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   pendingExtras: {
     marginTop: theme.spacing.sm,
     paddingTop: theme.spacing.sm,

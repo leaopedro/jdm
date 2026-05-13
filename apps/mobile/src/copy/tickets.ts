@@ -56,6 +56,17 @@ export const ticketsCopy = {
     voucherValid: 'Voucher válido',
     voucherOrderLabel: (shortId: string) => `Pedido #${shortId}`,
   },
+  offline: {
+    saveLabel: 'Salvar offline',
+    removeLabel: 'Remover do offline',
+    exportLabel: 'Exportar imagem',
+    savedToast: 'Ingresso salvo para acesso offline.',
+    removedToast: 'Ingresso removido do offline.',
+    exportedToast: 'Imagem salva na galeria.',
+    exportPermissionDenied: 'Permissão negada. Autorize o acesso à galeria nas configurações.',
+    exportError: 'Não foi possível exportar a imagem. Tente novamente.',
+    offlineBadge: 'Offline',
+  },
   purchase: {
     pickTier: 'Escolha um ingresso',
     confirm: 'Confirmar compra',

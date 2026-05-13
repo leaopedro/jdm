@@ -11,6 +11,7 @@
     "app/**/*",
     "src/**/*",
     "app.config.ts",
+    "vitest.config.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts",
     ".expo/types/**/*.ts"

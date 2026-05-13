@@ -1,7 +1,8 @@
 import type { MyTicket } from '@jdm/shared/tickets';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,9 +18,30 @@ import {
 
 import { listMyTickets, updateMyTicket } from '~/api/tickets';
 import { HiddenQR } from '~/components/HiddenQR';
+import { TicketPassExportCard } from '~/components/TicketPassExportCard';
 import { ticketsCopy } from '~/copy/tickets';
 import { formatEventDateRange } from '~/lib/format';
 import { theme } from '~/theme';
+import { exportTicketImage } from '~/tickets/export-ticket-image';
+import {
+  getSavedTicket,
+  isTicketSaved,
+  removeSavedTicket,
+  saveTicket,
+} from '~/tickets/offline-storage';
+
+function Toast({ message, onHide }: { message: string; onHide: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onHide, 3000);
+    return () => clearTimeout(t);
+  }, [onHide]);
+
+  return (
+    <View style={styles.toast} pointerEvents="none">
+      <Text style={styles.toastText}>{message}</Text>
+    </View>
+  );
+}
 
 export default function TicketDetail() {
   useKeepAwake();
@@ -32,13 +54,34 @@ export default function TicketDetail() {
   const [nicknameDraft, setNicknameDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [savedOffline, setSavedOffline] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const exportRef = useRef<View>(null);
 
   useEffect(() => {
-    if (preloaded) return;
+    if (preloaded) {
+      void isTicketSaved(ticketId).then(setSavedOffline);
+      return;
+    }
     void (async () => {
       try {
         const { items } = await listMyTickets();
-        setTicket(items.find((t) => t.id === ticketId) ?? null);
+        const found = items.find((t) => t.id === ticketId) ?? null;
+        if (found) {
+          setTicket(found);
+          const alreadySaved = await isTicketSaved(ticketId);
+          if (alreadySaved) await saveTicket(found);
+          setSavedOffline(alreadySaved);
+        } else {
+          const offline = await getSavedTicket(ticketId);
+          setTicket(offline);
+          setSavedOffline(offline !== null);
+        }
+      } catch {
+        const offline = await getSavedTicket(ticketId);
+        setTicket(offline);
+        setSavedOffline(offline !== null);
       } finally {
         setLoaded(true);
       }
@@ -107,11 +150,50 @@ export default function TicketDetail() {
     void submit(null);
   };
 
+  const handleSaveOffline = async () => {
+    setMenuOpen(false);
+    await saveTicket(ticket);
+    setSavedOffline(true);
+    setToast(ticketsCopy.offline.savedToast);
+  };
+
+  const handleRemoveOffline = async () => {
+    setMenuOpen(false);
+    await removeSavedTicket(ticket.id);
+    setSavedOffline(false);
+    setToast(ticketsCopy.offline.removedToast);
+  };
+
+  const handleExport = async () => {
+    setMenuOpen(false);
+    const result = await exportTicketImage(exportRef);
+    if (result === 'saved') {
+      setToast(ticketsCopy.offline.exportedToast);
+    } else if (result === 'permission_denied') {
+      setToast(ticketsCopy.offline.exportPermissionDenied);
+    } else {
+      setToast(ticketsCopy.offline.exportError);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{nickname ?? ticket.event.title}</Text>
-        {nickname ? <Text style={styles.subTitle}>{ticket.event.title}</Text> : null}
+        <View style={styles.headerRow}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{nickname ?? ticket.event.title}</Text>
+            {nickname ? <Text style={styles.subTitle}>{ticket.event.title}</Text> : null}
+          </View>
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            style={styles.overflowBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Mais opções"
+            hitSlop={8}
+          >
+            <MoreHorizontal color={theme.colors.fg} size={22} />
+          </Pressable>
+        </View>
         <Pressable
           onPress={openEdit}
           style={styles.editButton}
@@ -286,6 +368,49 @@ export default function TicketDetail() {
         </View>
       )}
 
+      {/* Hidden off-screen export card captured by react-native-view-shot */}
+      <View style={styles.exportCardHidden}>
+        <TicketPassExportCard ref={exportRef} ticket={ticket} />
+      </View>
+
+      {/* Overflow menu */}
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuOpen(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)} />
+        <View style={styles.menuCard}>
+          {ticket.status === 'valid' && !savedOffline ? (
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => void handleSaveOffline()}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menuText}>{ticketsCopy.offline.saveLabel}</Text>
+            </Pressable>
+          ) : null}
+          {savedOffline ? (
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => void handleRemoveOffline()}
+              accessibilityRole="button"
+            >
+              <Text style={styles.menuText}>{ticketsCopy.offline.removeLabel}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={styles.menuRow}
+            onPress={() => void handleExport()}
+            accessibilityRole="button"
+          >
+            <Text style={styles.menuText}>{ticketsCopy.offline.exportLabel}</Text>
+          </Pressable>
+        </View>
+      </Modal>
+
+      {/* Nickname edit modal */}
       <Modal visible={editing} animationType="fade" transparent onRequestClose={closeEdit}>
         <KeyboardAvoidingView
           style={styles.modalRoot}
@@ -340,6 +465,8 @@ export default function TicketDetail() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {toast ? <Toast message={toast} onHide={() => setToast(null)} /> : null}
     </ScrollView>
   );
 }
@@ -361,6 +488,17 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     gap: theme.spacing.xs,
+    width: '100%',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
+    alignItems: 'center',
   },
   title: {
     color: theme.colors.fg,
@@ -372,6 +510,12 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: theme.font.size.md,
     textAlign: 'center',
+  },
+  overflowBtn: {
+    padding: theme.spacing.xs,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   editButton: {
     paddingHorizontal: theme.spacing.md,
@@ -459,6 +603,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  exportCardHidden: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  menuCard: {
+    position: 'absolute',
+    top: 80,
+    right: theme.spacing.lg,
+    backgroundColor: theme.colors.bg,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    minWidth: 200,
+    overflow: 'hidden',
+  },
+  menuRow: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border,
+  },
+  menuText: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.md,
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 40,
+    left: theme.spacing.xl,
+    right: theme.spacing.xl,
+    backgroundColor: theme.colors.fg,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center',
+  },
+  toastText: {
+    color: theme.colors.bg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   modalRoot: {
     flex: 1,
