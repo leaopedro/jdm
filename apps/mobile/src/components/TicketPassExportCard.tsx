@@ -12,6 +12,7 @@ type Props = {
 
 export const TicketPassExportCard = forwardRef<View, Props>(({ ticket }, ref) => {
   const validExtras = ticket.extras.filter((e) => e.status === 'valid');
+  const validVouchers = ticket.pickupVouchers.filter((v) => v.status === 'valid');
 
   return (
     <View ref={ref} style={styles.card} collapsable={false}>
@@ -39,6 +40,31 @@ export const TicketPassExportCard = forwardRef<View, Props>(({ ticket }, ref) =>
               </View>
             </View>
           ))}
+        </View>
+      )}
+
+      {validVouchers.length > 0 && (
+        <View style={styles.extras}>
+          {validVouchers.map((voucher) => {
+            const title = voucher.productTitle ?? '—';
+            const suffix = voucher.variantName ? ` · ${voucher.variantName}` : '';
+            return (
+              <View key={voucher.id} style={styles.extraCard}>
+                <Text style={styles.extraName}>
+                  {title}
+                  {suffix}
+                </Text>
+                <View style={styles.extraQr}>
+                  <QRCode
+                    value={voucher.code}
+                    size={100}
+                    backgroundColor="#FFFFFF"
+                    color="#000000"
+                  />
+                </View>
+              </View>
+            );
+          })}
         </View>
       )}
 

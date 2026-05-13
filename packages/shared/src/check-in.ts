@@ -98,6 +98,9 @@ export type ExtraClaimRequest = z.infer<typeof extraClaimRequestSchema>;
 export const extraClaimResultSchema = z.enum(['claimed', 'already_used']);
 export type ExtraClaimResult = z.infer<typeof extraClaimResultSchema>;
 
+export const pickupVoucherStatusSchema = z.enum(['valid', 'used', 'revoked']);
+export type PickupVoucherStatus = z.infer<typeof pickupVoucherStatusSchema>;
+
 export const extraClaimResponseSchema = z.object({
   result: extraClaimResultSchema,
   item: z.object({

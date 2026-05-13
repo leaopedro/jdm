@@ -52,6 +52,7 @@ function makeTicket(id: string, overrides: Partial<MyTicket> = {}): MyTicket {
     },
     extras: [],
     pickupOrders: [],
+    pickupVouchers: [],
     ...overrides,
   } as MyTicket;
 }
