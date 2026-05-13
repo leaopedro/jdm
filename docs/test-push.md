@@ -112,6 +112,15 @@ production-shaped local smoke.
 > mobile signup flow does not block, but Expo will not deliver to that token.
 > Any device-level verification (variant 10B) **requires a physical device**.
 
+> **Watch out for `apps/mobile/.env.local`.** A blank line like
+> `EAS_PROJECT_ID=` or `EXPO_PUBLIC_API_BASE_URL=` in `.env.local` overrides
+> the value in `.env` because dotenv loads `.env.local` second and treats the
+> empty string as set. `app.config.ts` now uses `||` (not `??`) on those two
+> defaults so empty falls back, but if you see `[push] registerExpoPushToken:
+no projectId resolved` in the Metro console, that file is the first place
+> to look — either remove the empty line or set the value. Restart Metro with
+> `--clear` after editing.
+
 ### 10A — Worker only (DB-level smoke, no real device)
 
 Verifies dispatch claims a `scheduled` broadcast and transitions it to `sent`,

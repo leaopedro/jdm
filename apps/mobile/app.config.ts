@@ -22,7 +22,12 @@ const bundleId: Record<Variant, string> = {
   production: 'com.jdmexperience.app',
 };
 
-const easProjectId = process.env.EAS_PROJECT_ID ?? 'c071216e-6224-4f00-9eb0-6737fb5e1691';
+// Use `||` not `??` so that an empty string in .env.local (a common footgun
+// when teammates blank out the var) still falls back to the default instead
+// of silently producing an empty projectId — which makes
+// Notifications.getExpoPushTokenAsync throw 'no-project-id' and breaks the
+// local broadcast push smoke (JDMA-534).
+const easProjectId = process.env.EAS_PROJECT_ID || 'c071216e-6224-4f00-9eb0-6737fb5e1691';
 
 const stripeMerchantIdentifier =
   variant === 'production' ? 'merchant.com.jdmexperience.app' : undefined;
@@ -113,7 +118,10 @@ const config: ExpoConfig = {
   experiments: { typedRoutes: true },
   extra: {
     variant,
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
+    // `||` (not `??`) so an empty string in .env.local falls back to the
+    // default instead of producing an empty baseUrl. See easProjectId above
+    // for the same reasoning.
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:4000',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     stripePublishableKey: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
     stripeMerchantIdentifier,
