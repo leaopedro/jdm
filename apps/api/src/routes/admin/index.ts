@@ -2,7 +2,6 @@ import rateLimit from '@fastify/rate-limit';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { adminBroadcastRoutes } from './broadcasts.js';
-import { adminSupportRoutes } from './support.js';
 import { adminCheckInRoutes } from './check-in.js';
 import { adminCollectionRoutes } from './collections.js';
 import { adminEventRoutes } from './events.js';
@@ -15,6 +14,7 @@ import { adminStoreProductRoutes } from './store/products.js';
 import { adminStoreVariantRoutes } from './store/variants.js';
 import { adminStoreProductTypeRoutes } from './store-product-types.js';
 import { adminStoreSettingsRoutes } from './store-settings.js';
+import { adminSupportRoutes } from './support.js';
 import { adminTicketRoutes } from './tickets.js';
 import { adminTierRoutes } from './tiers.js';
 import { adminUserMutationRoutes, adminUserRoutes } from './users.js';

@@ -1,6 +1,10 @@
 import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@jdm/db';
-import { createSupportTicketBodySchema, supportTicketSchema, type SupportTicket } from '@jdm/shared/support';
+import {
+  createSupportTicketBodySchema,
+  supportTicketSchema,
+  type SupportTicket,
+} from '@jdm/shared/support';
 import type { SupportTicket as DbTicket } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -32,32 +36,38 @@ export const meSupportRoutes: FastifyPluginAsync = async (app) => {
       max: 5,
       timeWindow: '15 minutes',
       keyGenerator: (req) => {
-        const auth = (req as any).user;
+        const auth = (req as unknown as { user?: { sub?: string } }).user;
         return auth?.sub ? `support-create:${auth.sub}` : `support-create-ip:${req.ip}`;
       },
     });
 
-    scoped.post('/me/support-tickets', { preHandler: [scoped.authenticate] }, async (request, reply) => {
-      const { sub } = requireUser(request);
-      const { phone, message, attachmentObjectKey } = createSupportTicketBodySchema.parse(request.body);
+    scoped.post(
+      '/me/support-tickets',
+      { preHandler: [scoped.authenticate] },
+      async (request, reply) => {
+        const { sub } = requireUser(request);
+        const { phone, message, attachmentObjectKey } = createSupportTicketBodySchema.parse(
+          request.body,
+        );
 
-      if (attachmentObjectKey !== undefined) {
-        if (!app.uploads.isOwnedKey(attachmentObjectKey, sub, 'support_attachment')) {
-          return reply.status(400).send({ error: 'BadRequest', message: 'invalid attachment' });
+        if (attachmentObjectKey !== undefined) {
+          if (!app.uploads.isOwnedKey(attachmentObjectKey, sub, 'support_attachment')) {
+            return reply.status(400).send({ error: 'BadRequest', message: 'invalid attachment' });
+          }
         }
-      }
 
-      const ticket = await prisma.supportTicket.create({
-        data: {
-          userId: sub,
-          phone,
-          message,
-          attachmentObjectKey: attachmentObjectKey ?? null,
-          status: 'open',
-        },
-      });
+        const ticket = await prisma.supportTicket.create({
+          data: {
+            userId: sub,
+            phone,
+            message,
+            attachmentObjectKey: attachmentObjectKey ?? null,
+            status: 'open',
+          },
+        });
 
-      return reply.status(201).send(serializeTicket(ticket, app.uploads));
-    });
+        return reply.status(201).send(serializeTicket(ticket, app.uploads));
+      },
+    );
   });
 };
