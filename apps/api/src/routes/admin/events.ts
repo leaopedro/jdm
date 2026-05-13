@@ -15,16 +15,19 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import { displayPriceCents } from '../../services/pricing/dev-fee.js';
 import type { Uploads } from '../../services/uploads/index.js';
 
 import { serializeAdminTier } from './serializers.js';
 
-const serializeExtra = (x: DbExtra) =>
+const serializeExtra = (x: DbExtra, devFeePercent: number) =>
   eventExtraPublicSchema.parse({
     id: x.id,
     name: x.name,
     description: x.description,
     priceCents: x.priceCents,
+    displayPriceCents: displayPriceCents(x.priceCents, devFeePercent),
+    devFeePercent,
     currency: x.currency,
     quantityRemaining:
       x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
@@ -63,7 +66,7 @@ const serializeDetail = (
     extras: e.extras
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(serializeExtra),
+      .map((x) => serializeExtra(x, devFeePercent)),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await

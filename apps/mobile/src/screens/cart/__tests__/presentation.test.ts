@@ -235,12 +235,12 @@ describe('computeDisplayedCartTotals', () => {
     expect(computeDisplayedCartTotals(baseTotals, 'pickup')).toEqual({
       ...baseTotals,
       shippingSubtotalCents: 0,
-      amountCents: 9000,
+      amountCents: 9900,
     });
   });
 
   it('is a no-op when pickup but no shipping fee', () => {
-    const noShipping: CartTotals = { ...baseTotals, shippingSubtotalCents: 0, amountCents: 9000 };
+    const noShipping: CartTotals = { ...baseTotals, shippingSubtotalCents: 0, amountCents: 9900 };
     expect(computeDisplayedCartTotals(noShipping, 'pickup')).toEqual(noShipping);
   });
 });

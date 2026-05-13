@@ -188,6 +188,8 @@ describe('storeProductSchema', () => {
             sku: 'TSHIRT-PRETA-M',
             title: 'Preta / M',
             priceCents: 8990,
+            displayPriceCents: 9889,
+            devFeePercent: 10,
             compareAtPriceCents: null,
             currency: 'BRL',
             stockOnHand: 8,
