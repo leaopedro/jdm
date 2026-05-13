@@ -99,8 +99,68 @@ Same as step 7 but with `startsAt = now() + interval '59 minutes 45 seconds'`. E
 2. Trigger a ticket-confirmed push (replay the webhook with a fresh `dedupeKey`).
 3. Expo returns `DeviceNotRegistered` for the fake token; check DB — that row is gone, your real token is still there.
 
+## 10. Test local broadcast smoke path (F10)
+
+Default local dev does not run the broadcast worker and does not deliver real
+pushes — both behaviors are gated so ordinary `pnpm --filter @jdm/api dev`
+never sends accidental traffic. Use the env flags below to opt into a
+production-shaped local smoke.
+
+### 10A — Worker only (DB-level smoke, no real device)
+
+Verifies dispatch claims a `scheduled` broadcast and transitions it to `sent`,
+without hitting Expo.
+
+1. Stop the API. Set in `apps/api/.env`:
+
+   ```sh
+   BROADCAST_WORKER_ENABLED=true
+   # PUSH_PROVIDER unset (defaults to auto → DevPushSender in dev)
+   ```
+
+2. `pnpm --filter @jdm/api dev`.
+3. From the admin composer (or `POST /admin/broadcasts`), create a send-now
+   broadcast targeting yourself or a small audience.
+4. Within ~60 s, the admin list flips `Agendado` → `Enviado`. DB check:
+
+   ```sh
+   psql $DATABASE_URL -c $'select id, status, "startedAt", "completedAt" from "Broadcast" order by "createdAt" desc limit 1;'
+   psql $DATABASE_URL -c $'select status, count(*) from "BroadcastDelivery" group by status;'
+   ```
+
+   `Broadcast.status='sent'`, `BroadcastDelivery.status='sent'` for each target.
+   API logs include `[broadcasts] dispatch complete` and per-message
+   `[dev-push] to=… title=…` lines (delivery is stubbed locally).
+
+### 10B — Worker + real Expo delivery
+
+Adds real device delivery on top of 10A.
+
+1. Stop the API. In `apps/api/.env`:
+
+   ```sh
+   BROADCAST_WORKER_ENABLED=true
+   PUSH_PROVIDER=expo
+   EXPO_ACCESS_TOKEN=<your-expo-access-token>
+   ```
+
+2. Register a real device token first (see steps 1–3 above).
+3. `pnpm --filter @jdm/api dev`, create a send-now broadcast targeting that user.
+4. Within ~60 s, the push lands on the device and the admin list shows
+   `Enviado`. `BroadcastDelivery.status='sent'` for that user; invalid tokens
+   (if any) are pruned from `DeviceToken`.
+
+### Notes
+
+- Both flags default off / `auto`. Forgetting to set them keeps the safe local
+  default (no background worker, no real Expo traffic).
+- `PUSH_PROVIDER=dev` is also available as an explicit safety override (e.g.
+  to run a production-shaped build without hitting Expo).
+- Revert the env values when you are done so subsequent dev runs stay quiet.
+
 ## Cleanup
 
 - Reset the event `startsAt` to its real future value.
 - If you flipped the gate in step 7B, revert it.
-- Delete test `Notification` and `DeviceToken` rows for a clean slate.
+- If you set `BROADCAST_WORKER_ENABLED` or `PUSH_PROVIDER` for step 10, unset them.
+- Delete test `Notification`, `BroadcastDelivery`, and `DeviceToken` rows for a clean slate.

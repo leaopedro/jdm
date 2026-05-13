@@ -116,7 +116,7 @@ export const buildApp = async (
     });
   }
 
-  if (env.BROADCAST_WORKER_ENABLED && env.NODE_ENV === 'production') {
+  if (env.BROADCAST_WORKER_ENABLED) {
     const bWorker = startBroadcastWorker({
       sender: app.push,
       batchSize: env.BROADCAST_BATCH_SIZE,
