@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { cartPaymentMethodSchema } from './cart.js';
+import { capacityDisplayDescriptorSchema } from './general-settings.js';
 import { fulfillmentStatusSchema, ticketInputSchema } from './orders.js';
 import { stateCodeSchema } from './profile.js';
 
@@ -102,6 +103,7 @@ export const storeProductVariantSchema = z.object({
   currency: z.string().length(3),
   stockOnHand: z.number().int().nonnegative(),
   isActive: z.boolean(),
+  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type StoreProductVariant = z.infer<typeof storeProductVariantSchema>;
 

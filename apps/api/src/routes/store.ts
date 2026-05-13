@@ -1,4 +1,5 @@
 import { prisma } from '@jdm/db';
+import { type CapacityDisplayPolicy, computeCapacityDisplay } from '@jdm/shared/general-settings';
 import {
   storeCollectionListResponseSchema,
   storeCollectionSchema,
@@ -24,6 +25,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { loadCapacityDisplayPolicy } from '../services/general-settings.js';
 import { displayPriceCents } from '../services/pricing/dev-fee.js';
 import { ensureStoreSettings } from '../services/store-settings.js';
 import type { Uploads } from '../services/uploads/index.js';
@@ -72,7 +74,22 @@ const serializeImage = (photo: DbProductPhoto, uploads: Uploads) =>
     sortOrder: photo.sortOrder,
   });
 
-const serializeVariant = (v: DbVariant, currency: string, devFeePercent: number) =>
+const variantCapacityDisplay = (v: DbVariant, policy: CapacityDisplayPolicy) => {
+  const remaining = Math.max(0, v.quantityTotal - v.quantitySold);
+  const status: 'available' | 'sold_out' | 'unavailable' = !v.active
+    ? 'unavailable'
+    : v.quantityTotal > 0 && remaining === 0
+      ? 'sold_out'
+      : 'available';
+  return computeCapacityDisplay({ status, remaining, total: v.quantityTotal }, policy.products);
+};
+
+const serializeVariant = (
+  v: DbVariant,
+  currency: string,
+  devFeePercent: number,
+  policy: CapacityDisplayPolicy,
+) =>
   storeProductVariantSchema.parse({
     id: v.id,
     sku: v.sku ?? null,
@@ -84,6 +101,7 @@ const serializeVariant = (v: DbVariant, currency: string, devFeePercent: number)
     currency,
     stockOnHand: Math.max(0, v.quantityTotal - v.quantitySold),
     isActive: v.active,
+    capacityDisplay: variantCapacityDisplay(v, policy),
   });
 
 const computePriceRange = (
@@ -156,6 +174,7 @@ const serializeDetail = (
   product: ProductWithRelations,
   uploads: Uploads,
   devFeePercent: number,
+  policy: CapacityDisplayPolicy,
 ) => {
   const activeVariants = product.variants.filter((v) => v.active);
   const variantsForResponse = activeVariants.length > 0 ? activeVariants : product.variants;
@@ -173,7 +192,9 @@ const serializeDetail = (
     coverImageUrl: cover,
     collectionIds: product.collections.map((c) => c.collectionId),
     productType: serializeProductType(product.productType),
-    variants: variantsForResponse.map((v) => serializeVariant(v, product.currency, devFeePercent)),
+    variants: variantsForResponse.map((v) =>
+      serializeVariant(v, product.currency, devFeePercent, policy),
+    ),
     images: sortedPhotos.map((p) => serializeImage(p, uploads)),
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
@@ -453,8 +474,9 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
         })
       : [];
 
+    const policy = await loadCapacityDisplayPolicy();
     return storeProductDetailResponseSchema.parse({
-      product: serializeDetail(product, app.uploads, app.env.DEV_FEE_PERCENT),
+      product: serializeDetail(product, app.uploads, app.env.DEV_FEE_PERCENT, policy),
       collections: collections.map(serializeCollection),
     });
   });

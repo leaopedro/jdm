@@ -14,6 +14,15 @@ const buildVariant = (overrides: Partial<StoreProductVariant>): StoreProductVari
   currency: 'BRL',
   stockOnHand: 3,
   isActive: true,
+  capacityDisplay: {
+    status: 'available',
+    mode: 'absolute',
+    showAbsolute: true,
+    showPercentage: false,
+    remaining: 3,
+    remainingPercent: null,
+    thresholdPercent: 15,
+  },
   ...overrides,
 });
 

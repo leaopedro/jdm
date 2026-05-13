@@ -1,5 +1,10 @@
+import {
+  computeCapacityDisplay,
+  defaultCapacityDisplaySurfaceSetting,
+} from '@jdm/shared/general-settings';
 import type {
   Collection as DbCollection,
+  GeneralSettings as DbGeneralSettings,
   Product as DbProduct,
   ProductType as DbProductType,
   StoreSettings as DbStoreSettings,
@@ -7,7 +12,17 @@ import type {
   TicketTier as DbTier,
 } from '@prisma/client';
 
+import { toCapacityDisplayPolicy } from '../../services/general-settings.js';
 import { displayPriceCents as calcDisplayPrice } from '../../services/pricing/dev-fee.js';
+
+const adminTierCapacityDisplay = (t: DbTier) => {
+  const remaining = Math.max(0, t.quantityTotal - t.quantitySold);
+  const status = t.quantityTotal > 0 && remaining === 0 ? 'sold_out' : 'available';
+  return computeCapacityDisplay(
+    { status, remaining, total: t.quantityTotal },
+    defaultCapacityDisplaySurfaceSetting,
+  );
+};
 
 export const serializeAdminTier = (t: DbTier, devFeePercent: number) => ({
   id: t.id,
@@ -23,6 +38,7 @@ export const serializeAdminTier = (t: DbTier, devFeePercent: number) => ({
   salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
   sortOrder: t.sortOrder,
   requiresCar: t.requiresCar,
+  capacityDisplay: adminTierCapacityDisplay(t),
 });
 
 export const serializeAdminCollection = (
@@ -100,5 +116,11 @@ export const serializeAdminStoreSettings = (s: DbStoreSettings) => ({
   eventPickupEnabled: s.eventPickupEnabled,
   pickupDisplayLabel: s.pickupDisplayLabel,
   supportPhone: s.supportPhone,
+  updatedAt: s.updatedAt.toISOString(),
+});
+
+export const serializeAdminGeneralSettings = (s: DbGeneralSettings) => ({
+  id: s.id,
+  capacityDisplay: toCapacityDisplayPolicy(s),
   updatedAt: s.updatedAt.toISOString(),
 });

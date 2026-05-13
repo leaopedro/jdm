@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { eventExtraPublicSchema } from './extras.js';
+import { capacityDisplayDescriptorSchema } from './general-settings.js';
 import { stateCodeSchema } from './profile.js';
 
 export const eventTypeSchema = z.enum(['meeting', 'drift', 'other']);
@@ -27,6 +28,7 @@ export const ticketTierSchema = z.object({
   salesCloseAt: z.string().datetime().nullable(),
   sortOrder: z.number().int(),
   requiresCar: z.boolean(),
+  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type TicketTier = z.infer<typeof ticketTierSchema>;
 
@@ -53,6 +55,7 @@ export const eventDetailPublicSchema = eventSummarySchema.extend({
   capacity: z.number().int().nonnegative(),
   // null = unlimited; legacy responses may omit. Server enforces the real cap.
   maxTicketsPerUser: z.number().int().min(1).nullable().optional(),
+  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type EventDetailPublic = z.infer<typeof eventDetailPublicSchema>;
 

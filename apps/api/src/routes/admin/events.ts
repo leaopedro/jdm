@@ -5,6 +5,10 @@ import {
   adminEventUpdateSchema,
 } from '@jdm/shared/admin';
 import { eventExtraPublicSchema } from '@jdm/shared/extras';
+import {
+  computeCapacityDisplay,
+  defaultCapacityDisplaySurfaceSetting,
+} from '@jdm/shared/general-settings';
 import type {
   Event as DbEvent,
   TicketExtra as DbExtra,
@@ -20,6 +24,31 @@ import type { Uploads } from '../../services/uploads/index.js';
 
 import { serializeAdminTier } from './serializers.js';
 
+const adminExtraCapacityDisplay = (x: DbExtra) => {
+  if (x.quantityTotal == null) {
+    return computeCapacityDisplay(
+      { status: 'available', remaining: null, total: null },
+      defaultCapacityDisplaySurfaceSetting,
+    );
+  }
+  const remaining = Math.max(0, x.quantityTotal - x.quantitySold);
+  const status = remaining === 0 ? 'sold_out' : 'available';
+  return computeCapacityDisplay(
+    { status, remaining, total: x.quantityTotal },
+    defaultCapacityDisplaySurfaceSetting,
+  );
+};
+
+const adminEventCapacityDisplay = (e: DbEvent) =>
+  computeCapacityDisplay(
+    {
+      status: e.status === 'cancelled' ? 'unavailable' : 'available',
+      remaining: e.capacity,
+      total: e.capacity,
+    },
+    defaultCapacityDisplaySurfaceSetting,
+  );
+
 const serializeExtra = (x: DbExtra, devFeePercent: number) =>
   eventExtraPublicSchema.parse({
     id: x.id,
@@ -32,6 +61,7 @@ const serializeExtra = (x: DbExtra, devFeePercent: number) =>
     quantityRemaining:
       x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
     sortOrder: x.sortOrder,
+    capacityDisplay: adminExtraCapacityDisplay(x),
   });
 
 const serializeDetail = (
@@ -59,6 +89,7 @@ const serializeDetail = (
     publishedAt: e.publishedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
+    capacityDisplay: adminEventCapacityDisplay(e),
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
