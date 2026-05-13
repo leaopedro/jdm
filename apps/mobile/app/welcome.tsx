@@ -4,11 +4,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Bell, User } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, ScrollView, Text as RNText, View } from 'react-native';
 
 import { listEvents } from '~/api/events';
 import { useAuth } from '~/auth/context';
 import { buildLoginHref } from '~/auth/redirect-intent';
+import { notificationsCopy } from '~/copy/notifications';
+import { useUnreadCount } from '~/hooks/useUnreadCount';
 import { formatEventDateRange } from '~/lib/format';
 import { captureException } from '~/lib/sentry';
 
@@ -49,6 +51,7 @@ export default function Welcome() {
   const [items, setItems] = useState<EventSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const profileNavGuard = useRef(false);
+  const { count: unreadCount } = useUnreadCount(!isAnon && isAuthSettled);
 
   const handleProfilePress = useCallback(() => {
     if (!isAuthSettled || profileNavGuard.current) return;
@@ -123,11 +126,40 @@ export default function Welcome() {
           <View className="flex-row items-center gap-3">
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Notificações"
+              accessibilityLabel={
+                unreadCount > 0
+                  ? notificationsCopy.accessibilityUnread(unreadCount)
+                  : notificationsCopy.accessibilityBell
+              }
               hitSlop={8}
+              disabled={isAnon || !isAuthSettled}
+              onPress={() => router.push('/notifications' as never)}
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
             >
               <Bell color="#F5F5F5" size={22} strokeWidth={1.75} />
+              {unreadCount > 0 ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    backgroundColor: '#E10600',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 3,
+                  }}
+                >
+                  <RNText
+                    style={{ color: '#fff', fontSize: 9, fontWeight: '700', lineHeight: 13 }}
+                    numberOfLines={1}
+                  >
+                    {unreadCount > 99 ? '99+' : String(unreadCount)}
+                  </RNText>
+                </View>
+              ) : null}
             </Pressable>
             <Pressable
               accessibilityRole="button"
