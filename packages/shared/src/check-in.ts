@@ -123,9 +123,6 @@ export type ExtraClaimResponse = z.infer<typeof extraClaimResponseSchema>;
 
 // ── Pickup voucher claim (JDMA-540 per-product QR vouchers) ──────────
 
-export const pickupVoucherStatusSchema = z.enum(['valid', 'used', 'revoked']);
-export type PickupVoucherStatus = z.infer<typeof pickupVoucherStatusSchema>;
-
 export const pickupVoucherClaimRequestSchema = z.object({
   code: z.string().min(10).max(500),
   eventId: z.string().min(1).max(64),
