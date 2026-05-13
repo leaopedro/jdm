@@ -1,12 +1,27 @@
-import { notFound } from 'next/navigation';
+import type { SupportTicketInternalStatus } from '@jdm/shared/support';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 
 import { getAdminSupportTicket } from '~/lib/admin-api';
-import { closeSupportTicketAction } from '~/lib/support-actions';
+import { closeSupportTicketAction, updateInternalStatusAction } from '~/lib/support-actions';
 
 export const dynamic = 'force-dynamic';
 
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR') : '—');
+
+const INTERNAL_STATUS_LABELS: Record<SupportTicketInternalStatus, string> = {
+  unread: 'Não lido',
+  seen: 'Visto',
+  in_progress: 'Em andamento',
+  done: 'Resolvido',
+};
+
+const INTERNAL_STATUS_OPTIONS: SupportTicketInternalStatus[] = [
+  'unread',
+  'seen',
+  'in_progress',
+  'done',
+];
 
 export default async function SupportTicketDetailPage({
   params,
@@ -30,9 +45,7 @@ export default async function SupportTicketDetailPage({
         <h1 className="text-2xl font-bold">Chamado</h1>
         <span
           className={`ml-auto rounded px-2 py-1 text-xs font-semibold ${
-            ticket.status === 'open'
-              ? 'bg-green-900 text-green-200'
-              : 'bg-zinc-700 text-zinc-300'
+            ticket.status === 'open' ? 'bg-green-900 text-green-200' : 'bg-zinc-700 text-zinc-300'
           }`}
         >
           {ticket.status === 'open' ? 'Aberto' : 'Fechado'}
@@ -74,12 +87,29 @@ export default async function SupportTicketDetailPage({
         </div>
       </div>
 
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-[color:var(--color-muted)]">Status interno:</span>
+        <div className="flex gap-2">
+          {INTERNAL_STATUS_OPTIONS.map((s) => (
+            <form key={s} action={updateInternalStatusAction.bind(null, ticket.id, s)}>
+              <button
+                type="submit"
+                className={`rounded px-3 py-1 text-xs font-medium ${
+                  ticket.internalStatus === s
+                    ? 'bg-blue-700 text-white'
+                    : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                }`}
+              >
+                {INTERNAL_STATUS_LABELS[s]}
+              </button>
+            </form>
+          ))}
+        </div>
+      </div>
+
       {ticket.status === 'open' && (
         <form action={closeSupportTicketAction.bind(null, ticket.id)}>
-          <button
-            type="submit"
-            className="rounded bg-zinc-700 px-4 py-2 text-sm hover:bg-zinc-600"
-          >
+          <button type="submit" className="rounded bg-zinc-700 px-4 py-2 text-sm hover:bg-zinc-600">
             Fechar chamado
           </button>
         </form>

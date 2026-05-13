@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { prisma } from '@jdm/db';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -186,6 +187,7 @@ describe('GET /admin/support/:id', () => {
     });
     expect(body).toHaveProperty('closedAt');
     expect(body).toHaveProperty('closedByAdminId');
+    expect(body).toHaveProperty('internalStatus', 'unread');
   });
 });
 
@@ -275,5 +277,94 @@ describe('PATCH /admin/support/:id/close', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('closed');
+  });
+});
+
+describe('PATCH /admin/support/:id/internal-status', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 401 for unauthenticated', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/support/nonexistent/internal-status',
+      payload: { internalStatus: 'seen' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 403 for regular user', async () => {
+    const { user } = await createUser({ email: 'u@jdm.test', verified: true, role: 'user' });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/support/nonexistent/internal-status',
+      headers: { authorization: bearer(env, user.id, 'user') },
+      payload: { internalStatus: 'seen' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 for unknown id', async () => {
+    const { user: organizer } = await createUser({
+      email: 'org@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/support/00000000-0000-0000-0000-000000000000/internal-status',
+      headers: { authorization: bearer(env, organizer.id, 'organizer') },
+      payload: { internalStatus: 'seen' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('updates internalStatus and returns updated ticket', async () => {
+    const { user: organizer } = await createUser({
+      email: 'org2@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const { user: member } = await createUser({ email: 'm@jdm.test', verified: true });
+    const ticket = await seedTicket(member.id);
+
+    expect(ticket.internalStatus).toBe('unread');
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/support/${ticket.id}/internal-status`,
+      headers: { authorization: bearer(env, organizer.id, 'organizer') },
+      payload: { internalStatus: 'in_progress' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.internalStatus).toBe('in_progress');
+    expect(body.status).toBe('open');
+  });
+
+  it('rejects invalid internalStatus value', async () => {
+    const { user: organizer } = await createUser({
+      email: 'org3@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const { user: member } = await createUser({ email: 'm2@jdm.test', verified: true });
+    const ticket = await seedTicket(member.id);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/admin/support/${ticket.id}/internal-status`,
+      headers: { authorization: bearer(env, organizer.id, 'organizer') },
+      payload: { internalStatus: 'bogus' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

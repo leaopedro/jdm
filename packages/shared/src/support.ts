@@ -15,6 +15,14 @@ export type CreateSupportTicketBody = z.infer<typeof createSupportTicketBodySche
 export const supportTicketStatusSchema = z.enum(['open', 'closed']);
 export type SupportTicketStatus = z.infer<typeof supportTicketStatusSchema>;
 
+export const supportTicketInternalStatusSchema = z.enum(['unread', 'seen', 'in_progress', 'done']);
+export type SupportTicketInternalStatus = z.infer<typeof supportTicketInternalStatusSchema>;
+
+export const updateInternalStatusBodySchema = z.object({
+  internalStatus: supportTicketInternalStatusSchema,
+});
+export type UpdateInternalStatusBody = z.infer<typeof updateInternalStatusBodySchema>;
+
 export const supportTicketSchema = z.object({
   id: z.string(),
   phone: z.string(),
@@ -39,6 +47,7 @@ export const adminSupportTicketListItemSchema = z.object({
   message: z.string(),
   attachmentUrl: z.string().url().nullable(),
   status: supportTicketStatusSchema,
+  internalStatus: supportTicketInternalStatusSchema,
   createdAt: z.string().datetime(),
   user: adminSupportTicketUserSchema,
 });

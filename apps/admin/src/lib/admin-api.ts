@@ -72,17 +72,18 @@ import {
 } from '@jdm/shared/check-in';
 import { publicProfileSchema } from '@jdm/shared/profile';
 import {
-  adminSupportTicketDetailSchema,
-  adminSupportTicketListResponseSchema,
-  type AdminSupportTicketDetail,
-  type AdminSupportTicketListResponse,
-} from '@jdm/shared/support';
-import {
   storeSettingsSchema,
   type AdminStoreFulfillmentUpdate,
   type StoreSettings,
   type StoreSettingsUpdate,
 } from '@jdm/shared/store';
+import {
+  adminSupportTicketDetailSchema,
+  adminSupportTicketListResponseSchema,
+  type AdminSupportTicketDetail,
+  type AdminSupportTicketListResponse,
+  type SupportTicketInternalStatus,
+} from '@jdm/shared/support';
 import { z } from 'zod';
 
 import {
@@ -537,5 +538,15 @@ export const getAdminSupportTicket = (id: string): Promise<AdminSupportTicketDet
 export const closeAdminSupportTicket = (id: string): Promise<AdminSupportTicketDetail> =>
   apiFetch(`/admin/support/${id}/close`, {
     method: 'PATCH',
+    schema: adminSupportTicketDetailSchema,
+  });
+
+export const updateAdminSupportTicketInternalStatus = (
+  id: string,
+  internalStatus: SupportTicketInternalStatus,
+): Promise<AdminSupportTicketDetail> =>
+  apiFetch(`/admin/support/${id}/internal-status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ internalStatus }),
     schema: adminSupportTicketDetailSchema,
   });
