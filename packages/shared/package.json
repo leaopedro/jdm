@@ -66,6 +66,10 @@
       "types": "./src/store.ts",
       "default": "./dist/store.js"
     },
+    "./support": {
+      "types": "./src/support.ts",
+      "default": "./dist/support.js"
+    },
     "./tickets": {
       "types": "./src/tickets.ts",
       "default": "./dist/tickets.js"
