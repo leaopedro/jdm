@@ -98,6 +98,9 @@ export type ExtraClaimRequest = z.infer<typeof extraClaimRequestSchema>;
 export const extraClaimResultSchema = z.enum(['claimed', 'already_used']);
 export type ExtraClaimResult = z.infer<typeof extraClaimResultSchema>;
 
+export const pickupVoucherStatusSchema = z.enum(['valid', 'used', 'revoked']);
+export type PickupVoucherStatus = z.infer<typeof pickupVoucherStatusSchema>;
+
 export const extraClaimResponseSchema = z.object({
   result: extraClaimResultSchema,
   item: z.object({
@@ -119,9 +122,6 @@ export const extraClaimResponseSchema = z.object({
 export type ExtraClaimResponse = z.infer<typeof extraClaimResponseSchema>;
 
 // ── Pickup voucher claim (JDMA-540 per-product QR vouchers) ──────────
-
-export const pickupVoucherStatusSchema = z.enum(['valid', 'used', 'revoked']);
-export type PickupVoucherStatus = z.infer<typeof pickupVoucherStatusSchema>;
 
 export const pickupVoucherClaimRequestSchema = z.object({
   code: z.string().min(10).max(500),
