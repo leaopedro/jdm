@@ -29,12 +29,14 @@ export const settlePaidOrder = async (
 
   if (order.kind === 'mixed') {
     if (order.status === 'paid') {
+      await assignEventPickupTicket(orderId);
       return { kind: 'mixed' };
     }
     if (order.status !== 'pending') {
       throw new OrderNotPendingError(orderId, order.status);
     }
     const issued = await issueTicketsForMixedOrder(orderId, providerRef, env);
+    await assignEventPickupTicket(orderId);
     return { kind: 'mixed', issued };
   }
 

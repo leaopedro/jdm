@@ -147,6 +147,7 @@ describe('cart presentation helpers', () => {
         status: 'published',
       },
       extras: [],
+      pickupOrders: [],
     } satisfies MyTicket;
 
     expect(
@@ -211,6 +212,7 @@ describe('cart presentation helpers', () => {
         status: 'cancelled',
       },
       extras: [],
+      pickupOrders: [],
     } satisfies MyTicket;
 
     expect(buildPickupEventOptions([cancelledTicket], [])).toEqual([]);

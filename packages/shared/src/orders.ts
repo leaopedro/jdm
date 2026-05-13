@@ -155,6 +155,10 @@ export const myOrderSchema = z.object({
   fulfillmentStatus: fulfillmentStatusSchema.nullable(),
   event: eventSummarySchema.nullable(),
   items: z.array(myOrderLineItemSchema),
+  // Set on paid product/mixed pickup orders that are bound to an event ticket
+  // owned by the requesting user. Mobile uses this to render a `Ver Voucher`
+  // CTA that deep-links into the bound ticket detail. Null when not bound.
+  pickupTicketId: z.string().min(1).nullable(),
 });
 export type MyOrder = z.infer<typeof myOrderSchema>;
 

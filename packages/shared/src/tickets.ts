@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { storePickupItemSchema } from './check-in.js';
 import { eventSummarySchema } from './events.js';
 import { ticketExtraItemStatusSchema } from './extras.js';
 
@@ -19,6 +20,22 @@ export const myTicketExtraSchema = z.object({
 });
 export type MyTicketExtra = z.infer<typeof myTicketExtraSchema>;
 
+export const myTicketPickupFulfillmentStatusSchema = z.enum([
+  'unfulfilled',
+  'pickup_ready',
+  'picked_up',
+  'cancelled',
+]);
+export type MyTicketPickupFulfillmentStatus = z.infer<typeof myTicketPickupFulfillmentStatusSchema>;
+
+export const myTicketPickupOrderSchema = z.object({
+  orderId: z.string().min(1),
+  shortId: z.string().min(1),
+  fulfillmentStatus: myTicketPickupFulfillmentStatusSchema,
+  items: z.array(storePickupItemSchema),
+});
+export type MyTicketPickupOrder = z.infer<typeof myTicketPickupOrderSchema>;
+
 export const myTicketSchema = z.object({
   id: z.string().min(1),
   code: z.string().min(1),
@@ -30,6 +47,7 @@ export const myTicketSchema = z.object({
   createdAt: z.string().datetime(),
   event: eventSummarySchema,
   extras: z.array(myTicketExtraSchema),
+  pickupOrders: z.array(myTicketPickupOrderSchema),
 });
 export type MyTicket = z.infer<typeof myTicketSchema>;
 

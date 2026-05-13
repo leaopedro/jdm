@@ -125,8 +125,9 @@ export const assignEventPickupTicketTx = async (
     return order.pickupTicketId;
   }
 
-  const ticket = await tx.ticket.findFirst({
+  const sameOrderTicket = await tx.ticket.findFirst({
     where: {
+      orderId: order.id,
       userId: order.userId,
       eventId: order.pickupEventId,
       status: 'valid',
@@ -134,6 +135,18 @@ export const assignEventPickupTicketTx = async (
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { id: true },
   });
+
+  const ticket =
+    sameOrderTicket ??
+    (await tx.ticket.findFirst({
+      where: {
+        userId: order.userId,
+        eventId: order.pickupEventId,
+        status: 'valid',
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    }));
 
   if (!ticket) {
     throw new EventPickupAssignmentUnavailableError(order.id, order.userId, order.pickupEventId);

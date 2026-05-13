@@ -36,6 +36,16 @@ export const ticketsCopy = {
     nicknameSaving: 'Salvando...',
     nicknameError: 'Não foi possível salvar. Tente novamente.',
     nicknameMaxLengthHint: 'Até 60 caracteres.',
+    pickupTitle: 'Retiradas no evento',
+    pickupHelp: 'Apresente o QR Code deste ingresso na loja do evento para retirar os itens.',
+    pickupOrderLabel: (shortId: string) => `Pedido #${shortId}`,
+    pickupStatus: {
+      unfulfilled: 'Aguardando retirada',
+      pickup_ready: 'Pronto para retirar',
+      picked_up: 'Retirado',
+      cancelled: 'Cancelado',
+    },
+    pickupItemQuantity: (quantity: number) => `${quantity} un.`,
   },
   purchase: {
     pickTier: 'Escolha um ingresso',

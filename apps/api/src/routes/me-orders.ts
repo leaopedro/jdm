@@ -43,6 +43,22 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
       ticketsByKey.set(key, list);
     }
 
+    // Pickup bindings may point at tickets from earlier orders, so verify
+    // ownership separately rather than reusing the same-order ticket map.
+    const pickupTicketIds = orders
+      .map((o) => (o.status === 'paid' ? o.pickupTicketId : null))
+      .filter((id): id is string => !!id);
+    const ownedPickupTicketIds = pickupTicketIds.length
+      ? new Set(
+          (
+            await prisma.ticket.findMany({
+              where: { id: { in: pickupTicketIds }, userId: sub },
+              select: { id: true },
+            })
+          ).map((t) => t.id),
+        )
+      : new Set<string>();
+
     return myOrdersResponseSchema.parse({
       items: orders.map((order) => {
         const containsTickets = order.items.some((item) => item.kind === 'ticket');
@@ -65,6 +81,14 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
           containsStoreItems,
           fulfillmentMethod: containsStoreItems ? order.fulfillmentMethod : null,
           fulfillmentStatus: containsStoreItems ? order.fulfillmentStatus : null,
+          pickupTicketId:
+            containsStoreItems &&
+            order.status === 'paid' &&
+            order.fulfillmentMethod === 'pickup' &&
+            order.pickupTicketId &&
+            ownedPickupTicketIds.has(order.pickupTicketId)
+              ? order.pickupTicketId
+              : null,
           event: order.event
             ? {
                 id: order.event.id,

@@ -196,6 +196,43 @@ export default function TicketDetail() {
         </View>
       )}
 
+      {ticket.pickupOrders.length > 0 && (
+        <View style={styles.pickupSection}>
+          <Text style={styles.extrasTitle}>{ticketsCopy.detail.pickupTitle}</Text>
+          <Text style={styles.pickupHelp}>{ticketsCopy.detail.pickupHelp}</Text>
+          {ticket.pickupOrders.map((order) => {
+            const collected = order.fulfillmentStatus === 'picked_up';
+            const cancelled = order.fulfillmentStatus === 'cancelled';
+            return (
+              <View
+                key={order.orderId}
+                style={[styles.pickupCard, (collected || cancelled) && styles.pickupCardMuted]}
+              >
+                <View style={styles.pickupHeader}>
+                  <Text style={styles.pickupOrderId}>
+                    {ticketsCopy.detail.pickupOrderLabel(order.shortId)}
+                  </Text>
+                  <Text style={[styles.pickupStatus, (collected || cancelled) && styles.textMuted]}>
+                    {ticketsCopy.detail.pickupStatus[order.fulfillmentStatus]}
+                  </Text>
+                </View>
+                {order.items.map((item) => (
+                  <View key={item.id} style={styles.pickupItemRow}>
+                    <Text style={[styles.pickupItemName, cancelled && styles.textMuted]}>
+                      {item.productTitle ?? '—'}
+                      {item.variantName ? ` · ${item.variantName}` : ''}
+                    </Text>
+                    <Text style={styles.pickupItemQty}>
+                      {ticketsCopy.detail.pickupItemQuantity(item.quantity)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       <Modal visible={editing} animationType="fade" transparent onRequestClose={closeEdit}>
         <KeyboardAvoidingView
           style={styles.modalRoot}
@@ -445,5 +482,52 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: theme.font.size.sm,
     textDecorationLine: 'underline',
+  },
+  pickupSection: {
+    width: '100%',
+    marginTop: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  pickupHelp: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+  },
+  pickupCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  pickupCardMuted: { opacity: 0.6 },
+  pickupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pickupOrderId: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '700',
+  },
+  pickupStatus: {
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+    fontWeight: '600',
+  },
+  pickupItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+  },
+  pickupItemName: {
+    flex: 1,
+    color: theme.colors.fg,
+    fontSize: theme.font.size.sm,
+  },
+  pickupItemQty: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
   },
 });

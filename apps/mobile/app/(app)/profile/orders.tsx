@@ -179,6 +179,13 @@ function OrderCard({
     }
   };
 
+  const openVoucher = (ticketId: string) => {
+    router.push({
+      pathname: '/tickets/[ticketId]',
+      params: { ticketId },
+    } as never);
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -251,6 +258,16 @@ function OrderCard({
           );
         })}
       </View>
+
+      {order.pickupTicketId ? (
+        <Pressable
+          onPress={() => openVoucher(order.pickupTicketId!)}
+          accessibilityRole="button"
+          style={styles.voucherLink}
+        >
+          <Text style={styles.ticketLinkText}>{ordersCopy.viewVoucher}</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.footerRow}>
         <View>
@@ -562,6 +579,9 @@ const styles = StyleSheet.create({
   },
   ticketLink: {
     marginTop: theme.spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  voucherLink: {
     alignSelf: 'flex-start',
   },
   ticketLinkText: {

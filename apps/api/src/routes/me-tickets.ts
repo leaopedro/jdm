@@ -1,4 +1,5 @@
 import { prisma } from '@jdm/db';
+import type { MyTicketPickupOrder } from '@jdm/shared/tickets';
 import {
   myTicketSchema,
   myTicketsResponseSchema,
@@ -8,6 +9,7 @@ import type { Ticket, Event, TicketTier, TicketExtraItem, TicketExtra } from '@p
 import type { FastifyPluginAsync, FastifyInstance } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { getPickupOrdersByTicket } from '../services/store/pickup-collect.js';
 import { signTicketCode } from '../services/tickets/codes.js';
 
 type TicketWithRelations = Ticket & {
@@ -16,7 +18,11 @@ type TicketWithRelations = Ticket & {
   extraItems: (TicketExtraItem & { extra: TicketExtra })[];
 };
 
-const serializeTicket = (t: TicketWithRelations, app: FastifyInstance) => ({
+const serializeTicket = (
+  t: TicketWithRelations,
+  pickupOrders: MyTicketPickupOrder[],
+  app: FastifyInstance,
+) => ({
   id: t.id,
   code: signTicketCode(t.id, app.env),
   status: t.status,
@@ -46,6 +52,7 @@ const serializeTicket = (t: TicketWithRelations, app: FastifyInstance) => ({
     status: ei.status,
     usedAt: ei.usedAt?.toISOString() ?? null,
   })),
+  pickupOrders,
 });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -69,8 +76,10 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
         : b.event.startsAt.getTime() - a.event.startsAt.getTime();
     });
 
+    const pickupByTicket = await getPickupOrdersByTicket(sorted.map((t) => t.id));
+
     return myTicketsResponseSchema.parse({
-      items: sorted.map((t) => serializeTicket(t, app)),
+      items: sorted.map((t) => serializeTicket(t, pickupByTicket.get(t.id) ?? [], app)),
     });
   });
 
@@ -90,6 +99,10 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
       include: { event: true, tier: true, extraItems: { include: { extra: true } } },
     });
 
-    return myTicketSchema.parse(serializeTicket(updated, app));
+    const pickupByTicket = await getPickupOrdersByTicket([updated.id]);
+
+    return myTicketSchema.parse(
+      serializeTicket(updated, pickupByTicket.get(updated.id) ?? [], app),
+    );
   });
 };
