@@ -44,7 +44,7 @@ export const AuthedNav = ({ isStaff }: { isStaff: boolean }) => {
             aria-label={open ? 'Fechar menu' : 'Abrir menu'}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="flex flex-col justify-center gap-1.5 p-1 md:hidden"
+            className="flex flex-col justify-center gap-1.5 rounded p-1 focus-visible:outline focus-visible:outline-offset-1 focus-visible:outline-[color:var(--color-border)] md:hidden"
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="block h-0.5 w-5 bg-current" />
