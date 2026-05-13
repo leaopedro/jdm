@@ -32,10 +32,13 @@ export class VoucherRevokedError extends Error {
   }
 }
 
-const buildCodeSeed = (orderItemId: string, index: number, salt: string): string =>
-  `${orderItemId}-${index}-${salt}`;
-
-const randomSalt = (): string => Math.random().toString(36).slice(2, 10);
+// Deterministic seed keyed by (orderItemId, unitIndex). Concurrent retries
+// produce identical codes, so the `code` unique constraint plus the
+// `(orderItemId, unitIndex)` unique constraint together collapse races: at
+// most one row per unit can ever exist regardless of how many handlers run
+// in parallel.
+const buildCodeSeed = (orderItemId: string, unitIndex: number): string =>
+  `${orderItemId}-${unitIndex}`;
 
 export type MintedVoucher = {
   id: string;
@@ -48,10 +51,10 @@ export type MintedVoucher = {
 };
 
 // Mint one PickupVoucher row per product unit (quantity) bound to the given
-// pickup ticket. Idempotent at the (order, item) level: if vouchers already
-// exist for any of the order's product items, we skip those items entirely
-// and only mint missing ones. The seed includes a random salt so the signed
-// code stays unique across retries when no row exists yet.
+// pickup ticket. Race-safe via deterministic per-unit codes plus a compound
+// unique on (orderItemId, unitIndex) and a single createMany with
+// skipDuplicates: Postgres ON CONFLICT DO NOTHING collapses concurrent
+// settlement handlers so the order can never over-mint beyond quantity.
 export const mintPickupVouchersForOrderTx = async (
   orderId: string,
   ticketId: string,
@@ -70,53 +73,33 @@ export const mintPickupVouchersForOrderTx = async (
 
   if (productItems.length === 0) return [];
 
-  const existingByItem = new Map<string, number>();
-  const existing = await tx.pickupVoucher.findMany({
+  const rows = productItems.flatMap((item) =>
+    Array.from({ length: item.quantity }, (_, unitIndex) => ({
+      orderId,
+      orderItemId: item.id,
+      unitIndex,
+      ticketId,
+      eventId,
+      variantId: item.variantId,
+      code: signQrCode('v', buildCodeSeed(item.id, unitIndex), env),
+      status: 'valid' as const,
+    })),
+  );
+
+  await tx.pickupVoucher.createMany({ data: rows, skipDuplicates: true });
+
+  return tx.pickupVoucher.findMany({
     where: { orderId },
-    select: { orderItemId: true },
+    select: {
+      id: true,
+      orderItemId: true,
+      variantId: true,
+      ticketId: true,
+      eventId: true,
+      code: true,
+      status: true,
+    },
   });
-  for (const row of existing) {
-    existingByItem.set(row.orderItemId, (existingByItem.get(row.orderItemId) ?? 0) + 1);
-  }
-
-  const minted: MintedVoucher[] = [];
-
-  for (const item of productItems) {
-    const already = existingByItem.get(item.id) ?? 0;
-    const remaining = Math.max(0, item.quantity - already);
-    if (remaining === 0) continue;
-
-    for (let i = 0; i < remaining; i++) {
-      const salt = randomSalt();
-      // Sign a stable but unique seed; we never need to reverse the QR back
-      // to fields — the voucher row is looked up by `code` directly.
-      const seed = buildCodeSeed(item.id, already + i, salt);
-      const code = signQrCode('v', seed, env);
-      const row = await tx.pickupVoucher.create({
-        data: {
-          orderId,
-          orderItemId: item.id,
-          ticketId,
-          eventId,
-          variantId: item.variantId,
-          code,
-          status: 'valid',
-        },
-        select: {
-          id: true,
-          orderItemId: true,
-          variantId: true,
-          ticketId: true,
-          eventId: true,
-          code: true,
-          status: true,
-        },
-      });
-      minted.push(row);
-    }
-  }
-
-  return minted;
 };
 
 export type VoucherClaimedItem = {

@@ -617,6 +617,7 @@ model PickupVoucher {
   id          String              @id @default(cuid())
   orderId     String
   orderItemId String
+  unitIndex   Int
   ticketId    String
   eventId     String
   variantId   String?
@@ -633,8 +634,8 @@ model PickupVoucher {
   event     Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
   variant   Variant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
+  @@unique([orderItemId, unitIndex])
   @@index([orderId])
-  @@index([orderItemId])
   @@index([ticketId])
   @@index([eventId, status])
 }

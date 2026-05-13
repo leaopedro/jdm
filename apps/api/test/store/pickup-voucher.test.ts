@@ -358,21 +358,18 @@ describe('pickup voucher mint + claim', () => {
   });
 
   // Direct mint helper coverage to guard the txn-callable path independently.
-  it('mintPickupVouchersForOrderTx top-up: only mints missing units', async () => {
+  it('mintPickupVouchersForOrderTx is idempotent and preserves existing voucher state', async () => {
     const { user } = await createUser({ email: `o-${Math.random()}@jdm.test`, verified: true });
     const { event, tier } = await createEvent();
     const { variant } = await createProductWithVariant();
     const ticket = await createValidTicket(user.id, event.id, tier.id);
     const order = await createPaidPickupOrder(user.id, event.id, variant.id, 3);
 
-    // First call mints 3.
     await prisma.$transaction(async (tx) => {
       const minted = await mintPickupVouchersForOrderTx(order.id, ticket.id, event.id, tx, env);
       expect(minted).toHaveLength(3);
     });
 
-    // Manually revoke one row, then re-run mint — it must not top-up missing
-    // units (existing rows still count toward the quantity).
     const all = await prisma.pickupVoucher.findMany({ where: { orderId: order.id } });
     expect(all).toHaveLength(3);
     await prisma.pickupVoucher.update({
@@ -380,9 +377,44 @@ describe('pickup voucher mint + claim', () => {
       data: { status: 'revoked' },
     });
 
+    // Re-running mint must not duplicate rows and must not overwrite the
+    // revoked unit's status.
     await prisma.$transaction(async (tx) => {
-      const minted = await mintPickupVouchersForOrderTx(order.id, ticket.id, event.id, tx, env);
-      expect(minted).toHaveLength(0);
+      await mintPickupVouchersForOrderTx(order.id, ticket.id, event.id, tx, env);
     });
+
+    const after = await prisma.pickupVoucher.findMany({
+      where: { orderId: order.id },
+      orderBy: { unitIndex: 'asc' },
+    });
+    expect(after).toHaveLength(3);
+    expect(after.filter((v) => v.status === 'revoked')).toHaveLength(1);
+    expect(after.filter((v) => v.status === 'valid')).toHaveLength(2);
+  });
+
+  it('race-safe: concurrent mint calls never over-mint beyond quantity', async () => {
+    const { user } = await createUser({ email: `o-${Math.random()}@jdm.test`, verified: true });
+    const { event, tier } = await createEvent();
+    const { variant } = await createProductWithVariant();
+    const ticket = await createValidTicket(user.id, event.id, tier.id);
+    const order = await createPaidPickupOrder(user.id, event.id, variant.id, 4);
+
+    // Simulate two concurrent Stripe handlers (payment_intent.succeeded +
+    // checkout.session.completed) racing to settle the same order.
+    const runMint = () =>
+      prisma.$transaction(async (tx) =>
+        mintPickupVouchersForOrderTx(order.id, ticket.id, event.id, tx, env),
+      );
+
+    await Promise.all([runMint(), runMint(), runMint()]);
+
+    const all = await prisma.pickupVoucher.findMany({
+      where: { orderId: order.id },
+      orderBy: { unitIndex: 'asc' },
+    });
+    expect(all).toHaveLength(4);
+    expect(all.map((v) => v.unitIndex)).toEqual([0, 1, 2, 3]);
+    const codes = new Set(all.map((v) => v.code));
+    expect(codes.size).toBe(4);
   });
 });

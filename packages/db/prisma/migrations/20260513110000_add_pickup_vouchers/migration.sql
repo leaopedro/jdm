@@ -6,6 +6,7 @@ CREATE TABLE "PickupVoucher" (
     "id" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
     "orderItemId" TEXT NOT NULL,
+    "unitIndex" INTEGER NOT NULL,
     "ticketId" TEXT NOT NULL,
     "eventId" TEXT NOT NULL,
     "variantId" TEXT,
@@ -23,10 +24,10 @@ CREATE TABLE "PickupVoucher" (
 CREATE UNIQUE INDEX "PickupVoucher_code_key" ON "PickupVoucher"("code");
 
 -- CreateIndex
-CREATE INDEX "PickupVoucher_orderId_idx" ON "PickupVoucher"("orderId");
+CREATE UNIQUE INDEX "PickupVoucher_orderItemId_unitIndex_key" ON "PickupVoucher"("orderItemId", "unitIndex");
 
 -- CreateIndex
-CREATE INDEX "PickupVoucher_orderItemId_idx" ON "PickupVoucher"("orderItemId");
+CREATE INDEX "PickupVoucher_orderId_idx" ON "PickupVoucher"("orderId");
 
 -- CreateIndex
 CREATE INDEX "PickupVoucher_ticketId_idx" ON "PickupVoucher"("ticketId");
