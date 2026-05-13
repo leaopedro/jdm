@@ -57,6 +57,11 @@ export class R2Uploads implements Uploads {
     return `${this.publicBase.replace(/\/$/, '')}/${objectKey}`;
   }
 
+  async buildSignedGetUrl(objectKey: string, ttlSeconds = this.ttlSeconds): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
+    return getSignedUrl(this.client, command, { expiresIn: ttlSeconds });
+  }
+
   isOwnedKey(objectKey: string, userId: string, kind: UploadKind): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }

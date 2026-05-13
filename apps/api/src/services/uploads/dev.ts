@@ -31,6 +31,11 @@ export class DevUploads implements Uploads {
     return `${this.publicBase}/${objectKey}`;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async buildSignedGetUrl(objectKey: string, ttlSeconds = this.ttlSeconds): Promise<string> {
+    return `${this.publicBase}/${objectKey}?signed=dev&exp=${Date.now() + ttlSeconds * 1000}`;
+  }
+
   isOwnedKey(objectKey: string, userId: string, kind: UploadKind): boolean {
     return objectKey.startsWith(`${kind}/${userId}/`);
   }

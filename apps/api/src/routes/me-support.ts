@@ -11,12 +11,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import { requireUser } from '../plugins/auth.js';
 import type { Uploads } from '../services/uploads/index.js';
 
-const serializeTicket = (t: DbTicket, uploads: Uploads): SupportTicket =>
+const serializeTicket = async (t: DbTicket, uploads: Uploads): Promise<SupportTicket> =>
   supportTicketSchema.parse({
     id: t.id,
     phone: t.phone,
     message: t.message,
-    attachmentUrl: t.attachmentObjectKey ? uploads.buildPublicUrl(t.attachmentObjectKey) : null,
+    attachmentUrl: t.attachmentObjectKey
+      ? await uploads.buildSignedGetUrl(t.attachmentObjectKey)
+      : null,
     status: t.status,
     createdAt: t.createdAt.toISOString(),
   });
@@ -28,7 +30,7 @@ export const meSupportRoutes: FastifyPluginAsync = async (app) => {
       where: { userId: sub, status: 'open' },
       orderBy: { createdAt: 'desc' },
     });
-    return { items: tickets.map((t) => serializeTicket(t, app.uploads)) };
+    return { items: await Promise.all(tickets.map((t) => serializeTicket(t, app.uploads))) };
   });
 
   await app.register(async (scoped) => {
@@ -66,7 +68,7 @@ export const meSupportRoutes: FastifyPluginAsync = async (app) => {
           },
         });
 
-        return reply.status(201).send(serializeTicket(ticket, app.uploads));
+        return reply.status(201).send(await serializeTicket(ticket, app.uploads));
       },
     );
   });

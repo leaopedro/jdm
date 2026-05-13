@@ -32,7 +32,8 @@ const decodeCursor = (raw: string): { createdAt: Date; id: string } => {
 const attachmentUrl = (
   t: Pick<SupportTicket, 'attachmentObjectKey'>,
   uploads: Uploads,
-): string | null => (t.attachmentObjectKey ? uploads.buildPublicUrl(t.attachmentObjectKey) : null);
+): Promise<string | null> =>
+  t.attachmentObjectKey ? uploads.buildSignedGetUrl(t.attachmentObjectKey) : Promise.resolve(null);
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
@@ -84,16 +85,18 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
     const last = page[page.length - 1];
 
     return adminSupportTicketListResponseSchema.parse({
-      items: page.map((t) => ({
-        id: t.id,
-        phone: t.phone,
-        message: t.message,
-        attachmentUrl: attachmentUrl(t, app.uploads),
-        status: t.status,
-        internalStatus: t.internalStatus,
-        createdAt: t.createdAt.toISOString(),
-        user: t.user,
-      })),
+      items: await Promise.all(
+        page.map(async (t) => ({
+          id: t.id,
+          phone: t.phone,
+          message: t.message,
+          attachmentUrl: await attachmentUrl(t, app.uploads),
+          status: t.status,
+          internalStatus: t.internalStatus,
+          createdAt: t.createdAt.toISOString(),
+          user: t.user,
+        })),
+      ),
       hasMore,
       nextCursor: hasMore && last ? encodeCursor(last) : null,
     });
@@ -126,7 +129,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
       id: ticket.id,
       phone: ticket.phone,
       message: ticket.message,
-      attachmentUrl: attachmentUrl(ticket, app.uploads),
+      attachmentUrl: await attachmentUrl(ticket, app.uploads),
       status: ticket.status,
       internalStatus: ticket.internalStatus,
       createdAt: ticket.createdAt.toISOString(),
@@ -165,7 +168,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
         id: existing.id,
         phone: existing.phone,
         message: existing.message,
-        attachmentUrl: attachmentUrl(existing, app.uploads),
+        attachmentUrl: await attachmentUrl(existing, app.uploads),
         status: existing.status,
         internalStatus: existing.internalStatus,
         createdAt: existing.createdAt.toISOString(),
@@ -207,7 +210,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
       id: updated.id,
       phone: updated.phone,
       message: updated.message,
-      attachmentUrl: attachmentUrl(updated, app.uploads),
+      attachmentUrl: await attachmentUrl(updated, app.uploads),
       status: updated.status,
       internalStatus: updated.internalStatus,
       createdAt: updated.createdAt.toISOString(),
@@ -259,7 +262,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
       id: updated.id,
       phone: updated.phone,
       message: updated.message,
-      attachmentUrl: attachmentUrl(updated, app.uploads),
+      attachmentUrl: await attachmentUrl(updated, app.uploads),
       status: updated.status,
       internalStatus: updated.internalStatus,
       createdAt: updated.createdAt.toISOString(),
