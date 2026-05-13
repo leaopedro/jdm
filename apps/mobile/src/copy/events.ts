@@ -48,4 +48,12 @@ export const eventsCopy = {
     network: 'Sem conexão. Tente novamente.',
     notFound: 'Evento não encontrado.',
   },
+  confirmedCars: {
+    sectionTitle: 'Carros Confirmados',
+    empty: 'Nenhum carro confirmado ainda.',
+    viewAll: 'Ver todos',
+    sheetTitle: 'Carros Confirmados',
+    loading: 'Carregando carros…',
+    noNickname: 'Sem apelido',
+  },
 };

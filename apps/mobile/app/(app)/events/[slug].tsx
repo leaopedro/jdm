@@ -1,4 +1,9 @@
-import type { EventDetailCommerce, EventDetailPublic, TicketTier } from '@jdm/shared/events';
+import type {
+  ConfirmedCar,
+  EventDetailCommerce,
+  EventDetailPublic,
+  TicketTier,
+} from '@jdm/shared/events';
 import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react-native';
@@ -16,7 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getEvent, getEventCommerce } from '~/api/events';
+import { getConfirmedCars, getEvent, getEventCommerce } from '~/api/events';
 import { getMyTicketForEvent } from '~/api/tickets';
 import { useAuth } from '~/auth/context';
 import { useCart } from '~/cart/context';
@@ -27,6 +32,7 @@ import { ticketsCopy } from '~/copy/tickets';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
+import { ConfirmedCarsSection } from '~/screens/events/confirmed-cars/ConfirmedCarsSection';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
@@ -40,6 +46,8 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [hasTicket, setHasTicket] = useState(false);
+  const [confirmedCars, setConfirmedCars] = useState<ConfirmedCar[]>([]);
+  const [confirmedCarsLoading, setConfirmedCarsLoading] = useState(false);
   const { addItem, adding } = useCart();
   const { status: authStatus } = useAuth();
   const insets = useSafeAreaInsets();
@@ -83,6 +91,27 @@ export default function EventDetailScreen() {
   }, [slug, isAuthed, requestedTierId]);
 
   const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
+
+  // Fetch confirmed cars once we know the slug. Public — no auth needed.
+  const hasCarTier = commerceEvent?.tiers.some((t) => t.requiresCar) ?? false;
+  useEffect(() => {
+    if (!slug || typeof slug !== 'string') return;
+    let cancelled = false;
+    setConfirmedCarsLoading(true);
+    void (async () => {
+      try {
+        const res = await getConfirmedCars(slug);
+        if (!cancelled) setConfirmedCars(res.items);
+      } catch {
+        if (!cancelled) setConfirmedCars([]);
+      } finally {
+        if (!cancelled) setConfirmedCarsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   useEffect(() => {
     if (!event || isAnon || authStatus === 'loading') {
@@ -239,6 +268,12 @@ export default function EventDetailScreen() {
       <View style={styles.section}>
         <Text style={styles.body}>{event.description}</Text>
       </View>
+
+      <ConfirmedCarsSection
+        cars={confirmedCars}
+        loading={confirmedCarsLoading}
+        visible={hasCarTier || confirmedCars.length > 0}
+      />
 
       {commerceEvent ? (
         <View style={styles.section}>
