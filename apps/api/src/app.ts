@@ -117,6 +117,22 @@ export const buildApp = async (
   }
 
   if (env.BROADCAST_WORKER_ENABLED) {
+    // Warn loudly when the worker is enabled but the push sender is the dev
+    // stub. This is the most common local-smoke misconfiguration: operator
+    // sets BROADCAST_WORKER_ENABLED=true expecting real device delivery, but
+    // PUSH_PROVIDER stays at 'auto' in dev, so messages only hit DevPushSender
+    // and log `[dev-push] …` lines without leaving the process.
+    const usingDevSender = app.push.constructor.name === 'DevPushSender';
+    if (usingDevSender) {
+      app.log.warn(
+        {
+          BROADCAST_WORKER_ENABLED: env.BROADCAST_WORKER_ENABLED,
+          PUSH_PROVIDER: env.PUSH_PROVIDER,
+          NODE_ENV: env.NODE_ENV,
+        },
+        '[broadcasts] worker enabled with DevPushSender — broadcasts will be marked sent but no real push will be delivered. Set PUSH_PROVIDER=expo + EXPO_ACCESS_TOKEN and use a real device to deliver pushes.',
+      );
+    }
     const bWorker = startBroadcastWorker({
       sender: app.push,
       batchSize: env.BROADCAST_BATCH_SIZE,

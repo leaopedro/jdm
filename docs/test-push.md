@@ -106,10 +106,16 @@ pushes — both behaviors are gated so ordinary `pnpm --filter @jdm/api dev`
 never sends accidental traffic. Use the env flags below to opt into a
 production-shaped local smoke.
 
+> **Simulator cannot receive Expo push.** The iOS Simulator (and Android
+> emulator) cannot register for real Expo push tokens. JDMA-531 inserts a
+> synthetic `ExponentPushToken[simulator-…]` row into `DeviceToken` so the
+> mobile signup flow does not block, but Expo will not deliver to that token.
+> Any device-level verification (variant 10B) **requires a physical device**.
+
 ### 10A — Worker only (DB-level smoke, no real device)
 
 Verifies dispatch claims a `scheduled` broadcast and transitions it to `sent`,
-without hitting Expo.
+without hitting Expo. Works with simulator tokens.
 
 1. Stop the API. Set in `apps/api/.env`:
 
@@ -118,7 +124,10 @@ without hitting Expo.
    # PUSH_PROVIDER unset (defaults to auto → DevPushSender in dev)
    ```
 
-2. `pnpm --filter @jdm/api dev`.
+2. `pnpm --filter @jdm/api dev`. On boot you will see
+   `[broadcasts] worker enabled with DevPushSender — broadcasts will be marked
+sent but no real push will be delivered.` That is the signal you are in
+   10A, not 10B.
 3. From the admin composer (or `POST /admin/broadcasts`), create a send-now
    broadcast targeting yourself or a small audience.
 4. Within ~60 s, the admin list flips `Agendado` → `Enviado`. DB check:
@@ -132,11 +141,17 @@ without hitting Expo.
    API logs include `[broadcasts] dispatch complete` and per-message
    `[dev-push] to=… title=…` lines (delivery is stubbed locally).
 
-### 10B — Worker + real Expo delivery
+   No notification will arrive on any device or simulator in this mode — by
+   design.
 
-Adds real device delivery on top of 10A.
+### 10B — Worker + real Expo delivery (requires physical device)
 
-1. Stop the API. In `apps/api/.env`:
+Adds real device delivery on top of 10A. **Will not work against a simulator.**
+
+1. On a real iOS or Android device, install an EAS dev build, sign up, log in,
+   accept push permission. Verify a real `ExponentPushToken[…]` row landed in
+   `DeviceToken` (not `ExponentPushToken[simulator-…]`).
+2. Stop the API. In `apps/api/.env`:
 
    ```sh
    BROADCAST_WORKER_ENABLED=true
@@ -144,11 +159,14 @@ Adds real device delivery on top of 10A.
    EXPO_ACCESS_TOKEN=<your-expo-access-token>
    ```
 
-2. Register a real device token first (see steps 1–3 above).
-3. `pnpm --filter @jdm/api dev`, create a send-now broadcast targeting that user.
-4. Within ~60 s, the push lands on the device and the admin list shows
+3. `pnpm --filter @jdm/api dev`. The DevPushSender warning from 10A must
+   **not** appear; absence of that warn line confirms `ExpoPushSender` is wired.
+4. From the admin composer (or `POST /admin/broadcasts`), create a send-now
+   broadcast targeting that user.
+5. Within ~60 s, the push lands on the real device and the admin list shows
    `Enviado`. `BroadcastDelivery.status='sent'` for that user; invalid tokens
-   (if any) are pruned from `DeviceToken`.
+   (synthetic simulator rows for that user included) are pruned from
+   `DeviceToken` automatically.
 
 ### Notes
 
