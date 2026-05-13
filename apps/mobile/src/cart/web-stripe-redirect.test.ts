@@ -21,7 +21,7 @@ function fakeStorage(): Storage {
 }
 
 describe('redirectToStripeCheckout', () => {
-  it('persists first orderId to session storage and navigates to checkout url', () => {
+  it('persists first orderId and checkout URL per order, then navigates', () => {
     const storage = fakeStorage();
     const navigate = vi.fn();
 
@@ -33,6 +33,12 @@ describe('redirectToStripeCheckout', () => {
     });
 
     expect(storage.getItem('jdm:pendingOrderId')).toBe('order-1');
+    expect(storage.getItem('jdm:pendingCheckoutUrl:order-1')).toBe(
+      'https://checkout.stripe.test/abc',
+    );
+    expect(storage.getItem('jdm:pendingCheckoutUrl:order-2')).toBe(
+      'https://checkout.stripe.test/abc',
+    );
     expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/abc');
   });
 
@@ -48,6 +54,7 @@ describe('redirectToStripeCheckout', () => {
     });
 
     expect(storage.getItem('jdm:pendingOrderId')).toBeNull();
+    expect(storage.length).toBe(0);
     expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/abc');
   });
 });

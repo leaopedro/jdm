@@ -1,3 +1,5 @@
+import { setPendingCheckoutUrl } from './web-pending-checkout';
+
 const PENDING_ORDER_ID_KEY = 'jdm:pendingOrderId';
 
 export interface RedirectToStripeCheckoutInput {
@@ -28,6 +30,16 @@ export function redirectToStripeCheckout(input: RedirectToStripeCheckoutInput): 
   const firstOrderId = input.orderIds[0];
   if (firstOrderId && storage) {
     storage.setItem(PENDING_ORDER_ID_KEY, firstOrderId);
+  }
+
+  // Persist the hosted checkout URL keyed by every order so the resume
+  // flow on /profile/orders can reopen the same Stripe session without
+  // hitting /orders/:id/resume (Checkout Session orders have no
+  // PaymentIntent and would 409 there).
+  if (storage) {
+    for (const orderId of input.orderIds) {
+      setPendingCheckoutUrl(orderId, input.checkoutUrl, { storage });
+    }
   }
 
   navigate(input.checkoutUrl);

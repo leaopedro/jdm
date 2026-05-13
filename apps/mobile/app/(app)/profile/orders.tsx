@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +19,8 @@ import {
 
 import { ApiError } from '~/api/client';
 import { cancelMyOrder, listMyOrders, resumeOrder } from '~/api/orders';
+import { selectResumeKind } from '~/cart/resume-selector';
+import { getPendingCheckoutUrl } from '~/cart/web-pending-checkout';
 import { ordersCopy } from '~/copy/orders';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -128,6 +131,29 @@ function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () 
   );
 }
 
+// Resumes a Stripe Checkout Session order on web by reopening the hosted
+// checkout URL captured at order creation. Checkout Session orders have
+// Order.providerRef = null, so /orders/:id/resume returns 409 for them;
+// we therefore avoid that endpoint entirely on web.
+function ResumeWebStripeButton({ orderId }: { orderId: string }) {
+  const handlePay = () => {
+    const url = getPendingCheckoutUrl(orderId);
+    if (!url) {
+      showMessage(ordersCopy.payWebUnavailable);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = url;
+    }
+  };
+
+  return (
+    <Pressable onPress={handlePay} accessibilityRole="button" style={styles.payLink}>
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
 function ResumeOrderButton({
   order,
   reload,
@@ -135,18 +161,31 @@ function ResumeOrderButton({
   order: MyOrder;
   reload: () => unknown;
 }): React.ReactElement | null {
-  // Pix orders never touch the Stripe SDK, so render them regardless of
-  // whether STRIPE_AVAILABLE is true.
-  if (order.provider === 'abacatepay') {
-    return <ResumePixButton orderId={order.id} />;
+  const kind = selectResumeKind(order, {
+    platform: Platform.OS === 'web' ? 'web' : 'native',
+    storedCheckoutUrl:
+      Platform.OS === 'web' && order.provider === 'stripe' ? getPendingCheckoutUrl(order.id) : null,
+    stripeAvailable: STRIPE_AVAILABLE,
+  });
+
+  switch (kind) {
+    case 'pix':
+      return <ResumePixButton orderId={order.id} />;
+    case 'web-redirect':
+    case 'web-unavailable':
+      // The web button decides at click time whether to redirect or show
+      // the "session expired" message, using the same storage lookup as
+      // selectResumeKind. Rendering both states as the same Pagar CTA
+      // keeps the list visually consistent and avoids a stale-render
+      // mismatch between the kind computed at render time and the
+      // storage state at click time.
+      return <ResumeWebStripeButton orderId={order.id} />;
+    case 'native-stripe':
+      return <PayWithStripeButton orderId={order.id} reload={reload} />;
+    case 'none':
+    default:
+      return null;
   }
-  // Stripe orders need StripeProvider. Hide the CTA when Stripe is not
-  // configured (e.g. preview builds without a publishable key) — there is
-  // no usable resume path for card orders in that environment.
-  if (STRIPE_AVAILABLE) {
-    return <PayWithStripeButton orderId={order.id} reload={reload} />;
-  }
-  return null;
 }
 
 function OrderCard({
