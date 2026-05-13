@@ -17,6 +17,8 @@ const variant: AdminStoreVariant = {
   name: 'Preto M',
   sku: 'SKU-1',
   priceCents: 15900,
+  displayPriceCents: 17490,
+  devFeePercent: 10,
   quantityTotal: 8,
   quantitySold: 2,
   attributes: { tamanho: 'M', cor: 'Preto' },

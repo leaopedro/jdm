@@ -7,13 +7,13 @@ import type {
   TicketTier as DbTier,
 } from '@prisma/client';
 
-import { displayPriceCents } from '../../services/pricing/dev-fee.js';
+import { displayPriceCents as calcDisplayPrice } from '../../services/pricing/dev-fee.js';
 
 export const serializeAdminTier = (t: DbTier, devFeePercent: number) => ({
   id: t.id,
   name: t.name,
   priceCents: t.priceCents,
-  displayPriceCents: displayPriceCents(t.priceCents, devFeePercent),
+  displayPriceCents: calcDisplayPrice(t.priceCents, devFeePercent),
   devFeePercent,
   currency: t.currency,
   quantityTotal: t.quantityTotal,
@@ -75,12 +75,14 @@ export const serializeAdminProductType = (p: DbProductType, productCount: number
   createdAt: p.createdAt.toISOString(),
 });
 
-export const serializeAdminExtra = (e: DbTicketExtra) => ({
+export const serializeAdminExtra = (e: DbTicketExtra, devFeePercent: number) => ({
   id: e.id,
   eventId: e.eventId,
   name: e.name,
   description: e.description,
   priceCents: e.priceCents,
+  displayPriceCents: calcDisplayPrice(e.priceCents, devFeePercent),
+  devFeePercent,
   currency: e.currency,
   quantityTotal: e.quantityTotal,
   quantitySold: e.quantitySold,

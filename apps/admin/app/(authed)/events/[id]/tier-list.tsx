@@ -47,6 +47,10 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
             defaultValue={tier.priceCents}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
+          <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
+            <span>Taxa: {tier.devFeePercent}%</span>
+            <span>Preço final: {formatBRL(tier.displayPriceCents)}</span>
+          </span>
           <input
             name="quantityTotal"
             type="number"

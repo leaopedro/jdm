@@ -39,7 +39,7 @@ export const adminStoreVariantRoutes: FastifyPluginAsync = async (app) => {
       entityId: variant.id,
       metadata: { productId, name: variant.name },
     });
-    return reply.status(201).send(serializeAdminVariant(variant));
+    return reply.status(201).send(serializeAdminVariant(variant, app.env.DEV_FEE_PERCENT));
   });
 
   app.patch('/store/variants/:id', async (request, reply) => {
@@ -73,7 +73,7 @@ export const adminStoreVariantRoutes: FastifyPluginAsync = async (app) => {
       entityId: id,
       metadata: { fields: Object.keys(input) },
     });
-    return serializeAdminVariant(updated);
+    return serializeAdminVariant(updated, app.env.DEV_FEE_PERCENT);
   });
 
   // Soft-disable when sold; hard-delete only if no sales recorded.
@@ -96,7 +96,7 @@ export const adminStoreVariantRoutes: FastifyPluginAsync = async (app) => {
         entityId: id,
         metadata: { reason: 'soft-disable: quantitySold > 0' },
       });
-      return reply.status(200).send(serializeAdminVariant(updated));
+      return reply.status(200).send(serializeAdminVariant(updated, app.env.DEV_FEE_PERCENT));
     }
 
     await prisma.variant.delete({ where: { id } });

@@ -38,7 +38,7 @@ export function ReviewScreen() {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const unitPrice = extrasOnly ? 0 : tier.priceCents;
+  const unitPrice = extrasOnly ? 0 : tier.displayPriceCents;
   const extrasCents = tickets.reduce((sum, t) => {
     return sum + ticketExtras(t).reduce((s, e) => s + e.priceCents, 0);
   }, 0);

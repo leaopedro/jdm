@@ -44,7 +44,7 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
       if (extra.quantityRemaining === 0) return;
       setSelected((prev) => [
         ...prev,
-        { id: extra.id, name: extra.name, priceCents: extra.priceCents },
+        { id: extra.id, name: extra.name, priceCents: extra.displayPriceCents },
       ]);
     };
 
@@ -74,7 +74,7 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
               >
                 <View style={styles.extraTop}>
                   <Text style={styles.extraName}>{extra.name}</Text>
-                  <Text style={styles.extraPrice}>{formatBRL(extra.priceCents)}</Text>
+                  <Text style={styles.extraPrice}>{formatBRL(extra.displayPriceCents)}</Text>
                 </View>
                 {extra.description ? (
                   <Text style={styles.extraDescription}>{extra.description}</Text>

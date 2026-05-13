@@ -19,7 +19,7 @@ export const adminExtraRoutes: FastifyPluginAsync = async (app) => {
       where: { eventId },
       orderBy: { sortOrder: 'asc' },
     });
-    return { items: extras.map(serializeAdminExtra) };
+    return { items: extras.map((e) => serializeAdminExtra(e, app.env.DEV_FEE_PERCENT)) };
   });
 
   app.post('/events/:eventId/extras', async (request, reply) => {
@@ -53,7 +53,7 @@ export const adminExtraRoutes: FastifyPluginAsync = async (app) => {
       metadata: { eventId },
     });
 
-    return reply.status(201).send(serializeAdminExtra(extra));
+    return reply.status(201).send(serializeAdminExtra(extra, app.env.DEV_FEE_PERCENT));
   });
 
   app.patch('/extras/:extraId', async (request, reply) => {
@@ -80,7 +80,7 @@ export const adminExtraRoutes: FastifyPluginAsync = async (app) => {
       entityId: extraId,
       metadata: { fields: Object.keys(input) },
     });
-    return serializeAdminExtra(updated);
+    return serializeAdminExtra(updated, app.env.DEV_FEE_PERCENT);
   });
 
   app.delete('/extras/:extraId', async (request, reply) => {

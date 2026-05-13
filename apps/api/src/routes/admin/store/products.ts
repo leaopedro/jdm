@@ -79,7 +79,9 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
         entityId: product.id,
         metadata: { slug: product.slug },
       });
-      return reply.status(201).send(serializeAdminProductDetail(product, app.uploads));
+      return reply
+        .status(201)
+        .send(serializeAdminProductDetail(product, app.uploads, app.env.DEV_FEE_PERCENT));
     } catch (e) {
       const err = e as Prisma.PrismaClientKnownRequestError;
       if (err.code === 'P2002') {
@@ -96,7 +98,7 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
       include: productInclude,
     });
     if (!product) return reply.status(404).send({ error: 'NotFound' });
-    return serializeAdminProductDetail(product, app.uploads);
+    return serializeAdminProductDetail(product, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.patch('/store/products/:id', async (request, reply) => {
@@ -186,6 +188,6 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
       entityId: id,
       metadata: { fields: Object.keys(input) },
     });
-    return serializeAdminProductDetail(updated, app.uploads);
+    return serializeAdminProductDetail(updated, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 };

@@ -257,13 +257,13 @@ export default function EventDetailScreen() {
                   soldOut && styles.tierDisabled,
                 ]}
                 accessibilityRole="radio"
-                accessibilityLabel={`${t.name}, ${formatBRL(t.priceCents)}`}
+                accessibilityLabel={`${t.name}, ${formatBRL(t.displayPriceCents)}`}
                 accessibilityState={{ selected: isSelected, disabled: soldOut }}
                 accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
               >
                 <View style={styles.tierTop}>
                   <Text style={styles.tierName}>{t.name}</Text>
-                  <Text style={styles.tierPrice}>{formatBRL(t.priceCents)}</Text>
+                  <Text style={styles.tierPrice}>{formatBRL(t.displayPriceCents)}</Text>
                 </View>
                 <Text style={styles.sub}>
                   {soldOut
