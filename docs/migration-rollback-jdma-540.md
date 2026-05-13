@@ -5,9 +5,10 @@ Migration: `20260513110000_add_pickup_vouchers`
 ## What the migration adds
 
 - Enum `PickupVoucherStatus` (valid / used / revoked)
-- Table `PickupVoucher` with FK to `Order`, `OrderItem`, `Ticket`, `Event`, `StoreVariant`, `User`
-- Unique index on `(orderId, orderItemId, unitIndex)` (idempotent-mint guard)
-- Index on `code` (claim lookup)
+- Table `PickupVoucher` with FKs to `Order` (CASCADE), `OrderItem` (CASCADE), `Ticket` (CASCADE), `Event` (RESTRICT), and nullable `Variant` (SET NULL). `usedByUserId` is a plain `TEXT` column with no FK.
+- Unique index on `code` (claim lookup)
+- Unique index on `(orderItemId, unitIndex)` (idempotent-mint guard)
+- Non-unique indexes on `orderId`, `ticketId`, and `(eventId, status)`
 
 ## Forward safety
 
