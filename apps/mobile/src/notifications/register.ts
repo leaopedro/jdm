@@ -13,12 +13,20 @@ export type RegisterResult =
   | { ok: false; reason: 'simulator' | 'no-project-id' | 'sdk-error' };
 
 export const registerExpoPushToken = async (): Promise<RegisterResult> => {
-  if (!Device.isDevice) return { ok: false, reason: 'simulator' };
+  const platform: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
+  if (!Device.isDevice) {
+    // Simulators cannot receive push notifications. In dev, return a synthetic
+    // token so the DeviceToken row is persisted and F10 smoke can proceed.
+    // Expo push service will reject delivery — expected on simulator.
+    if (__DEV__) {
+      return { ok: true, token: `ExponentPushToken[simulator-${platform}]`, platform };
+    }
+    return { ok: false, reason: 'simulator' };
+  }
   const id = projectId();
   if (!id) return { ok: false, reason: 'no-project-id' };
   try {
     const result = await Notifications.getExpoPushTokenAsync({ projectId: id });
-    const platform: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
     return { ok: true, token: result.data, platform };
   } catch {
     return { ok: false, reason: 'sdk-error' };
