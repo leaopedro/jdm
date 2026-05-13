@@ -770,6 +770,48 @@ describe('POST /stripe/webhook (cart checkout settlement)', () => {
     expect(productOrder.pickupTicketId).toBe(ticket.id);
   });
 
+  it('payment_intent.succeeded binds mixed single-order pickup to a same-order ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const { cart, order, event } = await seedMixedSingleOrderCart(user.id);
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { pickupEventId: event.id, fulfillmentMethod: 'pickup' },
+    });
+
+    stripe.nextEvent = {
+      id: 'evt_cart_mixed_pickup_same_order',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_cart_mixed_pickup_same_order',
+          metadata: { cartId: cart.id, userId: user.id },
+        },
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/stripe/webhook',
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=x' },
+      payload: rawJson(stripe.nextEvent),
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const settled = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      select: { status: true, pickupTicketId: true },
+    });
+    expect(settled.status).toBe('paid');
+    expect(settled.pickupTicketId).not.toBeNull();
+
+    const sameOrderTicket = await prisma.ticket.findFirstOrThrow({
+      where: { orderId: order.id, eventId: event.id, status: 'valid' },
+      select: { id: true },
+    });
+    expect(settled.pickupTicketId).toBe(sameOrderTicket.id);
+  });
+
   it('duplicate ticket in multi-order cart issues partial refund, not full PI refund', async () => {
     const { user } = await createUser({ verified: true });
     const { cart, orders, events } = await seedCartWithOrders(user.id);

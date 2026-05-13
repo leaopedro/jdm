@@ -86,6 +86,59 @@ export const getPickupOrdersForTicket = async (ticketId: string): Promise<StoreP
   }));
 };
 
+export const getPickupOrdersByTicket = async (
+  ticketIds: string[],
+): Promise<Map<string, StorePickupOrder[]>> => {
+  const result = new Map<string, StorePickupOrder[]>();
+  if (ticketIds.length === 0) return result;
+
+  const candidates = await prisma.order.findMany({
+    where: {
+      fulfillmentMethod: 'pickup',
+      status: 'paid',
+      OR: [
+        { pickupTicketId: { in: ticketIds } },
+        ...ticketIds.map((id) => ({ notes: { contains: id } as const })),
+      ],
+    },
+    include: {
+      items: {
+        where: { kind: 'product' },
+        include: {
+          variant: {
+            select: {
+              name: true,
+              sku: true,
+              attributes: true,
+              product: { select: { title: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  for (const order of candidates) {
+    const linkedTicketId =
+      (order.pickupTicketId && ticketIds.includes(order.pickupTicketId)
+        ? order.pickupTicketId
+        : null) ?? parsePickupTicketId(order.notes);
+    if (!linkedTicketId || !ticketIds.includes(linkedTicketId)) continue;
+
+    const entry: StorePickupOrder = {
+      orderId: order.id,
+      shortId: order.id.slice(-8).toUpperCase(),
+      fulfillmentStatus: order.fulfillmentStatus as StorePickupOrder['fulfillmentStatus'],
+      items: mapItems(order.items),
+    };
+    const bucket = result.get(linkedTicketId);
+    if (bucket) bucket.push(entry);
+    else result.set(linkedTicketId, [entry]);
+  }
+
+  return result;
+};
+
 export type PickupCollectResult = {
   orderId: string;
   shortId: string;

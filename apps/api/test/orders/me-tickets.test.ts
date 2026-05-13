@@ -141,6 +141,82 @@ describe('GET /me/tickets', () => {
     expect(body.items[0]!.extras).toEqual([]);
   });
 
+  it('returns linked pickup orders only on the bound ticket', async () => {
+    const { user } = await createUser({ verified: true });
+    const ticketA = await seedTicketFor(user.id);
+    const ticketB = await seedTicketFor(user.id);
+
+    const productType = await prisma.productType.create({
+      data: { name: `Tipo ${Math.random().toString(36).slice(2, 6)}` },
+    });
+    const product = await prisma.product.create({
+      data: {
+        slug: `p-${Math.random().toString(36).slice(2, 8)}`,
+        title: 'Camiseta JDM',
+        description: 'desc',
+        productTypeId: productType.id,
+        basePriceCents: 9000,
+        currency: 'BRL',
+        status: 'active',
+      },
+    });
+    const variant = await prisma.variant.create({
+      data: {
+        productId: product.id,
+        name: 'Preto — M',
+        sku: `SKU-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+        priceCents: 9000,
+        quantityTotal: 10,
+        quantitySold: 1,
+        attributes: { size: 'M' },
+        active: true,
+      },
+    });
+    const pickupOrder = await prisma.order.create({
+      data: {
+        userId: user.id,
+        kind: 'product',
+        amountCents: 9000,
+        quantity: 1,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        fulfillmentMethod: 'pickup',
+        status: 'paid',
+        paidAt: new Date(),
+        pickupEventId: ticketA.eventId,
+        pickupTicketId: ticketA.id,
+        items: {
+          create: {
+            kind: 'product',
+            variantId: variant.id,
+            quantity: 2,
+            unitPriceCents: 9000,
+            subtotalCents: 18000,
+          },
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/tickets',
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = myTicketsResponseSchema.parse(res.json());
+    expect(body.items).toHaveLength(2);
+
+    const a = body.items.find((t) => t.id === ticketA.id)!;
+    const b = body.items.find((t) => t.id === ticketB.id)!;
+    expect(a.pickupOrders).toHaveLength(1);
+    expect(a.pickupOrders[0]!.orderId).toBe(pickupOrder.id);
+    expect(a.pickupOrders[0]!.items[0]!.productTitle).toBe('Camiseta JDM');
+    expect(a.pickupOrders[0]!.items[0]!.variantName).toBe('Preto — M');
+    expect(a.pickupOrders[0]!.items[0]!.quantity).toBe(2);
+    expect(b.pickupOrders).toEqual([]);
+  });
+
   it('rejects unauthenticated requests', async () => {
     const res = await app.inject({ method: 'GET', url: '/me/tickets' });
     expect(res.statusCode).toBe(401);
