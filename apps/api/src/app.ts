@@ -22,6 +22,7 @@ import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
 import { meNotificationsRoutes } from './routes/me-notifications.js';
 import { meOrdersRoutes } from './routes/me-orders.js';
 import { meShippingAddressRoutes } from './routes/me-shipping-addresses.js';
+import { meSupportRoutes } from './routes/me-support.js';
 import { meTicketsRoutes } from './routes/me-tickets.js';
 import { meRoutes } from './routes/me.js';
 import { orderRoutes } from './routes/orders.js';
@@ -99,6 +100,7 @@ export const buildApp = async (
   await app.register(meDeviceTokenRoutes);
   await app.register(meNotificationsRoutes);
   await app.register(meShippingAddressRoutes);
+  await app.register(meSupportRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
