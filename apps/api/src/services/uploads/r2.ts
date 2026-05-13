@@ -1,4 +1,9 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createId } from '@paralleldrive/cuid2';
 
@@ -41,6 +46,11 @@ export class R2Uploads implements Uploads {
       expiresAt: new Date(Date.now() + this.ttlSeconds * 1000),
       headers: { 'content-type': input.contentType },
     };
+  }
+
+  async presignGet(objectKey: string): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
+    return getSignedUrl(this.client, command, { expiresIn: this.ttlSeconds });
   }
 
   buildPublicUrl(objectKey: string): string {

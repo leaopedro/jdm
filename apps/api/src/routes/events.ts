@@ -266,17 +266,19 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const items = cars.map((c) =>
-      confirmedCarSchema.parse({
-        id: c!.id,
-        make: c!.make,
-        model: c!.model,
-        year: c!.year,
-        nickname: c!.nickname ?? null,
-        photoUrl: c!.photos[0]?.objectKey
-          ? app.uploads.buildPublicUrl(c!.photos[0].objectKey)
-          : null,
-      }),
+    const items = await Promise.all(
+      cars.map(async (c) =>
+        confirmedCarSchema.parse({
+          id: c!.id,
+          make: c!.make,
+          model: c!.model,
+          year: c!.year,
+          nickname: c!.nickname ?? null,
+          photoUrl: c!.photos[0]?.objectKey
+            ? await app.uploads.presignGet(c!.photos[0].objectKey)
+            : null,
+        }),
+      ),
     );
 
     return confirmedCarsResponseSchema.parse({ items, total: items.length });
