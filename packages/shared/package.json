@@ -58,6 +58,10 @@
       "types": "./src/push.ts",
       "default": "./dist/push.js"
     },
+    "./notifications": {
+      "types": "./src/notifications.ts",
+      "default": "./dist/notifications.js"
+    },
     "./store": {
       "types": "./src/store.ts",
       "default": "./dist/store.js"

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { notificationDeliveryModeSchema, notificationDestinationSchema } from './notifications.js';
+
 export const broadcastTargetKindSchema = z.enum(['all', 'premium', 'attendees_of_event', 'city']);
 export type BroadcastTargetKind = z.infer<typeof broadcastTargetKindSchema>;
 
@@ -30,6 +32,8 @@ export const createBroadcastRequestSchema = z
     body: z.string().min(1).max(500),
     data: z.record(z.unknown()).default({}),
     target: broadcastTargetSchema,
+    deliveryMode: notificationDeliveryModeSchema.default('in_app_plus_push'),
+    destination: notificationDestinationSchema.optional(),
     scheduledAt: z.string().datetime().optional(),
     sendNow: z.boolean().optional(),
   })
@@ -43,6 +47,8 @@ export const updateBroadcastRequestSchema = z.object({
   body: z.string().min(1).max(500).optional(),
   data: z.record(z.unknown()).optional(),
   target: broadcastTargetSchema.optional(),
+  deliveryMode: notificationDeliveryModeSchema.optional(),
+  destination: notificationDestinationSchema.nullable().optional(),
   scheduledAt: z.string().datetime().nullable().optional(),
 });
 export type UpdateBroadcastRequest = z.infer<typeof updateBroadcastRequestSchema>;
@@ -63,6 +69,8 @@ export const broadcastSummarySchema = z.object({
   body: z.string(),
   targetKind: broadcastTargetKindSchema,
   targetValue: z.string().nullable(),
+  deliveryMode: notificationDeliveryModeSchema,
+  destination: notificationDestinationSchema.nullable(),
   status: broadcastStatusSchema,
   scheduledAt: z.string().nullable(),
   startedAt: z.string().nullable(),

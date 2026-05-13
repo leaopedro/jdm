@@ -52,6 +52,8 @@ describe('broadcast-actions', () => {
       body: 'Chegue cedo',
       data: {},
       target: { kind: 'attendees_of_event', eventId: 'evt_123' },
+      deliveryMode: 'in_app_plus_push',
+      scheduledAt: undefined,
       sendNow: true,
     });
     expect(revalidatePath).toHaveBeenCalledWith('/broadcasts');
@@ -78,6 +80,7 @@ describe('broadcast-actions', () => {
       body: 'Saída às 8h',
       data: {},
       target: { kind: 'city', city: 'São Paulo' },
+      deliveryMode: 'in_app_plus_push',
       scheduledAt: '2026-05-13T12:30:00.000Z',
       sendNow: undefined,
     });

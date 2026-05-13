@@ -630,21 +630,23 @@ model DeviceToken {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String
-  kind      String    @db.VarChar(40)
-  title     String    @db.VarChar(200)
-  body      String    @db.VarChar(500)
-  data      Json
-  dedupeKey String    @db.VarChar(80)
-  sentAt    DateTime?
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  userId      String
+  kind        String    @db.VarChar(40)
+  title       String    @db.VarChar(200)
+  body        String    @db.VarChar(500)
+  data        Json
+  destination Json?
+  dedupeKey   String    @db.VarChar(80)
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, kind, dedupeKey])
   @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 model Cart {
@@ -732,20 +734,27 @@ enum BroadcastDeliveryStatus {
   skipped
 }
 
+enum NotificationDeliveryMode {
+  in_app_only
+  in_app_plus_push
+}
+
 model Broadcast {
-  id               String              @id @default(cuid())
-  title            String              @db.VarChar(200)
-  body             String              @db.VarChar(500)
-  data             Json                @default("{}")
+  id               String                   @id @default(cuid())
+  title            String                   @db.VarChar(200)
+  body             String                   @db.VarChar(500)
+  data             Json                     @default("{}")
   targetKind       BroadcastTargetKind
-  targetValue      String?             @db.VarChar(200)
+  targetValue      String?                  @db.VarChar(200)
+  deliveryMode     NotificationDeliveryMode @default(in_app_plus_push)
+  destination      Json?
   scheduledAt      DateTime?
   startedAt        DateTime?
   completedAt      DateTime?
-  status           BroadcastStatus     @default(draft)
+  status           BroadcastStatus          @default(draft)
   createdByAdminId String
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
   deliveries BroadcastDelivery[]
 

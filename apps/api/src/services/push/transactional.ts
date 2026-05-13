@@ -1,6 +1,7 @@
 import { prisma } from '@jdm/db';
+import type { NotificationDestination } from '@jdm/shared/notifications';
 import type { PushKind } from '@jdm/shared/push';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { isUniqueConstraintError } from '../../lib/prisma-errors.js';
 
@@ -13,6 +14,7 @@ export type SendTransactionalPushInput = {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  destination?: NotificationDestination;
 };
 
 export type SendTransactionalPushResult = {
@@ -21,12 +23,25 @@ export type SendTransactionalPushResult = {
   invalidatedTokens: number;
 };
 
+const buildPushData = (
+  notificationId: string,
+  input: SendTransactionalPushInput,
+): Record<string, unknown> => ({
+  ...(input.data ?? {}),
+  // Push always lands on the notifications screen first. The mobile app then
+  // resolves the destination after the user opens the inbox item.
+  route: 'notifications',
+  notificationId,
+  ...(input.destination ? { destination: input.destination } : {}),
+});
+
 export const sendTransactionalPush = async (
   input: SendTransactionalPushInput,
   deps: { sender: PushSender },
 ): Promise<SendTransactionalPushResult> => {
+  let notification;
   try {
-    await prisma.notification.create({
+    notification = await prisma.notification.create({
       data: {
         userId: input.userId,
         kind: input.kind,
@@ -34,6 +49,9 @@ export const sendTransactionalPush = async (
         title: input.title,
         body: input.body,
         data: (input.data ?? {}) as Prisma.InputJsonValue,
+        destination: input.destination
+          ? (input.destination as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       },
     });
   } catch (err) {
@@ -51,14 +69,15 @@ export const sendTransactionalPush = async (
     return { deduped: false, sent: 0, invalidatedTokens: 0 };
   }
 
+  const pushData = buildPushData(notification.id, input);
   const result = await deps.sender.send(
     tokens.map((t) => {
       const message: PushMessage = {
         to: t.expoPushToken,
         title: input.title,
         body: input.body,
+        data: pushData,
       };
-      if (input.data !== undefined) message.data = input.data;
       return message;
     }),
   );
@@ -76,8 +95,8 @@ export const sendTransactionalPush = async (
     });
   }
 
-  await prisma.notification.updateMany({
-    where: { userId: input.userId, kind: input.kind, dedupeKey: input.dedupeKey },
+  await prisma.notification.update({
+    where: { id: notification.id },
     data: { sentAt: new Date() },
   });
 

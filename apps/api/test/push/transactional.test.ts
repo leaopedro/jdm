@@ -94,4 +94,37 @@ describe('sendTransactionalPush', () => {
     const remaining = await prisma.deviceToken.findMany({ where: { userId: user.id } });
     expect(remaining.map((t) => t.expoPushToken)).toEqual(['ExponentPushToken[b]']);
   });
+
+  it('persists destination on the row and embeds route + notificationId in push data', async () => {
+    const { user } = await createUser({ email: 'a@jdm.test', verified: true });
+    await seedToken(user.id, 'ExponentPushToken[a]');
+    const sender = new DevPushSender();
+
+    await sendTransactionalPush(
+      {
+        userId: user.id,
+        kind: 'ticket.confirmed',
+        dedupeKey: 'order-1',
+        title: 'Ingresso confirmado',
+        body: 'pronto',
+        data: { orderId: 'order-1' },
+        destination: { kind: 'tickets' },
+      },
+      { sender },
+    );
+
+    const row = await prisma.notification.findFirstOrThrow({
+      where: { userId: user.id, kind: 'ticket.confirmed', dedupeKey: 'order-1' },
+    });
+    expect(row.destination).toEqual({ kind: 'tickets' });
+
+    expect(sender.captured).toHaveLength(1);
+    const captured = sender.captured[0]!;
+    expect(captured.data).toMatchObject({
+      orderId: 'order-1',
+      route: 'notifications',
+      destination: { kind: 'tickets' },
+      notificationId: row.id,
+    });
+  });
 });
