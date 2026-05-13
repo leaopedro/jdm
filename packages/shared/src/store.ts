@@ -96,6 +96,8 @@ export const storeProductVariantSchema = z.object({
   sku: z.string().trim().min(1).max(80).nullable(),
   title: z.string().trim().min(1).max(120),
   priceCents: z.number().int().nonnegative(),
+  displayPriceCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
   compareAtPriceCents: z.number().int().nonnegative().nullable(),
   currency: z.string().length(3),
   stockOnHand: z.number().int().nonnegative(),
@@ -137,6 +139,9 @@ export const storeProductSummarySchema = storeProductSchema
     priceRange: z.object({
       minPriceCents: z.number().int().nonnegative(),
       maxPriceCents: z.number().int().nonnegative(),
+      minDisplayPriceCents: z.number().int().nonnegative(),
+      maxDisplayPriceCents: z.number().int().nonnegative(),
+      devFeePercent: z.number().int().nonnegative(),
       currency: z.string().length(3),
     }),
     inStock: z.boolean(),

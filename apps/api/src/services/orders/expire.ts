@@ -210,6 +210,9 @@ export type ExpireSingleOrderOutcome =
         status: string;
         expiresAt: Date | null;
         amountCents: number;
+        baseAmountCents: number;
+        devFeePercent: number;
+        devFeeAmountCents: number;
         currency: string;
         provider: 'stripe' | 'abacatepay';
         providerRef: string | null;
@@ -246,6 +249,9 @@ export const expireSingleOrderInTransaction = async (
       status: true,
       expiresAt: true,
       amountCents: true,
+      baseAmountCents: true,
+      devFeePercent: true,
+      devFeeAmountCents: true,
       currency: true,
       provider: true,
       providerRef: true,
@@ -276,6 +282,9 @@ export const expireSingleOrderInTransaction = async (
         status: true,
         expiresAt: true,
         amountCents: true,
+        baseAmountCents: true,
+        devFeePercent: true,
+        devFeeAmountCents: true,
         currency: true,
         provider: true,
         providerRef: true,

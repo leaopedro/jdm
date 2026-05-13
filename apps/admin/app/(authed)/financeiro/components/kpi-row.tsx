@@ -30,6 +30,13 @@ function buildTileGroups(s: AdminFinanceSummary): TileGroup[] {
         { label: 'Reembolsos', value: fmtNumber(s.refundedCount) },
       ],
     },
+    {
+      title: 'Taxa de desenvolvimento',
+      tiles: [
+        { label: 'Taxa atual', value: `${s.devFeePercent}%` },
+        { label: 'Taxa coletada', value: fmtCurrency(s.devFeeCollectedCents) },
+      ],
+    },
   ];
 }
 

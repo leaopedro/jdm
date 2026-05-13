@@ -25,6 +25,7 @@ import {
   findPendingTicketOrderForEvent,
 } from '../services/orders/pending-guard.js';
 import { reserveExtras, validateTickets } from '../services/orders/validate-tickets.js';
+import { applyDevFee } from '../services/pricing/dev-fee.js';
 
 type PreparedOrder = {
   sub: string;
@@ -34,6 +35,12 @@ type PreparedOrder = {
   validationResult: Awaited<ReturnType<typeof validateTickets>>;
   expiredProviderRefs: string[];
   reserved: boolean;
+  // Sellable subtotal before the dev fee (no shipping in this route).
+  baseAmountCents: number;
+  devFeePercent: number;
+  devFeeAmountCents: number;
+  // Gross charged total — equals baseAmountCents + devFeeAmountCents here because
+  // ticket orders never carry shipping.
   amountCents: number;
   ticketCount: number;
 };
@@ -47,6 +54,7 @@ async function prepareOrder(
     tickets: TicketInput[];
     extrasOnly?: boolean;
   },
+  devFeePercent: number,
 ): Promise<
   | { ok: true; data: PreparedOrder }
   | { ok: false; status: number; body: { error: string; message: string; code?: string } }
@@ -206,9 +214,11 @@ async function prepareOrder(
     throw err;
   }
 
-  const amountCents = isExtrasOnly
+  const baseAmountCents = isExtrasOnly
     ? validationResult.totalExtrasCents
     : tier.priceCents * input.tickets.length + validationResult.totalExtrasCents;
+
+  const fee = applyDevFee(baseAmountCents, devFeePercent);
 
   return {
     ok: true,
@@ -225,7 +235,10 @@ async function prepareOrder(
       validationResult,
       expiredProviderRefs,
       reserved,
-      amountCents,
+      baseAmountCents: fee.baseAmountCents,
+      devFeePercent: fee.devFeePercent,
+      devFeeAmountCents: fee.devFeeAmountCents,
+      amountCents: fee.grossAmountCents,
       ticketCount: input.tickets.length,
     },
   };
@@ -242,6 +255,9 @@ async function createPendingOrder(
       tierId: data.tier.id,
       kind: data.isExtrasOnly ? 'extras_only' : 'ticket',
       amountCents: data.amountCents,
+      baseAmountCents: data.baseAmountCents,
+      devFeePercent: data.devFeePercent,
+      devFeeAmountCents: data.devFeeAmountCents,
       quantity: data.ticketCount,
       currency: data.tier.currency,
       method: 'card',
@@ -277,6 +293,9 @@ async function createPendingOrderPix(data: PreparedOrder): Promise<{
       tierId: data.tier.id,
       kind: data.isExtrasOnly ? 'extras_only' : 'ticket',
       amountCents: data.amountCents,
+      baseAmountCents: data.baseAmountCents,
+      devFeePercent: data.devFeePercent,
+      devFeeAmountCents: data.devFeeAmountCents,
       quantity: data.ticketCount,
       currency: data.tier.currency,
       method: 'pix',
@@ -348,7 +367,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     const { sub } = requireUser(request);
     const input = createOrderRequestSchema.parse(request.body);
 
-    const result = await prepareOrder(sub, input);
+    const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
     if (!result.ok) return reply.status(result.status).send(result.body);
     const data = result.data;
 
@@ -411,6 +430,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             brCode: billing.brCode,
             expiresAt: order.expiresAt.toISOString(),
             amountCents: data.amountCents,
+            baseAmountCents: data.baseAmountCents,
+            devFeePercent: data.devFeePercent,
+            devFeeAmountCents: data.devFeeAmountCents,
             currency: data.tier.currency,
           }),
         );
@@ -460,6 +482,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           status: 'pending',
           clientSecret: intent.clientSecret,
           amountCents: data.amountCents,
+          baseAmountCents: data.baseAmountCents,
+          devFeePercent: data.devFeePercent,
+          devFeeAmountCents: data.devFeeAmountCents,
           currency: data.tier.currency,
         }),
       );
@@ -480,7 +505,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     }
     const input = parsed.data;
 
-    const result = await prepareOrder(sub, input);
+    const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
     if (!result.ok) return reply.status(result.status).send(result.body);
     const data = result.data;
 
@@ -541,6 +566,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           status: 'pending',
           checkoutUrl: session.url,
           amountCents: data.amountCents,
+          baseAmountCents: data.baseAmountCents,
+          devFeePercent: data.devFeePercent,
+          devFeeAmountCents: data.devFeeAmountCents,
           currency: data.tier.currency,
         }),
       );
@@ -623,6 +651,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             brCode,
             expiresAt: expiresAt.toISOString(),
             amountCents: order.amountCents,
+            baseAmountCents: order.baseAmountCents,
+            devFeePercent: order.devFeePercent,
+            devFeeAmountCents: order.devFeeAmountCents,
             currency: order.currency,
           }),
         );
@@ -639,6 +670,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           orderId: order.id,
           clientSecret: pi.clientSecret,
           amountCents: order.amountCents,
+          baseAmountCents: order.baseAmountCents,
+          devFeePercent: order.devFeePercent,
+          devFeeAmountCents: order.devFeeAmountCents,
           currency: order.currency,
         }),
       );
@@ -691,6 +725,9 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
           provider: order.provider,
           expiresAt: order.expiresAt?.toISOString() ?? null,
           amountCents: order.amountCents,
+          baseAmountCents: order.baseAmountCents,
+          devFeePercent: order.devFeePercent,
+          devFeeAmountCents: order.devFeeAmountCents,
           currency: order.currency,
           ...(ticketId ? { ticketId } : {}),
         }),

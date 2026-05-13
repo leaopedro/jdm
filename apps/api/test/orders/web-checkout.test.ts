@@ -106,7 +106,7 @@ describe('POST /orders/checkout', () => {
     expect(res.statusCode).toBe(201);
     const body = createWebCheckoutResponseSchema.parse(res.json());
     expect(body.status).toBe('pending');
-    expect(body.amountCents).toBe(5000);
+    expect(body.amountCents).toBe(5500);
     expect(body.checkoutUrl).toBe('https://checkout.stripe.com/cs_test_1');
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
@@ -141,7 +141,7 @@ describe('POST /orders/checkout', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createWebCheckoutResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(7000);
+    expect(body.amountCents).toBe(7700);
 
     const csCall = stripe.calls.find((c) => c.kind === 'createCheckoutSession');
     const csPayload = csCall!.payload as CreateCheckoutSessionInput;
@@ -303,7 +303,7 @@ describe('POST /orders/checkout', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createWebCheckoutResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(2000);
+    expect(body.amountCents).toBe(2200);
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
     expect(order.kind).toBe('extras_only');

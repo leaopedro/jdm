@@ -18,7 +18,7 @@ import type { TicketData } from './types';
 interface SelectedExtra {
   id: string;
   name: string;
-  priceCents: number;
+  displayPriceCents: number;
 }
 
 import { getApiErrorCode } from '~/api/errors';
@@ -38,9 +38,9 @@ export function ReviewScreen() {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const unitPrice = extrasOnly ? 0 : tier.priceCents;
+  const unitPrice = extrasOnly ? 0 : tier.displayPriceCents;
   const extrasCents = tickets.reduce((sum, t) => {
-    return sum + ticketExtras(t).reduce((s, e) => s + e.priceCents, 0);
+    return sum + ticketExtras(t).reduce((s, e) => s + e.displayPriceCents, 0);
   }, 0);
   const totalCents = unitPrice * quantity + extrasCents;
 
@@ -138,7 +138,7 @@ export function ReviewScreen() {
               {extras.map((extra) => (
                 <View key={extra.id} style={styles.lineItem}>
                   <Text style={styles.lineLabel}>{extra.name}</Text>
-                  <Text style={styles.lineValue}>{formatBRL(extra.priceCents)}</Text>
+                  <Text style={styles.lineValue}>{formatBRL(extra.displayPriceCents)}</Text>
                 </View>
               ))}
               {typeof ticketData.carLabel === 'string' ? (

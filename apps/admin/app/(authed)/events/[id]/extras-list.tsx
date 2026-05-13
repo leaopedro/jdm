@@ -47,6 +47,10 @@ const ExtraRow = ({ eventId, extra }: { eventId: string; extra: AdminExtra }) =>
             defaultValue={extra.priceCents}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
+          <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
+            <span>Taxa: {extra.devFeePercent}%</span>
+            <span>Preço final: {formatBRL(extra.displayPriceCents)}</span>
+          </span>
           <input
             name="quantityTotal"
             type="number"

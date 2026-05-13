@@ -17,7 +17,10 @@ const baseTotals: CartTotals = {
   productsSubtotalCents: 9000,
   shippingSubtotalCents: 1500,
   discountCents: 0,
-  amountCents: 10500,
+  baseAmountCents: 9000,
+  devFeePercent: 10,
+  devFeeAmountCents: 900,
+  amountCents: 11400,
   currency: 'BRL',
 };
 
@@ -232,12 +235,12 @@ describe('computeDisplayedCartTotals', () => {
     expect(computeDisplayedCartTotals(baseTotals, 'pickup')).toEqual({
       ...baseTotals,
       shippingSubtotalCents: 0,
-      amountCents: 9000,
+      amountCents: 9900,
     });
   });
 
   it('is a no-op when pickup but no shipping fee', () => {
-    const noShipping: CartTotals = { ...baseTotals, shippingSubtotalCents: 0, amountCents: 9000 };
+    const noShipping: CartTotals = { ...baseTotals, shippingSubtotalCents: 0, amountCents: 9900 };
     expect(computeDisplayedCartTotals(noShipping, 'pickup')).toEqual(noShipping);
   });
 });

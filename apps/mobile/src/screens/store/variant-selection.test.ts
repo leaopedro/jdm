@@ -13,6 +13,8 @@ const variant = (overrides: Partial<StoreProductVariant> = {}): StoreProductVari
   sku: 'SKU-1',
   title: 'P',
   priceCents: 9900,
+  displayPriceCents: 10890,
+  devFeePercent: 10,
   compareAtPriceCents: null,
   currency: 'BRL',
   stockOnHand: 8,

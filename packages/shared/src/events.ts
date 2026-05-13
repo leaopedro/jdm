@@ -18,6 +18,8 @@ export const ticketTierSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(80),
   priceCents: z.number().int().nonnegative(),
+  displayPriceCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
   currency: z.string().length(3),
   quantityTotal: z.number().int().nonnegative(),
   remainingCapacity: z.number().int().nonnegative(),

@@ -15,23 +15,30 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import { displayPriceCents } from '../../services/pricing/dev-fee.js';
 import type { Uploads } from '../../services/uploads/index.js';
 
 import { serializeAdminTier } from './serializers.js';
 
-const serializeExtra = (x: DbExtra) =>
+const serializeExtra = (x: DbExtra, devFeePercent: number) =>
   eventExtraPublicSchema.parse({
     id: x.id,
     name: x.name,
     description: x.description,
     priceCents: x.priceCents,
+    displayPriceCents: displayPriceCents(x.priceCents, devFeePercent),
+    devFeePercent,
     currency: x.currency,
     quantityRemaining:
       x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
     sortOrder: x.sortOrder,
   });
 
-const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, uploads: Uploads) =>
+const serializeDetail = (
+  e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] },
+  uploads: Uploads,
+  devFeePercent: number,
+) =>
   adminEventDetailSchema.parse({
     id: e.id,
     slug: e.slug,
@@ -55,11 +62,11 @@ const serializeDetail = (e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] }, up
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(serializeAdminTier),
+      .map((t) => serializeAdminTier(t, devFeePercent)),
     extras: e.extras
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(serializeExtra),
+      .map((x) => serializeExtra(x, devFeePercent)),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -94,7 +101,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
         entityId: event.id,
         metadata: { slug: event.slug },
       });
-      return reply.status(201).send(serializeDetail(event, app.uploads));
+      return reply.status(201).send(serializeDetail(event, app.uploads, app.env.DEV_FEE_PERCENT));
     } catch (e) {
       const err = e as Prisma.PrismaClientKnownRequestError;
       if (err.code === 'P2002') {
@@ -111,7 +118,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       include: { tiers: true, extras: true },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    return serializeDetail(event, app.uploads);
+    return serializeDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.patch('/events/:id', async (request, reply) => {
@@ -148,7 +155,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       entityId: id,
       metadata: { fields: Object.keys(input) },
     });
-    return serializeDetail(updated, app.uploads);
+    return serializeDetail(updated, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.post('/events/:id/publish', async (request, reply) => {
@@ -178,7 +185,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       entityType: 'event',
       entityId: id,
     });
-    return serializeDetail(updated, app.uploads);
+    return serializeDetail(updated, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.post('/events/:id/unpublish', async (request, reply) => {
@@ -209,7 +216,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       entityType: 'event',
       entityId: id,
     });
-    return serializeDetail(updated, app.uploads);
+    return serializeDetail(updated, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.post('/events/:id/cancel', async (request, reply) => {
@@ -231,7 +238,7 @@ export const adminEventRoutes: FastifyPluginAsync = async (app) => {
       entityType: 'event',
       entityId: id,
     });
-    return serializeDetail(updated, app.uploads);
+    return serializeDetail(updated, app.uploads, app.env.DEV_FEE_PERCENT);
   });
 
   app.get('/events', async () => {

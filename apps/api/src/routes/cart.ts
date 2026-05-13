@@ -138,7 +138,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const fulfillmentContext = await loadCartFulfillmentContext();
 
     return getCartResponseSchema.parse({
-      cart: freshCart ? serializeCart(freshCart, fulfillmentContext) : null,
+      cart: freshCart
+        ? serializeCart(freshCart, fulfillmentContext, { devFeePercent: app.env.DEV_FEE_PERCENT })
+        : null,
       stockWarnings: [],
       evictedItems,
       flags: { cartV1: true },
@@ -244,7 +246,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return upsertCartItemResponseSchema.parse({
-      cart: serializeCart(updatedCart, fulfillmentContext),
+      cart: serializeCart(updatedCart, fulfillmentContext, {
+        devFeePercent: app.env.DEV_FEE_PERCENT,
+      }),
     });
   });
 
@@ -391,7 +395,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return upsertCartItemResponseSchema.parse({
-        cart: serializeCart(updatedCart, fulfillmentContext),
+        cart: serializeCart(updatedCart, fulfillmentContext, {
+          devFeePercent: app.env.DEV_FEE_PERCENT,
+        }),
       });
     },
   );
@@ -575,6 +581,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       shippingAddressId,
       pickupEventId: pickupEventIdToUse,
       fulfillmentMethod: resolvedFulfillmentMethod,
+      devFeePercent: app.env.DEV_FEE_PERCENT,
     });
     if (!reserveResult.ok) {
       return reply.status(reserveResult.status).send({
@@ -632,7 +639,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           beginCheckoutResponseSchema.parse({
             checkoutId: cart.id,
             status: 'pending',
-            cart: serializeCart(updatedCart, fulfillmentContext),
+            cart: serializeCart(updatedCart, fulfillmentContext, {
+              devFeePercent: app.env.DEV_FEE_PERCENT,
+            }),
             orderIds: data.orders.map((o) => o.id),
             provider: 'abacatepay',
             providerRef: billing.id,
@@ -713,7 +722,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         beginCheckoutResponseSchema.parse({
           checkoutId: cart.id,
           status: 'pending',
-          cart: serializeCart(updatedCart, fulfillmentContext),
+          cart: serializeCart(updatedCart, fulfillmentContext, {
+            devFeePercent: app.env.DEV_FEE_PERCENT,
+          }),
           orderIds: data.orders.map((o) => o.id),
           provider: 'stripe',
           providerRef: session.paymentIntentId,

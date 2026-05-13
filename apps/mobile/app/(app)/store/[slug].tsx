@@ -152,7 +152,7 @@ export default function StoreProductDetailScreen() {
         </Text>
         {selectedVariant ? (
           <View style={styles.priceRow}>
-            <Text variant="h2">{formatBRL(selectedVariant.priceCents)}</Text>
+            <Text variant="h2">{formatBRL(selectedVariant.displayPriceCents)}</Text>
             <View style={styles.stockPill}>
               <Text style={styles.stockPillText}>{getVariantStockLabel(selectedVariant)}</Text>
             </View>
@@ -204,7 +204,7 @@ export default function StoreProductDetailScreen() {
                 <>
                   <Text style={styles.variantTriggerValue}>{selectedVariant.title}</Text>
                   <Text style={styles.variantMeta}>
-                    {formatBRL(selectedVariant.priceCents)} ·{' '}
+                    {formatBRL(selectedVariant.displayPriceCents)} ·{' '}
                     {getVariantStockLabel(selectedVariant)}
                   </Text>
                 </>
@@ -218,7 +218,9 @@ export default function StoreProductDetailScreen() {
           <View style={[styles.variantCard, styles.variantCardSelected]}>
             <View style={styles.variantTop}>
               <Text style={styles.variantTitle}>{selectedVariant.title}</Text>
-              <Text style={styles.variantPrice}>{formatBRL(selectedVariant.priceCents)}</Text>
+              <Text style={styles.variantPrice}>
+                {formatBRL(selectedVariant.displayPriceCents)}
+              </Text>
             </View>
             <Text style={styles.variantMeta}>{getVariantStockLabel(selectedVariant)}</Text>
           </View>
@@ -322,7 +324,7 @@ export default function StoreProductDetailScreen() {
                     accessibilityState={{ selected: isSelected, disabled: !selectable }}
                   >
                     <Text style={styles.variantTitle}>{variant.title}</Text>
-                    <Text style={styles.variantPrice}>{formatBRL(variant.priceCents)}</Text>
+                    <Text style={styles.variantPrice}>{formatBRL(variant.displayPriceCents)}</Text>
                     <Text style={styles.variantMeta}>{getVariantStockLabel(variant)}</Text>
                   </Pressable>
                 );

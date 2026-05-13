@@ -13,6 +13,10 @@ import {
 } from '~/lib/store-actions';
 
 const initial: StoreFormState = { error: null };
+
+const formatBRL = (cents: number) =>
+  (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 const fieldCls =
   'rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm';
 const labelCls = 'flex flex-col gap-1 text-xs text-[color:var(--color-muted)]';
@@ -64,6 +68,10 @@ const VariantRow = ({ productId, variant }: { productId: string; variant: AdminS
             defaultValue={variant.priceCents}
             className="w-28"
           />
+          <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
+            <span>Taxa: {variant.devFeePercent}%</span>
+            <span>Preço final: {formatBRL(variant.displayPriceCents)}</span>
+          </span>
           <Field
             label="Estoque total"
             name="quantityTotal"

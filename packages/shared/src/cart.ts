@@ -142,6 +142,12 @@ export const cartTotalsSchema = z.object({
   productsSubtotalCents: z.number().int().nonnegative(),
   shippingSubtotalCents: z.number().int().nonnegative(),
   discountCents: z.number().int().nonnegative(),
+  // baseAmountCents is the sum of sellable line subtotals (no shipping, no fee).
+  // devFeeAmountCents is applied to baseAmountCents at the configured devFeePercent.
+  // amountCents stays gross charged total: base + devFee + shipping - discount.
+  baseAmountCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
+  devFeeAmountCents: z.number().int().nonnegative(),
   amountCents: z.number().int().nonnegative(),
   currency: z.string().length(3),
 });

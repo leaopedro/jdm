@@ -98,12 +98,20 @@ describe('POST /orders', () => {
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
     expect(body.status).toBe('pending');
-    expect(body.amountCents).toBe(5000);
+    // 5000 base + 10% dev fee = 5500 gross. Default DEV_FEE_PERCENT is 10.
+    expect(body.amountCents).toBe(5500);
+    expect(body.baseAmountCents).toBe(5000);
+    expect(body.devFeePercent).toBe(10);
+    expect(body.devFeeAmountCents).toBe(500);
     expect(body.clientSecret).toBe('pi_test_1_secret_abc');
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
     expect(order.status).toBe('pending');
     expect(order.providerRef).toBe('pi_test_1');
+    expect(order.amountCents).toBe(5500);
+    expect(order.baseAmountCents).toBe(5000);
+    expect(order.devFeePercent).toBe(10);
+    expect(order.devFeeAmountCents).toBe(500);
 
     const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloaded.quantitySold).toBe(1);
@@ -134,7 +142,10 @@ describe('POST /orders', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(15000);
+    // 3 × 5000 base + 10% dev fee = 16500 gross.
+    expect(body.amountCents).toBe(16500);
+    expect(body.baseAmountCents).toBe(15000);
+    expect(body.devFeeAmountCents).toBe(1500);
 
     const reloaded = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
     expect(reloaded.quantitySold).toBe(3);
@@ -218,7 +229,9 @@ describe('POST /orders', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
-    expect(body.amountCents).toBe(5000);
+    // 5000 base + 10% dev fee = 5500 gross.
+    expect(body.amountCents).toBe(5500);
+    expect(body.baseAmountCents).toBe(5000);
 
     const order = await prisma.order.findUniqueOrThrow({ where: { id: body.orderId } });
     expect(order.kind).toBe('ticket');
@@ -246,8 +259,10 @@ describe('POST /orders', () => {
 
     expect(res.statusCode).toBe(201);
     const body = createOrderResponseSchema.parse(res.json());
-    // 5000 (tier) + 2000 (extra) = 7000
-    expect(body.amountCents).toBe(7000);
+    // 5000 (tier) + 2000 (extra) = 7000 base; gross with 10% dev fee = 7700.
+    expect(body.amountCents).toBe(7700);
+    expect(body.baseAmountCents).toBe(7000);
+    expect(body.devFeeAmountCents).toBe(700);
 
     const orderExtra = await prisma.orderExtra.findFirst({ where: { orderId: body.orderId } });
     expect(orderExtra).not.toBeNull();

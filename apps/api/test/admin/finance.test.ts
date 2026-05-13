@@ -89,6 +89,9 @@ async function seedOrder(
   tierId: string | null,
   overrides: Partial<{
     amountCents: number;
+    baseAmountCents: number;
+    devFeePercent: number;
+    devFeeAmountCents: number;
     method: 'card' | 'pix';
     provider: 'stripe' | 'abacatepay';
     status: 'paid' | 'refunded' | 'pending';
@@ -115,18 +118,24 @@ async function seedOrder(
   const kind = overrides.kind ?? 'ticket';
   const paidAt = overrides.paidAt ?? new Date('2026-05-01T12:00:00Z');
   const refundedAt = overrides.refundedAt ?? null;
+  const devFeePercent = overrides.devFeePercent ?? 0;
+  const devFeeAmountCents = overrides.devFeeAmountCents ?? 0;
+  const baseAmountCents = overrides.baseAmountCents ?? amountCents - devFeeAmountCents;
 
   const order =
     eventId === null && tierId === null
       ? await (async () => {
           const orderId = randomUUID();
           await prisma.$executeRawUnsafe(
-            `INSERT INTO "Order" ("id", "userId", "eventId", "tierId", "kind", "amountCents", "currency", "method", "provider", "providerRef", "quantity", "status", "paidAt", "refundedAt", "createdAt", "updatedAt")
-             VALUES ($1, $2, NULL, NULL, $3::"OrderKind", $4, $5, $6::"PaymentMethod", $7::"PaymentProvider", $8, 1, $9::"OrderStatus", $10, $11, NOW(), NOW())`,
+            `INSERT INTO "Order" ("id", "userId", "eventId", "tierId", "kind", "amountCents", "baseAmountCents", "devFeePercent", "devFeeAmountCents", "currency", "method", "provider", "providerRef", "quantity", "status", "paidAt", "refundedAt", "createdAt", "updatedAt")
+             VALUES ($1, $2, NULL, NULL, $3::"OrderKind", $4, $5, $6, $7, $8, $9::"PaymentMethod", $10::"PaymentProvider", $11, 1, $12::"OrderStatus", $13, $14, NOW(), NOW())`,
             orderId,
             userId,
             kind,
             amountCents,
+            baseAmountCents,
+            devFeePercent,
+            devFeeAmountCents,
             'BRL',
             method,
             provider,
@@ -144,6 +153,9 @@ async function seedOrder(
             tierId,
             kind,
             amountCents,
+            baseAmountCents,
+            devFeePercent,
+            devFeeAmountCents,
             currency: 'BRL',
             method,
             provider,
@@ -433,6 +445,59 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const body = adminFinanceSummarySchema.parse(res.json());
       expect(body.totalRevenueCents).toBe(5000);
+    });
+
+    it('reports dev-fee snapshot totals from paid orders and nets refunded fees', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
+      const event = await seedEvent('meet-sp');
+      const tier = await seedTier(event.id);
+
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 11000,
+        baseAmountCents: 10000,
+        devFeePercent: 10,
+        devFeeAmountCents: 1000,
+        status: 'paid',
+      });
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 5500,
+        baseAmountCents: 5000,
+        devFeePercent: 10,
+        devFeeAmountCents: 500,
+        status: 'paid',
+      });
+      // Legacy order snapshotted with no fee — must stay zero (no retroactive imputation).
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 3000,
+        baseAmountCents: 3000,
+        devFeePercent: 0,
+        devFeeAmountCents: 0,
+        status: 'paid',
+      });
+      // Refunded paid order — its fee comes out of the collected total.
+      await seedOrder(buyer.id, event.id, tier.id, {
+        amountCents: 2200,
+        baseAmountCents: 2000,
+        devFeePercent: 10,
+        devFeeAmountCents: 200,
+        status: 'refunded',
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/summary',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = adminFinanceSummarySchema.parse(res.json());
+      expect(body.devFeePercent).toBe(10);
+      // 1000 + 500 + 0 collected − 200 refunded = 1300.
+      expect(body.devFeeCollectedCents).toBe(1300);
     });
 
     it('netRevenueCents goes negative when refunds exceed paid revenue in window', async () => {

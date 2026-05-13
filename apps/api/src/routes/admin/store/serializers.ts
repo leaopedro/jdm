@@ -12,15 +12,18 @@ import type {
   Variant as DbVariant,
 } from '@prisma/client';
 
+import { displayPriceCents } from '../../../services/pricing/dev-fee.js';
 import type { Uploads } from '../../../services/uploads/index.js';
 
-export const serializeAdminVariant = (v: DbVariant): AdminStoreVariant =>
+export const serializeAdminVariant = (v: DbVariant, devFeePercent: number): AdminStoreVariant =>
   adminStoreVariantSchema.parse({
     id: v.id,
     productId: v.productId,
     name: v.name,
     sku: v.sku,
     priceCents: v.priceCents,
+    displayPriceCents: displayPriceCents(v.priceCents, devFeePercent),
+    devFeePercent,
     quantityTotal: v.quantityTotal,
     quantitySold: v.quantitySold,
     attributes: (v.attributes ?? {}) as Record<string, string>,
@@ -40,6 +43,7 @@ export const serializeAdminPhoto = (p: DbProductPhoto, uploads: Uploads): AdminS
 export const serializeAdminProductDetail = (
   p: DbProduct & { variants: DbVariant[]; photos: DbProductPhoto[] },
   uploads: Uploads,
+  devFeePercent: number,
 ): AdminStoreProductDetail =>
   adminStoreProductDetailSchema.parse({
     id: p.id,
@@ -58,7 +62,7 @@ export const serializeAdminProductDetail = (
     variants: p.variants
       .slice()
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-      .map(serializeAdminVariant),
+      .map((v) => serializeAdminVariant(v, devFeePercent)),
     photos: p.photos
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)

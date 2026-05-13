@@ -24,6 +24,8 @@ export const eventExtraPublicSchema = z.object({
   name: z.string().min(1).max(140),
   description: z.string().nullable(),
   priceCents: z.number().int().nonnegative(),
+  displayPriceCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
   currency: z.string().length(3),
   quantityRemaining: z.number().int().nonnegative().nullable(),
   sortOrder: z.number().int(),

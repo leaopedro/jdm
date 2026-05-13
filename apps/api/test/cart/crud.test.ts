@@ -528,8 +528,8 @@ describe('Cart CRUD', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = upsertCartItemResponseSchema.parse(res.json());
-      // 2*5000 + 1*3000 = 13000
-      expect(body.cart.totals.amountCents).toBe(13000);
+      // 2*5000 + 1*3000 = 13000 base; +10% dev fee = 14300 gross
+      expect(body.cart.totals.amountCents).toBe(14300);
       expect(body.cart.totals.ticketSubtotalCents).toBe(13000);
       expect(body.cart.totals.currency).toBe('BRL');
     });

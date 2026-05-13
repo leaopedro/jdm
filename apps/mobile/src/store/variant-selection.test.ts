@@ -8,6 +8,8 @@ const buildVariant = (overrides: Partial<StoreProductVariant>): StoreProductVari
   sku: 'SKU-1',
   title: 'P',
   priceCents: 12000,
+  displayPriceCents: 13200,
+  devFeePercent: 10,
   compareAtPriceCents: null,
   currency: 'BRL',
   stockOnHand: 3,

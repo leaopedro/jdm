@@ -367,6 +367,8 @@ export const adminExtraSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   priceCents: z.number().int().nonnegative(),
+  displayPriceCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
   currency: z.string(),
   quantityTotal: z.number().int().nonnegative().nullable(),
   quantitySold: z.number().int().nonnegative(),
@@ -460,6 +462,11 @@ export const adminFinanceSummarySchema = z.object({
   refundedCount: z.number().int().nonnegative(),
   storeRevenueCents: z.number().int().nonnegative(),
   storeOrderCount: z.number().int().nonnegative(),
+  // Current configured dev-fee percent. Reflects the env at request time, not the per-order snapshots.
+  devFeePercent: z.number().int().nonnegative(),
+  // Sum of Order.devFeeAmountCents on paid orders in window, minus refunded fee amounts.
+  // Legacy orders snapshotted at devFeeAmountCents=0 stay zero — no retroactive imputation.
+  devFeeCollectedCents: z.number().int(),
 });
 export type AdminFinanceSummary = z.infer<typeof adminFinanceSummarySchema>;
 
@@ -634,6 +641,8 @@ export const adminStoreVariantSchema = z.object({
   name: z.string(),
   sku: z.string().nullable(),
   priceCents: z.number().int().nonnegative(),
+  displayPriceCents: z.number().int().nonnegative(),
+  devFeePercent: z.number().int().nonnegative(),
   quantityTotal: z.number().int().nonnegative(),
   quantitySold: z.number().int().nonnegative(),
   attributes: z.record(z.string()),

@@ -43,12 +43,13 @@ import { theme } from '~/theme';
 const BRAND_RED = '#E10600';
 
 const formatPriceRange = (product: StoreProductSummary): string => {
-  const { minPriceCents, maxPriceCents } = product.priceRange;
-  if (minPriceCents === maxPriceCents) return formatBRL(minPriceCents);
-  return `${formatBRL(minPriceCents)} - ${formatBRL(maxPriceCents)}`;
+  const { minDisplayPriceCents, maxDisplayPriceCents } = product.priceRange;
+  if (minDisplayPriceCents === maxDisplayPriceCents) return formatBRL(minDisplayPriceCents);
+  return `${formatBRL(minDisplayPriceCents)} - ${formatBRL(maxDisplayPriceCents)}`;
 };
 
-const formatVariantPrice = (variant: StoreProductVariant): string => formatBRL(variant.priceCents);
+const formatVariantPrice = (variant: StoreProductVariant): string =>
+  formatBRL(variant.displayPriceCents);
 
 const productBadgeLabel = (product: { canShip: boolean; canPickup: boolean }): string => {
   const parts: string[] = [];

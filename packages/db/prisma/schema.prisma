@@ -468,6 +468,9 @@ model Order {
   pickupTicketId    String?
   kind              OrderKind         @default(ticket)
   amountCents       Int
+  baseAmountCents   Int               @default(0)
+  devFeePercent     Int               @default(10)
+  devFeeAmountCents Int               @default(0)
   currency          String            @default("BRL") @db.VarChar(3)
   method            PaymentMethod
   provider          PaymentProvider

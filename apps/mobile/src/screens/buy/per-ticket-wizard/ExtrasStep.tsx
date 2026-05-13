@@ -11,7 +11,7 @@ import { theme } from '~/theme';
 type SelectedExtra = {
   id: string;
   name: string;
-  priceCents: number;
+  displayPriceCents: number;
 };
 
 const selectedFromData = (value: unknown): SelectedExtra[] => {
@@ -23,9 +23,9 @@ const selectedFromData = (value: unknown): SelectedExtra[] => {
         typeof item === 'object' &&
         typeof (item as SelectedExtra).id === 'string' &&
         typeof (item as SelectedExtra).name === 'string' &&
-        typeof (item as SelectedExtra).priceCents === 'number',
+        typeof (item as SelectedExtra).displayPriceCents === 'number',
     )
-    .map((item) => ({ id: item.id, name: item.name, priceCents: item.priceCents }));
+    .map((item) => ({ id: item.id, name: item.name, displayPriceCents: item.displayPriceCents }));
 };
 
 function createExtrasScreen(eventExtras: EventExtraPublic[]) {
@@ -44,7 +44,7 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
       if (extra.quantityRemaining === 0) return;
       setSelected((prev) => [
         ...prev,
-        { id: extra.id, name: extra.name, priceCents: extra.priceCents },
+        { id: extra.id, name: extra.name, displayPriceCents: extra.displayPriceCents },
       ]);
     };
 
@@ -74,7 +74,7 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
               >
                 <View style={styles.extraTop}>
                   <Text style={styles.extraName}>{extra.name}</Text>
-                  <Text style={styles.extraPrice}>{formatBRL(extra.priceCents)}</Text>
+                  <Text style={styles.extraPrice}>{formatBRL(extra.displayPriceCents)}</Text>
                 </View>
                 {extra.description ? (
                   <Text style={styles.extraDescription}>{extra.description}</Text>
