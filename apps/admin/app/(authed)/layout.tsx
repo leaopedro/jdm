@@ -1,6 +1,4 @@
-import Link from 'next/link';
-
-import { LogoutButton } from '~/components/logout-button';
+import { AuthedNav } from '~/components/authed-nav';
 import { readRole } from '~/lib/auth-session';
 
 export default async function AuthedLayout({ children }: { children: React.ReactNode }) {
@@ -9,39 +7,7 @@ export default async function AuthedLayout({ children }: { children: React.React
 
   return (
     <div className="min-h-screen">
-      <nav className="flex items-center justify-between border-b border-[color:var(--color-border)] px-6 py-3">
-        <div className="flex items-center gap-4">
-          <Link href={isStaff ? '/check-in' : '/events'} className="font-semibold">
-            JDM Admin
-          </Link>
-          {!isStaff ? (
-            <>
-              <Link href="/events" className="text-sm opacity-80 hover:opacity-100">
-                Eventos
-              </Link>
-              <Link href="/loja" className="text-sm opacity-80 hover:opacity-100">
-                Loja
-              </Link>
-              <Link href="/users" className="text-sm opacity-80 hover:opacity-100">
-                Usuários
-              </Link>
-              <Link href="/financeiro" className="text-sm opacity-80 hover:opacity-100">
-                Financeiro
-              </Link>
-              <Link href="/broadcasts" className="text-sm opacity-80 hover:opacity-100">
-                Broadcasts
-              </Link>
-              <Link href="/support" className="text-sm opacity-80 hover:opacity-100">
-                Suporte
-              </Link>
-            </>
-          ) : null}
-          <Link href="/check-in" className="text-sm opacity-80 hover:opacity-100">
-            Check-in
-          </Link>
-        </div>
-        <LogoutButton />
-      </nav>
+      <AuthedNav isStaff={isStaff} />
       <main className="mx-auto max-w-5xl p-6">{children}</main>
     </div>
   );

@@ -73,7 +73,7 @@ export const ProductForm = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <form action={action} className="grid grid-cols-2 gap-4">
+      <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Título" name="title" required defaultValue={v.title ?? product.title} />
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Tipo de produto</span>
