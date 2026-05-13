@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 import {
   adminStoreProductCreateSchema,
   adminStoreProductListResponseSchema,
+  adminStoreProductLookupResponseSchema,
   adminStoreProductUpdateSchema,
 } from '@jdm/shared/admin';
 import type { Prisma } from '@prisma/client';
@@ -89,6 +90,14 @@ export const adminStoreProductRoutes: FastifyPluginAsync = async (app) => {
       }
       throw e;
     }
+  });
+
+  app.get('/store/products/lookup', async () => {
+    const products = await prisma.product.findMany({
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+      select: { id: true, slug: true, title: true, status: true },
+    });
+    return adminStoreProductLookupResponseSchema.parse({ items: products });
   });
 
   app.get('/store/products/:id', async (request, reply) => {
