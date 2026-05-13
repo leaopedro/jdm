@@ -24,11 +24,20 @@ export const registerExpoPushToken = async (): Promise<RegisterResult> => {
     return { ok: false, reason: 'simulator' };
   }
   const id = projectId();
-  if (!id) return { ok: false, reason: 'no-project-id' };
+  if (!id) {
+    // Visible diagnostic — silent failures of this path are what made JDMA-534
+    // smoke debugging painful. Most common cause: empty `EAS_PROJECT_ID=` line
+    // in apps/mobile/.env.local overriding the value in .env.
+    console.warn(
+      '[push] registerExpoPushToken: no projectId resolved. Check EAS_PROJECT_ID in apps/mobile/.env / .env.local.',
+    );
+    return { ok: false, reason: 'no-project-id' };
+  }
   try {
     const result = await Notifications.getExpoPushTokenAsync({ projectId: id });
     return { ok: true, token: result.data, platform };
-  } catch {
+  } catch (err) {
+    console.warn('[push] registerExpoPushToken: SDK error', err);
     return { ok: false, reason: 'sdk-error' };
   }
 };

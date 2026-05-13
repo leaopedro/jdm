@@ -8,6 +8,13 @@ export type { PushSender, PushMessage, PushSendResult, PushSendOutcome } from '.
 export { DevPushSender } from './dev.js';
 
 export const buildPushSender = (env: Env): PushSender => {
+  if (env.PUSH_PROVIDER === 'expo') {
+    return new ExpoPushSender(env.EXPO_ACCESS_TOKEN);
+  }
+  if (env.PUSH_PROVIDER === 'dev') {
+    return new DevPushSender();
+  }
+  // auto: behavior tied to NODE_ENV.
   if (env.NODE_ENV === 'production') {
     return new ExpoPushSender(env.EXPO_ACCESS_TOKEN);
   }

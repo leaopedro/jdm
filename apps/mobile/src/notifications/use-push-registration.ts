@@ -40,9 +40,16 @@ export const usePushRegistration = ({ isAuthenticated }: UsePushRegistrationDeps
     };
     void boot();
 
-    const sub = Notifications.addPushTokenListener((event) => {
-      const platform: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
-      void send(event.data as string, platform);
+    // NOTE: `addPushTokenListener` fires with `DevicePushToken` (the native
+    // APNs/FCM raw token), NOT the Expo wrapper token. Writing `event.data`
+    // straight to `/me/device-tokens` would persist a non-Expo string that
+    // Expo's push service immediately rejects (and that pollutes DeviceToken
+    // with rows like `b6aab6ef…` hex — JDMA-534 debugging).
+    //
+    // On rotation, re-run the full boot path so we re-fetch a fresh Expo
+    // push token via `getExpoPushTokenAsync` and persist that instead.
+    const sub = Notifications.addPushTokenListener(() => {
+      void boot();
     });
 
     return () => {
