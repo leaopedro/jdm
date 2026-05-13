@@ -105,6 +105,7 @@ function AppTabs() {
         name="profile"
         options={{ title: APP_TAB_SPECS[5].title, tabBarIcon: ProfileIcon }}
       />
+      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notificações' }} />
     </Tabs>
   );
 }

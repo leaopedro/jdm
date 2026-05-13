@@ -2,6 +2,7 @@ import type { PublicProfile } from '@jdm/shared/profile';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
+  BellDot,
   CarFront,
   ChevronRight,
   LogOut,
@@ -24,7 +25,9 @@ import {
 import { getProfile, updateProfile } from '~/api/profile';
 import { useAuth } from '~/auth/context';
 import { authCopy } from '~/copy/auth';
+import { notificationsCopy } from '~/copy/notifications';
 import { profileCopy } from '~/copy/profile';
+import { useUnreadCount } from '~/hooks/useUnreadCount';
 import { pickAndUpload } from '~/lib/upload-image';
 import { theme } from '~/theme';
 
@@ -81,6 +84,7 @@ function MenuRow({ icon, label, hint, onPress, accent = false }: MenuRowProps) {
 export default function ProfileMenuScreen() {
   const { logout } = useAuth();
   const router = useRouter();
+  const { count: unreadCount } = useUnreadCount(true);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -178,6 +182,18 @@ export default function ProfileMenuScreen() {
           label={profileCopy.profile.editDetails}
           hint={profileCopy.menu.editHint}
           onPress={() => router.push('/profile/edit' as never)}
+        />
+        <MenuRow
+          icon={
+            <BellDot
+              color={unreadCount > 0 ? theme.colors.accent : theme.colors.fg}
+              size={18}
+              strokeWidth={1.75}
+            />
+          }
+          label={notificationsCopy.menu.label}
+          hint={notificationsCopy.menu.hint}
+          onPress={() => router.push('/notifications' as never)}
         />
         <MenuRow
           icon={<Bell color={theme.colors.fg} size={18} strokeWidth={1.75} />}

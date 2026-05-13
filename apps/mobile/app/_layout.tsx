@@ -27,6 +27,7 @@ import { AuthProvider, useAuth } from '~/auth/context';
 import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
 import { captureException, initSentry } from '~/lib/sentry';
 import { ToastHost } from '~/lib/toast';
+import { usePushOpenHandler } from '~/notifications/use-push-open-handler';
 import { StoreRuntimeProvider } from '~/store/runtime-context';
 import { theme } from '~/theme';
 
@@ -53,6 +54,7 @@ const Gate = () => {
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ next?: string }>();
   const next = sanitizeNext(params.next);
+  usePushOpenHandler();
   const inAuth =
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
