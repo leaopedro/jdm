@@ -194,6 +194,15 @@ describe('storeProductSchema', () => {
             currency: 'BRL',
             stockOnHand: 8,
             isActive: true,
+            capacityDisplay: {
+              status: 'available',
+              mode: 'absolute',
+              showAbsolute: true,
+              showPercentage: false,
+              remaining: 8,
+              remainingPercent: null,
+              thresholdPercent: 15,
+            },
           },
         ],
         images: [
