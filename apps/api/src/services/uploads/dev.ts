@@ -22,6 +22,11 @@ export class DevUploads implements Uploads {
     };
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async presignGet(objectKey: string): Promise<string> {
+    return this.buildPublicUrl(objectKey);
+  }
+
   buildPublicUrl(objectKey: string): string {
     return `${this.publicBase}/${objectKey}`;
   }

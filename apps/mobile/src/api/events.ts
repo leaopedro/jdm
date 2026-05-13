@@ -1,4 +1,6 @@
 import {
+  type ConfirmedCarsResponse,
+  confirmedCarsResponseSchema,
   type EventDetailCommerce,
   eventDetailCommerceSchema,
   type EventDetailPublic,
@@ -36,3 +38,6 @@ export const getEventCommerce = (slug: string): Promise<EventDetailCommerce> =>
 
 export const getEventCommerceById = (id: string): Promise<EventDetailCommerce> =>
   authedRequest(`/events/by-id/${encodeURIComponent(id)}/commerce`, eventDetailCommerceSchema);
+
+export const getConfirmedCars = (slug: string): Promise<ConfirmedCarsResponse> =>
+  request(`/events/${encodeURIComponent(slug)}/confirmed-cars`, confirmedCarsResponseSchema);

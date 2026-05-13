@@ -1,5 +1,7 @@
 import { prisma } from '@jdm/db';
 import {
+  confirmedCarSchema,
+  confirmedCarsResponseSchema,
   eventDetailCommerceSchema,
   eventDetailPublicSchema,
   eventListQuerySchema,
@@ -215,4 +217,70 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
     },
   );
+
+  // Public confirmed cars — no auth required.
+  // Returns only public car fields; plate and all internal fields are excluded at query level.
+  app.get('/events/:slug/confirmed-cars', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+
+    const event = await prisma.event.findFirst({
+      where: { slug, status: 'published' },
+      select: { id: true },
+    });
+    if (!event) return reply.status(404).send({ error: 'NotFound' });
+
+    // Only tickets on car-required tiers with valid status contribute confirmed cars.
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        eventId: event.id,
+        status: 'valid',
+        tier: { requiresCar: true },
+        carId: { not: null },
+      },
+      select: {
+        carId: true,
+        car: {
+          select: {
+            id: true,
+            make: true,
+            model: true,
+            year: true,
+            nickname: true,
+            photos: {
+              select: { objectKey: true },
+              orderBy: { sortOrder: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    // Deduplicate by carId — one car may have multiple tickets (e.g. extras).
+    const seen = new Set<string>();
+    const cars: (typeof tickets)[number]['car'][] = [];
+    for (const t of tickets) {
+      if (t.car && t.carId && !seen.has(t.carId)) {
+        seen.add(t.carId);
+        cars.push(t.car);
+      }
+    }
+
+    const items = await Promise.all(
+      cars.map(async (c) =>
+        confirmedCarSchema.parse({
+          id: c!.id,
+          make: c!.make,
+          model: c!.model,
+          year: c!.year,
+          nickname: c!.nickname ?? null,
+          photoUrl: c!.photos[0]?.objectKey
+            ? await app.uploads.presignGet(c!.photos[0].objectKey)
+            : null,
+        }),
+      ),
+    );
+
+    return confirmedCarsResponseSchema.parse({ items, total: items.length });
+  });
 };

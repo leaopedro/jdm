@@ -79,3 +79,21 @@ export const eventListResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 export type EventListResponse = z.infer<typeof eventListResponseSchema>;
+
+// Public-safe confirmed car: photo, make/model/year/nickname only.
+// plate and all internal-control fields are excluded at the DB query boundary.
+export const confirmedCarSchema = z.object({
+  id: z.string().min(1),
+  make: z.string().min(1).max(60),
+  model: z.string().min(1).max(60),
+  year: z.number().int(),
+  nickname: z.string().max(60).nullable(),
+  photoUrl: z.string().url().nullable(),
+});
+export type ConfirmedCar = z.infer<typeof confirmedCarSchema>;
+
+export const confirmedCarsResponseSchema = z.object({
+  items: z.array(confirmedCarSchema),
+  total: z.number().int().nonnegative(),
+});
+export type ConfirmedCarsResponse = z.infer<typeof confirmedCarsResponseSchema>;
