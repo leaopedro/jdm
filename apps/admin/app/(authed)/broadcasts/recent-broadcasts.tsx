@@ -1,8 +1,9 @@
 'use client';
 
-import type { BroadcastSummary } from '@jdm/shared';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+
+import type { BroadcastSummary } from '../../../../../packages/shared/src/broadcasts';
 
 import { cancelBroadcastAction } from '~/lib/broadcast-actions';
 
@@ -10,6 +11,12 @@ type EventOption = {
   id: string;
   title: string;
   startsAt: string;
+};
+
+type ProductOption = {
+  id: string;
+  title: string;
+  slug: string;
 };
 
 const statusLabel: Record<BroadcastSummary['status'], string> = {
@@ -39,15 +46,41 @@ const renderTarget = (broadcast: BroadcastSummary, events: EventOption[]) => {
   return events.find((event) => event.id === broadcast.targetValue)?.title ?? 'Evento selecionado';
 };
 
+const renderDeliveryMode = (broadcast: BroadcastSummary) =>
+  broadcast.deliveryMode === 'in_app_only' ? 'Somente na central' : 'Central + push';
+
+const renderDestination = (
+  broadcast: BroadcastSummary,
+  events: EventOption[],
+  products: ProductOption[],
+) => {
+  const destination = broadcast.destination;
+  if (!destination || destination.kind === 'none') return 'Sem link adicional';
+  if (destination.kind === 'tickets') return 'Meus ingressos';
+  if (destination.kind === 'event') {
+    return events.find((event) => event.id === destination.eventId)?.title ?? 'Evento selecionado';
+  }
+  if (destination.kind === 'product') {
+    return (
+      products.find((product) => product.id === destination.productId)?.title ??
+      'Produto selecionado'
+    );
+  }
+  if (destination.kind === 'internal_path') return destination.path;
+  return destination.url;
+};
+
 const canCancel = (status: BroadcastSummary['status']) =>
   status === 'draft' || status === 'scheduled' || status === 'failed';
 
 export function RecentBroadcasts({
   broadcasts,
   events,
+  products,
 }: {
   broadcasts: BroadcastSummary[];
   events: EventOption[];
+  products: ProductOption[];
 }) {
   const router = useRouter();
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
@@ -114,12 +147,24 @@ export function RecentBroadcasts({
                 ) : null}
               </div>
 
-              <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-[color:var(--color-muted)]">
                     Público
                   </p>
                   <p className="mt-1">{renderTarget(broadcast, events)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[color:var(--color-muted)]">
+                    Entrega
+                  </p>
+                  <p className="mt-1">{renderDeliveryMode(broadcast)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[color:var(--color-muted)]">
+                    Destino
+                  </p>
+                  <p className="mt-1 break-all">{renderDestination(broadcast, events, products)}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-[color:var(--color-muted)]">

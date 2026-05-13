@@ -1,17 +1,4 @@
 import {
-  broadcastDryRunResponseSchema,
-  broadcastListResponseSchema,
-  broadcastSummarySchema,
-  createBroadcastRequestSchema,
-  updateBroadcastRequestSchema,
-  type BroadcastDryRunRequest,
-  type BroadcastDryRunResponse,
-  type BroadcastListResponse,
-  type BroadcastSummary,
-  type CreateBroadcastRequest,
-  type UpdateBroadcastRequest,
-} from '@jdm/shared';
-import {
   adminEventDetailSchema,
   adminEventListResponseSchema,
   adminExtraSchema,
@@ -91,6 +78,20 @@ import {
   type StoreSettingsUpdate,
 } from '@jdm/shared/store';
 import { z } from 'zod';
+
+import {
+  broadcastDryRunResponseSchema,
+  broadcastListResponseSchema,
+  broadcastSummarySchema,
+  createBroadcastRequestSchema,
+  updateBroadcastRequestSchema,
+  type BroadcastDryRunRequest,
+  type BroadcastDryRunResponse,
+  type BroadcastListResponse,
+  type BroadcastSummary,
+  type CreateBroadcastRequest,
+  type UpdateBroadcastRequest,
+} from '../../../../packages/shared/src/broadcasts';
 
 import { apiFetch } from './api';
 
