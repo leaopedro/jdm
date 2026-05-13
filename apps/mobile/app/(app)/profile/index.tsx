@@ -7,6 +7,7 @@ import {
   ChevronRight,
   LogOut,
   MapPinned,
+  MessageCircle,
   Package,
   PencilLine,
 } from 'lucide-react-native';
@@ -218,6 +219,12 @@ export default function ProfileMenuScreen() {
           label={profileCopy.menu.garage}
           hint={profileCopy.menu.garageHint}
           onPress={() => router.push('/profile/garage' as never)}
+        />
+        <MenuRow
+          icon={<MessageCircle color={theme.colors.fg} size={18} strokeWidth={1.75} />}
+          label={profileCopy.menu.support}
+          hint={profileCopy.menu.supportHint}
+          onPress={() => router.push('/profile/support' as never)}
         />
         <MenuRow
           icon={<LogOut color={theme.colors.accent} size={18} strokeWidth={1.75} />}
