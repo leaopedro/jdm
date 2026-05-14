@@ -2,6 +2,7 @@ export type UploadKind =
   | 'avatar'
   | 'car_photo'
   | 'event_cover'
+  | 'feed_photo'
   | 'product_photo'
   | 'support_attachment';
 

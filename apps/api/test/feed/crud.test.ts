@@ -699,3 +699,101 @@ describe('carId ownership validation', () => {
     expect(res.json().message).toContain('Car does not belong to you');
   });
 });
+
+describe('photoObjectKeys ownership validation', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('rejects post create with unowned photo key', async () => {
+    const event = await seedEvent({ feedAccess: 'public', postingAccess: 'attendees' });
+    const tier = await seedTier(event.id);
+    const { user } = await createUser({ email: 'u@jdm.test', verified: true });
+    const { user: other } = await createUser({ email: 'other@jdm.test', verified: true });
+    await seedTicket(user.id, event.id, tier.id);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
+      payload: { body: 'Stolen photo', photoObjectKeys: [`feed_photo/${other.id}/abc.jpg`] },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().message).toContain('Photo does not belong to you');
+  });
+
+  it('accepts post create with owned photo key', async () => {
+    const event = await seedEvent({ feedAccess: 'public', postingAccess: 'attendees' });
+    const tier = await seedTier(event.id);
+    const { user } = await createUser({ email: 'u@jdm.test', verified: true });
+    await seedTicket(user.id, event.id, tier.id);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
+      payload: { body: 'My photo', photoObjectKeys: [`feed_photo/${user.id}/abc.jpg`] },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('rejects patch with unowned photo key', async () => {
+    const event = await seedEvent();
+    const { user } = await createUser({ email: 'u@jdm.test', verified: true });
+    const { user: other } = await createUser({ email: 'other@jdm.test', verified: true });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: user.id },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
+      payload: { photoObjectKeys: [`feed_photo/${other.id}/abc.jpg`] },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().message).toContain('Photo does not belong to you');
+  });
+});
+
+describe('GET /events/:eventId/feed/:postId/comments - visibility guards', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('returns 404 for unknown event', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/events/unknown/feed/some-post/comments',
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe('NotFound');
+  });
+
+  it('returns 404 when parent post is hidden', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'hidden post', status: 'hidden' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 when parent post is removed', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'removed post', status: 'removed' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});

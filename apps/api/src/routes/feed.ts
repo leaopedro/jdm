@@ -186,6 +186,16 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
 
     const { carId, body, photoObjectKeys } = feedPostCreateInputSchema.parse(request.body);
 
+    if (photoObjectKeys?.length) {
+      for (const key of photoObjectKeys) {
+        if (!app.uploads.isOwnedKey(key, sub, 'feed_photo')) {
+          return reply
+            .status(403)
+            .send({ error: 'Forbidden', message: 'Photo does not belong to you' });
+        }
+      }
+    }
+
     if (carId) {
       const car = await prisma.car.findFirst({
         where: { id: carId, userId: sub },
@@ -260,6 +270,16 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
       const isStaff = role === 'organizer' || role === 'admin';
       if (!isStaff && post.authorUserId !== sub) {
         return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
+      }
+
+      if (patch.photoObjectKeys?.length) {
+        for (const key of patch.photoObjectKeys) {
+          if (!app.uploads.isOwnedKey(key, sub, 'feed_photo')) {
+            return reply
+              .status(403)
+              .send({ error: 'Forbidden', message: 'Photo does not belong to you' });
+          }
+        }
       }
 
       if (patch.photoObjectKeys !== undefined) {
@@ -346,11 +366,12 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
         where: { id: eventId },
         select: { feedEnabled: true },
       });
-      if (!event?.feedEnabled)
+      if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
+      if (!event.feedEnabled)
         return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
       const post = await prisma.feedPost.findFirst({
-        where: { id: postId, eventId },
+        where: { id: postId, eventId, status: 'visible' },
         select: { id: true },
       });
       if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
