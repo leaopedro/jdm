@@ -143,6 +143,7 @@ const serializeCommerceDetail = (
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
+    hasCarTier: e.tiers.some((t) => t.requiresCar),
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
