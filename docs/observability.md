@@ -13,9 +13,11 @@ or before changing anything that emits telemetry.
   `service=api|admin|mobile`. Events are routed/filtered in Sentry by
   the `service` tag, not by DSN.
 - **Releases**: each app uploads release + sourcemaps automatically.
-  - `api` — `Sentry.init({ release: GIT_SHA })` set from
-    `${{RAILWAY_GIT_COMMIT_SHA}}`. No sourcemap upload (server JS,
-    stack frames already point at compiled `dist/`).
+  - `api` — `Sentry.init({ release: GIT_SHA })`. The API resolves
+    `GIT_SHA` from the explicit env var, falling back to
+    `RAILWAY_GIT_COMMIT_SHA` (auto-injected on Railway) and finally to
+    `"dev"`. No sourcemap upload (server JS, stack frames already point
+    at compiled `dist/`).
   - `admin` — `withSentryConfig` in `apps/admin/next.config.mjs`
     uploads release + sourcemaps on every Vercel build using
     `SENTRY_AUTH_TOKEN` + `SENTRY_PROJECT_ADMIN`.
