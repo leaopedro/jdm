@@ -93,7 +93,7 @@ export const ProductForm = ({
             ))}
           </select>
         </label>
-        <label className="col-span-2 flex flex-col gap-1">
+        <label className="sm:col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
             name="description"
@@ -111,7 +111,7 @@ export const ProductForm = ({
           required
           defaultValue={v.basePriceCents ?? String(product.basePriceCents)}
         />
-        <fieldset className="col-span-2 flex flex-col gap-2">
+        <fieldset className="sm:col-span-2 flex flex-col gap-2">
           <legend className="mb-1 text-sm text-[color:var(--color-muted)]">Modo de entrega</legend>
           <label className="flex items-center gap-2">
             <input
@@ -165,8 +165,8 @@ export const ProductForm = ({
             </span>
           ) : null}
         </label>
-        {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
-        <div className="col-span-2 flex gap-3">
+        {state.error ? <p className="sm:col-span-2 text-sm text-red-400">{state.error}</p> : null}
+        <div className="sm:col-span-2 flex gap-3">
           <Submit />
           {product.status !== 'archived' ? (
             <button
