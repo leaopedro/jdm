@@ -900,5 +900,54 @@ describe('POST /stripe/webhook', () => {
       const reloaded = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(reloaded.status).toBe('refunded');
     });
+
+    it('charge.refunded revokes ticket and extras for a paid order', async () => {
+      const { user } = await createUser();
+      const { event, tier, order } = await seedEventTierOrder(user.id);
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'paid', paidAt: new Date() },
+      });
+      const ticket = await prisma.ticket.create({
+        data: {
+          orderId: order.id,
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+
+      const chargePayload = {
+        id: 'evt_refund_1',
+        type: 'charge.refunded',
+        data: {
+          object: {
+            payment_intent: order.providerRef,
+            amount: 5000,
+            amount_refunded: 5000,
+          },
+        },
+      };
+
+      stripe.nextEvent = chargePayload;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/stripe/webhook',
+        headers: { 'content-type': 'application/json', 'stripe-signature': 'valid' },
+        payload: rawJson(chargePayload),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, refunded: true });
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('refunded');
+
+      const updatedTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(updatedTicket.status).toBe('revoked');
+    });
   });
 });

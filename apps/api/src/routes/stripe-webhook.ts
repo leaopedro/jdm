@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { isUniqueConstraintError } from '../lib/prisma-errors.js';
+import { revokeTicketsForRefundedOrder } from '../services/orders/revoke.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
@@ -351,11 +352,13 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true, ignored: true, reason: 'partial-refund' });
       }
 
-      // updatedAt auto-bumps as a refundedAt proxy until JDMA-314 lands.
-      await prisma.order.updateMany({
+      const refundResult = await prisma.order.updateMany({
         where: { id: order.id, status: 'paid' },
         data: { status: 'refunded' },
       });
+      if (refundResult.count > 0) {
+        await revokeTicketsForRefundedOrder(order.id);
+      }
 
       const firstTime = await markProcessed(event.id, event);
       request.log.info(
