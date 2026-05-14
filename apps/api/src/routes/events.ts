@@ -66,14 +66,6 @@ const extraCapacityDisplay = (x: DbExtra, policy: CapacityDisplayPolicy) => {
   return computeCapacityDisplay({ status, remaining, total: x.quantityTotal }, policy.extras);
 };
 
-const eventCapacityDisplay = (e: DbEvent, policy: CapacityDisplayPolicy) => {
-  const status = e.status === 'cancelled' ? 'unavailable' : 'available';
-  return computeCapacityDisplay(
-    { status, remaining: e.capacity, total: e.capacity },
-    policy.events,
-  );
-};
-
 const serializeTier = (t: DbTier, devFeePercent: number, policy: CapacityDisplayPolicy) =>
   ticketTierSchema.parse({
     id: t.id,
@@ -106,7 +98,7 @@ const serializeExtra = (x: DbExtra, devFeePercent: number, policy: CapacityDispl
     capacityDisplay: extraCapacityDisplay(x, policy),
   });
 
-const serializePublicDetail = (e: DbEvent, uploads: Uploads, policy: CapacityDisplayPolicy) =>
+const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
   eventDetailPublicSchema.parse({
     id: e.id,
     slug: e.slug,
@@ -123,7 +115,6 @@ const serializePublicDetail = (e: DbEvent, uploads: Uploads, policy: CapacityDis
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
-    capacityDisplay: eventCapacityDisplay(e, policy),
   });
 
 const serializeCommerceDetail = (
@@ -148,7 +139,6 @@ const serializeCommerceDetail = (
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
-    capacityDisplay: eventCapacityDisplay(e, policy),
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -211,8 +201,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       where: { slug, status: 'published' },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    const policy = await loadCapacityDisplayPolicy();
-    return serializePublicDetail(event, app.uploads, policy);
+    return serializePublicDetail(event, app.uploads);
   });
 
   app.get('/events/by-id/:id', async (request, reply) => {
@@ -221,8 +210,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       where: { id, status: 'published' },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    const policy = await loadCapacityDisplayPolicy();
-    return serializePublicDetail(event, app.uploads, policy);
+    return serializePublicDetail(event, app.uploads);
   });
 
   app.get('/events/:slug/commerce', { preHandler: [app.authenticate] }, async (request, reply) => {

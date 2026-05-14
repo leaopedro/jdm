@@ -1,6 +1,7 @@
 import { prisma } from '@jdm/db';
 import {
   type CapacityDisplayPolicy,
+  defaultCapacityDisplayPolicy,
   GENERAL_SETTINGS_SINGLETON_ID,
 } from '@jdm/shared/general-settings';
 
@@ -45,6 +46,10 @@ export const toCapacityDisplayPolicy = (row: GeneralSettingsRow): CapacityDispla
 });
 
 export const loadCapacityDisplayPolicy = async (): Promise<CapacityDisplayPolicy> => {
-  const row = await ensureGeneralSettings();
-  return toCapacityDisplayPolicy(row);
+  try {
+    const row = await ensureGeneralSettings();
+    return toCapacityDisplayPolicy(row);
+  } catch {
+    return defaultCapacityDisplayPolicy;
+  }
 };

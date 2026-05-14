@@ -49,13 +49,14 @@ export const eventSummarySchema = z.object({
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
 // Public detail: anonymous-safe payload, no commerce data (no tiers, no extras).
+// No event-level capacityDisplay yet — event remaining capacity is not modeled
+// directly (only per-tier). Surface returns when a real remaining source lands.
 export const eventDetailPublicSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),
   capacity: z.number().int().nonnegative(),
   // null = unlimited; legacy responses may omit. Server enforces the real cap.
   maxTicketsPerUser: z.number().int().min(1).nullable().optional(),
-  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type EventDetailPublic = z.infer<typeof eventDetailPublicSchema>;
 

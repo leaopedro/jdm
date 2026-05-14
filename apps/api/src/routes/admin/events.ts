@@ -39,16 +39,6 @@ const adminExtraCapacityDisplay = (x: DbExtra) => {
   );
 };
 
-const adminEventCapacityDisplay = (e: DbEvent) =>
-  computeCapacityDisplay(
-    {
-      status: e.status === 'cancelled' ? 'unavailable' : 'available',
-      remaining: e.capacity,
-      total: e.capacity,
-    },
-    defaultCapacityDisplaySurfaceSetting,
-  );
-
 const serializeExtra = (x: DbExtra, devFeePercent: number) =>
   eventExtraPublicSchema.parse({
     id: x.id,
@@ -89,7 +79,6 @@ const serializeDetail = (
     publishedAt: e.publishedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
-    capacityDisplay: adminEventCapacityDisplay(e),
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)

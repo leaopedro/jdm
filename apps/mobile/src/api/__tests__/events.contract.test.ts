@@ -27,7 +27,6 @@ const PUBLIC_FIXTURE = {
   description: 'd',
   capacity: 200,
   maxTicketsPerUser: 4,
-  capacityDisplay: CAPACITY_DISPLAY_ABSOLUTE,
 } as const;
 
 const COMMERCE_FIXTURE = {
