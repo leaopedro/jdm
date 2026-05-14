@@ -162,3 +162,70 @@ export const FEED_PUBLIC_RESPONSE_SCHEMAS = {
   publicCarPhoto: publicCarPhotoSchema,
   feedSettings: feedSettingsSchema,
 } as const;
+
+// ---------- Moderation inputs ----------
+
+export const banScopeSchema = z.enum(['view', 'post']);
+export type BanScope = z.infer<typeof banScopeSchema>;
+
+export const moderatePostInputSchema = z.object({
+  action: z.enum(['hide', 'remove', 'restore']),
+});
+export type ModeratePostInput = z.infer<typeof moderatePostInputSchema>;
+
+export const moderateCommentInputSchema = z.object({
+  action: z.enum(['hide', 'remove', 'restore']),
+});
+export type ModerateCommentInput = z.infer<typeof moderateCommentInputSchema>;
+
+export const resolveReportInputSchema = z.object({
+  resolution: z.string().trim().min(1).max(300),
+});
+export type ResolveReportInput = z.infer<typeof resolveReportInputSchema>;
+
+export const createFeedBanInputSchema = z.object({
+  userId: z.string().min(1),
+  scope: banScopeSchema,
+  reason: z.string().trim().max(300).optional(),
+});
+export type CreateFeedBanInput = z.infer<typeof createFeedBanInputSchema>;
+
+// ---------- Moderation response shapes ----------
+
+export const feedBanResponseSchema = z.object({
+  id: z.string().min(1),
+  eventId: z.string().min(1),
+  userId: z.string().min(1),
+  userName: z.string().nullable(),
+  scope: banScopeSchema,
+  reason: z.string().nullable(),
+  bannedByName: z.string().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type FeedBanResponse = z.infer<typeof feedBanResponseSchema>;
+
+export const reportResponseSchema = z.object({
+  id: z.string().min(1),
+  targetKind: reportTargetKindSchema,
+  targetId: z.string().min(1),
+  reporterName: z.string().nullable(),
+  reason: z.string(),
+  status: reportStatusSchema,
+  resolution: z.string().nullable(),
+  resolverName: z.string().nullable(),
+  resolvedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type ReportResponse = z.infer<typeof reportResponseSchema>;
+
+export const moderationQueueItemSchema = z.object({
+  kind: z.enum(['post', 'comment']),
+  id: z.string().min(1),
+  body: z.string(),
+  status: z.string(),
+  authorName: z.string().nullable(),
+  carNickname: z.string().nullable(),
+  openReportCount: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+});
+export type ModerationQueueItem = z.infer<typeof moderationQueueItemSchema>;
