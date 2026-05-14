@@ -94,7 +94,9 @@ export default function EventDetailScreen() {
   const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
 
   // Fetch confirmed cars once we know the slug. Public — no auth needed.
-  const hasCarTier = commerceEvent?.tiers.some((t) => t.requiresCar) ?? false;
+  // Prefer commerce tiers (authed); fall back to the public hasCarTier flag for anonymous users.
+  const hasCarTier =
+    commerceEvent?.tiers.some((t) => t.requiresCar) ?? publicEvent?.hasCarTier ?? false;
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
     let cancelled = false;

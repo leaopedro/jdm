@@ -100,6 +100,70 @@ describe('ConfirmedCarsSection — state logic', () => {
   });
 });
 
+// ── Screen-level anonymous visibility wiring ──────────────────────────────────
+// Exercises the exact derivation in apps/mobile/app/(app)/events/[slug].tsx:
+//   hasCarTier = commerceEvent?.tiers.some(t => t.requiresCar) ?? publicEvent?.hasCarTier ?? false
+//   visible    = confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier
+
+type MockCommerce = { tiers: { requiresCar: boolean }[] } | null;
+type MockPublic = { hasCarTier: boolean } | null;
+
+const deriveHasCarTier = (commerceEvent: MockCommerce, publicEvent: MockPublic): boolean =>
+  commerceEvent?.tiers.some((t) => t.requiresCar) ?? publicEvent?.hasCarTier ?? false;
+
+const deriveVisible = (
+  confirmedCarsLoading: boolean,
+  confirmedCars: unknown[],
+  hasCarTier: boolean,
+): boolean => confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier;
+
+describe('EventDetailScreen — confirmed-cars anonymous visibility wiring', () => {
+  it('authed: commerceEvent tiers drive hasCarTier regardless of publicEvent', () => {
+    expect(deriveHasCarTier({ tiers: [{ requiresCar: true }] }, { hasCarTier: false })).toBe(true);
+    expect(deriveHasCarTier({ tiers: [{ requiresCar: false }] }, { hasCarTier: true })).toBe(false);
+  });
+
+  it('anon + publicEvent.hasCarTier=true → hasCarTier=true', () => {
+    expect(deriveHasCarTier(null, { hasCarTier: true })).toBe(true);
+  });
+
+  it('anon + publicEvent.hasCarTier=false → hasCarTier=false', () => {
+    expect(deriveHasCarTier(null, { hasCarTier: false })).toBe(false);
+  });
+
+  it('anon + publicEvent null → hasCarTier=false', () => {
+    expect(deriveHasCarTier(null, null)).toBe(false);
+  });
+
+  it('anon, hasCarTier=true, 0 cars, not loading → section visible (empty state shown)', () => {
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: true });
+    const visible = deriveVisible(false, [], hasCarTier);
+    expect(visible).toBe(true);
+    const s = sectionState([], false, visible);
+    if (!s.rendered) throw new Error('must render');
+    expect(s.empty).toBe(true);
+  });
+
+  it('anon, hasCarTier=false, 0 cars, not loading → section hidden', () => {
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: false });
+    const visible = deriveVisible(false, [], hasCarTier);
+    expect(visible).toBe(false);
+    const s = sectionState([], false, visible);
+    expect(s.rendered).toBe(false);
+  });
+
+  it('anon, hasCarTier=true, cars present → section visible with cars', () => {
+    const cars = [makeCar('r1'), makeCar('r2')];
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: true });
+    const visible = deriveVisible(false, cars, hasCarTier);
+    expect(visible).toBe(true);
+    const s = sectionState(cars, false, visible);
+    if (!s.rendered) throw new Error('must render');
+    expect(s.inlineCount).toBe(2);
+    expect(s.empty).toBe(false);
+  });
+});
+
 // ── Schema / privacy ─────────────────────────────────────────────────────────
 
 describe('confirmedCarsResponseSchema — privacy boundary', () => {
