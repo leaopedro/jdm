@@ -84,6 +84,7 @@ export function CarDetailSheet({ car, onClose }: Props) {
       style={StyleSheet.absoluteFill}
       pointerEvents="box-none"
       accessibilityViewIsModal={visible}
+      aria-modal={visible}
     >
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
         <Pressable

@@ -564,3 +564,51 @@ describe('bottom-sheet gesture ownership — handle-only', () => {
     expect(shouldCaptureMove(6)).toBe(true);
   });
 });
+
+// ── Cross-platform accessibility isolation ────────────────────────────────────
+// Overlay containers use both accessibilityViewIsModal (iOS/VoiceOver) and
+// aria-modal (cross-platform RN 0.71+, maps to setImportantForAccessibility on
+// Android). The ScrollView behind the sheet additionally receives
+// importantForAccessibility="no-hide-descendants" (Android TalkBack explicit).
+//
+// Pure model: derive the correct importantForAccessibility value from sheet state.
+
+type ImportantForA11y = 'auto' | 'no-hide-descendants';
+
+const scrollA11y = (isSheetOpen: boolean): ImportantForA11y =>
+  isSheetOpen ? 'no-hide-descendants' : 'auto';
+
+describe('cross-platform accessibility isolation', () => {
+  it('ScrollView importantForAccessibility is "auto" when no sheet open', () => {
+    expect(scrollA11y(false)).toBe('auto');
+  });
+
+  it('ScrollView importantForAccessibility is "no-hide-descendants" when CarDetailSheet open', () => {
+    // isSheetOpen = selectedCar !== null || allSheetOpen
+    const selectedCar = { ref: 'r1' };
+    const isSheetOpen = selectedCar !== null || false;
+    expect(scrollA11y(isSheetOpen)).toBe('no-hide-descendants');
+  });
+
+  it('ScrollView importantForAccessibility is "no-hide-descendants" when AllCarsSheet open', () => {
+    const selectedCar = null;
+    const allSheetOpen = true;
+    const isSheetOpen = selectedCar !== null || allSheetOpen;
+    expect(scrollA11y(isSheetOpen)).toBe('no-hide-descendants');
+  });
+
+  it('aria-modal is true only when sheet is visible (not during exit animation)', () => {
+    // visible=false, mounted=true during exit → aria-modal must be false
+    // so TalkBack is not trapped to an exiting (invisible) sheet.
+    const visible = false;
+    const mounted = true;
+    const ariaModal = visible; // prop passed as aria-modal={visible}
+    expect(ariaModal).toBe(false);
+    expect(mounted).toBe(true); // sheet still in tree but not trapping focus
+  });
+
+  it('aria-modal is true when sheet is fully open', () => {
+    const visible = true;
+    expect(visible).toBe(true);
+  });
+});

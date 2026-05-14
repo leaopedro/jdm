@@ -204,10 +204,14 @@ export default function EventDetailScreen() {
   }
 
   const selectedTier = commerceEvent?.tiers.find((t) => t.id === selectedTierId) ?? null;
+  const isSheetOpen = selectedCar !== null || allSheetOpen;
 
   return (
     <View style={styles.root}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        importantForAccessibility={isSheetOpen ? 'no-hide-descendants' : 'auto'}
+      >
         <View>
           {event.coverUrl ? (
             <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
