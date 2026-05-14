@@ -51,13 +51,19 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     return serializeUser(user, app.uploads);
   });
 
-  app.patch('/me', { preHandler: [app.authenticate] }, async (request, _reply) => {
+  app.patch('/me', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { sub } = requireUser(request);
     // Strip undefined values: Prisma's exactOptionalPropertyTypes rejects `string | undefined`
     // where its generated types expect `string | StringFieldUpdateOperationsInput`.
     const data = Object.fromEntries(
       Object.entries(updateProfileSchema.parse(request.body)).filter(([, v]) => v !== undefined),
     );
+    if (
+      typeof data.avatarObjectKey === 'string' &&
+      !app.uploads.isOwnedKey(data.avatarObjectKey, sub, 'avatar')
+    ) {
+      return reply.status(400).send({ error: 'BadRequest', message: 'avatar key not owned' });
+    }
     const user = await prisma.user.update({ where: { id: sub }, data });
     return serializeUser(user, app.uploads);
   });

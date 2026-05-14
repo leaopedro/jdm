@@ -43,7 +43,7 @@ export const buildFakeAbacatePay = (): FakeAbacatePay => {
     getPixBilling: (id: string) => {
       fake.calls.push({ method: 'getPixBilling', args: [id] });
       if (fake.nextStatus) return Promise.resolve(fake.nextStatus);
-      return Promise.resolve({ id, status: 'PENDING', paidAt: null });
+      return Promise.resolve({ id, status: 'PAID', paidAt: new Date().toISOString() });
     },
 
     verifyWebhookSignature: (_payload: Buffer, _signature: string) => {

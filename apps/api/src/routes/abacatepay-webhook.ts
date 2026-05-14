@@ -9,6 +9,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
 import { releaseAllReservationsForOrders } from '../services/orders/expire.js';
+import { revokeTicketsForRefundedOrder } from '../services/orders/revoke.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
@@ -182,7 +183,7 @@ const cartSettlementPriority = (kind: 'ticket' | 'extras_only' | 'product' | 'mi
 
 export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
   await app.register(rateLimit, {
-    max: 60,
+    max: 20,
     timeWindow: '1 minute',
     keyGenerator: (req) => req.ip,
   });
@@ -250,18 +251,25 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'missing id or event field' });
     }
 
-    // H1: Reject sandbox/devMode events in production unless an explicit
-    // override is enabled for controlled internal testing.
+    // M-9: Fail closed — reject sandbox/devMode events in production unless an
+    // explicit override is enabled for controlled internal testing.
     if (
       event.devMode &&
       app.env.NODE_ENV === 'production' &&
       !app.env.ABACATEPAY_DEV_WEBHOOK_ENABLED
     ) {
+      Sentry.captureMessage('abacatepay webhook: devMode event received in production', {
+        level: 'error',
+        tags: { kind: 'webhook-devmode-in-prod', provider: 'abacatepay' },
+        extra: { eventId: event.id, eventType: event.event },
+      });
       request.log.warn(
         { eventId: event.id, eventType: event.event },
         'abacatepay webhook: rejected devMode event in production',
       );
-      return reply.status(200).send({ ok: true });
+      return reply
+        .status(400)
+        .send({ error: 'BadRequest', message: 'devMode events rejected in production' });
     }
 
     // L6: Reject unknown event types
@@ -301,6 +309,30 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         });
         await markProcessed(event.id, event);
         return reply.status(200).send({ ok: true });
+      }
+
+      // H-3: Re-fetch provider state before trusting webhook payload.
+      // On mismatch do NOT mark processed — return 409 so AbacatePay retries.
+      // A transiently stale status will resolve on the next delivery.
+      try {
+        const upstream = await app.abacatepay.getPixBilling(billingId);
+        if (upstream.status !== 'PAID') {
+          request.log.warn(
+            { billingId, upstreamStatus: upstream.status, eventId: event.id },
+            'abacatepay webhook: provider re-fetch shows non-PAID status, deferring',
+          );
+          Sentry.captureMessage('abacatepay webhook: settlement deferred by provider re-fetch', {
+            level: 'warning',
+            tags: { kind: 'webhook-trust-mismatch', provider: 'abacatepay' },
+            extra: { billingId, upstreamStatus: upstream.status },
+          });
+          return reply.status(409).send({ ok: false, reason: 'upstream-not-paid' });
+        }
+      } catch (fetchErr) {
+        request.log.warn(
+          { err: fetchErr, billingId },
+          'abacatepay webhook: provider re-fetch failed, proceeding with caution',
+        );
       }
 
       // Cart-level settlement: one billing → N orders flipped atomically
@@ -644,8 +676,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
     // Failure events: release inventory immediately rather than waiting for TTL sweep.
     // `lost` mirrors Stripe `payment_intent.payment_failed` / `checkout.session.expired`
     // (pending Pix never paid). `refunded` and `disputed` may arrive on a previously
-    // paid order; current scope only releases pending-order reservations — paid-order
-    // ticket revocation belongs to a future refund flow (JDMA-S4b.3 / refund UI).
+    // paid order; tickets for paid orders are revoked after the status transition.
     if (
       event.event === 'transparent.lost' ||
       event.event === 'transparent.refunded' ||
@@ -702,7 +733,6 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
 
       let releasedCount = 0;
-      let refundedPaidCount = 0;
       if (pendingOrderIds.length > 0 || paidOrderIds.length > 0) {
         await prisma.$transaction(async (tx) => {
           const updated = await tx.order.updateMany({
@@ -723,13 +753,18 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             });
           }
           if (event.event === 'transparent.refunded' && paidOrderIds.length > 0) {
-            const refundedPaid = await tx.order.updateMany({
+            await tx.order.updateMany({
               where: { id: { in: paidOrderIds }, status: 'paid' },
               data: { status: 'refunded', refundedAt: new Date() },
             });
-            refundedPaidCount = refundedPaid.count;
           }
         });
+      }
+
+      if (paidOrderIds.length > 0) {
+        for (const oid of paidOrderIds) {
+          await revokeTicketsForRefundedOrder(oid);
+        }
       }
 
       const firstTime = await markProcessed(event.id, event);
@@ -738,7 +773,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           eventId: event.id,
           eventType: event.event,
           released: releasedCount,
-          refundedPaid: refundedPaidCount,
+          revokedPaid: paidOrderIds.length,
           orderIds: pendingOrderIds,
           paidOrderIds,
           firstTime,

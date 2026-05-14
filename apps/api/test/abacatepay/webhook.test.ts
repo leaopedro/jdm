@@ -407,12 +407,13 @@ describe('POST /abacatepay/webhook', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  // --- devMode (H1) ---
+  // --- devMode (M-9) ---
 
-  it('skips processing for devMode events in production', async () => {
+  it('returns 400 for devMode events in production', async () => {
     const prodEnv: Env = {
       ...env,
-      NODE_ENV: 'production',
+      NODE_ENV: 'production' as const,
+      ABACATEPAY_DEV_WEBHOOK_ENABLED: false,
       RESEND_API_KEY: 'fake-resend-key',
       SENTRY_DSN: undefined,
       WORKER_ENABLED: false,
@@ -423,6 +424,7 @@ describe('POST /abacatepay/webhook', () => {
       push: new DevPushSender(),
     });
 
+    Sentry.captureMessage.mockClear();
     const payload = makePayload({ id: 'evt_devmode_1', devMode: true });
     const res = await prodApp.inject({
       method: 'POST',
@@ -434,12 +436,25 @@ describe('POST /abacatepay/webhook', () => {
       payload,
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: 'BadRequest',
+      message: 'devMode events rejected in production',
+    });
+
+    // Sentry must be alerted
+    const devModeCalls = Sentry.captureMessage.mock.calls.filter(
+      ([msg]) => typeof msg === 'string' && msg.includes('devMode event received in production'),
+    );
+    expect(devModeCalls).toHaveLength(1);
+
     // Event should NOT be stored — it was rejected
     const record = await prisma.paymentWebhookEvent.findUnique({
       where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_devmode_1' } },
     });
     expect(record).toBeNull();
+
+    Sentry.captureMessage.mockClear();
     await prodApp.close();
   });
 
@@ -1008,6 +1023,37 @@ describe('POST /abacatepay/webhook', () => {
       expect(res.statusCode).toBe(200);
       const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updatedOrder.status).toBe('paid');
+    });
+
+    it('transparent.completed rejects when provider re-fetch shows non-PAID status', async () => {
+      const { user } = await createUser();
+      const providerRef = `pix_refetch_${Date.now()}`;
+      const { order } = await seedEventTierOrder(user.id, { providerRef });
+
+      abacatepay.nextStatus = { id: providerRef, status: 'EXPIRED', paidAt: null };
+
+      const payload = makeV2TransparentCompletedPayload(providerRef, undefined, {
+        metadata: { orderId: order.id },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: { 'content-type': 'application/json', 'x-webhook-signature': 'valid-sig' },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ ok: false, reason: 'upstream-not-paid' });
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('pending');
+
+      const parsed = JSON.parse(payload) as { id: string };
+      const deduped = await prisma.paymentWebhookEvent.findFirst({
+        where: { eventId: parsed.id },
+      });
+      expect(deduped).toBeNull();
     });
   });
 
@@ -1898,6 +1944,50 @@ describe('POST /abacatepay/webhook', () => {
       expect(updated.refundedAt).toBeInstanceOf(Date);
       const tierAfter = await prisma.ticketTier.findUniqueOrThrow({ where: { id: tier.id } });
       expect(tierAfter.quantitySold).toBe(1);
+    });
+
+    it('transparent.refunded revokes tickets for paid orders', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_refunded_revoke_${Date.now()}`;
+      const { event, tier, order } = await seedEventTierOrder(user.id, {
+        status: 'paid',
+        providerRef: billingId,
+      });
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { paidAt: new Date() },
+      });
+
+      const ticket = await prisma.ticket.create({
+        data: {
+          orderId: order.id,
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+
+      const res = await post(
+        makeV2FailurePayload(
+          'transparent.refunded',
+          billingId,
+          `evt_refunded_revoke_${Date.now()}`,
+          {
+            metadata: { orderId: order.id },
+          },
+        ),
+      );
+
+      expect(res.statusCode).toBe(200);
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('refunded');
+
+      const updatedTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(updatedTicket.status).toBe('revoked');
     });
 
     it('transparent.lost falls back to providerRef lookup when metadata missing', async () => {

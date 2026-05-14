@@ -14,6 +14,10 @@ export const adminStorePhotoRoutes: FastifyPluginAsync = async (app) => {
     const { productId } = request.params as { productId: string };
     const input = adminStoreProductPhotoCreateSchema.parse(request.body);
 
+    if (!app.uploads.isOwnedKey(input.objectKey, sub, 'product_photo')) {
+      return reply.status(400).send({ error: 'BadRequest', message: 'object key not owned' });
+    }
+
     const product = await prisma.product.findUnique({
       where: { id: productId },
       select: { id: true },
