@@ -172,9 +172,7 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
         carId: carId ?? null,
         body,
         status: 'visible',
-        photos: photoObjectKeys?.length
-          ? { create: photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })) }
-          : undefined,
+        ...(photoObjectKeys?.length && { photos: { create: photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })) } }),
       },
       select: POST_SELECT,
     });

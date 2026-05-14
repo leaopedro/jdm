@@ -482,6 +482,6 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
     expect(body.mine).toBe(true);
     const rows = await prisma.feedReaction.findMany({ where: { postId: post.id, userId: user.id } });
     expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe('dislike');
+    expect(rows[0]?.kind).toBe('dislike');
   });
 });
