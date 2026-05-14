@@ -39,7 +39,7 @@ export class R2Uploads implements Uploads {
       ContentLength: input.size,
       ContentDisposition: 'inline',
       CacheControl: UPLOAD_CACHE_CONTROL,
-      Metadata: { kind: input.kind, uid: input.userId },
+      Metadata: { kind: input.kind },
     });
     const uploadUrl = await getSignedUrl(this.client, command, { expiresIn: this.ttlSeconds });
     return {
@@ -53,7 +53,6 @@ export class R2Uploads implements Uploads {
         'content-disposition': 'inline',
         'cache-control': UPLOAD_CACHE_CONTROL,
         'x-amz-meta-kind': input.kind,
-        'x-amz-meta-uid': input.userId,
       },
     };
   }

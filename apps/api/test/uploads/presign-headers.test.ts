@@ -63,13 +63,13 @@ describe('presign response headers binding', () => {
     expect(body.headers['content-length']).toBe('2048');
   });
 
-  it('includes x-amz-meta-kind and x-amz-meta-uid in headers', async () => {
+  it('includes x-amz-meta-kind in headers and omits uid', async () => {
     const { user } = await createUser({ verified: true });
     const res = await presign(app, user.id);
     expect(res.statusCode).toBe(200);
     const body = res.json<{ headers: Record<string, string> }>();
     expect(body.headers['x-amz-meta-kind']).toBe('avatar');
-    expect(body.headers['x-amz-meta-uid']).toBe(user.id);
+    expect(body.headers['x-amz-meta-uid']).toBeUndefined();
   });
 
   it('webp content type also gets all bound headers', async () => {

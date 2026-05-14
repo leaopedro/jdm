@@ -24,7 +24,6 @@ export class DevUploads implements Uploads {
         'content-disposition': 'inline',
         'cache-control': UPLOAD_CACHE_CONTROL,
         'x-amz-meta-kind': input.kind,
-        'x-amz-meta-uid': input.userId,
       },
     };
   }
