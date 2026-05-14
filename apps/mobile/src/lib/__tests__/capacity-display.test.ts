@@ -37,10 +37,10 @@ describe('capacityLabel', () => {
     expect(capacityLabel(makeDescriptor({ mode: 'absolute', showAbsolute: false }))).toBeNull();
   });
 
-  it('returns count label in percentage_threshold mode when showPercentage', () => {
+  it('returns percentage label in percentage_threshold mode when showPercentage', () => {
     expect(
-      capacityLabel(makeDescriptor({ mode: 'percentage_threshold', showAbsolute: false, showPercentage: true, remaining: 3 })),
-    ).toBe('3 disponíveis');
+      capacityLabel(makeDescriptor({ mode: 'percentage_threshold', showAbsolute: false, showPercentage: true, remaining: null, remainingPercent: 8 })),
+    ).toBe('8% disponíveis');
   });
 
   it('returns null in percentage_threshold mode when showPercentage false (above threshold)', () => {
