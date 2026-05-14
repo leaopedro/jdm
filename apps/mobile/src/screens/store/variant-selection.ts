@@ -1,5 +1,7 @@
 import type { StoreProductVariant } from '@jdm/shared/store';
 
+import { storeCopy } from '../../copy/store';
+
 const MAX_PRODUCT_QUANTITY = 20;
 
 export const isVariantSelectable = (variant: StoreProductVariant): boolean =>
@@ -25,10 +27,24 @@ export const clampProductQuantity = (
   return Math.max(1, Math.min(nextQuantity, stockLimit));
 };
 
-export const getVariantStockLabel = (variant: StoreProductVariant): string => {
-  if (!variant.isActive) return 'Indisponível';
-  if (variant.stockOnHand <= 0) return 'Esgotado';
-  if (variant.stockOnHand === 1) return 'Última unidade';
-  if (variant.stockOnHand <= 5) return `${variant.stockOnHand} restantes`;
-  return 'Pronta entrega';
+export const getVariantStockLabel = (variant: StoreProductVariant): string | null => {
+  const { capacityDisplay } = variant;
+
+  if (capacityDisplay.status === 'unavailable' || !variant.isActive) {
+    return storeCopy.stock.unavailable;
+  }
+
+  if (capacityDisplay.status === 'sold_out' || variant.stockOnHand <= 0) {
+    return storeCopy.stock.soldOut;
+  }
+
+  if (capacityDisplay.showAbsolute && capacityDisplay.remaining != null) {
+    return storeCopy.stock.remaining(capacityDisplay.remaining);
+  }
+
+  if (capacityDisplay.showPercentage && capacityDisplay.remainingPercent != null) {
+    return storeCopy.stock.remainingPercent(capacityDisplay.remainingPercent);
+  }
+
+  return null;
 };
