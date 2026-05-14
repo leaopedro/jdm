@@ -33,6 +33,12 @@ export const storeCopy = {
     decreaseQuantity: 'Diminuir quantidade',
     increaseQuantity: 'Aumentar quantidade',
   },
+  stock: {
+    unavailable: 'Indisponível',
+    soldOut: 'Esgotado',
+    remaining: (count: number) => `${count} restantes`,
+    remainingPercent: (percent: number) => `${percent}% restantes`,
+  },
   variantPicker: {
     title: 'Escolha a variação',
     subtitle: 'Selecione tamanho, modelo ou opção disponível antes de adicionar ao carrinho.',

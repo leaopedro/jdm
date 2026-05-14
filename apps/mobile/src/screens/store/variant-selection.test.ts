@@ -59,11 +59,70 @@ describe('store variant selection helpers', () => {
     expect(clampProductQuantity(25, variant({ stockOnHand: 50 }))).toBe(20);
   });
 
-  it('formats stock labels for the storefront detail screen', () => {
+  it('formats stock labels for the storefront detail screen from the capacity policy', () => {
     expect(getVariantStockLabel(variant({ isActive: false }))).toBe('Indisponível');
     expect(getVariantStockLabel(variant({ stockOnHand: 0 }))).toBe('Esgotado');
-    expect(getVariantStockLabel(variant({ stockOnHand: 1 }))).toBe('Última unidade');
-    expect(getVariantStockLabel(variant({ stockOnHand: 4 }))).toBe('4 restantes');
-    expect(getVariantStockLabel(variant({ stockOnHand: 12 }))).toBe('Pronta entrega');
+    expect(
+      getVariantStockLabel(
+        variant({
+          stockOnHand: 12,
+          capacityDisplay: {
+            status: 'available',
+            mode: 'absolute',
+            showAbsolute: true,
+            showPercentage: false,
+            remaining: 12,
+            remainingPercent: 100,
+            thresholdPercent: 15,
+          },
+        }),
+      ),
+    ).toBe('12 restantes');
+    expect(
+      getVariantStockLabel(
+        variant({
+          stockOnHand: 1,
+          capacityDisplay: {
+            status: 'available',
+            mode: 'percentage_threshold',
+            showAbsolute: false,
+            showPercentage: true,
+            remaining: null,
+            remainingPercent: 10,
+            thresholdPercent: 15,
+          },
+        }),
+      ),
+    ).toBe('10% restantes');
+    expect(
+      getVariantStockLabel(
+        variant({
+          capacityDisplay: {
+            status: 'available',
+            mode: 'percentage_threshold',
+            showAbsolute: false,
+            showPercentage: false,
+            remaining: null,
+            remainingPercent: null,
+            thresholdPercent: 15,
+          },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      getVariantStockLabel(
+        variant({
+          capacityDisplay: {
+            status: 'available',
+            mode: 'hidden',
+            showAbsolute: false,
+            showPercentage: false,
+            remaining: null,
+            remainingPercent: null,
+            thresholdPercent: 15,
+          },
+        }),
+      ),
+    ).toBeNull();
   });
 });

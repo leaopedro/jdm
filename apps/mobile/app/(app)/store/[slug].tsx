@@ -73,6 +73,7 @@ export default function StoreProductDetailScreen() {
   }, [product, selectedVariantId]);
 
   const purchaseMode = product ? getDetailPurchaseMode(product, selectedVariantId) : 'unavailable';
+  const selectedVariantStockLabel = selectedVariant ? getVariantStockLabel(selectedVariant) : null;
   const heroImage = product?.images[0]?.url ?? product?.coverImageUrl ?? null;
 
   const updateQuantity = (nextQuantity: number) => {
@@ -153,9 +154,11 @@ export default function StoreProductDetailScreen() {
         {selectedVariant ? (
           <View style={styles.priceRow}>
             <Text variant="h2">{formatBRL(selectedVariant.displayPriceCents)}</Text>
-            <View style={styles.stockPill}>
-              <Text style={styles.stockPillText}>{getVariantStockLabel(selectedVariant)}</Text>
-            </View>
+            {selectedVariantStockLabel ? (
+              <View style={styles.stockPill}>
+                <Text style={styles.stockPillText}>{selectedVariantStockLabel}</Text>
+              </View>
+            ) : null}
           </View>
         ) : hasMultipleVariants ? (
           <Text variant="bodySm" tone="secondary">
@@ -204,8 +207,9 @@ export default function StoreProductDetailScreen() {
                 <>
                   <Text style={styles.variantTriggerValue}>{selectedVariant.title}</Text>
                   <Text style={styles.variantMeta}>
-                    {formatBRL(selectedVariant.displayPriceCents)} ·{' '}
-                    {getVariantStockLabel(selectedVariant)}
+                    {selectedVariantStockLabel
+                      ? `${formatBRL(selectedVariant.displayPriceCents)} · ${selectedVariantStockLabel}`
+                      : formatBRL(selectedVariant.displayPriceCents)}
                   </Text>
                 </>
               ) : (
@@ -222,7 +226,9 @@ export default function StoreProductDetailScreen() {
                 {formatBRL(selectedVariant.displayPriceCents)}
               </Text>
             </View>
-            <Text style={styles.variantMeta}>{getVariantStockLabel(selectedVariant)}</Text>
+            {selectedVariantStockLabel ? (
+              <Text style={styles.variantMeta}>{selectedVariantStockLabel}</Text>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -304,6 +310,7 @@ export default function StoreProductDetailScreen() {
               {product.variants.map((variant) => {
                 const isSelected = selectedVariant?.id === variant.id;
                 const selectable = isVariantSelectable(variant);
+                const stockLabel = getVariantStockLabel(variant);
                 return (
                   <Pressable
                     key={variant.id}
@@ -325,7 +332,7 @@ export default function StoreProductDetailScreen() {
                   >
                     <Text style={styles.variantTitle}>{variant.title}</Text>
                     <Text style={styles.variantPrice}>{formatBRL(variant.displayPriceCents)}</Text>
-                    <Text style={styles.variantMeta}>{getVariantStockLabel(variant)}</Text>
+                    {stockLabel ? <Text style={styles.variantMeta}>{stockLabel}</Text> : null}
                   </Pressable>
                 );
               })}
