@@ -225,6 +225,141 @@ describe('confirmedCarsResponseSchema — privacy boundary', () => {
   });
 });
 
+// ── Interaction state machine ─────────────────────────────────────────────────
+// Pure model of ConfirmedCarsSection's 3-field state machine.
+// Extracted from the component so we can exercise navigation paths without
+// rendering React Native.
+//
+// State fields (mirror component useState declarations):
+//   selectedCar  — car currently shown in CarDetailSheet
+//   allSheetOpen — AllCarsSheet visibility
+//   carFromAll   — whether selectedCar was opened via AllCarsSheet
+
+type CarRef = { ref: string };
+
+type SheetState = {
+  selectedCar: CarRef | null;
+  allSheetOpen: boolean;
+  carFromAll: boolean;
+};
+
+const initial: SheetState = { selectedCar: null, allSheetOpen: false, carFromAll: false };
+
+// Mirrors: onPress={() => setSelectedCar(car)} (inline avatar)
+const selectInline = (s: SheetState, car: CarRef): SheetState => ({
+  ...s,
+  selectedCar: car,
+  // carFromAll intentionally stays as-is (component doesn't touch it here)
+});
+
+// Mirrors: onPress={() => setAllSheetOpen(true)} (overflow button / viewAll)
+const openAllSheet = (s: SheetState): SheetState => ({ ...s, allSheetOpen: true });
+
+// Mirrors: onSelectCar={(car) => { setAllSheetOpen(false); setCarFromAll(true); setSelectedCar(car) }}
+const selectFromAll = (s: SheetState, car: CarRef): SheetState => ({
+  selectedCar: car,
+  allSheetOpen: false,
+  carFromAll: true,
+});
+
+// Mirrors: onClose={() => { const fromAll = carFromAll; setSelectedCar(null); setCarFromAll(false); if (fromAll) setAllSheetOpen(true); }}
+// This is called by BOTH the backdrop press AND the explicit X button.
+const closeCarDetail = (s: SheetState): SheetState => {
+  const fromAll = s.carFromAll;
+  return {
+    selectedCar: null,
+    carFromAll: false,
+    allSheetOpen: fromAll ? true : s.allSheetOpen,
+  };
+};
+
+// Mirrors: onClose={() => setAllSheetOpen(false)}
+const closeAllSheet = (s: SheetState): SheetState => ({ ...s, allSheetOpen: false });
+
+const CAR_A: CarRef = { ref: 'car_a' };
+const CAR_B: CarRef = { ref: 'car_b' };
+
+describe('ConfirmedCarsSection — interaction state machine', () => {
+  describe('direct inline selection', () => {
+    it('selecting inline car opens CarDetailSheet, allSheetOpen stays false', () => {
+      const s = selectInline(initial, CAR_A);
+      expect(s.selectedCar).toEqual(CAR_A);
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.carFromAll).toBe(false);
+    });
+
+    it('closing inline CarDetailSheet does NOT reopen AllCarsSheet', () => {
+      const s = closeCarDetail(selectInline(initial, CAR_A));
+      expect(s.selectedCar).toBeNull();
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.carFromAll).toBe(false);
+    });
+  });
+
+  describe('AllCarsSheet → CarDetailSheet → back navigation', () => {
+    it('opening AllCarsSheet sets allSheetOpen=true, selectedCar stays null', () => {
+      const s = openAllSheet(initial);
+      expect(s.allSheetOpen).toBe(true);
+      expect(s.selectedCar).toBeNull();
+    });
+
+    it('selecting car from AllCarsSheet: sheet closes, carFromAll=true, car shown', () => {
+      const s = selectFromAll(openAllSheet(initial), CAR_B);
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toEqual(CAR_B);
+      expect(s.carFromAll).toBe(true);
+    });
+
+    it('closing CarDetailSheet when opened from AllCarsSheet restores AllCarsSheet', () => {
+      const opened = selectFromAll(openAllSheet(initial), CAR_B);
+      const closed = closeCarDetail(opened);
+      expect(closed.selectedCar).toBeNull();
+      expect(closed.allSheetOpen).toBe(true); // AllCarsSheet restored
+      expect(closed.carFromAll).toBe(false);
+    });
+
+    it('full round-trip: AllCarsSheet → car detail → close → AllCarsSheet still open', () => {
+      let s = initial;
+      s = openAllSheet(s); // user taps "Ver todos"
+      s = selectFromAll(s, CAR_A); // taps a car in AllCarsSheet
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toEqual(CAR_A);
+      s = closeCarDetail(s); // taps X or backdrop
+      expect(s.selectedCar).toBeNull();
+      expect(s.allSheetOpen).toBe(true); // back at AllCarsSheet
+      s = closeAllSheet(s); // taps close on AllCarsSheet
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toBeNull();
+    });
+  });
+
+  describe('explicit close affordance (X button)', () => {
+    it('X button calls same onClose as backdrop — same state result', () => {
+      // CarDetailSheet.closeBtn and backdrop both call props.onClose.
+      // State result is identical regardless of which trigger fires.
+      const fromInline = closeCarDetail(selectInline(initial, CAR_A));
+      const fromAll = closeCarDetail(selectFromAll(openAllSheet(initial), CAR_A));
+      // inline path: allSheetOpen stays false
+      expect(fromInline.allSheetOpen).toBe(false);
+      // all-cars path: allSheetOpen restored
+      expect(fromAll.allSheetOpen).toBe(true);
+      // in both cases selectedCar cleared and carFromAll reset
+      expect(fromInline.selectedCar).toBeNull();
+      expect(fromAll.selectedCar).toBeNull();
+      expect(fromInline.carFromAll).toBe(false);
+      expect(fromAll.carFromAll).toBe(false);
+    });
+  });
+
+  describe('closing AllCarsSheet directly', () => {
+    it('closes AllCarsSheet without affecting selectedCar', () => {
+      const s = closeAllSheet(openAllSheet(initial));
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toBeNull();
+    });
+  });
+});
+
 // ── PT-BR copy completeness ───────────────────────────────────────────────────
 
 describe('PT-BR copy — confirmedCars', () => {
