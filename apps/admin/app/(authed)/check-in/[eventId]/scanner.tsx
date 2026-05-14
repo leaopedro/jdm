@@ -29,7 +29,7 @@ export function isScanLocked(state: ScanState): boolean {
 export function makeScanCallback(
   stateRef: { current: ScanState },
   lastScanRef: { current: { code: string; at: number } | null },
-  onScan: (code: string) => void,
+  onScan: (code: string) => unknown,
 ): (res: { getText: () => string } | null) => void {
   return (res) => {
     if (!res) return;
