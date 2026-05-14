@@ -9,6 +9,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import type { AbacateWebhookEvent } from '../services/abacatepay/index.js';
 import { releaseAllReservationsForOrders } from '../services/orders/expire.js';
+import { revokeTicketsForRefundedOrder } from '../services/orders/revoke.js';
 import { settlePaidOrder } from '../services/orders/settle.js';
 import { sendTransactionalPush } from '../services/push/transactional.js';
 import { EventPickupAssignmentUnavailableError } from '../services/store/event-pickup.js';
@@ -644,8 +645,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
     // Failure events: release inventory immediately rather than waiting for TTL sweep.
     // `lost` mirrors Stripe `payment_intent.payment_failed` / `checkout.session.expired`
     // (pending Pix never paid). `refunded` and `disputed` may arrive on a previously
-    // paid order; current scope only releases pending-order reservations — paid-order
-    // ticket revocation belongs to a future refund flow (JDMA-S4b.3 / refund UI).
+    // paid order; tickets for paid orders are revoked after the status transition.
     if (
       event.event === 'transparent.lost' ||
       event.event === 'transparent.refunded' ||
@@ -730,6 +730,12 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             refundedPaidCount = refundedPaid.count;
           }
         });
+      }
+
+      if (refundedPaidCount > 0) {
+        for (const oid of paidOrderIds) {
+          await revokeTicketsForRefundedOrder(oid);
+        }
       }
 
       const firstTime = await markProcessed(event.id, event);

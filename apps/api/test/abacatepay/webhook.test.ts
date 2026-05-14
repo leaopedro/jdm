@@ -1900,6 +1900,50 @@ describe('POST /abacatepay/webhook', () => {
       expect(tierAfter.quantitySold).toBe(1);
     });
 
+    it('transparent.refunded revokes tickets for paid orders', async () => {
+      const { user } = await createUser({ verified: true });
+      const billingId = `pix_refunded_revoke_${Date.now()}`;
+      const { event, tier, order } = await seedEventTierOrder(user.id, {
+        status: 'paid',
+        providerRef: billingId,
+      });
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { paidAt: new Date() },
+      });
+
+      const ticket = await prisma.ticket.create({
+        data: {
+          orderId: order.id,
+          userId: user.id,
+          eventId: event.id,
+          tierId: tier.id,
+          source: 'purchase',
+          status: 'valid',
+        },
+      });
+
+      const res = await post(
+        makeV2FailurePayload(
+          'transparent.refunded',
+          billingId,
+          `evt_refunded_revoke_${Date.now()}`,
+          {
+            metadata: { orderId: order.id },
+          },
+        ),
+      );
+
+      expect(res.statusCode).toBe(200);
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('refunded');
+
+      const updatedTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+      expect(updatedTicket.status).toBe('revoked');
+    });
+
     it('transparent.lost falls back to providerRef lookup when metadata missing', async () => {
       const { user } = await createUser({ verified: true });
       const billingId = `pix_lost_fallback_${Date.now()}`;
