@@ -5,6 +5,8 @@
 > **> note (2026-05-04, JDMA-225):** product rule is **not** one-ticket-per-user/event. Real invariant is `maxTicketsPerUser` per event; issuance/refund logic must enforce cap as `existingValidCount + order.quantity <= event.maxTicketsPerUser`. Historical text below mentioning one-ticket-per-user should be read as superseded by this note.
 >
 > **> note (2026-05-05, JDMA-254):** cart redesign follow-up PRs #109/#110/#112/#114 are merged on `main`, but not fully promoted on `production` yet. Do not flip roadmap 4.1–4.7 to `[x]` until post-deploy parity smoke (`C1/C3/C4`, plus `P1/P2` when Pix is in scope) is captured.
+>
+> **> note (2026-05-13, JDMA-574):** mobile-web resume path for Stripe Checkout Session orders is now URL-based, not API-based. Orders created via hosted Checkout have `Order.providerRef = null`, so `POST /orders/:id/resume` returns 409 for them and the native PaymentSheet resume flow cannot recover the session. The mobile-web fix (PR #276, commit `19cff47`) captures the Stripe Checkout URL at order creation and reopens it from `/profile/orders`, guarded by a fresh `GET /orders/:id` check (only navigate when `status === 'pending'` and `expiresAt` is null or future) and scoped to the canonical (first) order of a multi-order cart to prevent sibling sharing. Pix and native Stripe resume are unchanged. New mobile modules: `src/cart/resume-web-checkout.ts`, `resume-selector.ts`, `web-pending-checkout.ts`, and PT-BR copy keys `payWebUnavailable` / `payWebUnverified`. See "Post-merge follow-ups" at the bottom of this plan.
 
 **Goal:** An authenticated attendee can buy a ticket for a published event via Stripe (card + Apple Pay), receive a server-signed QR-coded `Ticket`, and view it in the mobile "Meus ingressos" tab. Covers roadmap 4.1–4.7. Pix (4.8–4.12) and check-in (F5) are separate plans.
 
@@ -2667,3 +2669,35 @@ Once the PR is merged AND the API is redeployed on Railway AND the mobile dev-cl
 - Push notification on ticket issuance (F6).
 - Rate limiting on `/orders` and `/stripe/webhook` (cross-cutting).
 - EAS dev-client build automation (roadmap 0.9, still deferred).
+
+---
+
+## Post-merge follow-ups
+
+### ✅ JDMA-574 — mobile-web Stripe order resume via hosted checkout URL
+
+- **Merged:** 2026-05-13, PR [#276](https://github.com/leaopedro/jdm/pull/276), commit `19cff47fa09a390f7556e2eda4d662fe86a573f9`.
+- **Problem:** Stripe Checkout Session orders created from mobile-web have `Order.providerRef = null`, so `POST /orders/:id/resume` returns 409 `OrderNotPending`. `/profile/orders` previously routed mobile-web pending orders through the native PaymentSheet resume flow, which always failed for the hosted-checkout path.
+- **Fix:**
+  - Capture the hosted Checkout URL alongside the pending order id at creation time (web-only persistence in mobile session storage).
+  - On resume click, navigate to the stored URL instead of calling the resume endpoint. Pix and native Stripe resume behavior unchanged.
+  - Re-validate freshness via `GET /orders/:id` before redirect. Only navigate when `status === 'pending'` AND `expiresAt` is null or in the future. Stripe Checkout Sessions remain payable past the local 15-min reservation, so a stale pending order could otherwise be paid after expiry.
+  - Scope the stored URL to the first sibling order id only. Previously the same Checkout Session URL was stored against every order id in a multi-order cart, letting any sibling reopen the shared Stripe session and pay the full cart even after sibling-level cancellations.
+- **Files touched (11):**
+  - `apps/mobile/app/(app)/profile/orders.tsx` — wire `ResumeWebStripeButton` and the three-kind resolver result.
+  - `apps/mobile/src/cart/resume-selector.ts` + test — pick the canonical sibling for URL storage.
+  - `apps/mobile/src/cart/resume-web-checkout.ts` + test — fresh-fetch and three-kind result (`redirect`, `stale`, `unverified`).
+  - `apps/mobile/src/cart/web-pending-checkout.ts` + test — session storage helpers.
+  - `apps/mobile/src/cart/web-stripe-redirect.ts` + test — scope URL persistence to the canonical order id.
+  - `apps/mobile/src/copy/orders.ts` — PT-BR copy keys `payWebUnavailable`, `payWebUnverified`.
+  - `apps/mobile/src/screens/buy/web-checkout.ts` — capture URL at creation.
+- **Resolver kinds (resume-web-checkout):**
+  - `redirect` — server confirms pending + reservation not lapsed; navigate to stored URL.
+  - `stale` — server returns a terminal status OR `expiresAt <= now`. UI clears the stored URL, shows `payWebUnavailable`, and reloads the list.
+  - `unverified` — freshness fetch threw. UI shows `payWebUnverified`, keeps the stored URL so the user can retry.
+- **Verification:** 202/202 mobile tests pass, 0 lint errors (per implementation log).
+- **Watch items / open edges:**
+  - URL is persisted in mobile-web session storage only. A cleared session or a different browser yields the PT-BR `payWebUnavailable` fallback — by design, but worth tracking if users report dead resume.
+  - Resolver depends on accurate `expiresAt` from `GET /orders/:id`. If the order route ever stops returning `expiresAt` on Checkout Session orders, `redirect` will gate too aggressively or too loosely.
+  - Pix and native Stripe resume paths still flow through `POST /orders/:id/resume` and are out of scope for this fix.
+  - No backend change. If we later normalize Checkout Session orders to expose a server-side resume URL on `GET /orders/:id`, the mobile-web session-storage hop can be removed.
