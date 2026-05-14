@@ -93,9 +93,7 @@ export function Scanner({ eventId }: { eventId: string }) {
     const reader = new BrowserMultiFormatReader();
 
     const handleScan = async (code: string) => {
-      const pending: ScanState = { kind: 'pending' };
-      stateRef.current = pending;
-      setState(pending);
+      setState({ kind: 'pending' });
       if (isVoucherCode(code)) {
         const data = await submitVoucherClaim(code, eventId);
         const next: ScanState = { kind: 'voucher-result', data, code };
@@ -134,6 +132,7 @@ export function Scanner({ eventId }: { eventId: string }) {
             const now = Date.now();
             const last = lastScanRef.current;
             if (last && last.code === code && now - last.at < RESCAN_COOLDOWN_MS) return;
+            stateRef.current = { kind: 'pending' };
             lastScanRef.current = { code, at: now };
             void handleScan(code);
           },
@@ -157,10 +156,9 @@ export function Scanner({ eventId }: { eventId: string }) {
   }, [eventId]);
 
   const dismiss = () => {
+    stateRef.current = { kind: 'idle' };
     lastScanRef.current = null;
-    const idle: ScanState = { kind: 'idle' };
-    stateRef.current = idle;
-    setState(idle);
+    setState({ kind: 'idle' });
   };
 
   return (
