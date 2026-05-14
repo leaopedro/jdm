@@ -18,6 +18,7 @@ import { carRoutes } from './routes/cars.js';
 import { cartRoutes } from './routes/cart.js';
 import { devUploadRoutes } from './routes/dev-uploads.js';
 import { eventRoutes } from './routes/events.js';
+import { feedRoutes } from './routes/feed.js';
 import { healthRoutes } from './routes/health.js';
 import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
 import { meNotificationsRoutes } from './routes/me-notifications.js';
@@ -106,6 +107,7 @@ export const buildApp = async (
   await app.register(uploadRoutes);
   await app.register(carRoutes);
   await app.register(eventRoutes);
+  await app.register(feedRoutes);
   await app.register(storeRoutes);
   await app.register(cartRoutes);
   await app.register(orderRoutes);
