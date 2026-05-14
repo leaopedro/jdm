@@ -352,13 +352,11 @@ export const stripeWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true, ignored: true, reason: 'partial-refund' });
       }
 
-      const refundResult = await prisma.order.updateMany({
+      await prisma.order.updateMany({
         where: { id: order.id, status: 'paid' },
         data: { status: 'refunded' },
       });
-      if (refundResult.count > 0) {
-        await revokeTicketsForRefundedOrder(order.id);
-      }
+      await revokeTicketsForRefundedOrder(order.id);
 
       const firstTime = await markProcessed(event.id, event);
       request.log.info(

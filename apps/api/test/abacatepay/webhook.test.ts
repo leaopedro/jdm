@@ -1043,11 +1043,17 @@ describe('POST /abacatepay/webhook', () => {
         payload,
       });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, ignored: true, reason: 'upstream-not-paid' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ ok: false, reason: 'upstream-not-paid' });
 
       const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updatedOrder.status).toBe('pending');
+
+      const parsed = JSON.parse(payload) as { id: string };
+      const deduped = await prisma.paymentWebhookEvent.findFirst({
+        where: { eventId: parsed.id },
+      });
+      expect(deduped).toBeNull();
     });
   });
 

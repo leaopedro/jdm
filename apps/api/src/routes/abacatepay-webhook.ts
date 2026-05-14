@@ -311,21 +311,22 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true });
       }
 
-      // H-3: Re-fetch provider state before trusting webhook payload
+      // H-3: Re-fetch provider state before trusting webhook payload.
+      // On mismatch do NOT mark processed — return 409 so AbacatePay retries.
+      // A transiently stale status will resolve on the next delivery.
       try {
         const upstream = await app.abacatepay.getPixBilling(billingId);
         if (upstream.status !== 'PAID') {
           request.log.warn(
             { billingId, upstreamStatus: upstream.status, eventId: event.id },
-            'abacatepay webhook: provider re-fetch shows non-PAID status, rejecting',
+            'abacatepay webhook: provider re-fetch shows non-PAID status, deferring',
           );
-          Sentry.captureMessage('abacatepay webhook: settlement rejected by provider re-fetch', {
+          Sentry.captureMessage('abacatepay webhook: settlement deferred by provider re-fetch', {
             level: 'warning',
             tags: { kind: 'webhook-trust-mismatch', provider: 'abacatepay' },
             extra: { billingId, upstreamStatus: upstream.status },
           });
-          await markProcessed(event.id, event);
-          return reply.status(200).send({ ok: true, ignored: true, reason: 'upstream-not-paid' });
+          return reply.status(409).send({ ok: false, reason: 'upstream-not-paid' });
         }
       } catch (fetchErr) {
         request.log.warn(
@@ -732,7 +733,6 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       }
 
       let releasedCount = 0;
-      let refundedPaidCount = 0;
       if (pendingOrderIds.length > 0 || paidOrderIds.length > 0) {
         await prisma.$transaction(async (tx) => {
           const updated = await tx.order.updateMany({
@@ -753,16 +753,15 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
             });
           }
           if (event.event === 'transparent.refunded' && paidOrderIds.length > 0) {
-            const refundedPaid = await tx.order.updateMany({
+            await tx.order.updateMany({
               where: { id: { in: paidOrderIds }, status: 'paid' },
               data: { status: 'refunded', refundedAt: new Date() },
             });
-            refundedPaidCount = refundedPaid.count;
           }
         });
       }
 
-      if (refundedPaidCount > 0) {
+      if (paidOrderIds.length > 0) {
         for (const oid of paidOrderIds) {
           await revokeTicketsForRefundedOrder(oid);
         }
@@ -774,7 +773,7 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
           eventId: event.id,
           eventType: event.event,
           released: releasedCount,
-          refundedPaid: refundedPaidCount,
+          revokedPaid: paidOrderIds.length,
           orderIds: pendingOrderIds,
           paidOrderIds,
           firstTime,

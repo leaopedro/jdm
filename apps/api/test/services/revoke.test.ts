@@ -159,4 +159,110 @@ describe('revokeTicketsForRefundedOrder', () => {
 
     await expect(revokeTicketsForRefundedOrder(order.id)).resolves.not.toThrow();
   });
+
+  it('revokes extras attached to another ticket for extras_only order', async () => {
+    const { user } = await createUser();
+    const { event, ticket, extra } = await seedPaidOrderWithTicket(user.id);
+
+    const extrasOrder = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        amountCents: 2000,
+        quantity: 1,
+        kind: 'extras_only',
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'pix_extras_only',
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+    const extra2 = await prisma.ticketExtra.create({
+      data: {
+        eventId: event.id,
+        name: 'Camiseta',
+        priceCents: 3000,
+        quantitySold: 1,
+        sortOrder: 1,
+      },
+    });
+    await prisma.orderExtra.create({
+      data: { orderId: extrasOrder.id, extraId: extra2.id, quantity: 1 },
+    });
+    const extraItem2 = await prisma.ticketExtraItem.create({
+      data: {
+        ticketId: ticket.id,
+        extraId: extra2.id,
+        code: `extra_${ticket.id}_${extra2.id}.hmac`,
+        status: 'valid',
+      },
+    });
+
+    await revokeTicketsForRefundedOrder(extrasOrder.id);
+
+    const updatedExtraItem = await prisma.ticketExtraItem.findUniqueOrThrow({
+      where: { id: extraItem2.id },
+    });
+    expect(updatedExtraItem.status).toBe('revoked');
+
+    const originalTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(originalTicket.status).toBe('valid');
+
+    const originalExtra = await prisma.ticketExtraItem.findFirst({
+      where: { ticketId: ticket.id, extraId: extra.id },
+    });
+    expect(originalExtra!.status).toBe('valid');
+  });
+
+  it('revokes pickup vouchers for product-only order', async () => {
+    const { user } = await createUser();
+    const { event, ticket } = await seedPaidOrderWithTicket(user.id);
+
+    const productOrder = await prisma.order.create({
+      data: {
+        userId: user.id,
+        eventId: event.id,
+        amountCents: 4000,
+        quantity: 1,
+        kind: 'product',
+        method: 'pix',
+        provider: 'abacatepay',
+        providerRef: 'pix_product',
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+    const orderItem = await prisma.orderItem.create({
+      data: {
+        orderId: productOrder.id,
+        kind: 'product',
+        eventId: event.id,
+        unitPriceCents: 4000,
+        subtotalCents: 4000,
+        quantity: 1,
+      },
+    });
+    const voucher = await prisma.pickupVoucher.create({
+      data: {
+        orderId: productOrder.id,
+        orderItemId: orderItem.id,
+        unitIndex: 0,
+        ticketId: ticket.id,
+        eventId: event.id,
+        code: `voucher_${productOrder.id}.hmac`,
+        status: 'valid',
+      },
+    });
+
+    await revokeTicketsForRefundedOrder(productOrder.id);
+
+    const updatedVoucher = await prisma.pickupVoucher.findUniqueOrThrow({
+      where: { id: voucher.id },
+    });
+    expect(updatedVoucher.status).toBe('revoked');
+
+    const originalTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(originalTicket.status).toBe('valid');
+  });
 });
