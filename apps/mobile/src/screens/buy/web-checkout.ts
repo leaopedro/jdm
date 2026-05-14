@@ -2,6 +2,7 @@ import type { CreateWebCheckoutRequest } from '@jdm/shared/orders';
 import { Platform } from 'react-native';
 
 import { createWebCheckout } from '~/api/orders';
+import { setPendingCheckoutUrl } from '~/cart/web-pending-checkout';
 
 export const isWeb = Platform.OS === 'web';
 
@@ -20,5 +21,6 @@ export async function startWebCheckout(
   const { successUrl, cancelUrl } = getReturnUrls();
   const result = await createWebCheckout({ ...order, successUrl, cancelUrl });
   sessionStorage.setItem('jdm:pendingOrderId', result.orderId);
+  setPendingCheckoutUrl(result.orderId, result.checkoutUrl);
   window.location.href = result.checkoutUrl;
 }

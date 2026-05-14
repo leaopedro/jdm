@@ -58,4 +58,6 @@ export const ordersCopy = {
   pay: 'Pagar',
   payError: 'Não foi possível retomar o pagamento.',
   payErrorBody: 'Tente novamente ou entre em contato com o suporte.',
+  payWebUnavailable: 'Sessão de pagamento expirou neste navegador. Refaça a compra para continuar.',
+  payWebUnverified: 'Não foi possível validar o pagamento agora. Tente novamente.',
 };

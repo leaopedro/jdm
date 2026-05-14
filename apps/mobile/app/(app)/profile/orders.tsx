@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,7 +18,10 @@ import {
 } from 'react-native';
 
 import { ApiError } from '~/api/client';
-import { cancelMyOrder, listMyOrders, resumeOrder } from '~/api/orders';
+import { cancelMyOrder, getOrder, listMyOrders, resumeOrder } from '~/api/orders';
+import { selectResumeKind } from '~/cart/resume-selector';
+import { resolveWebResume } from '~/cart/resume-web-checkout';
+import { clearPendingCheckoutUrl, getPendingCheckoutUrl } from '~/cart/web-pending-checkout';
 import { ordersCopy } from '~/copy/orders';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
@@ -128,6 +132,62 @@ function PayWithStripeButton({ orderId, reload }: { orderId: string; reload: () 
   );
 }
 
+// Resumes a Stripe Checkout Session order on web by reopening the hosted
+// checkout URL captured at order creation. Checkout Session orders have
+// Order.providerRef = null, so /orders/:id/resume returns 409 for them;
+// we therefore avoid that endpoint entirely on web. resolveWebResume
+// re-validates server-side freshness (status === 'pending' and reservation
+// not expired) before redirecting, so a stale order cannot be paid by
+// reopening a stored Stripe Checkout URL.
+function ResumeWebStripeButton({ orderId, reload }: { orderId: string; reload: () => unknown }) {
+  const [busy, setBusy] = useState(false);
+
+  const handlePay = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const action = await resolveWebResume(orderId, {
+        getStoredUrl: (id) => getPendingCheckoutUrl(id),
+        fetchOrderStatus: async (id) => {
+          const order = await getOrder(id);
+          return { status: order.status, expiresAt: order.expiresAt };
+        },
+      });
+      if (action.kind === 'redirect') {
+        if (typeof window !== 'undefined') {
+          window.location.href = action.url;
+        }
+        return;
+      }
+      if (action.kind === 'stale') {
+        // Server confirmed the order is no longer payable. Safe to drop
+        // the stored URL and reload the list to reflect the new status.
+        clearPendingCheckoutUrl(orderId);
+        showMessage(ordersCopy.payWebUnavailable);
+        reload();
+        return;
+      }
+      // action.kind === 'unverified': transient fetch failure. Keep the
+      // stored URL so a retry can still resume payment for a still-
+      // pending order; do NOT reload (the list state is unchanged).
+      showMessage(ordersCopy.payWebUnverified);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => void handlePay()}
+      accessibilityRole="button"
+      disabled={busy}
+      style={[styles.payLink, busy && styles.actionDisabled]}
+    >
+      <Text style={styles.payLinkText}>{ordersCopy.pay}</Text>
+    </Pressable>
+  );
+}
+
 function ResumeOrderButton({
   order,
   reload,
@@ -135,18 +195,26 @@ function ResumeOrderButton({
   order: MyOrder;
   reload: () => unknown;
 }): React.ReactElement | null {
-  // Pix orders never touch the Stripe SDK, so render them regardless of
-  // whether STRIPE_AVAILABLE is true.
-  if (order.provider === 'abacatepay') {
-    return <ResumePixButton orderId={order.id} />;
+  const kind = selectResumeKind(order, {
+    platform: Platform.OS === 'web' ? 'web' : 'native',
+    hasStoredCheckoutUrl:
+      Platform.OS === 'web' &&
+      order.provider === 'stripe' &&
+      getPendingCheckoutUrl(order.id) !== null,
+    stripeAvailable: STRIPE_AVAILABLE,
+  });
+
+  switch (kind) {
+    case 'pix':
+      return <ResumePixButton orderId={order.id} />;
+    case 'web':
+      return <ResumeWebStripeButton orderId={order.id} reload={reload} />;
+    case 'native-stripe':
+      return <PayWithStripeButton orderId={order.id} reload={reload} />;
+    case 'none':
+    default:
+      return null;
   }
-  // Stripe orders need StripeProvider. Hide the CTA when Stripe is not
-  // configured (e.g. preview builds without a publishable key) — there is
-  // no usable resume path for card orders in that environment.
-  if (STRIPE_AVAILABLE) {
-    return <PayWithStripeButton orderId={order.id} reload={reload} />;
-  }
-  return null;
 }
 
 function OrderCard({
