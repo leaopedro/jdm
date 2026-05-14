@@ -6,8 +6,22 @@
 // /orders/:id/resume cannot be reused here (those orders have
 // providerRef = null and the endpoint returns 409), so we re-validate
 // freshness via the read-only GET /orders/:id before redirecting.
+//
+// Result kinds are intentionally split into three cases:
+//   - redirect:   order is still pending and reservation has not lapsed.
+//   - stale:      server confirms the order is no longer payable
+//                 (terminal status or reservation expiresAt <= now).
+//                 Caller may safely discard the stored URL.
+//   - unverified: freshness could not be confirmed (fetch threw, e.g.
+//                 transient network/API error). Caller MUST keep the
+//                 stored URL so the user can retry — one bad fetch must
+//                 not permanently remove the only resume path for a
+//                 still-pending order.
 
-export type WebResumeAction = { kind: 'redirect'; url: string } | { kind: 'unavailable' };
+export type WebResumeAction =
+  | { kind: 'redirect'; url: string }
+  | { kind: 'stale' }
+  | { kind: 'unverified' };
 
 export interface ResumeFreshnessOrder {
   status: string;
@@ -25,22 +39,22 @@ export async function resolveWebResume(
   deps: ResolveWebResumeDeps,
 ): Promise<WebResumeAction> {
   const url = deps.getStoredUrl(orderId);
-  if (!url) return { kind: 'unavailable' };
+  if (!url) return { kind: 'stale' };
 
   let order: ResumeFreshnessOrder;
   try {
     order = await deps.fetchOrderStatus(orderId);
   } catch {
-    return { kind: 'unavailable' };
+    return { kind: 'unverified' };
   }
 
-  if (order.status !== 'pending') return { kind: 'unavailable' };
+  if (order.status !== 'pending') return { kind: 'stale' };
 
   if (order.expiresAt) {
     const nowMs = (deps.now ?? (() => new Date()))().getTime();
     const expiresMs = new Date(order.expiresAt).getTime();
     if (!Number.isFinite(expiresMs) || expiresMs <= nowMs) {
-      return { kind: 'unavailable' };
+      return { kind: 'stale' };
     }
   }
 

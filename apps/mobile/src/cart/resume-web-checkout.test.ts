@@ -25,38 +25,38 @@ describe('resolveWebResume', () => {
     expect(result.kind).toBe('redirect');
   });
 
-  it('returns unavailable when no URL is stored (does not call fetch)', async () => {
+  it('returns stale when no URL is stored and never calls fetch', async () => {
     const fetchOrderStatus = vi.fn();
     const result = await resolveWebResume('order-1', {
       getStoredUrl: () => null,
       fetchOrderStatus,
       now: () => NOW,
     });
-    expect(result).toEqual({ kind: 'unavailable' });
+    expect(result).toEqual({ kind: 'stale' });
     expect(fetchOrderStatus).not.toHaveBeenCalled();
   });
 
-  it('returns unavailable when order status is no longer pending', async () => {
+  it('returns stale for every non-pending terminal status', async () => {
     for (const status of ['paid', 'cancelled', 'expired', 'failed', 'refunded']) {
       const result = await resolveWebResume('order-1', {
         getStoredUrl: () => 'https://checkout.stripe.test/sess',
         fetchOrderStatus: vi.fn().mockResolvedValue({ status, expiresAt: FUTURE }),
         now: () => NOW,
       });
-      expect(result).toEqual({ kind: 'unavailable' });
+      expect(result).toEqual({ kind: 'stale' });
     }
   });
 
-  it('returns unavailable when reservation expiresAt is in the past even if status still says pending', async () => {
+  it('returns stale when reservation expiresAt is in the past even if status still says pending', async () => {
     const result = await resolveWebResume('order-1', {
       getStoredUrl: () => 'https://checkout.stripe.test/sess',
       fetchOrderStatus: vi.fn().mockResolvedValue({ status: 'pending', expiresAt: PAST }),
       now: () => NOW,
     });
-    expect(result).toEqual({ kind: 'unavailable' });
+    expect(result).toEqual({ kind: 'stale' });
   });
 
-  it('returns unavailable when expiresAt is exactly now (boundary)', async () => {
+  it('returns stale when expiresAt is exactly now (boundary)', async () => {
     const result = await resolveWebResume('order-1', {
       getStoredUrl: () => 'https://checkout.stripe.test/sess',
       fetchOrderStatus: vi
@@ -64,15 +64,15 @@ describe('resolveWebResume', () => {
         .mockResolvedValue({ status: 'pending', expiresAt: NOW.toISOString() }),
       now: () => NOW,
     });
-    expect(result).toEqual({ kind: 'unavailable' });
+    expect(result).toEqual({ kind: 'stale' });
   });
 
-  it('returns unavailable when fetchOrderStatus throws', async () => {
+  it('returns unverified when fetchOrderStatus throws (transient failure — caller must keep URL)', async () => {
     const result = await resolveWebResume('order-1', {
       getStoredUrl: () => 'https://checkout.stripe.test/sess',
       fetchOrderStatus: vi.fn().mockRejectedValue(new Error('network')),
       now: () => NOW,
     });
-    expect(result).toEqual({ kind: 'unavailable' });
+    expect(result).toEqual({ kind: 'unverified' });
   });
 });

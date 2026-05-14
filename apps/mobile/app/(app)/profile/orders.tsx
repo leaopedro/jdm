@@ -159,9 +159,18 @@ function ResumeWebStripeButton({ orderId, reload }: { orderId: string; reload: (
         }
         return;
       }
-      clearPendingCheckoutUrl(orderId);
-      showMessage(ordersCopy.payWebUnavailable);
-      reload();
+      if (action.kind === 'stale') {
+        // Server confirmed the order is no longer payable. Safe to drop
+        // the stored URL and reload the list to reflect the new status.
+        clearPendingCheckoutUrl(orderId);
+        showMessage(ordersCopy.payWebUnavailable);
+        reload();
+        return;
+      }
+      // action.kind === 'unverified': transient fetch failure. Keep the
+      // stored URL so a retry can still resume payment for a still-
+      // pending order; do NOT reload (the list state is unchanged).
+      showMessage(ordersCopy.payWebUnverified);
     } finally {
       setBusy(false);
     }
