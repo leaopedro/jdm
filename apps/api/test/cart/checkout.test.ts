@@ -225,6 +225,33 @@ describe('POST /cart/checkout', () => {
     expect(order.devFeeAmountCents).toBe(700);
   });
 
+  it('Stripe session amountCents is gross (dev-fee-inclusive) when extras are included', async () => {
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+    const { event, tier } = await seedPublishedEvent({ priceCents: 5000 });
+    const extra = await seedExtra(event.id, { priceCents: 2000 });
+
+    await addCartItem(app, token, {
+      eventId: event.id,
+      tierId: tier.id,
+      tickets: [{ extras: [extra.id] }],
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/cart/checkout',
+      headers: { authorization: token },
+      payload: { paymentMethod: 'card' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const sessionCall = stripe.calls.find((c) => c.kind === 'createCheckoutSession');
+    // Provider must be billed gross (dev-fee-inclusive) amount, not base amount.
+    // 5000 (tier base) + 2000 (extra base) = 7000 base; gross with 10% dev fee = 7700.
+    const payload = sessionCall!.payload as { amountCents: number };
+    expect(payload.amountCents).toBe(7700);
+  });
+
   it('transitions cart status to checking_out', async () => {
     const { user } = await createUser({ verified: true });
     const token = bearer(env, user.id);

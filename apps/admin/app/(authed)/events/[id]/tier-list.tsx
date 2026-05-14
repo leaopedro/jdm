@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminTicketTier } from '@jdm/shared/admin';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
@@ -31,6 +31,8 @@ const formatBRL = (cents: number) =>
 
 const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) => {
   const [state, action] = useActionState(updateTierAction.bind(null, eventId, tier.id), initial);
+  const [priceReais, setPriceReais] = useState((tier.priceCents / 100).toFixed(2));
+  const previewDisplayCents = Math.round(Number(priceReais) * 100 * (1 + tier.devFeePercent / 100));
   return (
     <tr className="border-b border-[color:var(--color-border)]">
       <td className="py-2">
@@ -45,12 +47,13 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
             type="number"
             min={0}
             step={0.01}
-            defaultValue={(tier.priceCents / 100).toFixed(2)}
+            value={priceReais}
+            onChange={(e) => setPriceReais(e.target.value)}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
           <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
             <span>Taxa: {tier.devFeePercent}%</span>
-            <span>Preço final: {formatBRL(tier.displayPriceCents)}</span>
+            <span>Preço final: {formatBRL(previewDisplayCents)}</span>
           </span>
           <input
             name="quantityTotal"
@@ -72,8 +75,8 @@ const TierRow = ({ eventId, tier }: { eventId: string; tier: AdminTicketTier }) 
           {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}
         </form>
       </td>
-      <td className="text-sm">{formatBRL(tier.priceCents)}</td>
-      <td className="text-sm">
+      <td className="pl-2 text-sm">{formatBRL(tier.displayPriceCents)}</td>
+      <td className="pl-2 text-sm">
         {tier.quantitySold}/{tier.quantityTotal}
       </td>
       <td>
@@ -100,8 +103,8 @@ export const TierList = ({ eventId, tiers }: { eventId: string; tiers: AdminTick
         <thead>
           <tr className="text-sm text-[color:var(--color-muted)]">
             <th className="py-2">Tier</th>
-            <th>Preço</th>
-            <th>Vendidos</th>
+            <th className="pl-2">Preço</th>
+            <th className="pl-2">Vendidos</th>
             <th />
           </tr>
         </thead>

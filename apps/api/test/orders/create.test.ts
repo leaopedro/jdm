@@ -280,6 +280,35 @@ describe('POST /orders', () => {
     expect((tickets[0] as { e: string[] }).e).toContain(extra.id);
   });
 
+  it('Stripe PI amountCents is gross (dev-fee-inclusive) when extras are included', async () => {
+    const { user } = await createUser({ verified: true });
+    const { event, tier } = await seedPublishedEvent();
+    const extra = await seedExtra(event.id);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders',
+      headers: { authorization: bearer(env, user.id) },
+      payload: {
+        eventId: event.id,
+        tierId: tier.id,
+        method: 'card',
+        tickets: [{ extras: [extra.id] }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = createOrderResponseSchema.parse(res.json());
+    // 5000 (tier base) + 2000 (extra base) = 7000 base; gross with 10% dev fee = 7700.
+    expect(body.amountCents).toBe(7700);
+    expect(body.baseAmountCents).toBe(7000);
+
+    const piCall = stripe.calls.find((c) => c.kind === 'createPaymentIntent');
+    const piPayload = piCall!.payload as CreatePaymentIntentInput;
+    // Provider must be billed the gross amount, not the base amount.
+    expect(piPayload.amountCents).toBe(7700);
+  });
+
   it('returns 422 when the same extra appears twice in one ticket', async () => {
     const { user } = await createUser({ verified: true });
     const { event, tier } = await seedPublishedEvent();

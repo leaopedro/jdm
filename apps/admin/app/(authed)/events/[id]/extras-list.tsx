@@ -1,7 +1,7 @@
 'use client';
 
 import type { AdminExtra } from '@jdm/shared/admin';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
@@ -31,6 +31,8 @@ const formatBRL = (cents: number) =>
 
 const ExtraRow = ({ eventId, extra }: { eventId: string; extra: AdminExtra }) => {
   const [state, action] = useActionState(updateExtraAction.bind(null, eventId, extra.id), initial);
+  const [priceCents, setPriceCents] = useState(extra.priceCents);
+  const previewDisplayCents = Math.round(priceCents * (1 + extra.devFeePercent / 100));
   return (
     <tr className="border-b border-[color:var(--color-border)]">
       <td className="py-2">
@@ -44,12 +46,13 @@ const ExtraRow = ({ eventId, extra }: { eventId: string; extra: AdminExtra }) =>
             name="priceCents"
             type="number"
             min={0}
-            defaultValue={extra.priceCents}
+            value={priceCents}
+            onChange={(e) => setPriceCents(Number(e.target.value))}
             className="w-24 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
           />
           <span className="flex flex-col text-xs text-[color:var(--color-muted)]">
             <span>Taxa: {extra.devFeePercent}%</span>
-            <span>Preço final: {formatBRL(extra.displayPriceCents)}</span>
+            <span>Preço final: {formatBRL(previewDisplayCents)}</span>
           </span>
           <input
             name="quantityTotal"
@@ -73,7 +76,7 @@ const ExtraRow = ({ eventId, extra }: { eventId: string; extra: AdminExtra }) =>
           {state.error ? <span className="text-xs text-red-400">{state.error}</span> : null}
         </form>
       </td>
-      <td className="text-sm">{formatBRL(extra.priceCents)}</td>
+      <td className="text-sm">{formatBRL(extra.displayPriceCents)}</td>
       <td className="text-sm">{extra.quantityTotal ?? '∞'}</td>
       <td className="text-sm">{extra.active ? 'Sim' : 'Não'}</td>
       <td>
