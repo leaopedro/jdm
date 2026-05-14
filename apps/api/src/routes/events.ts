@@ -12,6 +12,7 @@ import {
   ticketTierSchema,
 } from '@jdm/shared/events';
 import { eventExtraPublicSchema } from '@jdm/shared/extras';
+import { type CapacityDisplayPolicy, computeCapacityDisplay } from '@jdm/shared/general-settings';
 import type {
   Event as DbEvent,
   Prisma,
@@ -20,6 +21,7 @@ import type {
 } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { loadCapacityDisplayPolicy } from '../services/general-settings.js';
 import { displayPriceCents } from '../services/pricing/dev-fee.js';
 import type { Uploads } from '../services/uploads/index.js';
 
@@ -46,7 +48,25 @@ const serializeSummary = (e: DbEvent, uploads: Uploads) =>
     status: e.status,
   });
 
-const serializeTier = (t: DbTier, devFeePercent: number) =>
+const tierCapacityDisplay = (t: DbTier, policy: CapacityDisplayPolicy) => {
+  const remaining = Math.max(0, t.quantityTotal - t.quantitySold);
+  const status = t.quantityTotal > 0 && remaining === 0 ? 'sold_out' : 'available';
+  return computeCapacityDisplay({ status, remaining, total: t.quantityTotal }, policy.tickets);
+};
+
+const extraCapacityDisplay = (x: DbExtra, policy: CapacityDisplayPolicy) => {
+  if (x.quantityTotal == null) {
+    return computeCapacityDisplay(
+      { status: 'available', remaining: null, total: null },
+      policy.extras,
+    );
+  }
+  const remaining = Math.max(0, x.quantityTotal - x.quantitySold);
+  const status = remaining === 0 ? 'sold_out' : 'available';
+  return computeCapacityDisplay({ status, remaining, total: x.quantityTotal }, policy.extras);
+};
+
+const serializeTier = (t: DbTier, devFeePercent: number, policy: CapacityDisplayPolicy) =>
   ticketTierSchema.parse({
     id: t.id,
     name: t.name,
@@ -60,9 +80,10 @@ const serializeTier = (t: DbTier, devFeePercent: number) =>
     salesCloseAt: t.salesCloseAt?.toISOString() ?? null,
     sortOrder: t.sortOrder,
     requiresCar: t.requiresCar,
+    capacityDisplay: tierCapacityDisplay(t, policy),
   });
 
-const serializeExtra = (x: DbExtra, devFeePercent: number) =>
+const serializeExtra = (x: DbExtra, devFeePercent: number, policy: CapacityDisplayPolicy) =>
   eventExtraPublicSchema.parse({
     id: x.id,
     name: x.name,
@@ -74,6 +95,7 @@ const serializeExtra = (x: DbExtra, devFeePercent: number) =>
     quantityRemaining:
       x.quantityTotal != null ? Math.max(0, x.quantityTotal - x.quantitySold) : null,
     sortOrder: x.sortOrder,
+    capacityDisplay: extraCapacityDisplay(x, policy),
   });
 
 const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
@@ -99,6 +121,7 @@ const serializeCommerceDetail = (
   e: DbEvent & { tiers: DbTier[]; extras: DbExtra[] },
   uploads: Uploads,
   devFeePercent: number,
+  policy: CapacityDisplayPolicy,
 ) =>
   eventDetailCommerceSchema.parse({
     id: e.id,
@@ -119,11 +142,11 @@ const serializeCommerceDetail = (
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((t) => serializeTier(t, devFeePercent)),
+      .map((t) => serializeTier(t, devFeePercent, policy)),
     extras: e.extras
       .filter((x) => x.quantityTotal == null || x.quantitySold < x.quantityTotal)
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((x) => serializeExtra(x, devFeePercent)),
+      .map((x) => serializeExtra(x, devFeePercent, policy)),
   });
 
 // eslint-disable-next-line @typescript-eslint/require-await
@@ -200,7 +223,8 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
-    return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
+    const policy = await loadCapacityDisplayPolicy();
+    return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT, policy);
   });
 
   app.get(
@@ -216,7 +240,8 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
         },
       });
       if (!event) return reply.status(404).send({ error: 'NotFound' });
-      return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT);
+      const policy = await loadCapacityDisplayPolicy();
+      return serializeCommerceDetail(event, app.uploads, app.env.DEV_FEE_PERCENT, policy);
     },
   );
 

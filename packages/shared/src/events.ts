@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { eventExtraPublicSchema } from './extras.js';
+import { capacityDisplayDescriptorSchema } from './general-settings.js';
 import { stateCodeSchema } from './profile.js';
 
 export const eventTypeSchema = z.enum(['meeting', 'drift', 'other']);
@@ -27,6 +28,7 @@ export const ticketTierSchema = z.object({
   salesCloseAt: z.string().datetime().nullable(),
   sortOrder: z.number().int(),
   requiresCar: z.boolean(),
+  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type TicketTier = z.infer<typeof ticketTierSchema>;
 
@@ -47,6 +49,8 @@ export const eventSummarySchema = z.object({
 export type EventSummary = z.infer<typeof eventSummarySchema>;
 
 // Public detail: anonymous-safe payload, no commerce data (no tiers, no extras).
+// No event-level capacityDisplay yet — event remaining capacity is not modeled
+// directly (only per-tier). Surface returns when a real remaining source lands.
 export const eventDetailPublicSchema = eventSummarySchema.extend({
   description: z.string(),
   venueAddress: z.string().nullable(),

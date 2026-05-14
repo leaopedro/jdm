@@ -455,6 +455,24 @@ model StoreSettings {
   updatedAt               DateTime @updatedAt
 }
 
+enum CapacityDisplayMode {
+  absolute
+  percentage_threshold
+  hidden
+}
+
+model GeneralSettings {
+  id                              String              @id @default(cuid())
+  ticketCapacityMode              CapacityDisplayMode @default(absolute)
+  ticketCapacityThresholdPercent  Int                 @default(15)
+  extraCapacityMode               CapacityDisplayMode @default(absolute)
+  extraCapacityThresholdPercent   Int                 @default(15)
+  productCapacityMode             CapacityDisplayMode @default(absolute)
+  productCapacityThresholdPercent Int                 @default(15)
+  createdAt                       DateTime            @default(now())
+  updatedAt                       DateTime            @updatedAt
+}
+
 enum TicketSource {
   purchase
   premium_grant

@@ -30,6 +30,10 @@
       "types": "./src/events.ts",
       "default": "./dist/events.js"
     },
+    "./general-settings": {
+      "types": "./src/general-settings.ts",
+      "default": "./dist/general-settings.js"
+    },
     "./extras": {
       "types": "./src/extras.ts",
       "default": "./dist/extras.js"

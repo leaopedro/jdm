@@ -13,5 +13,6 @@ export * from './push.js';
 export * from './extras.js';
 export * from './cart.js';
 export * from './store.js';
+export * from './general-settings.js';
 export * from './notifications.js';
 export * from './broadcasts.js';

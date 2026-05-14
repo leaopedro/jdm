@@ -70,6 +70,11 @@ import {
   type TicketCheckInRequest,
   type TicketCheckInResponse,
 } from '@jdm/shared/check-in';
+import {
+  generalSettingsSchema,
+  type GeneralSettings,
+  type GeneralSettingsUpdate,
+} from '@jdm/shared/general-settings';
 import { publicProfileSchema } from '@jdm/shared/profile';
 import {
   storeSettingsSchema,
@@ -379,6 +384,18 @@ export const updateAdminStoreSettings = (input: StoreSettingsUpdate): Promise<St
     method: 'PUT',
     body: JSON.stringify(input),
     schema: storeSettingsSchema,
+  });
+
+export const getAdminGeneralSettings = (): Promise<GeneralSettings> =>
+  apiFetch('/admin/general/settings', { schema: generalSettingsSchema });
+
+export const updateAdminGeneralSettings = (
+  input: GeneralSettingsUpdate,
+): Promise<GeneralSettings> =>
+  apiFetch('/admin/general/settings', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+    schema: generalSettingsSchema,
   });
 
 // ── Admin broadcasts ───────────────────────────────────────────────

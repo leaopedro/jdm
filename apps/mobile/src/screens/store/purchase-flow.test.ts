@@ -21,6 +21,15 @@ const baseVariant: StoreProduct['variants'][number] = {
   currency: 'BRL',
   stockOnHand: 5,
   isActive: true,
+  capacityDisplay: {
+    status: 'available' as const,
+    mode: 'absolute' as const,
+    showAbsolute: true,
+    showPercentage: false,
+    remaining: 5,
+    remainingPercent: null,
+    thresholdPercent: 15,
+  },
 };
 
 const buildProduct = (overrides: Partial<StoreProduct> = {}): StoreProduct => ({

@@ -1,6 +1,16 @@
 import { eventDetailCommerceSchema, eventDetailPublicSchema } from '@jdm/shared/events';
 import { describe, expect, it } from 'vitest';
 
+const CAPACITY_DISPLAY_ABSOLUTE = {
+  status: 'available',
+  mode: 'absolute',
+  showAbsolute: true,
+  showPercentage: false,
+  remaining: 100,
+  remainingPercent: null,
+  thresholdPercent: 15,
+} as const;
+
 const PUBLIC_FIXTURE = {
   id: 'evt_1',
   slug: 'encontro-sp',
@@ -35,6 +45,7 @@ const COMMERCE_FIXTURE = {
       salesCloseAt: null,
       sortOrder: 0,
       requiresCar: false,
+      capacityDisplay: CAPACITY_DISPLAY_ABSOLUTE,
     },
   ],
   extras: [
@@ -48,6 +59,7 @@ const COMMERCE_FIXTURE = {
       currency: 'BRL',
       quantityRemaining: 38,
       sortOrder: 0,
+      capacityDisplay: CAPACITY_DISPLAY_ABSOLUTE,
     },
   ],
 } as const;

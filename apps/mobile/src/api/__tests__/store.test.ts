@@ -192,6 +192,15 @@ describe('mobile store API client', () => {
                   currency: 'BRL',
                   stockOnHand: 5,
                   isActive: true,
+                  capacityDisplay: {
+                    status: 'available',
+                    mode: 'absolute',
+                    showAbsolute: true,
+                    showPercentage: false,
+                    remaining: 5,
+                    remainingPercent: null,
+                    thresholdPercent: 15,
+                  },
                 },
               ],
               images: [

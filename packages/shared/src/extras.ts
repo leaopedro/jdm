@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { capacityDisplayDescriptorSchema } from './general-settings.js';
+
 export const ticketExtraItemStatusSchema = z.enum(['valid', 'used', 'revoked']);
 export type TicketExtraItemStatus = z.infer<typeof ticketExtraItemStatusSchema>;
 
@@ -29,6 +31,7 @@ export const eventExtraPublicSchema = z.object({
   currency: z.string().length(3),
   quantityRemaining: z.number().int().nonnegative().nullable(),
   sortOrder: z.number().int(),
+  capacityDisplay: capacityDisplayDescriptorSchema,
 });
 export type EventExtraPublic = z.infer<typeof eventExtraPublicSchema>;
 
