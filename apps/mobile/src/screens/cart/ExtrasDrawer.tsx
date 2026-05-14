@@ -106,7 +106,7 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
                         {extra.description}
                       </Text>
                     ) : null}
-                    <Text style={styles.extraPrice}>{formatBRL(extra.priceCents)}</Text>
+                    <Text style={styles.extraPrice}>{formatBRL(extra.displayPriceCents)}</Text>
                   </View>
                   <Pressable
                     onPress={() => void toggleExtra(extra.id)}
