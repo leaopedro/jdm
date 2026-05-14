@@ -29,16 +29,6 @@ export const adminGeneralSettingsRoutes: FastifyPluginAsync = async (app) => {
     const capacity = input.capacityDisplay ?? {};
     const touched: string[] = [];
 
-    if (capacity.events) {
-      if (capacity.events.mode !== undefined) {
-        data.eventCapacityMode = capacity.events.mode;
-        touched.push('capacityDisplay.events.mode');
-      }
-      if (capacity.events.thresholdPercent !== undefined) {
-        data.eventCapacityThresholdPercent = capacity.events.thresholdPercent;
-        touched.push('capacityDisplay.events.thresholdPercent');
-      }
-    }
     if (capacity.tickets) {
       if (capacity.tickets.mode !== undefined) {
         data.ticketCapacityMode = capacity.tickets.mode;

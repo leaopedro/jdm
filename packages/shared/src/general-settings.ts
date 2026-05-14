@@ -6,7 +6,7 @@ export const DEFAULT_CAPACITY_THRESHOLD_PERCENT = 15;
 export const capacityDisplayModeSchema = z.enum(['absolute', 'percentage_threshold', 'hidden']);
 export type CapacityDisplayMode = z.infer<typeof capacityDisplayModeSchema>;
 
-export const capacityDisplaySurfaceSchema = z.enum(['events', 'tickets', 'extras', 'products']);
+export const capacityDisplaySurfaceSchema = z.enum(['tickets', 'extras', 'products']);
 export type CapacityDisplaySurface = z.infer<typeof capacityDisplaySurfaceSchema>;
 
 export const capacityAvailabilityStatusSchema = z.enum(['available', 'sold_out', 'unavailable']);
@@ -30,7 +30,6 @@ export const capacityDisplaySurfaceSettingSchema = z.object({
 export type CapacityDisplaySurfaceSetting = z.infer<typeof capacityDisplaySurfaceSettingSchema>;
 
 export const capacityDisplayPolicySchema = z.object({
-  events: capacityDisplaySurfaceSettingSchema,
   tickets: capacityDisplaySurfaceSettingSchema,
   extras: capacityDisplaySurfaceSettingSchema,
   products: capacityDisplaySurfaceSettingSchema,
@@ -56,7 +55,6 @@ export const generalSettingsUpdateSchema = z
   .object({
     capacityDisplay: z
       .object({
-        events: capacityDisplaySurfaceUpdateSchema.optional(),
         tickets: capacityDisplaySurfaceUpdateSchema.optional(),
         extras: capacityDisplaySurfaceUpdateSchema.optional(),
         products: capacityDisplaySurfaceUpdateSchema.optional(),
@@ -85,7 +83,6 @@ export const defaultCapacityDisplaySurfaceSetting: CapacityDisplaySurfaceSetting
 };
 
 export const defaultCapacityDisplayPolicy: CapacityDisplayPolicy = {
-  events: defaultCapacityDisplaySurfaceSetting,
   tickets: defaultCapacityDisplaySurfaceSetting,
   extras: defaultCapacityDisplaySurfaceSetting,
   products: defaultCapacityDisplaySurfaceSetting,

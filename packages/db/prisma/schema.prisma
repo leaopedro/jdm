@@ -463,8 +463,6 @@ enum CapacityDisplayMode {
 
 model GeneralSettings {
   id                              String              @id @default(cuid())
-  eventCapacityMode               CapacityDisplayMode @default(absolute)
-  eventCapacityThresholdPercent   Int                 @default(15)
   ticketCapacityMode              CapacityDisplayMode @default(absolute)
   ticketCapacityThresholdPercent  Int                 @default(15)
   extraCapacityMode               CapacityDisplayMode @default(absolute)

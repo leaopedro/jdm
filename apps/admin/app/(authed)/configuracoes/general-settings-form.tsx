@@ -2,7 +2,6 @@
 
 import {
   type CapacityDisplayMode,
-  type CapacityDisplaySurface,
   type CapacityDisplayPolicy,
   type GeneralSettings,
   computeCapacityDisplay,
@@ -15,12 +14,8 @@ const labelCls = 'flex flex-col gap-1 text-sm';
 const inputCls =
   'w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm text-[color:var(--color-fg)]';
 
-const surfaces: { key: CapacityDisplaySurface; title: string; description: string }[] = [
-  {
-    key: 'events',
-    title: 'Eventos',
-    description: 'Como exibir a capacidade pública dos eventos.',
-  },
+type Surface = { key: keyof CapacityDisplayPolicy; title: string; description: string };
+const surfaces: Surface[] = [
   {
     key: 'tickets',
     title: 'Ingressos',
@@ -45,13 +40,9 @@ const modeOptions: { value: CapacityDisplayMode; label: string }[] = [
 ];
 
 type SurfaceState = { mode: CapacityDisplayMode; thresholdPercent: string };
-type PolicyState = Record<CapacityDisplaySurface, SurfaceState>;
+type PolicyState = Record<keyof CapacityDisplayPolicy, SurfaceState>;
 
 const toPolicyState = (policy: CapacityDisplayPolicy): PolicyState => ({
-  events: {
-    mode: policy.events.mode,
-    thresholdPercent: String(policy.events.thresholdPercent),
-  },
   tickets: {
     mode: policy.tickets.mode,
     thresholdPercent: String(policy.tickets.thresholdPercent),
@@ -67,7 +58,7 @@ const toPolicyState = (policy: CapacityDisplayPolicy): PolicyState => ({
 });
 
 const previewLabel = (
-  surface: CapacityDisplaySurface,
+  surface: keyof CapacityDisplayPolicy,
   mode: CapacityDisplayMode,
   thresholdPercent: number,
   remaining: number,
@@ -94,10 +85,10 @@ export function GeneralSettingsForm({ initial }: { initial: GeneralSettings }) {
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const setSurfaceMode = (key: CapacityDisplaySurface, mode: CapacityDisplayMode) =>
+  const setSurfaceMode = (key: keyof CapacityDisplayPolicy, mode: CapacityDisplayMode) =>
     setState((prev) => ({ ...prev, [key]: { ...prev[key], mode } }));
 
-  const setSurfaceThreshold = (key: CapacityDisplaySurface, thresholdPercent: string) =>
+  const setSurfaceThreshold = (key: keyof CapacityDisplayPolicy, thresholdPercent: string) =>
     setState((prev) => ({ ...prev, [key]: { ...prev[key], thresholdPercent } }));
 
   const handleSubmit = (e: React.FormEvent) => {

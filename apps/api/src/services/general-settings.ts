@@ -27,10 +27,6 @@ export const ensureGeneralSettings = async () => {
 type GeneralSettingsRow = Awaited<ReturnType<typeof ensureGeneralSettings>>;
 
 export const toCapacityDisplayPolicy = (row: GeneralSettingsRow): CapacityDisplayPolicy => ({
-  events: {
-    mode: row.eventCapacityMode,
-    thresholdPercent: row.eventCapacityThresholdPercent,
-  },
   tickets: {
     mode: row.ticketCapacityMode,
     thresholdPercent: row.ticketCapacityThresholdPercent,

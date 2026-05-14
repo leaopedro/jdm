@@ -37,7 +37,6 @@ describe('admin general settings', () => {
     expect(res.statusCode).toBe(200);
     const body = generalSettingsSchema.parse(res.json());
     expect(body.id).toBe(GENERAL_SETTINGS_SINGLETON_ID);
-    expect(body.capacityDisplay.events).toEqual({ mode: 'absolute', thresholdPercent: 15 });
     expect(body.capacityDisplay.tickets).toEqual({ mode: 'absolute', thresholdPercent: 15 });
     expect(body.capacityDisplay.extras).toEqual({ mode: 'absolute', thresholdPercent: 15 });
     expect(body.capacityDisplay.products).toEqual({ mode: 'absolute', thresholdPercent: 15 });
@@ -63,7 +62,6 @@ describe('admin general settings', () => {
     expect(body.capacityDisplay.tickets.thresholdPercent).toBe(15);
     expect(body.capacityDisplay.products.mode).toBe('percentage_threshold');
     expect(body.capacityDisplay.products.thresholdPercent).toBe(25);
-    expect(body.capacityDisplay.events.mode).toBe('absolute');
     expect(body.capacityDisplay.extras.mode).toBe('absolute');
 
     const persisted = await prisma.generalSettings.findUniqueOrThrow({

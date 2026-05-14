@@ -4,8 +4,6 @@ CREATE TYPE "CapacityDisplayMode" AS ENUM ('absolute', 'percentage_threshold', '
 -- CreateTable
 CREATE TABLE "GeneralSettings" (
     "id" TEXT NOT NULL,
-    "eventCapacityMode" "CapacityDisplayMode" NOT NULL DEFAULT 'absolute',
-    "eventCapacityThresholdPercent" INTEGER NOT NULL DEFAULT 15,
     "ticketCapacityMode" "CapacityDisplayMode" NOT NULL DEFAULT 'absolute',
     "ticketCapacityThresholdPercent" INTEGER NOT NULL DEFAULT 15,
     "extraCapacityMode" "CapacityDisplayMode" NOT NULL DEFAULT 'absolute',
