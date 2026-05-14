@@ -64,15 +64,11 @@ export function ScanResultOverlay({
   if (state.kind === 'idle') return null;
   return (
     <div className="absolute inset-0 z-10 overflow-y-auto rounded bg-black/70 p-4">
-      {state.kind === 'pending' && (
-        <p className="text-white opacity-80">Validando…</p>
-      )}
+      {state.kind === 'pending' && <p className="text-white opacity-80">Validando…</p>}
       {state.kind === 'ticket-result' && (
         <TicketResultCard data={state.data} eventId={eventId} onDismiss={onDismiss} />
       )}
-      {state.kind === 'extra-result' && (
-        <ExtraResultCard data={state.data} onDismiss={onDismiss} />
-      )}
+      {state.kind === 'extra-result' && <ExtraResultCard data={state.data} onDismiss={onDismiss} />}
       {state.kind === 'voucher-result' && (
         <VoucherResultCard data={state.data} onDismiss={onDismiss} />
       )}

@@ -14,11 +14,7 @@ vi.mock('@zxing/browser', () => ({
   })),
 }));
 
-import {
-  isScanLocked,
-  ScanResultOverlay,
-  type ScanState,
-} from './scanner';
+import { isScanLocked, ScanResultOverlay, type ScanState } from './scanner';
 
 import type {
   CheckInActionResult,
