@@ -15,6 +15,7 @@ import {
 import { updateCartItem } from '~/api/cart';
 import { useCart } from '~/cart/context';
 import { cartCopy } from '~/copy/cart';
+import { isCapacityBlocked } from '~/lib/capacity-display';
 import { formatBRL } from '~/lib/format';
 import { theme } from '~/theme';
 
@@ -92,7 +93,7 @@ export function ExtrasDrawer({ visible, item, eventExtras, onClose }: Props) {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             {eventExtras.map((extra) => {
               const owned = selectedIds.has(extra.id);
-              const soldOut = !owned && extra.quantityRemaining === 0;
+              const soldOut = !owned && isCapacityBlocked(extra.capacityDisplay);
               const isLoading = pending.has(extra.id);
               const disabled = soldOut || isLoading;
 

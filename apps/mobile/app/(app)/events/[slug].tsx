@@ -30,6 +30,7 @@ import { cartCopy } from '~/copy/cart';
 import { eventsCopy } from '~/copy/events';
 import { ticketsCopy } from '~/copy/tickets';
 import { showMessage } from '~/lib/confirm';
+import { capacityLabel, isCapacityBlocked } from '~/lib/capacity-display';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
 import { ConfirmedCarsSection } from '~/screens/events/confirmed-cars/ConfirmedCarsSection';
@@ -279,32 +280,29 @@ export default function EventDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
           {commerceEvent.tiers.map((t) => {
-            const soldOut = t.remainingCapacity === 0;
+            const blocked = isCapacityBlocked(t.capacityDisplay);
+            const label = capacityLabel(t.capacityDisplay);
             const isSelected = selectedTierId === t.id;
             return (
               <Pressable
                 key={t.id}
-                onPress={() => !soldOut && setSelectedTierId(t.id)}
-                disabled={soldOut}
+                onPress={() => !blocked && setSelectedTierId(t.id)}
+                disabled={blocked}
                 style={[
                   styles.tier,
                   isSelected && styles.tierSelected,
-                  soldOut && styles.tierDisabled,
+                  blocked && styles.tierDisabled,
                 ]}
                 accessibilityRole="radio"
                 accessibilityLabel={`${t.name}, ${formatBRL(t.displayPriceCents)}`}
-                accessibilityState={{ selected: isSelected, disabled: soldOut }}
-                accessibilityHint={soldOut ? undefined : 'Select this ticket tier'}
+                accessibilityState={{ selected: isSelected, disabled: blocked }}
+                accessibilityHint={blocked ? undefined : 'Select this ticket tier'}
               >
                 <View style={styles.tierTop}>
                   <Text style={styles.tierName}>{t.name}</Text>
                   <Text style={styles.tierPrice}>{formatBRL(t.displayPriceCents)}</Text>
                 </View>
-                <Text style={styles.sub}>
-                  {soldOut
-                    ? ticketsCopy.purchase.soldOut
-                    : `${t.remainingCapacity} ${eventsCopy.detail.remaining}`}
-                </Text>
+                {label !== null ? <Text style={styles.sub}>{label}</Text> : null}
               </Pressable>
             );
           })}
