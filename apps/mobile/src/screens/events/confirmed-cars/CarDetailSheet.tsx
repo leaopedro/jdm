@@ -1,4 +1,5 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
+import { X } from 'lucide-react-native';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '~/theme';
@@ -24,7 +25,18 @@ export function CarDetailSheet({ car, onClose }: Props) {
         accessibilityLabel="Fechar"
       />
       <View style={styles.sheet}>
-        <View style={styles.handle} />
+        <View style={styles.sheetHeader}>
+          <View style={styles.handle} />
+          <Pressable
+            style={styles.closeBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+            hitSlop={8}
+          >
+            <X size={20} color={theme.colors.muted} strokeWidth={2} />
+          </Pressable>
+        </View>
         {car ? (
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {car.photoUrl ? (
@@ -58,13 +70,22 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '60%',
   },
+  sheetHeader: {
+    paddingTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.border,
     alignSelf: 'center',
-    marginVertical: theme.spacing.sm,
+  },
+  closeBtn: {
+    position: 'absolute',
+    right: theme.spacing.md,
+    top: theme.spacing.sm,
+    padding: 4,
   },
   content: {
     alignItems: 'center',
