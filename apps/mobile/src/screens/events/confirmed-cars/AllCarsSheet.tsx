@@ -2,6 +2,7 @@ import type { ConfirmedCar } from '@jdm/shared/events';
 import { useEffect, useRef } from 'react';
 import {
   Animated,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -47,9 +48,18 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
     }
   }, [visible, translateY, backdropOpacity]);
 
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy);
