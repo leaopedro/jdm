@@ -25,6 +25,7 @@ import { clearPendingCheckoutUrl, getPendingCheckoutUrl } from '~/cart/web-pendi
 import { ordersCopy } from '~/copy/orders';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
+import { resolveOrderKindLabel } from '~/screens/profile/orders-kind-label';
 import { theme } from '~/theme';
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -261,7 +262,9 @@ function OrderCard({
           <Text style={styles.title}>
             {ordersCopy.summary.orderId} #{order.shortId}
           </Text>
-          <Text style={styles.subtitle}>{ordersCopy.orderKind[order.kind]}</Text>
+          <Text style={styles.subtitle}>
+            {resolveOrderKindLabel(order.containsTickets, order.containsStoreItems, order.kind)}
+          </Text>
         </View>
         <View style={styles.badges}>
           <View style={[styles.badge, paymentBadgeStyle(order.status)]}>
