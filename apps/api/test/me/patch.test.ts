@@ -83,4 +83,41 @@ describe('PATCH /me', () => {
     expect(body.avatarUrl).toBeTypeOf('string');
     expect(body.avatarUrl).toContain(objectKey);
   });
+
+  it('rejects avatarObjectKey not owned by the user', async () => {
+    const { user } = await createUser({ verified: true });
+    const env = loadEnv();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { avatarObjectKey: 'avatar/other-user-id/stolen.jpg' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'BadRequest' });
+  });
+
+  it('accepts avatarObjectKey owned by the user', async () => {
+    const { user } = await createUser({ verified: true });
+    const env = loadEnv();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { avatarObjectKey: `avatar/${user.id}/my-photo.jpg` },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('accepts null avatarObjectKey to clear avatar', async () => {
+    const { user } = await createUser({ verified: true });
+    const env = loadEnv();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/me',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { avatarObjectKey: null },
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });
