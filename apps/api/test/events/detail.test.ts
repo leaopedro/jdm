@@ -99,6 +99,83 @@ describe('GET /events/:slug (public)', () => {
     const res = await app.inject({ method: 'GET', url: '/events/cancelled-one' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns hasCarTier=false when no tier requires a car', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'no-car-tier',
+        title: 't',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'meeting',
+        status: 'published',
+        capacity: 100,
+        publishedAt: new Date(),
+        tiers: {
+          create: [
+            {
+              name: 'Geral',
+              priceCents: 5000,
+              quantityTotal: 50,
+              sortOrder: 0,
+              requiresCar: false,
+            },
+          ],
+        },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/events/no-car-tier' });
+    expect(res.statusCode).toBe(200);
+    const body = eventDetailPublicSchema.parse(res.json());
+    expect(body.hasCarTier).toBe(false);
+  });
+
+  it('returns hasCarTier=true when at least one tier requires a car', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'has-car-tier',
+        title: 't',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'drift',
+        status: 'published',
+        capacity: 50,
+        publishedAt: new Date(),
+        tiers: {
+          create: [
+            {
+              name: 'Espectador',
+              priceCents: 2000,
+              quantityTotal: 40,
+              sortOrder: 0,
+              requiresCar: false,
+            },
+            {
+              name: 'Piloto',
+              priceCents: 8000,
+              quantityTotal: 10,
+              sortOrder: 1,
+              requiresCar: true,
+            },
+          ],
+        },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/events/has-car-tier' });
+    expect(res.statusCode).toBe(200);
+    const body = eventDetailPublicSchema.parse(res.json());
+    expect(body.hasCarTier).toBe(true);
+  });
 });
 
 describe('GET /events/by-id/:id (public)', () => {

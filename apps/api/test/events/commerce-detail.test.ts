@@ -170,6 +170,64 @@ describe('GET /events/:slug/commerce (auth required)', () => {
     expect(body.tiers.find((t) => t.name === 'Piloto')?.requiresCar).toBe(true);
   });
 
+  it('returns hasCarTier=false when no tier requires a car', async () => {
+    await makePublishedEvent('commerce-no-car-tier');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/events/commerce-no-car-tier/commerce',
+      headers: { authorization: authHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = eventDetailCommerceSchema.parse(res.json());
+    expect(body.hasCarTier).toBe(false);
+  });
+
+  it('returns hasCarTier=true when at least one tier requires a car', async () => {
+    await prisma.event.create({
+      data: {
+        slug: 'commerce-has-car-tier',
+        title: 't',
+        description: 'd',
+        startsAt: new Date(Date.now() + 86400_000),
+        endsAt: new Date(Date.now() + 90000_000),
+        venueName: 'v',
+        venueAddress: 'a',
+        city: 'São Paulo',
+        stateCode: 'SP',
+        type: 'drift',
+        status: 'published',
+        capacity: 50,
+        publishedAt: new Date(),
+        tiers: {
+          create: [
+            {
+              name: 'Espectador',
+              priceCents: 2000,
+              quantityTotal: 40,
+              sortOrder: 0,
+              requiresCar: false,
+            },
+            {
+              name: 'Piloto',
+              priceCents: 8000,
+              quantityTotal: 10,
+              sortOrder: 1,
+              requiresCar: true,
+            },
+          ],
+        },
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/events/commerce-has-car-tier/commerce',
+      headers: { authorization: authHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = eventDetailCommerceSchema.parse(res.json());
+    expect(body.hasCarTier).toBe(true);
+  });
+
   it('returns 404 for unknown slug', async () => {
     const res = await app.inject({
       method: 'GET',
