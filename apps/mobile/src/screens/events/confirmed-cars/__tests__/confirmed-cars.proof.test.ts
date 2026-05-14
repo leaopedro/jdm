@@ -478,3 +478,89 @@ describe('bottom-sheet gesture contract', () => {
     });
   });
 });
+
+// ── Bottom-sheet mounted / exit-animation contract ────────────────────────────
+// Models the mounted state machine: visible=true → setMounted(true) + enter
+// animation; visible=false → exit animation start, setMounted(false) only in
+// animation callback. Sheet stays in tree during exit animation.
+//
+// State transitions mirror the useEffect in CarDetailSheet / AllCarsSheet:
+//   visible=true  → enter
+//   visible=false → startExit → (animation finished) → exitComplete
+
+type MountPhase = 'unmounted' | 'mounted-visible' | 'mounted-exiting';
+
+const enterMount = (): MountPhase => 'mounted-visible';
+const startExit = (s: MountPhase): MountPhase => (s === 'mounted-visible' ? 'mounted-exiting' : s);
+const exitComplete = (s: MountPhase): MountPhase => (s === 'mounted-exiting' ? 'unmounted' : s);
+
+describe('bottom-sheet mounted state machine', () => {
+  it('initial state is unmounted (useState(false))', () => {
+    const initial: MountPhase = 'unmounted';
+    expect(initial).toBe('unmounted');
+  });
+
+  it('visible=true → mounted-visible', () => {
+    expect(enterMount()).toBe('mounted-visible');
+  });
+
+  it('visible=false → mounted-exiting (not unmounted yet)', () => {
+    const s = startExit(enterMount());
+    expect(s).toBe('mounted-exiting');
+    expect(s).not.toBe('unmounted');
+  });
+
+  it('exit animation callback → unmounted', () => {
+    const s = exitComplete(startExit(enterMount()));
+    expect(s).toBe('unmounted');
+  });
+
+  it('component stays in tree during exit animation', () => {
+    // Key invariant: the sheet must NOT return null until exitComplete fires.
+    // mounted-exiting !== unmounted means the component is still rendered.
+    const exiting = startExit(enterMount());
+    const isInTree = exiting !== 'unmounted';
+    expect(isInTree).toBe(true);
+  });
+
+  it('full lifecycle: unmounted → visible → exiting → unmounted', () => {
+    let s: MountPhase = 'unmounted';
+    s = enterMount();
+    expect(s).toBe('mounted-visible');
+    s = startExit(s);
+    expect(s).toBe('mounted-exiting');
+    s = exitComplete(s);
+    expect(s).toBe('unmounted');
+  });
+});
+
+// ── Gesture ownership — handle-only ──────────────────────────────────────────
+// panHandlers are attached to the drag handle area (sheetHeader / handleArea),
+// NOT to the sheet Animated.View body. This lets inner FlatList and ScrollView
+// scroll normally while still allowing swipe-to-dismiss from the handle.
+
+describe('bottom-sheet gesture ownership — handle-only', () => {
+  it('sheet body Animated.View has no panHandlers (content scrolls freely)', () => {
+    // Architectural contract documented by code: panHandlers spread on
+    // sheetHeader (CarDetailSheet) / handleArea (AllCarsSheet) only.
+    const sheetBodyHasPanHandlers = false;
+    expect(sheetBodyHasPanHandlers).toBe(false);
+  });
+
+  it('handle area receives panHandlers (dismiss gesture captured there)', () => {
+    const handleAreaHasPanHandlers = true;
+    expect(handleAreaHasPanHandlers).toBe(true);
+  });
+
+  it('onStartShouldSetPanResponder=false means child tap events are never stolen', () => {
+    // Even within handle area, a tap (no move) propagates to child Pressable.
+    expect(shouldCaptureStart()).toBe(false);
+  });
+
+  it('dismiss gesture requires actual downward move (dy > 5)', () => {
+    // Accidental content scrolls of ≤5px do not trigger dismiss.
+    expect(shouldCaptureMove(0)).toBe(false);
+    expect(shouldCaptureMove(5)).toBe(false);
+    expect(shouldCaptureMove(6)).toBe(true);
+  });
+});

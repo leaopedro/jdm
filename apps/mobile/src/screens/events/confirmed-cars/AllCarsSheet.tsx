@@ -1,5 +1,5 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -27,11 +27,13 @@ type Props = {
 };
 
 export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
+  const [mounted, setMounted] = useState(false);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      setMounted(true);
       Animated.parallel([
         Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
         Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -44,7 +46,9 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
     }
   }, [visible, translateY, backdropOpacity]);
 
@@ -74,10 +78,14 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
     }),
   ).current;
 
-  if (!visible) return null;
+  if (!mounted) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="box-none"
+      accessibilityViewIsModal={visible}
+    >
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -86,11 +94,10 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
           accessibilityLabel="Fechar"
         />
       </Animated.View>
-      <Animated.View
-        style={[styles.sheet, { transform: [{ translateY }] }]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.handle} />
+      <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+        <View style={styles.handleArea} {...panResponder.panHandlers}>
+          <View style={styles.handle} />
+        </View>
         <Text style={styles.title}>{eventsCopy.confirmedCars.sheetTitle}</Text>
         <FlatList
           data={cars}
@@ -139,13 +146,15 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     maxHeight: '75%',
   },
+  handleArea: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.border,
-    alignSelf: 'center',
-    marginVertical: theme.spacing.sm,
   },
   title: {
     color: theme.colors.fg,

@@ -1,6 +1,6 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
 import { X } from 'lucide-react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -26,11 +26,13 @@ type Props = {
 
 export function CarDetailSheet({ car, onClose }: Props) {
   const visible = car !== null;
+  const [mounted, setMounted] = useState(false);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      setMounted(true);
       Animated.parallel([
         Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
         Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -43,7 +45,9 @@ export function CarDetailSheet({ car, onClose }: Props) {
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
     }
   }, [visible, translateY, backdropOpacity]);
 
@@ -73,10 +77,14 @@ export function CarDetailSheet({ car, onClose }: Props) {
     }),
   ).current;
 
-  if (!visible) return null;
+  if (!mounted) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="box-none"
+      accessibilityViewIsModal={visible}
+    >
       <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -85,11 +93,8 @@ export function CarDetailSheet({ car, onClose }: Props) {
           accessibilityLabel="Fechar"
         />
       </Animated.View>
-      <Animated.View
-        style={[styles.sheet, { transform: [{ translateY }] }]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.sheetHeader}>
+      <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+        <View style={styles.sheetHeader} {...panResponder.panHandlers}>
           <View style={styles.handle} />
           <Pressable
             style={styles.closeBtn}
@@ -140,6 +145,7 @@ const styles = StyleSheet.create({
   },
   sheetHeader: {
     paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
     marginBottom: theme.spacing.xs,
   },
   handle: {
