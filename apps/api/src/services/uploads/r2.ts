@@ -8,7 +8,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createId } from '@paralleldrive/cuid2';
 
 import type { PresignInput, PresignResult, UploadKind, Uploads } from './types.js';
-import { EXT_FOR_MIME } from './types.js';
+import { EXT_FOR_MIME, UPLOAD_CACHE_CONTROL } from './types.js';
 
 export class R2Uploads implements Uploads {
   private readonly client: S3Client;
@@ -37,6 +37,9 @@ export class R2Uploads implements Uploads {
       Key: objectKey,
       ContentType: input.contentType,
       ContentLength: input.size,
+      ContentDisposition: 'inline',
+      CacheControl: UPLOAD_CACHE_CONTROL,
+      Metadata: { kind: input.kind },
     });
     const uploadUrl = await getSignedUrl(this.client, command, { expiresIn: this.ttlSeconds });
     return {
@@ -44,7 +47,13 @@ export class R2Uploads implements Uploads {
       objectKey,
       publicUrl: this.buildPublicUrl(objectKey),
       expiresAt: new Date(Date.now() + this.ttlSeconds * 1000),
-      headers: { 'content-type': input.contentType },
+      headers: {
+        'content-type': input.contentType,
+        'content-length': String(input.size),
+        'content-disposition': 'inline',
+        'cache-control': UPLOAD_CACHE_CONTROL,
+        'x-amz-meta-kind': input.kind,
+      },
     };
   }
 
