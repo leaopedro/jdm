@@ -2,7 +2,7 @@
 
 import type { CheckInExtraItem, StorePickupOrder } from '@jdm/shared/check-in';
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import {
   submitCheckIn,
@@ -13,7 +13,7 @@ import {
   type VoucherClaimActionResult,
 } from '~/lib/check-in-actions';
 
-type ScanState =
+export type ScanState =
   | { kind: 'idle' }
   | { kind: 'pending' }
   | { kind: 'ticket-result'; data: CheckInActionResult; code: string }
@@ -21,6 +21,10 @@ type ScanState =
   | { kind: 'voucher-result'; data: VoucherClaimActionResult; code: string };
 
 const RESCAN_COOLDOWN_MS = 5000;
+
+export function isScanLocked(state: ScanState): boolean {
+  return state.kind !== 'idle';
+}
 
 function isExtraCode(code: string): boolean {
   return code.startsWith('e.');
@@ -48,9 +52,38 @@ function mapCameraError(err: unknown): string {
   return 'Falha ao iniciar câmera.';
 }
 
+export function ScanResultOverlay({
+  state,
+  eventId,
+  onDismiss,
+}: {
+  state: ScanState;
+  eventId: string;
+  onDismiss: () => void;
+}) {
+  if (state.kind === 'idle') return null;
+  return (
+    <div className="absolute inset-0 z-10 overflow-y-auto rounded bg-black/70 p-4">
+      {state.kind === 'pending' && (
+        <p className="text-white opacity-80">Validando…</p>
+      )}
+      {state.kind === 'ticket-result' && (
+        <TicketResultCard data={state.data} eventId={eventId} onDismiss={onDismiss} />
+      )}
+      {state.kind === 'extra-result' && (
+        <ExtraResultCard data={state.data} onDismiss={onDismiss} />
+      )}
+      {state.kind === 'voucher-result' && (
+        <VoucherResultCard data={state.data} onDismiss={onDismiss} />
+      )}
+    </div>
+  );
+}
+
 export function Scanner({ eventId }: { eventId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<ScanState>({ kind: 'idle' });
+  const stateRef = useRef<ScanState>({ kind: 'idle' });
   const lastScanRef = useRef<{ code: string; at: number } | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -60,16 +93,24 @@ export function Scanner({ eventId }: { eventId: string }) {
     const reader = new BrowserMultiFormatReader();
 
     const handleScan = async (code: string) => {
-      setState({ kind: 'pending' });
+      const pending: ScanState = { kind: 'pending' };
+      stateRef.current = pending;
+      setState(pending);
       if (isVoucherCode(code)) {
         const data = await submitVoucherClaim(code, eventId);
-        setState({ kind: 'voucher-result', data, code });
+        const next: ScanState = { kind: 'voucher-result', data, code };
+        stateRef.current = next;
+        setState(next);
       } else if (isExtraCode(code)) {
         const data = await submitExtraClaim(code, eventId);
-        setState({ kind: 'extra-result', data, code });
+        const next: ScanState = { kind: 'extra-result', data, code };
+        stateRef.current = next;
+        setState(next);
       } else {
         const data = await submitCheckIn(code, eventId);
-        setState({ kind: 'ticket-result', data, code });
+        const next: ScanState = { kind: 'ticket-result', data, code };
+        stateRef.current = next;
+        setState(next);
       }
     };
 
@@ -88,6 +129,7 @@ export function Scanner({ eventId }: { eventId: string }) {
           videoRef.current!,
           (res) => {
             if (stopped || !res) return;
+            if (stateRef.current.kind !== 'idle') return;
             const code = res.getText();
             const now = Date.now();
             const last = lastScanRef.current;
@@ -114,29 +156,29 @@ export function Scanner({ eventId }: { eventId: string }) {
     };
   }, [eventId]);
 
-  const dismiss = () => setState({ kind: 'idle' });
+  const dismiss = () => {
+    lastScanRef.current = null;
+    const idle: ScanState = { kind: 'idle' };
+    stateRef.current = idle;
+    setState(idle);
+  };
 
   return (
     <div className="flex flex-col gap-4">
       {cameraError ? (
         <p className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm">{cameraError}</p>
       ) : null}
-      <video
-        ref={videoRef}
-        className="w-full max-w-md rounded border border-[color:var(--color-border)] bg-black"
-        muted
-        playsInline
-      />
+      <div className="relative w-full max-w-md">
+        <video
+          ref={videoRef}
+          className="w-full rounded border border-[color:var(--color-border)] bg-black"
+          muted
+          playsInline
+        />
+        <ScanResultOverlay state={state} eventId={eventId} onDismiss={dismiss} />
+      </div>
       {state.kind === 'idle' && (
         <p className="opacity-80">Aponte para o QR code do ingresso, extra ou voucher.</p>
-      )}
-      {state.kind === 'pending' && <p className="opacity-80">Validando…</p>}
-      {state.kind === 'ticket-result' && (
-        <TicketResultCard data={state.data} eventId={eventId} onDismiss={dismiss} />
-      )}
-      {state.kind === 'extra-result' && <ExtraResultCard data={state.data} onDismiss={dismiss} />}
-      {state.kind === 'voucher-result' && (
-        <VoucherResultCard data={state.data} onDismiss={dismiss} />
       )}
     </div>
   );
