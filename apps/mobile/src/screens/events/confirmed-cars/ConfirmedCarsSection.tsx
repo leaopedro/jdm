@@ -1,5 +1,4 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
-import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -9,9 +8,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-import { AllCarsSheet } from './AllCarsSheet';
-import { CarDetailSheet } from './CarDetailSheet';
 
 import { eventsCopy } from '~/copy/events';
 import { theme } from '~/theme';
@@ -23,13 +19,17 @@ type Props = {
   loading: boolean;
   /** Section is hidden entirely when false (event has no car-required tiers). */
   visible: boolean;
+  onSelectCar: (car: ConfirmedCar) => void;
+  onOpenAllSheet: () => void;
 };
 
-export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
-  const [selectedCar, setSelectedCar] = useState<ConfirmedCar | null>(null);
-  const [allSheetOpen, setAllSheetOpen] = useState(false);
-  const [carFromAll, setCarFromAll] = useState(false);
-
+export function ConfirmedCarsSection({
+  cars,
+  loading,
+  visible,
+  onSelectCar,
+  onOpenAllSheet,
+}: Props) {
   if (!visible) return null;
 
   const inlineSlice = cars.slice(0, INLINE_MAX);
@@ -58,7 +58,7 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
               <Pressable
                 key={car.ref}
                 style={styles.avatarWrap}
-                onPress={() => setSelectedCar(car)}
+                onPress={() => onSelectCar(car)}
                 accessibilityRole="button"
                 accessibilityLabel={`${car.make} ${car.model} ${car.year}`}
                 hitSlop={4}
@@ -77,7 +77,7 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
             {hasOverflow ? (
               <Pressable
                 style={styles.overflowBtn}
-                onPress={() => setAllSheetOpen(true)}
+                onPress={onOpenAllSheet}
                 accessibilityRole="button"
                 accessibilityLabel={eventsCopy.confirmedCars.viewAll}
               >
@@ -89,7 +89,7 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
 
           {hasOverflow ? (
             <Pressable
-              onPress={() => setAllSheetOpen(true)}
+              onPress={onOpenAllSheet}
               accessibilityRole="button"
               accessibilityLabel={eventsCopy.confirmedCars.viewAll}
               style={styles.viewAllBtn}
@@ -99,27 +99,6 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
           ) : null}
         </>
       )}
-
-      <CarDetailSheet
-        car={selectedCar}
-        onClose={() => {
-          const fromAll = carFromAll;
-          setSelectedCar(null);
-          setCarFromAll(false);
-          if (fromAll) setAllSheetOpen(true);
-        }}
-      />
-
-      <AllCarsSheet
-        visible={allSheetOpen}
-        cars={cars}
-        onClose={() => setAllSheetOpen(false)}
-        onSelectCar={(car) => {
-          setAllSheetOpen(false);
-          setCarFromAll(true);
-          setSelectedCar(car);
-        }}
-      />
     </View>
   );
 }

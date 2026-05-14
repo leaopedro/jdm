@@ -33,6 +33,8 @@ import { capacityLabel, isCapacityBlocked } from '~/lib/capacity-display';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL, formatEventDateRange } from '~/lib/format';
 import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
+import { AllCarsSheet } from '~/screens/events/confirmed-cars/AllCarsSheet';
+import { CarDetailSheet } from '~/screens/events/confirmed-cars/CarDetailSheet';
 import { ConfirmedCarsSection } from '~/screens/events/confirmed-cars/ConfirmedCarsSection';
 import { theme } from '~/theme';
 
@@ -49,6 +51,9 @@ export default function EventDetailScreen() {
   const [hasTicket, setHasTicket] = useState(false);
   const [confirmedCars, setConfirmedCars] = useState<ConfirmedCar[]>([]);
   const [confirmedCarsLoading, setConfirmedCarsLoading] = useState(false);
+  const [selectedCar, setSelectedCar] = useState<ConfirmedCar | null>(null);
+  const [allSheetOpen, setAllSheetOpen] = useState(false);
+  const [carFromAll, setCarFromAll] = useState(false);
   const { addItem, adding } = useCart();
   const { status: authStatus } = useAuth();
   const insets = useSafeAreaInsets();
@@ -93,10 +98,10 @@ export default function EventDetailScreen() {
 
   const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
 
-  // Fetch confirmed cars once we know the slug. Public — no auth needed.
   // Prefer commerce tiers (authed); fall back to the public hasCarTier flag for anonymous users.
   const hasCarTier =
     commerceEvent?.tiers.some((t) => t.requiresCar) ?? publicEvent?.hasCarTier ?? false;
+
   useEffect(() => {
     if (!slug || typeof slug !== 'string') return;
     let cancelled = false;
@@ -199,137 +204,170 @@ export default function EventDetailScreen() {
   }
 
   const selectedTier = commerceEvent?.tiers.find((t) => t.id === selectedTierId) ?? null;
+  const isSheetOpen = selectedCar !== null || allSheetOpen;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View>
-        {event.coverUrl ? (
-          <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
-        ) : (
-          <View style={[styles.cover, styles.coverPlaceholder]} />
-        )}
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar"
-          hitSlop={8}
-          style={[styles.backButton, { top: backTop }]}
-        >
-          <ArrowLeft color="#F5F5F5" size={22} strokeWidth={2} />
-        </Pressable>
-      </View>
-      <View style={styles.section}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={3}>
-            {event.title}
-          </Text>
-          {hasTicket ? (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/tickets',
-                  params: { eventId: event.id },
-                } as never)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={eventsCopy.detail.viewMyTickets}
-              style={styles.viewTicketsBtn}
-              hitSlop={8}
-            >
-              <TicketIcon color={theme.colors.bg} size={14} strokeWidth={2} />
-              <Text style={styles.viewTicketsText}>{eventsCopy.detail.viewMyTickets}</Text>
-            </Pressable>
-          ) : null}
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        importantForAccessibility={isSheetOpen ? 'no-hide-descendants' : 'auto'}
+      >
+        <View>
+          {event.coverUrl ? (
+            <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
+          ) : (
+            <View style={[styles.cover, styles.coverPlaceholder]} />
+          )}
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            hitSlop={8}
+            style={[styles.backButton, { top: backTop }]}
+          >
+            <ArrowLeft color="#F5F5F5" size={22} strokeWidth={2} />
+          </Pressable>
         </View>
-        <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
-      </View>
-
-      {(() => {
-        const locationLine = [event.venueAddress, event.city, event.stateCode]
-          .filter(Boolean)
-          .join(', ');
-        const hasAny = event.venueName || locationLine;
-        if (!hasAny) return null;
-        return (
-          <View style={styles.section}>
-            <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
-            {event.venueName ? <Text style={styles.body}>{event.venueName}</Text> : null}
-            {locationLine ? <Text style={styles.sub}>{locationLine}</Text> : null}
-            <Pressable
-              onPress={() => openMap(event)}
-              style={styles.mapButton}
-              accessibilityRole="button"
-              accessibilityLabel={eventsCopy.detail.openMaps}
-              accessibilityHint="Opens location in Maps"
-            >
-              <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
-            </Pressable>
+        <View style={styles.section}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={3}>
+              {event.title}
+            </Text>
+            {hasTicket ? (
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/tickets',
+                    params: { eventId: event.id },
+                  } as never)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={eventsCopy.detail.viewMyTickets}
+                style={styles.viewTicketsBtn}
+                hitSlop={8}
+              >
+                <TicketIcon color={theme.colors.bg} size={14} strokeWidth={2} />
+                <Text style={styles.viewTicketsText}>{eventsCopy.detail.viewMyTickets}</Text>
+              </Pressable>
+            ) : null}
           </View>
-        );
-      })()}
+          <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.body}>{event.description}</Text>
-      </View>
+        {(() => {
+          const locationLine = [event.venueAddress, event.city, event.stateCode]
+            .filter(Boolean)
+            .join(', ');
+          const hasAny = event.venueName || locationLine;
+          if (!hasAny) return null;
+          return (
+            <View style={styles.section}>
+              <Text style={styles.h2}>{eventsCopy.detail.venue}</Text>
+              {event.venueName ? <Text style={styles.body}>{event.venueName}</Text> : null}
+              {locationLine ? <Text style={styles.sub}>{locationLine}</Text> : null}
+              <Pressable
+                onPress={() => openMap(event)}
+                style={styles.mapButton}
+                accessibilityRole="button"
+                accessibilityLabel={eventsCopy.detail.openMaps}
+                accessibilityHint="Opens location in Maps"
+              >
+                <Text style={styles.mapLabel}>{eventsCopy.detail.openMaps}</Text>
+              </Pressable>
+            </View>
+          );
+        })()}
 
-      <ConfirmedCarsSection
-        cars={confirmedCars}
-        loading={confirmedCarsLoading}
-        visible={confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier}
+        <View style={styles.section}>
+          <Text style={styles.body}>{event.description}</Text>
+        </View>
+
+        <ConfirmedCarsSection
+          cars={confirmedCars}
+          loading={confirmedCarsLoading}
+          visible={confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier}
+          onSelectCar={(car) => {
+            setCarFromAll(false);
+            setSelectedCar(car);
+          }}
+          onOpenAllSheet={() => setAllSheetOpen(true)}
+        />
+
+        {commerceEvent ? (
+          <View style={styles.section}>
+            <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
+            {commerceEvent.tiers.map((t) => {
+              const blocked = isCapacityBlocked(t.capacityDisplay);
+              const label = capacityLabel(t.capacityDisplay);
+              const isSelected = selectedTierId === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => !blocked && setSelectedTierId(t.id)}
+                  disabled={blocked}
+                  style={[
+                    styles.tier,
+                    isSelected && styles.tierSelected,
+                    blocked && styles.tierDisabled,
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${t.name}, ${formatBRL(t.displayPriceCents)}`}
+                  accessibilityState={{ selected: isSelected, disabled: blocked }}
+                  accessibilityHint={blocked ? undefined : 'Select this ticket tier'}
+                >
+                  <View style={styles.tierTop}>
+                    <Text style={styles.tierName}>{t.name}</Text>
+                    <Text style={styles.tierPrice}>{formatBRL(t.displayPriceCents)}</Text>
+                  </View>
+                  {label !== null ? <Text style={styles.sub}>{label}</Text> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <View style={styles.section}>
+          <Button
+            label={adding ? cartCopy.actions.adding : cartCopy.actions.addToCart}
+            onPress={() => void handlePurchasePress()}
+            disabled={
+              adding ||
+              isBuyCtaDisabled({
+                authStatus,
+                eventSlug: event.slug,
+                selectedTierId: selectedTier?.id ?? null,
+              })
+            }
+          />
+        </View>
+      </ScrollView>
+
+      <CarDetailSheet
+        car={selectedCar}
+        onClose={() => {
+          const fromAll = carFromAll;
+          setSelectedCar(null);
+          setCarFromAll(false);
+          if (fromAll) setAllSheetOpen(true);
+        }}
       />
 
-      {commerceEvent ? (
-        <View style={styles.section}>
-          <Text style={styles.h2}>{ticketsCopy.purchase.pickTier}</Text>
-          {commerceEvent.tiers.map((t) => {
-            const blocked = isCapacityBlocked(t.capacityDisplay);
-            const label = capacityLabel(t.capacityDisplay);
-            const isSelected = selectedTierId === t.id;
-            return (
-              <Pressable
-                key={t.id}
-                onPress={() => !blocked && setSelectedTierId(t.id)}
-                disabled={blocked}
-                style={[
-                  styles.tier,
-                  isSelected && styles.tierSelected,
-                  blocked && styles.tierDisabled,
-                ]}
-                accessibilityRole="radio"
-                accessibilityLabel={`${t.name}, ${formatBRL(t.displayPriceCents)}`}
-                accessibilityState={{ selected: isSelected, disabled: blocked }}
-                accessibilityHint={blocked ? undefined : 'Select this ticket tier'}
-              >
-                <View style={styles.tierTop}>
-                  <Text style={styles.tierName}>{t.name}</Text>
-                  <Text style={styles.tierPrice}>{formatBRL(t.displayPriceCents)}</Text>
-                </View>
-                {label !== null ? <Text style={styles.sub}>{label}</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <View style={styles.section}>
-        <Button
-          label={adding ? cartCopy.actions.adding : cartCopy.actions.addToCart}
-          onPress={() => void handlePurchasePress()}
-          disabled={
-            adding ||
-            isBuyCtaDisabled({
-              authStatus,
-              eventSlug: event.slug,
-              selectedTierId: selectedTier?.id ?? null,
-            })
-          }
-        />
-      </View>
-    </ScrollView>
+      <AllCarsSheet
+        visible={allSheetOpen}
+        cars={confirmedCars}
+        onClose={() => setAllSheetOpen(false)}
+        onSelectCar={(car) => {
+          setAllSheetOpen(false);
+          setCarFromAll(true);
+          setSelectedCar(car);
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.bg },
   container: { paddingBottom: theme.spacing.xl, backgroundColor: theme.colors.bg },
   center: {
     flex: 1,
