@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { WizardStepDefinition, WizardStepProps } from './types';
 
 import { buyCopy } from '~/copy/buy';
+import { capacityLabel, isCapacityBlocked } from '~/lib/capacity-display';
 import { formatBRL } from '~/lib/format';
 import { theme } from '~/theme';
 
@@ -58,19 +59,20 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {sortedExtras.map((extra) => {
             const isSelected = selectedIds.has(extra.id);
-            const soldOut = extra.quantityRemaining === 0 && !isSelected;
+            const blocked = !isSelected && isCapacityBlocked(extra.capacityDisplay);
+            const label = isSelected ? null : capacityLabel(extra.capacityDisplay);
             return (
               <Pressable
                 key={extra.id}
                 onPress={() => toggleExtra(extra)}
-                disabled={soldOut}
+                disabled={blocked}
                 style={[
                   styles.extraCard,
                   isSelected && styles.extraCardSelected,
-                  soldOut && styles.disabled,
+                  blocked && styles.disabled,
                 ]}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: isSelected, disabled: soldOut }}
+                accessibilityState={{ checked: isSelected, disabled: blocked }}
               >
                 <View style={styles.extraTop}>
                   <Text style={styles.extraName}>{extra.name}</Text>
@@ -79,13 +81,7 @@ function createExtrasScreen(eventExtras: EventExtraPublic[]) {
                 {extra.description ? (
                   <Text style={styles.extraDescription}>{extra.description}</Text>
                 ) : null}
-                <Text style={styles.extraMeta}>
-                  {extra.quantityRemaining === null
-                    ? ''
-                    : soldOut
-                      ? buyCopy.extras.soldOut
-                      : buyCopy.extras.remaining(extra.quantityRemaining)}
-                </Text>
+                {label !== null ? <Text style={styles.extraMeta}>{label}</Text> : null}
               </Pressable>
             );
           })}
