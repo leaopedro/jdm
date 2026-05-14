@@ -4,6 +4,7 @@ export const UPLOAD_KINDS = [
   'avatar',
   'car_photo',
   'event_cover',
+  'feed_photo',
   'product_photo',
   'support_attachment',
 ] as const;

@@ -111,16 +111,38 @@ export type FeedCommentResponse = z.infer<typeof feedCommentResponseSchema>;
 
 export const feedListResponseSchema = z.object({
   posts: z.array(feedPostResponseSchema),
-  nextCursor: z.string().nullable(),
+  page: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
 });
 export type FeedListResponse = z.infer<typeof feedListResponseSchema>;
+
+export const feedCommentListResponseSchema = z.object({
+  comments: z.array(feedCommentResponseSchema),
+  page: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type FeedCommentListResponse = z.infer<typeof feedCommentListResponseSchema>;
+
+export const feedPostPatchInputSchema = z.object({
+  body: z.string().trim().min(1).max(2000).optional(),
+  photoObjectKeys: z.array(z.string().min(1).max(300)).max(1).optional(),
+  carId: z.undefined({ message: 'carId cannot be changed after publish' }).optional(),
+});
+export type FeedPostPatchInput = z.infer<typeof feedPostPatchInputSchema>;
+
+export const feedReactionInputSchema = z.object({
+  kind: z.enum(['like', 'dislike']),
+});
+export type FeedReactionInput = z.infer<typeof feedReactionInputSchema>;
 
 // ---------- Inputs ----------
 
 export const feedPostCreateInputSchema = z.object({
-  carId: z.string().min(1),
+  carId: z.string().min(1).optional(),
   body: z.string().trim().min(1).max(2000),
-  photoObjectKeys: z.array(z.string().min(1).max(300)).max(20).optional(),
+  photoObjectKeys: z.array(z.string().min(1).max(300)).max(1).optional(),
 });
 export type FeedPostCreateInput = z.infer<typeof feedPostCreateInputSchema>;
 
@@ -157,6 +179,7 @@ export const FEED_PUBLIC_RESPONSE_SCHEMAS = {
   feedPostResponse: feedPostResponseSchema,
   feedCommentResponse: feedCommentResponseSchema,
   feedListResponse: feedListResponseSchema,
+  feedCommentListResponse: feedCommentListResponseSchema,
   feedReactionSummary: feedReactionSummarySchema,
   feedPostPhoto: feedPostPhotoSchema,
   publicCarPhoto: publicCarPhotoSchema,
