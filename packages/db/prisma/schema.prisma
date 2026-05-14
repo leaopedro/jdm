@@ -66,6 +66,8 @@ model User {
   feedReactions       FeedReaction[]
   reportsFiled        Report[]             @relation("ReportReporter")
   reportsResolved     Report[]             @relation("ReportResolver")
+  feedBans            FeedBan[]            @relation("FeedBanUser")
+  feedBansIssued      FeedBan[]            @relation("FeedBanActor")
 
   @@index([createdAt])
 }
@@ -205,6 +207,7 @@ model Event {
   orderItems     OrderItem[]
   pickupVouchers PickupVoucher[]
   feedPosts      FeedPost[]
+  feedBans       FeedBan[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -921,6 +924,29 @@ enum ReportStatus {
 enum ReportTargetKind {
   post
   comment
+}
+
+enum BanScope {
+  view
+  post
+}
+
+model FeedBan {
+  id         String   @id @default(cuid())
+  eventId    String
+  userId     String
+  scope      BanScope
+  reason     String?  @db.VarChar(300)
+  bannedById String
+  createdAt  DateTime @default(now())
+
+  event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User  @relation("FeedBanUser", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy User  @relation("FeedBanActor", fields: [bannedById], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, scope])
+  @@index([eventId])
+  @@index([userId])
 }
 
 model FeedPost {
