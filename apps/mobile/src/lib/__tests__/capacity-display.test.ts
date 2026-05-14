@@ -18,7 +18,9 @@ function makeDescriptor(overrides: Partial<CapacityDisplayDescriptor>): Capacity
 
 describe('capacityLabel', () => {
   it('returns "Esgotado" for sold_out', () => {
-    expect(capacityLabel(makeDescriptor({ status: 'sold_out', showAbsolute: false, remaining: 0 }))).toBe('Esgotado');
+    expect(
+      capacityLabel(makeDescriptor({ status: 'sold_out', showAbsolute: false, remaining: 0 })),
+    ).toBe('Esgotado');
   });
 
   it('returns "Indisponível" for unavailable', () => {
@@ -30,7 +32,9 @@ describe('capacityLabel', () => {
   });
 
   it('returns count label in absolute mode when showAbsolute', () => {
-    expect(capacityLabel(makeDescriptor({ mode: 'absolute', showAbsolute: true, remaining: 5 }))).toBe('5 disponíveis');
+    expect(
+      capacityLabel(makeDescriptor({ mode: 'absolute', showAbsolute: true, remaining: 5 })),
+    ).toBe('5 disponíveis');
   });
 
   it('returns null in absolute mode when showAbsolute false', () => {
@@ -39,13 +43,27 @@ describe('capacityLabel', () => {
 
   it('returns percentage label in percentage_threshold mode when showPercentage', () => {
     expect(
-      capacityLabel(makeDescriptor({ mode: 'percentage_threshold', showAbsolute: false, showPercentage: true, remaining: null, remainingPercent: 8 })),
+      capacityLabel(
+        makeDescriptor({
+          mode: 'percentage_threshold',
+          showAbsolute: false,
+          showPercentage: true,
+          remaining: null,
+          remainingPercent: 8,
+        }),
+      ),
     ).toBe('8% disponíveis');
   });
 
   it('returns null in percentage_threshold mode when showPercentage false (above threshold)', () => {
     expect(
-      capacityLabel(makeDescriptor({ mode: 'percentage_threshold', showAbsolute: false, showPercentage: false })),
+      capacityLabel(
+        makeDescriptor({
+          mode: 'percentage_threshold',
+          showAbsolute: false,
+          showPercentage: false,
+        }),
+      ),
     ).toBeNull();
   });
 

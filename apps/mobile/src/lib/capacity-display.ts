@@ -4,8 +4,10 @@ export function capacityLabel(descriptor: CapacityDisplayDescriptor): string | n
   if (descriptor.status === 'sold_out') return 'Esgotado';
   if (descriptor.status === 'unavailable') return 'Indisponível';
   if (descriptor.mode === 'hidden') return null;
-  if (descriptor.showAbsolute && descriptor.remaining !== null) return `${descriptor.remaining} disponíveis`;
-  if (descriptor.showPercentage && descriptor.remainingPercent !== null) return `${descriptor.remainingPercent}% disponíveis`;
+  if (descriptor.showAbsolute && descriptor.remaining !== null)
+    return `${descriptor.remaining} disponíveis`;
+  if (descriptor.showPercentage && descriptor.remainingPercent !== null)
+    return `${descriptor.remainingPercent}% disponíveis`;
   return null;
 }
 
