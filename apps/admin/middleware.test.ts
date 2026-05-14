@@ -43,4 +43,12 @@ describe('admin auth middleware', () => {
     const res = middleware(makeRequest('/events'));
     expect(res.headers.get('location')).toBe('https://jdm-admin-eight.vercel.app/login');
   });
+
+  it('x-middleware-subrequest header does not bypass auth gate', () => {
+    const req = new NextRequest('https://jdm-admin-eight.vercel.app/events', {
+      headers: { 'x-middleware-subrequest': 'middleware:middleware:middleware' },
+    });
+    const res = middleware(req);
+    expect(res.headers.get('location')).toBe('https://jdm-admin-eight.vercel.app/login');
+  });
 });

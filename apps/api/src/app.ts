@@ -9,6 +9,7 @@ import { buildLoggerOptions } from './logger.js';
 import { authPlugin } from './plugins/auth.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
+import { securityHeadersPlugin } from './plugins/security-headers.js';
 import { sentryPlugin } from './plugins/sentry.js';
 import { abacatepayWebhookRoutes } from './routes/abacatepay-webhook.js';
 import { adminRoutes } from './routes/admin/index.js';
@@ -85,6 +86,7 @@ export const buildApp = async (
   process.stdout.write('[app] services ready, registering plugins\n');
 
   await app.register(requestIdPlugin);
+  await app.register(securityHeadersPlugin);
   await app.register(sentryPlugin, { env });
   await app.register(sensible);
   await app.register(cors, {

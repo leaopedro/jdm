@@ -1,11 +1,30 @@
 import { withSentryConfig } from '@sentry/nextjs';
 
+const securityHeaders = [
+  { key: 'X-DNS-Prefetch-Control', value: 'off' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-XSS-Protection', value: '0' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=()',
+  },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
   transpilePackages: ['@jdm/shared'],
   env: {
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000',
+  },
+  async headers() {
+    return [{ source: '/(.*)', headers: securityHeaders }];
   },
   // Shared packages use NodeNext-style `./foo.js` imports in `.ts` source so the
   // API's NodeNext typecheck can resolve them. Teach webpack to fall back to
