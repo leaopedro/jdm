@@ -572,7 +572,7 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
           }),
         ]);
 
-        return { likes, mine: mine !== null };
+        return { likes, mine: mine?.kind === 'like' };
       });
 
       return reply.status(200).send(result);

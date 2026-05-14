@@ -604,12 +604,42 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.likes).toBe(0);
-    expect(body.mine).toBe(true);
+    expect(body.mine).toBe(false);
     const rows = await prisma.feedReaction.findMany({
       where: { postId: post.id, userId: user.id },
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe('dislike');
+  });
+
+  it('mine field agrees between reaction mutation and feed list after like->dislike', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'u@jdm.test' });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
+      payload: { kind: 'like' },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    const switchRes = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
+      payload: { kind: 'dislike' },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    const switchBody = switchRes.json();
+    const feedRes = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    const feedBody = feedRes.json();
+    expect(switchBody.mine).toBe(false);
+    expect(feedBody.posts[0].reactions.mine).toBe(false);
+    expect(switchBody.mine).toBe(feedBody.posts[0].reactions.mine);
   });
 
   it('returns 403 when user is banned from feed', async () => {
