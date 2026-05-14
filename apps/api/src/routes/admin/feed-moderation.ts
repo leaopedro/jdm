@@ -146,6 +146,8 @@ export const adminFeedModerationRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     if (!report) return reply.status(404).send({ error: 'NotFound', message: 'Report not found' });
+    if (report.status !== 'open')
+      return reply.status(409).send({ error: 'Conflict', message: 'Report is not open' });
 
     await prisma.report.update({
       where: { id: reportId },
@@ -174,6 +176,8 @@ export const adminFeedModerationRoutes: FastifyPluginAsync = async (app) => {
       },
     });
     if (!report) return reply.status(404).send({ error: 'NotFound', message: 'Report not found' });
+    if (report.status !== 'open')
+      return reply.status(409).send({ error: 'Conflict', message: 'Report is not open' });
 
     await prisma.report.update({
       where: { id: reportId },

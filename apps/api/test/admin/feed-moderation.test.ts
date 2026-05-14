@@ -432,6 +432,46 @@ describe('POST /admin/events/:eventId/feed/reports/:reportId/resolve', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns 409 when resolving an already-resolved report', async () => {
+    const { user: org } = await createUser({
+      email: 'org@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const event = await seedEvent();
+    const post = await seedPost(event.id);
+    const report = await seedReport('post', post.id, { status: 'resolved' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/feed/reports/${report.id}/resolve`,
+      payload: { resolution: 'Trying again' },
+      headers: { authorization: bearer(env, org.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('Conflict');
+  });
+
+  it('returns 409 when resolving a dismissed report', async () => {
+    const { user: org } = await createUser({
+      email: 'org@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const event = await seedEvent();
+    const post = await seedPost(event.id);
+    const report = await seedReport('post', post.id, { status: 'dismissed' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/feed/reports/${report.id}/resolve`,
+      payload: { resolution: 'Trying again' },
+      headers: { authorization: bearer(env, org.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('Conflict');
+  });
 });
 
 describe('POST /admin/events/:eventId/feed/reports/:reportId/dismiss', () => {
@@ -468,6 +508,44 @@ describe('POST /admin/events/:eventId/feed/reports/:reportId/dismiss', () => {
     expect(updated!.status).toBe('dismissed');
     expect(updated!.resolverId).toBe(org.id);
     expect(updated!.resolvedAt).not.toBeNull();
+  });
+
+  it('returns 409 when dismissing a resolved report', async () => {
+    const { user: org } = await createUser({
+      email: 'org@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const event = await seedEvent();
+    const post = await seedPost(event.id);
+    const report = await seedReport('post', post.id, { status: 'resolved' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/feed/reports/${report.id}/dismiss`,
+      headers: { authorization: bearer(env, org.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('Conflict');
+  });
+
+  it('returns 409 when dismissing an already-dismissed report', async () => {
+    const { user: org } = await createUser({
+      email: 'org@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const event = await seedEvent();
+    const post = await seedPost(event.id);
+    const report = await seedReport('post', post.id, { status: 'dismissed' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/events/${event.id}/feed/reports/${report.id}/dismiss`,
+      headers: { authorization: bearer(env, org.id, 'organizer') },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('Conflict');
   });
 });
 
