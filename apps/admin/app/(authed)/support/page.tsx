@@ -1,3 +1,4 @@
+import type { SupportTicketInternalStatus, SupportTicketStatus } from '@jdm/shared/support';
 import Link from 'next/link';
 
 import { listAdminSupportTickets } from '~/lib/admin-api';
@@ -5,6 +6,30 @@ import { listAdminSupportTickets } from '~/lib/admin-api';
 export const dynamic = 'force-dynamic';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleString('pt-BR');
+
+const CLIENT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
+  open: 'Aberto',
+  closed: 'Fechado',
+};
+
+const CLIENT_STATUS_TONE: Record<SupportTicketStatus, string> = {
+  open: 'bg-green-900 text-green-200',
+  closed: 'bg-zinc-700 text-zinc-300',
+};
+
+const INTERNAL_STATUS_LABELS: Record<SupportTicketInternalStatus, string> = {
+  unread: 'Não lido',
+  seen: 'Visto',
+  in_progress: 'Em andamento',
+  done: 'Resolvido',
+};
+
+const INTERNAL_STATUS_TONE: Record<SupportTicketInternalStatus, string> = {
+  unread: 'bg-amber-950 text-amber-200',
+  seen: 'bg-sky-950 text-sky-200',
+  in_progress: 'bg-blue-900 text-blue-200',
+  done: 'bg-emerald-900 text-emerald-200',
+};
 
 export default async function SupportPage({
   searchParams,
@@ -48,6 +73,8 @@ export default async function SupportPage({
               <th className="py-2 pr-4">Usuário</th>
               <th className="pr-4">Telefone</th>
               <th className="pr-4">Mensagem</th>
+              <th className="pr-4">Status cliente</th>
+              <th className="pr-4">Status interno</th>
               <th>Criado em</th>
             </tr>
           </thead>
@@ -66,6 +93,20 @@ export default async function SupportPage({
                 <td className="pr-4 font-mono">{t.phone}</td>
                 <td className="max-w-xs truncate pr-4 text-[color:var(--color-muted)]">
                   {t.message}
+                </td>
+                <td className="pr-4">
+                  <span
+                    className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${CLIENT_STATUS_TONE[t.status]}`}
+                  >
+                    {CLIENT_STATUS_LABELS[t.status]}
+                  </span>
+                </td>
+                <td className="pr-4">
+                  <span
+                    className={`inline-flex rounded px-2 py-1 text-xs font-semibold ${INTERNAL_STATUS_TONE[t.internalStatus]}`}
+                  >
+                    {INTERNAL_STATUS_LABELS[t.internalStatus]}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap">{fmtDate(t.createdAt)}</td>
               </tr>

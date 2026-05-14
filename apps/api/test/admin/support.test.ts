@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 import { prisma } from '@jdm/db';
+import { adminSupportTicketListResponseSchema } from '@jdm/shared/support';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -111,6 +112,51 @@ describe('GET /admin/support', () => {
     const body = res.json();
     expect(body.items).toHaveLength(1);
     expect(body.items[0].status).toBe('closed');
+  });
+
+  it('returns tickets newest-first with both status fields', async () => {
+    const { user: organizer } = await createUser({
+      email: 'org4@jdm.test',
+      verified: true,
+      role: 'organizer',
+    });
+    const { user: member } = await createUser({ email: 'm4@jdm.test', verified: true });
+    const older = await seedTicket(member.id, { message: 'older ticket', status: 'closed' });
+    const newer = await seedTicket(member.id, { message: 'newer ticket', status: 'open' });
+
+    await prisma.supportTicket.update({
+      where: { id: older.id },
+      data: {
+        createdAt: new Date('2026-05-13T15:00:00.000Z'),
+        internalStatus: 'done',
+      },
+    });
+    await prisma.supportTicket.update({
+      where: { id: newer.id },
+      data: {
+        createdAt: new Date('2026-05-14T15:00:00.000Z'),
+        internalStatus: 'in_progress',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/support',
+      headers: { authorization: bearer(env, organizer.id, 'organizer') },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = adminSupportTicketListResponseSchema.parse(res.json());
+    expect(body.items).toHaveLength(2);
+    expect(body.items.map((item) => item.id)).toEqual([newer.id, older.id]);
+    expect(body.items[0]).toMatchObject({
+      status: 'open',
+      internalStatus: 'in_progress',
+    });
+    expect(body.items[1]).toMatchObject({
+      status: 'closed',
+      internalStatus: 'done',
+    });
   });
 });
 
