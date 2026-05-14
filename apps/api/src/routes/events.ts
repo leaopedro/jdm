@@ -98,7 +98,10 @@ const serializeExtra = (x: DbExtra, devFeePercent: number, policy: CapacityDispl
     capacityDisplay: extraCapacityDisplay(x, policy),
   });
 
-const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
+const serializePublicDetail = (
+  e: DbEvent & { tiers: { requiresCar: boolean }[] },
+  uploads: Uploads,
+) =>
   eventDetailPublicSchema.parse({
     id: e.id,
     slug: e.slug,
@@ -115,6 +118,7 @@ const serializePublicDetail = (e: DbEvent, uploads: Uploads) =>
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
+    hasCarTier: e.tiers.some((t) => t.requiresCar),
   });
 
 const serializeCommerceDetail = (
@@ -139,6 +143,7 @@ const serializeCommerceDetail = (
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
+    hasCarTier: e.tiers.some((t) => t.requiresCar),
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -199,6 +204,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     const { slug } = request.params as { slug: string };
     const event = await prisma.event.findFirst({
       where: { slug, status: 'published' },
+      include: { tiers: { select: { requiresCar: true } } },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializePublicDetail(event, app.uploads);
@@ -208,6 +214,7 @@ export const eventRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string };
     const event = await prisma.event.findFirst({
       where: { id, status: 'published' },
+      include: { tiers: { select: { requiresCar: true } } },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound' });
     return serializePublicDetail(event, app.uploads);

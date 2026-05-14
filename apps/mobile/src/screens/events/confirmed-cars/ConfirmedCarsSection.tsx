@@ -28,6 +28,7 @@ type Props = {
 export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
   const [selectedCar, setSelectedCar] = useState<ConfirmedCar | null>(null);
   const [allSheetOpen, setAllSheetOpen] = useState(false);
+  const [carFromAll, setCarFromAll] = useState(false);
 
   if (!visible) return null;
 
@@ -99,7 +100,15 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
         </>
       )}
 
-      <CarDetailSheet car={selectedCar} onClose={() => setSelectedCar(null)} />
+      <CarDetailSheet
+        car={selectedCar}
+        onClose={() => {
+          const fromAll = carFromAll;
+          setSelectedCar(null);
+          setCarFromAll(false);
+          if (fromAll) setAllSheetOpen(true);
+        }}
+      />
 
       <AllCarsSheet
         visible={allSheetOpen}
@@ -107,6 +116,7 @@ export function ConfirmedCarsSection({ cars, loading, visible }: Props) {
         onClose={() => setAllSheetOpen(false)}
         onSelectCar={(car) => {
           setAllSheetOpen(false);
+          setCarFromAll(true);
           setSelectedCar(car);
         }}
       />

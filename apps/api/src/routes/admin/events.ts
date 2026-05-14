@@ -75,6 +75,7 @@ const serializeDetail = (
     description: e.description,
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
+    hasCarTier: e.tiers.some((t) => t.requiresCar),
     status: e.status,
     publishedAt: e.publishedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),

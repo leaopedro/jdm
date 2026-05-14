@@ -100,6 +100,70 @@ describe('ConfirmedCarsSection — state logic', () => {
   });
 });
 
+// ── Screen-level anonymous visibility wiring ──────────────────────────────────
+// Exercises the exact derivation in apps/mobile/app/(app)/events/[slug].tsx:
+//   hasCarTier = commerceEvent?.tiers.some(t => t.requiresCar) ?? publicEvent?.hasCarTier ?? false
+//   visible    = confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier
+
+type MockCommerce = { tiers: { requiresCar: boolean }[] } | null;
+type MockPublic = { hasCarTier: boolean } | null;
+
+const deriveHasCarTier = (commerceEvent: MockCommerce, publicEvent: MockPublic): boolean =>
+  commerceEvent?.tiers.some((t) => t.requiresCar) ?? publicEvent?.hasCarTier ?? false;
+
+const deriveVisible = (
+  confirmedCarsLoading: boolean,
+  confirmedCars: unknown[],
+  hasCarTier: boolean,
+): boolean => confirmedCarsLoading || confirmedCars.length > 0 || hasCarTier;
+
+describe('EventDetailScreen — confirmed-cars anonymous visibility wiring', () => {
+  it('authed: commerceEvent tiers drive hasCarTier regardless of publicEvent', () => {
+    expect(deriveHasCarTier({ tiers: [{ requiresCar: true }] }, { hasCarTier: false })).toBe(true);
+    expect(deriveHasCarTier({ tiers: [{ requiresCar: false }] }, { hasCarTier: true })).toBe(false);
+  });
+
+  it('anon + publicEvent.hasCarTier=true → hasCarTier=true', () => {
+    expect(deriveHasCarTier(null, { hasCarTier: true })).toBe(true);
+  });
+
+  it('anon + publicEvent.hasCarTier=false → hasCarTier=false', () => {
+    expect(deriveHasCarTier(null, { hasCarTier: false })).toBe(false);
+  });
+
+  it('anon + publicEvent null → hasCarTier=false', () => {
+    expect(deriveHasCarTier(null, null)).toBe(false);
+  });
+
+  it('anon, hasCarTier=true, 0 cars, not loading → section visible (empty state shown)', () => {
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: true });
+    const visible = deriveVisible(false, [], hasCarTier);
+    expect(visible).toBe(true);
+    const s = sectionState([], false, visible);
+    if (!s.rendered) throw new Error('must render');
+    expect(s.empty).toBe(true);
+  });
+
+  it('anon, hasCarTier=false, 0 cars, not loading → section hidden', () => {
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: false });
+    const visible = deriveVisible(false, [], hasCarTier);
+    expect(visible).toBe(false);
+    const s = sectionState([], false, visible);
+    expect(s.rendered).toBe(false);
+  });
+
+  it('anon, hasCarTier=true, cars present → section visible with cars', () => {
+    const cars = [makeCar('r1'), makeCar('r2')];
+    const hasCarTier = deriveHasCarTier(null, { hasCarTier: true });
+    const visible = deriveVisible(false, cars, hasCarTier);
+    expect(visible).toBe(true);
+    const s = sectionState(cars, false, visible);
+    if (!s.rendered) throw new Error('must render');
+    expect(s.inlineCount).toBe(2);
+    expect(s.empty).toBe(false);
+  });
+});
+
 // ── Schema / privacy ─────────────────────────────────────────────────────────
 
 describe('confirmedCarsResponseSchema — privacy boundary', () => {
@@ -158,6 +222,141 @@ describe('confirmedCarsResponseSchema — privacy boundary', () => {
   it('photoUrl nullable: null is valid', () => {
     const parsed = confirmedCarsResponseSchema.parse({ items: [makeCar('c')], total: 1 });
     expect(parsed.items[0]!.photoUrl).toBeNull();
+  });
+});
+
+// ── Interaction state machine ─────────────────────────────────────────────────
+// Pure model of ConfirmedCarsSection's 3-field state machine.
+// Extracted from the component so we can exercise navigation paths without
+// rendering React Native.
+//
+// State fields (mirror component useState declarations):
+//   selectedCar  — car currently shown in CarDetailSheet
+//   allSheetOpen — AllCarsSheet visibility
+//   carFromAll   — whether selectedCar was opened via AllCarsSheet
+
+type CarRef = { ref: string };
+
+type SheetState = {
+  selectedCar: CarRef | null;
+  allSheetOpen: boolean;
+  carFromAll: boolean;
+};
+
+const initial: SheetState = { selectedCar: null, allSheetOpen: false, carFromAll: false };
+
+// Mirrors: onPress={() => setSelectedCar(car)} (inline avatar)
+const selectInline = (s: SheetState, car: CarRef): SheetState => ({
+  ...s,
+  selectedCar: car,
+  // carFromAll intentionally stays as-is (component doesn't touch it here)
+});
+
+// Mirrors: onPress={() => setAllSheetOpen(true)} (overflow button / viewAll)
+const openAllSheet = (s: SheetState): SheetState => ({ ...s, allSheetOpen: true });
+
+// Mirrors: onSelectCar={(car) => { setAllSheetOpen(false); setCarFromAll(true); setSelectedCar(car) }}
+const selectFromAll = (s: SheetState, car: CarRef): SheetState => ({
+  selectedCar: car,
+  allSheetOpen: false,
+  carFromAll: true,
+});
+
+// Mirrors: onClose={() => { const fromAll = carFromAll; setSelectedCar(null); setCarFromAll(false); if (fromAll) setAllSheetOpen(true); }}
+// This is called by BOTH the backdrop press AND the explicit X button.
+const closeCarDetail = (s: SheetState): SheetState => {
+  const fromAll = s.carFromAll;
+  return {
+    selectedCar: null,
+    carFromAll: false,
+    allSheetOpen: fromAll ? true : s.allSheetOpen,
+  };
+};
+
+// Mirrors: onClose={() => setAllSheetOpen(false)}
+const closeAllSheet = (s: SheetState): SheetState => ({ ...s, allSheetOpen: false });
+
+const CAR_A: CarRef = { ref: 'car_a' };
+const CAR_B: CarRef = { ref: 'car_b' };
+
+describe('ConfirmedCarsSection — interaction state machine', () => {
+  describe('direct inline selection', () => {
+    it('selecting inline car opens CarDetailSheet, allSheetOpen stays false', () => {
+      const s = selectInline(initial, CAR_A);
+      expect(s.selectedCar).toEqual(CAR_A);
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.carFromAll).toBe(false);
+    });
+
+    it('closing inline CarDetailSheet does NOT reopen AllCarsSheet', () => {
+      const s = closeCarDetail(selectInline(initial, CAR_A));
+      expect(s.selectedCar).toBeNull();
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.carFromAll).toBe(false);
+    });
+  });
+
+  describe('AllCarsSheet → CarDetailSheet → back navigation', () => {
+    it('opening AllCarsSheet sets allSheetOpen=true, selectedCar stays null', () => {
+      const s = openAllSheet(initial);
+      expect(s.allSheetOpen).toBe(true);
+      expect(s.selectedCar).toBeNull();
+    });
+
+    it('selecting car from AllCarsSheet: sheet closes, carFromAll=true, car shown', () => {
+      const s = selectFromAll(openAllSheet(initial), CAR_B);
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toEqual(CAR_B);
+      expect(s.carFromAll).toBe(true);
+    });
+
+    it('closing CarDetailSheet when opened from AllCarsSheet restores AllCarsSheet', () => {
+      const opened = selectFromAll(openAllSheet(initial), CAR_B);
+      const closed = closeCarDetail(opened);
+      expect(closed.selectedCar).toBeNull();
+      expect(closed.allSheetOpen).toBe(true); // AllCarsSheet restored
+      expect(closed.carFromAll).toBe(false);
+    });
+
+    it('full round-trip: AllCarsSheet → car detail → close → AllCarsSheet still open', () => {
+      let s = initial;
+      s = openAllSheet(s); // user taps "Ver todos"
+      s = selectFromAll(s, CAR_A); // taps a car in AllCarsSheet
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toEqual(CAR_A);
+      s = closeCarDetail(s); // taps X or backdrop
+      expect(s.selectedCar).toBeNull();
+      expect(s.allSheetOpen).toBe(true); // back at AllCarsSheet
+      s = closeAllSheet(s); // taps close on AllCarsSheet
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toBeNull();
+    });
+  });
+
+  describe('explicit close affordance (X button)', () => {
+    it('X button calls same onClose as backdrop — same state result', () => {
+      // CarDetailSheet.closeBtn and backdrop both call props.onClose.
+      // State result is identical regardless of which trigger fires.
+      const fromInline = closeCarDetail(selectInline(initial, CAR_A));
+      const fromAll = closeCarDetail(selectFromAll(openAllSheet(initial), CAR_A));
+      // inline path: allSheetOpen stays false
+      expect(fromInline.allSheetOpen).toBe(false);
+      // all-cars path: allSheetOpen restored
+      expect(fromAll.allSheetOpen).toBe(true);
+      // in both cases selectedCar cleared and carFromAll reset
+      expect(fromInline.selectedCar).toBeNull();
+      expect(fromAll.selectedCar).toBeNull();
+      expect(fromInline.carFromAll).toBe(false);
+      expect(fromAll.carFromAll).toBe(false);
+    });
+  });
+
+  describe('closing AllCarsSheet directly', () => {
+    it('closes AllCarsSheet without affecting selectedCar', () => {
+      const s = closeAllSheet(openAllSheet(initial));
+      expect(s.allSheetOpen).toBe(false);
+      expect(s.selectedCar).toBeNull();
+    });
   });
 });
 
