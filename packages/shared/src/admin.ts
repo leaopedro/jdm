@@ -55,6 +55,16 @@ export const adminAuditActionSchema = z.enum([
   'store.pickup_voucher.claim',
   'support.ticket.close',
   'support.ticket.internal_status_update',
+  'feed.post.hide',
+  'feed.post.remove',
+  'feed.post.restore',
+  'feed.comment.hide',
+  'feed.comment.remove',
+  'feed.comment.restore',
+  'feed.report.resolve',
+  'feed.report.dismiss',
+  'feed.ban.create',
+  'feed.ban.delete',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 

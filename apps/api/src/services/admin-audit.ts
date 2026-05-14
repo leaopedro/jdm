@@ -20,7 +20,11 @@ export type RecordAuditInput = {
     | 'product_type'
     | 'order'
     | 'pickup_voucher'
-    | 'support_ticket';
+    | 'support_ticket'
+    | 'feed_post'
+    | 'feed_comment'
+    | 'report'
+    | 'feed_ban';
   entityId: string;
   metadata?: Record<string, unknown>;
 };
