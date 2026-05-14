@@ -59,6 +59,9 @@ export const eventDetailPublicSchema = eventSummarySchema.extend({
   maxTicketsPerUser: z.number().int().min(1).nullable().optional(),
   // true when at least one tier requires car registration; public-safe signal for confirmed-cars section.
   hasCarTier: z.boolean(),
+  feedEnabled: z.boolean(),
+  feedAccess: feedAccessSchema,
+  postingAccess: postingAccessSchema,
 });
 export type EventDetailPublic = z.infer<typeof eventDetailPublicSchema>;
 

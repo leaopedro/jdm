@@ -116,7 +116,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
       if (!post) return;
       const currentlyLiked = post.reactions.mine;
       if (currentlyLiked) {
-        await removeFeedReaction(postId);
+        await removeFeedReaction(post.eventId, postId);
         setPosts((prev) =>
           prev.map((p) =>
             p.id === postId
@@ -125,7 +125,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
           ),
         );
       } else {
-        const updated = await toggleFeedReaction(postId, kind);
+        const updated = await toggleFeedReaction(post.eventId, postId, kind);
         setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, reactions: updated } : p)));
       }
     } catch {
@@ -143,7 +143,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
     setSubmitting(true);
     try {
       if (editingPost) {
-        const updated = await patchFeedPost(editingPost.id, { body });
+        const updated = await patchFeedPost(editingPost.eventId, editingPost.id, { body });
         setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
         const newPost = await createFeedPost(eventSlug, { body, carId });
@@ -166,7 +166,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteFeedPost(post.id);
+            await deleteFeedPost(post.eventId, post.id);
             setPosts((prev) => prev.filter((p) => p.id !== post.id));
           } catch {
             Alert.alert(feedCopy.errors.postFailed);
@@ -239,15 +239,15 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
                 isOwn={myCars.some((c) => c.id === post.car?.id)}
                 reactionLoading={reactionLoadingIds.has(post.id)}
                 onToggleReaction={handleReaction}
-                onEdit={
-                  canPost
-                    ? (p) => {
+                {...(canPost
+                  ? {
+                      onEdit: (p: FeedPostResponse) => {
                         setEditingPost(p);
                         setComposerOpen(true);
-                      }
-                    : undefined
-                }
-                onDelete={canPost ? handleDeletePost : undefined}
+                      },
+                      onDelete: handleDeletePost,
+                    }
+                  : {})}
               />
             ))
           )}

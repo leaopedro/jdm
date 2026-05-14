@@ -77,7 +77,7 @@ export function FeedPostCard({
 
       {post.photos.length > 0 ? (
         <Image
-          source={{ uri: post.photos[0].url }}
+          source={{ uri: post.photos[0]?.url }}
           style={styles.photo}
           accessibilityLabel="Foto do post"
         />
@@ -90,7 +90,7 @@ export function FeedPostCard({
         onToggle={(kind) => onToggleReaction(post.id, kind)}
       />
 
-      <FeedComments postId={post.id} commentCount={post.commentCount} myCarId={myCarId} />
+      <FeedComments eventId={post.eventId} postId={post.id} commentCount={post.commentCount} myCarId={myCarId} />
     </View>
   );
 }

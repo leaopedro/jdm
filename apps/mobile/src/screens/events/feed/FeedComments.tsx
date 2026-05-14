@@ -15,12 +15,13 @@ import { feedCopy } from '~/copy/feed';
 import { theme } from '~/theme';
 
 type Props = {
+  eventId: string;
   postId: string;
   commentCount: number;
   myCarId: string | null;
 };
 
-export function FeedComments({ postId, commentCount, myCarId }: Props) {
+export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [comments, setComments] = useState<FeedCommentResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,7 +34,7 @@ export function FeedComments({ postId, commentCount, myCarId }: Props) {
     if (!expanded) return;
     let cancelled = false;
     setLoading(true);
-    void listFeedComments(postId, 1)
+    void listFeedComments(eventId, postId, 1)
       .then((res) => {
         if (!cancelled) setComments(res.comments);
       })
@@ -52,7 +53,7 @@ export function FeedComments({ postId, commentCount, myCarId }: Props) {
     if (!draft.trim() || !myCarId) return;
     setSubmitting(true);
     try {
-      const comment = await createFeedComment(postId, { body: draft.trim(), carId: myCarId });
+      const comment = await createFeedComment(eventId, postId, { body: draft.trim(), carId: myCarId });
       setComments((prev) => [...prev, comment]);
       setDraft('');
     } catch {

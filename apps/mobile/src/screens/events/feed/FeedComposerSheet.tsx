@@ -42,7 +42,7 @@ export function FeedComposerSheet({
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   const [selectedCarId, setSelectedCarId] = useState<string | null>(
-    cars.length === 1 ? cars[0].id : null,
+    cars.length === 1 ? (cars[0]?.id ?? null) : null,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [body, setBody] = useState('');
@@ -53,7 +53,7 @@ export function FeedComposerSheet({
   }, [editingPost]);
 
   useEffect(() => {
-    if (cars.length === 1) setSelectedCarId(cars[0].id);
+    if (cars.length === 1) setSelectedCarId(cars[0]?.id ?? null);
   }, [cars]);
 
   useEffect(() => {

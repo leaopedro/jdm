@@ -36,7 +36,9 @@ import { isBuyCtaDisabled, resolveBuyCta } from '~/screens/events/buy-cta';
 import { AllCarsSheet } from '~/screens/events/confirmed-cars/AllCarsSheet';
 import { CarDetailSheet } from '~/screens/events/confirmed-cars/CarDetailSheet';
 import { ConfirmedCarsSection } from '~/screens/events/confirmed-cars/ConfirmedCarsSection';
+import { EventFeedSection } from '~/screens/events/feed/EventFeedSection';
 import { theme } from '~/theme';
+import { defaultFeedSettings } from '@jdm/shared/feed';
 
 export default function EventDetailScreen() {
   const { slug, tierId: requestedTierId } = useLocalSearchParams<{
@@ -206,6 +208,44 @@ export default function EventDetailScreen() {
   const selectedTier = commerceEvent?.tiers.find((t) => t.id === selectedTierId) ?? null;
   const isSheetOpen = selectedCar !== null || allSheetOpen;
 
+  if (event.feedEnabled) {
+    return (
+      <View style={[styles.root, styles.feedRoot]}>
+        <View>
+          {event.coverUrl ? (
+            <Image source={{ uri: event.coverUrl }} style={styles.cover} accessible={false} />
+          ) : (
+            <View style={[styles.cover, styles.coverPlaceholder]} />
+          )}
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/events'))}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            hitSlop={8}
+            style={[styles.backButton, { top: backTop }]}
+          >
+            <ArrowLeft color="#F5F5F5" size={22} strokeWidth={2} />
+          </Pressable>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.title} numberOfLines={3}>
+            {event.title}
+          </Text>
+          <Text style={styles.sub}>{formatEventDateRange(event.startsAt, event.endsAt)}</Text>
+        </View>
+        <EventFeedSection
+          eventSlug={event.slug}
+          eventId={event.id}
+          feedSettings={{
+            ...defaultFeedSettings,
+            feedEnabled: true,
+          }}
+          hasTicket={hasTicket}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -368,6 +408,7 @@ export default function EventDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.bg },
+  feedRoot: { flex: 1 },
   container: { paddingBottom: theme.spacing.xl, backgroundColor: theme.colors.bg },
   center: {
     flex: 1,
