@@ -1009,6 +1009,31 @@ describe('POST /abacatepay/webhook', () => {
       const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
       expect(updatedOrder.status).toBe('paid');
     });
+
+    it('transparent.completed rejects when provider re-fetch shows non-PAID status', async () => {
+      const { user } = await createUser();
+      const providerRef = `pix_refetch_${Date.now()}`;
+      const { order } = await seedEventTierOrder(user.id, { providerRef });
+
+      abacatepay.nextStatus = { id: providerRef, status: 'EXPIRED', paidAt: null };
+
+      const payload = makeV2TransparentCompletedPayload(providerRef, undefined, {
+        metadata: { orderId: order.id },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: webhookUrl,
+        headers: { 'content-type': 'application/json', 'x-webhook-signature': 'valid-sig' },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, ignored: true, reason: 'upstream-not-paid' });
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.status).toBe('pending');
+    });
   });
 
   describe('cart-level settlement (metadata.cartId)', () => {

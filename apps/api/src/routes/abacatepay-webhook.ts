@@ -304,6 +304,29 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({ ok: true });
       }
 
+      // H-3: Re-fetch provider state before trusting webhook payload
+      try {
+        const upstream = await app.abacatepay.getPixBilling(billingId);
+        if (upstream.status !== 'PAID') {
+          request.log.warn(
+            { billingId, upstreamStatus: upstream.status, eventId: event.id },
+            'abacatepay webhook: provider re-fetch shows non-PAID status, rejecting',
+          );
+          Sentry.captureMessage('abacatepay webhook: settlement rejected by provider re-fetch', {
+            level: 'warning',
+            tags: { kind: 'webhook-trust-mismatch', provider: 'abacatepay' },
+            extra: { billingId, upstreamStatus: upstream.status },
+          });
+          await markProcessed(event.id, event);
+          return reply.status(200).send({ ok: true, ignored: true, reason: 'upstream-not-paid' });
+        }
+      } catch (fetchErr) {
+        request.log.warn(
+          { err: fetchErr, billingId },
+          'abacatepay webhook: provider re-fetch failed, proceeding with caution',
+        );
+      }
+
       // Cart-level settlement: one billing → N orders flipped atomically
       const metadataCartId = extractCartIdFromMetadata(event.data);
       if (metadataCartId) {
