@@ -1,8 +1,22 @@
 import type { ConfirmedCar } from '@jdm/shared/events';
 import { X } from 'lucide-react-native';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Image,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { theme } from '~/theme';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const DISMISS_THRESHOLD = 80;
 
 type Props = {
   car: ConfirmedCar | null;
@@ -10,21 +24,61 @@ type Props = {
 };
 
 export function CarDetailSheet({ car, onClose }: Props) {
+  const visible = car !== null;
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: SCREEN_HEIGHT,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible, translateY, backdropOpacity]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) translateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > DISMISS_THRESHOLD || g.vy > 0.5) {
+          onClose();
+        } else {
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+    }),
+  ).current;
+
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={car !== null}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-      accessibilityViewIsModal
-    >
-      <Pressable
-        style={styles.backdrop}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Fechar"
-      />
-      <View style={styles.sheet}>
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar"
+        />
+      </Animated.View>
+      <Animated.View
+        style={[styles.sheet, { transform: [{ translateY }] }]}
+        {...panResponder.panHandlers}
+      >
         <View style={styles.sheetHeader}>
           <View style={styles.handle} />
           <Pressable
@@ -53,17 +107,21 @@ export function CarDetailSheet({ car, onClose }: Props) {
             </Text>
           </ScrollView>
         ) : null}
-      </View>
-    </Modal>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: theme.colors.bg,
     borderTopLeftRadius: theme.radii.lg,
     borderTopRightRadius: theme.radii.lg,
