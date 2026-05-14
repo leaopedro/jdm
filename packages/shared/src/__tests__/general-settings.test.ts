@@ -94,7 +94,7 @@ describe('generalSettingsUpdateSchema', () => {
 
   it('accepts threshold-only update', () => {
     const r = generalSettingsUpdateSchema.safeParse({
-      capacityDisplay: { events: { thresholdPercent: 25 } },
+      capacityDisplay: { extras: { thresholdPercent: 25 } },
     });
     expect(r.success).toBe(true);
   });
