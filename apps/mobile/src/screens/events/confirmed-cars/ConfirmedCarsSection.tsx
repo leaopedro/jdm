@@ -69,7 +69,7 @@ export function ConfirmedCarsSection({
                   <View style={[styles.avatar, styles.avatarPlaceholder]} />
                 )}
                 <Text style={styles.avatarLabel} numberOfLines={1}>
-                  {car.make}
+                  {car.model}
                 </Text>
               </Pressable>
             ))}

@@ -118,10 +118,10 @@ export function AllCarsSheet({ visible, cars, onClose, onSelectCar }: Props) {
                 <View style={[styles.avatar, styles.avatarPlaceholder]} />
               )}
               <Text style={styles.cellName} numberOfLines={1}>
-                {item.make}
+                {item.model}
               </Text>
               <Text style={styles.cellSub} numberOfLines={1}>
-                {item.model}
+                {item.make}
               </Text>
             </Pressable>
           )}
