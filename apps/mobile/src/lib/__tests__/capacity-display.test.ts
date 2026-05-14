@@ -1,7 +1,7 @@
+import type { CapacityDisplayDescriptor } from '@jdm/shared/general-settings';
 import { describe, expect, it } from 'vitest';
 
 import { capacityLabel, isCapacityBlocked } from '../capacity-display';
-import type { CapacityDisplayDescriptor } from '@jdm/shared/general-settings';
 
 function makeDescriptor(overrides: Partial<CapacityDisplayDescriptor>): CapacityDisplayDescriptor {
   return {
