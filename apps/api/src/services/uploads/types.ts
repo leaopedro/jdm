@@ -34,3 +34,5 @@ export const EXT_FOR_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 };
+
+export const UPLOAD_CACHE_CONTROL = 'public, max-age=31536000, immutable';

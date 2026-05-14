@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 
 import type { PresignInput, PresignResult, UploadKind, Uploads } from './types.js';
-import { EXT_FOR_MIME } from './types.js';
+import { EXT_FOR_MIME, UPLOAD_CACHE_CONTROL } from './types.js';
 
 export class DevUploads implements Uploads {
   constructor(
@@ -18,7 +18,14 @@ export class DevUploads implements Uploads {
       objectKey,
       publicUrl: this.buildPublicUrl(objectKey),
       expiresAt: new Date(Date.now() + this.ttlSeconds * 1000),
-      headers: { 'content-type': input.contentType },
+      headers: {
+        'content-type': input.contentType,
+        'content-length': String(input.size),
+        'content-disposition': 'inline',
+        'cache-control': UPLOAD_CACHE_CONTROL,
+        'x-amz-meta-kind': input.kind,
+        'x-amz-meta-uid': input.userId,
+      },
     };
   }
 
