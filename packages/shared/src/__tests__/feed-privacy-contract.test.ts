@@ -14,7 +14,10 @@ function collectKeys(schema: z.ZodTypeAny, seen = new Set<z.ZodTypeAny>()): stri
     case 'ZodObject': {
       const shape = (schema as z.ZodObject<z.ZodRawShape>).shape;
       const own = Object.keys(shape);
-      const nested = own.flatMap((k) => collectKeys(shape[k], seen));
+      const nested = own.flatMap((k) => {
+        const field = shape[k];
+        return field ? collectKeys(field, seen) : [];
+      });
       return [...own, ...nested];
     }
     case 'ZodArray':
