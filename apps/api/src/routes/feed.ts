@@ -247,12 +247,10 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
 
       const parseResult = feedPostPatchInputSchema.safeParse(request.body);
       if (!parseResult.success) {
-        return reply
-          .status(400)
-          .send({
-            error: 'BadRequest',
-            message: parseResult.error.errors[0]?.message ?? 'Invalid input',
-          });
+        return reply.status(400).send({
+          error: 'BadRequest',
+          message: parseResult.error.errors[0]?.message ?? 'Invalid input',
+        });
       }
       const patch = parseResult.data;
 
