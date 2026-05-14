@@ -125,6 +125,7 @@ export const feedPostCreateInputSchema = z.object({
 export type FeedPostCreateInput = z.infer<typeof feedPostCreateInputSchema>;
 
 export const feedCommentCreateInputSchema = z.object({
+  carId: z.string().min(1).optional(),
   body: z.string().trim().min(1).max(1000),
 });
 export type FeedCommentCreateInput = z.infer<typeof feedCommentCreateInputSchema>;

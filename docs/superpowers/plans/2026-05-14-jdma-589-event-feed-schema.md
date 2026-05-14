@@ -58,13 +58,13 @@
 
 ---
 
-## Task 1: Add Prisma enums + Feed-domain models + Event fields
+## ✅ Task 1: Add Prisma enums + Feed-domain models + Event fields
 
 **Files:**
 
 - Modify: `packages/db/prisma/schema.prisma` (append at end of file; reuse `String @id @default(cuid())` style; use `@db.VarChar` lengths consistent with neighbours)
 
-- [ ] **Step 1: Add enums above the new models**
+- [x] **Step 1: Add enums above the new models**
 
 Append to `packages/db/prisma/schema.prisma`:
 
@@ -105,7 +105,7 @@ enum ReportTargetKind {
 }
 ```
 
-- [ ] **Step 2: Add feed settings to `Event`**
+- [x] **Step 2: Add feed settings to `Event`**
 
 Find the `model Event` block (currently at line ~168). Inside its field list, before the relations section, add:
 
@@ -124,7 +124,7 @@ Add the back-relation lines to the same `Event` model's relations block:
   reports        Report[]
 ```
 
-- [ ] **Step 3: Add back-relation on `User`**
+- [x] **Step 3: Add back-relation on `User`**
 
 Find `model User`. Append to its relations block (alongside `tickets`, `notifications`, etc.):
 
@@ -136,7 +136,7 @@ Find `model User`. Append to its relations block (alongside `tickets`, `notifica
   reportsResolved  Report[]      @relation("ReportResolver")
 ```
 
-- [ ] **Step 4: Add back-relation on `Car`**
+- [x] **Step 4: Add back-relation on `Car`**
 
 Find `model Car`. Append:
 
@@ -144,7 +144,7 @@ Find `model Car`. Append:
   feedPosts FeedPost[]
 ```
 
-- [ ] **Step 5: Add new models at end of file**
+- [x] **Step 5: Add new models at end of file**
 
 ```prisma
 model FeedPost {
@@ -250,12 +250,12 @@ model Report {
 }
 ```
 
-- [ ] **Step 6: Format & validate the schema**
+- [x] **Step 6: Format & validate the schema**
 
 Run: `pnpm --filter @jdm/db exec prisma format && pnpm --filter @jdm/db exec prisma validate`
 Expected: both succeed, exit 0, no diff complaints.
 
-- [ ] **Step 7: Commit schema edit**
+- [x] **Step 7: Commit schema edit**
 
 ```bash
 git add packages/db/prisma/schema.prisma
@@ -266,25 +266,25 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 2: Generate the migration SQL
+## ✅ Task 2: Generate the migration SQL
 
 **Files:**
 
 - Create: `packages/db/prisma/migrations/<timestamp>_feed_schema/migration.sql`
 
-- [ ] **Step 1: Boot the local Postgres if not running**
+- [x] **Step 1: Boot the local Postgres if not running**
 
 Run: `docker compose up -d postgres && docker compose exec -T postgres pg_isready -U jdm -d jdm`
 Expected: `localhost:5432 - accepting connections` (container exposes 5433 host-side; the in-container port is 5432).
 
 If Docker is unavailable in the worker environment, skip ahead to Step 5 (hand-author SQL) and document that fallback in the commit message.
 
-- [ ] **Step 2: Create the migration**
+- [x] **Step 2: Create the migration**
 
 Run: `pnpm --filter @jdm/db exec prisma migrate dev --name feed_schema --create-only`
 Expected: a new directory `packages/db/prisma/migrations/<timestamp>_feed_schema/` containing `migration.sql`. `--create-only` means the SQL is written but not applied yet, so the dev DB stays clean.
 
-- [ ] **Step 3: Inspect the generated SQL**
+- [x] **Step 3: Inspect the generated SQL**
 
 Open the new `migration.sql` and confirm:
 
@@ -293,7 +293,7 @@ Open the new `migration.sql` and confirm:
 3. `CREATE TABLE "FeedPost"`, `"FeedPostPhoto"`, `"FeedComment"`, `"FeedReaction"`, `"Report"` are present with the indexes and unique constraint on `FeedReaction (postId, userId)`.
 4. All foreign keys match the `onDelete` modes from the schema (`CASCADE` for owners, `SET NULL` for `Car`/`User` back-references on `FeedPost`/`FeedComment`/`Report`).
 
-- [ ] **Step 4: Append the report target check constraint**
+- [x] **Step 4: Append the report target check constraint**
 
 Prisma does not emit named `CHECK` constraints from the schema. Append to the end of the generated `migration.sql`:
 
@@ -307,23 +307,23 @@ ALTER TABLE "Report"
   );
 ```
 
-- [ ] **Step 5 (fallback only — skip if Step 2 succeeded): Hand-author the migration**
+- [x] **Step 5 (fallback only — skip if Step 2 succeeded): Hand-author the migration**
 
 If Step 2 could not run, create `packages/db/prisma/migrations/<UTC-timestamp>_feed_schema/migration.sql` manually, mirroring the structure of `20260513200000_general_settings/migration.sql`. The contents must match what `prisma migrate diff --from-schema-datamodel <previous_schema> --to-schema-datamodel <current_schema> --script` would emit. Include the same enum, table, index, FK, and CHECK statements as Steps 3–4 require. Document in the commit message that the migration was hand-authored due to no available shadow DB.
 
-- [ ] **Step 6: Apply the migration to confirm it runs cleanly**
+- [x] **Step 6: Apply the migration to confirm it runs cleanly**
 
 Run: `pnpm --filter @jdm/db exec prisma migrate deploy`
 Expected: `Applying migration <timestamp>_feed_schema` followed by `All migrations have been successfully applied.`
 
 If Docker is unavailable, skip and rely on CI to verify.
 
-- [ ] **Step 7: Regenerate the Prisma client**
+- [x] **Step 7: Regenerate the Prisma client**
 
 Run: `pnpm --filter @jdm/db db:generate`
 Expected: `Generated Prisma Client (v...)` with no errors.
 
-- [ ] **Step 8: Commit the migration**
+- [x] **Step 8: Commit the migration**
 
 ```bash
 git add packages/db/prisma/migrations
@@ -334,7 +334,7 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 3: Add `@jdm/shared/feed` Zod contracts
+## ✅ Task 3: Add `@jdm/shared/feed` Zod contracts
 
 **Files:**
 
@@ -342,7 +342,7 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 - Modify: `packages/shared/src/index.ts`
 - Modify: `packages/shared/package.json`
 
-- [ ] **Step 1: Write `packages/shared/src/feed.ts`**
+- [x] **Step 1: Write `packages/shared/src/feed.ts`**
 
 Create the file with:
 
@@ -474,6 +474,7 @@ export const feedPostCreateInputSchema = z.object({
 export type FeedPostCreateInput = z.infer<typeof feedPostCreateInputSchema>;
 
 export const feedCommentCreateInputSchema = z.object({
+  carId: z.string().min(1).optional(),
   body: z.string().trim().min(1).max(1000),
 });
 export type FeedCommentCreateInput = z.infer<typeof feedCommentCreateInputSchema>;
@@ -512,7 +513,9 @@ export const FEED_PUBLIC_RESPONSE_SCHEMAS = {
 } as const;
 ```
 
-- [ ] **Step 2: Wire the barrel export**
+> note: `feedCommentCreateInputSchema` gained `carId?: string` post-plan; `FeedComment.carId` is optional on the Prisma model so commenters can identify as their car, matching `FeedPost` identity pattern. Plan code block updated to match shipped code.
+
+- [x] **Step 2: Wire the barrel export**
 
 Edit `packages/shared/src/index.ts`. Append after the last `export * from './broadcasts.js';` line:
 
@@ -520,7 +523,7 @@ Edit `packages/shared/src/index.ts`. Append after the last `export * from './bro
 export * from './feed.js';
 ```
 
-- [ ] **Step 3: Add the package subpath export**
+- [x] **Step 3: Add the package subpath export**
 
 Edit `packages/shared/package.json`. Inside the `exports` object, add a new entry beside `./broadcasts` (alphabetical placement is fine — match the pattern used by `./events`):
 
@@ -531,17 +534,17 @@ Edit `packages/shared/package.json`. Inside the `exports` object, add a new entr
     },
 ```
 
-- [ ] **Step 4: Build the package**
+- [x] **Step 4: Build the package**
 
 Run: `pnpm --filter @jdm/shared build`
 Expected: `dist/feed.js`, `dist/feed.d.ts`, `dist/feed.js.map` are produced. No tsc errors.
 
-- [ ] **Step 5: Typecheck the workspace**
+- [x] **Step 5: Typecheck the workspace**
 
 Run: `pnpm --filter @jdm/shared typecheck`
 Expected: exits 0.
 
-- [ ] **Step 6: Commit shared contracts**
+- [x] **Step 6: Commit shared contracts**
 
 ```bash
 git add packages/shared/src/feed.ts packages/shared/src/index.ts packages/shared/package.json
@@ -552,13 +555,13 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 4: Schema-shape happy-path test
+## ✅ Task 4: Schema-shape happy-path test
 
 **Files:**
 
 - Create: `packages/shared/src/__tests__/feed.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -668,14 +671,14 @@ describe('feed post create input', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test, observe it pass (it should — schemas already exist after Task 3)**
+- [x] **Step 2: Run the test, observe it pass (it should — schemas already exist after Task 3)**
 
 Run: `pnpm --filter @jdm/shared test -- src/__tests__/feed.test.ts`
 Expected: all tests pass.
 
 If any test fails, the failure points at a bug in `feed.ts` from Task 3 — fix the schema, not the test.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add packages/shared/src/__tests__/feed.test.ts
@@ -686,7 +689,7 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 5: Privacy-contract test — forbidden keys never appear
+## ✅ Task 5: Privacy-contract test — forbidden keys never appear
 
 **Files:**
 
@@ -694,7 +697,7 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 This is the core deliverable of the issue: a proof that no feed response schema can carry PII.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -789,18 +792,18 @@ describe('feed privacy contract', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test, observe it pass**
+- [x] **Step 2: Run the test, observe it pass**
 
 Run: `pnpm --filter @jdm/shared test -- src/__tests__/feed-privacy-contract.test.ts`
 Expected: all assertions green. If any forbidden key appears, the schema in `feed.ts` is wrong — fix the schema, not the test.
 
-- [ ] **Step 3: Sanity: prove the test catches regressions**
+- [x] **Step 3: Sanity: prove the test catches regressions**
 
 Temporarily edit `packages/shared/src/feed.ts` and add `userId: z.string()` to `feedPostResponseSchema`. Re-run the test from Step 2. Expected: the `feedPostResponse` case fails with `Expected []; Received: ['userId']`.
 
 Revert the edit. Re-run; all green. (Do not commit the temporary edit.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/shared/src/__tests__/feed-privacy-contract.test.ts
@@ -811,21 +814,21 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 6: Roadmap delta + rollback notes
+## ✅ Task 6: Roadmap delta + rollback notes
 
 **Files:**
 
 - Modify: `plans/roadmap.md`
 - Create: nothing additional; rollback notes go on the issue comment at the end.
 
-- [ ] **Step 1: Flip F9.1 status marker**
+- [x] **Step 1: Flip F9.1 status marker**
 
 In `plans/roadmap.md`, find the F9.1 line:
 
 ```
 #### 9.1 Schema: FeedPost, FeedLike, FeedComment, Report
 
-- [ ] **Done when:** migration green; shared schemas in `@jdm/shared/feed`.
+- [x] **Done when:** migration green; shared schemas in `@jdm/shared/feed`.
 ```
 
 Change `- [ ]` to `- [~]`. (Per CLAUDE.md: `[~]` while in-progress on-branch; flip to `[x]` only after merge to `main` AND deployment.)
@@ -836,17 +839,17 @@ Add a one-line `> note:` immediately under the bullet:
 > note: model named `FeedReaction` (kind-flexible) instead of `FeedLike`; `Report` covers posts and comments; feed settings persisted on `Event`.
 ```
 
-- [ ] **Step 2: Verify the formatter / linter does not complain**
+- [x] **Step 2: Verify the formatter / linter does not complain**
 
 Run: `pnpm --filter @jdm/shared lint && pnpm --filter @jdm/db lint`
 Expected: both exit 0.
 
-- [ ] **Step 3: Run the full shared package test suite**
+- [x] **Step 3: Run the full shared package test suite**
 
 Run: `pnpm --filter @jdm/shared test`
 Expected: all tests pass, including the two new files from Tasks 4 and 5.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add plans/roadmap.md
@@ -857,14 +860,14 @@ Co-Authored-By: Paperclip <noreply@paperclip.ing>"
 
 ---
 
-## Task 7: Branch verification + push
+## ✅ Task 7: Branch verification + push
 
-- [ ] **Step 1: Confirm branch state**
+- [x] **Step 1: Confirm branch state**
 
 Run: `git status --short && git log --oneline main..HEAD`
 Expected: clean working tree, 6 commits since `main` (one per task that committed).
 
-- [ ] **Step 2: Push and open PR**
+- [x] **Step 2: Push and open PR**
 
 Run:
 
@@ -890,7 +893,7 @@ gh pr create --base main --title "feat(jdma-589): event feed schema + shared con
 - [x] `pnpm --filter @jdm/shared test`
 - [x] `pnpm --filter @jdm/shared typecheck`
 - [x] `pnpm --filter @jdm/db exec prisma validate`
-- [ ] Run `pnpm --filter @jdm/db db:migrate` in CI
+- [x] Run `pnpm --filter @jdm/db db:migrate` in CI
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
@@ -899,7 +902,7 @@ EOF
 
 Expected: PR URL printed.
 
-- [ ] **Step 3: Set issue to `in_review`**
+- [x] **Step 3: Set issue to `in_review`**
 
 Use the Paperclip API to set JDMA-589 to `in_review` with a comment linking the PR. (Handled by the orchestrating agent.)
 
