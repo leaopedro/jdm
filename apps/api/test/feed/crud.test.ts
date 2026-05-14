@@ -8,11 +8,13 @@ import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
 const env = loadEnv();
 
-const seedEvent = (overrides: {
-  feedAccess?: 'public' | 'attendees' | 'members_only';
-  postingAccess?: 'attendees' | 'members_only' | 'organizers_only';
-  feedEnabled?: boolean;
-} = {}) =>
+const seedEvent = (
+  overrides: {
+    feedAccess?: 'public' | 'attendees' | 'members_only';
+    postingAccess?: 'attendees' | 'members_only' | 'organizers_only';
+    feedEnabled?: boolean;
+  } = {},
+) =>
   prisma.event.create({
     data: {
       title: 'Feed Test Event',
@@ -46,7 +48,10 @@ const seedCar = (userId: string) =>
 
 describe('GET /events/:eventId/feed', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 404 for unknown event', async () => {
@@ -75,7 +80,8 @@ describe('GET /events/:eventId/feed', () => {
     const event = await seedEvent({ feedAccess: 'attendees' });
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
     const res = await app.inject({
-      method: 'GET', url: `/events/${event.id}/feed`,
+      method: 'GET',
+      url: `/events/${event.id}/feed`,
       headers: { authorization: bearer(env, user.id) },
     });
     expect(res.statusCode).toBe(403);
@@ -87,7 +93,8 @@ describe('GET /events/:eventId/feed', () => {
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
     await seedTicket(user.id, event.id, tier.id);
     const res = await app.inject({
-      method: 'GET', url: `/events/${event.id}/feed`,
+      method: 'GET',
+      url: `/events/${event.id}/feed`,
       headers: { authorization: bearer(env, user.id) },
     });
     expect(res.statusCode).toBe(200);
@@ -102,9 +109,14 @@ describe('GET /events/:eventId/feed', () => {
   it('paginates with page and perPage params', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     for (let i = 0; i < 7; i++) {
-      await prisma.feedPost.create({ data: { eventId: event.id, body: `Post ${i}`, status: 'visible' } });
+      await prisma.feedPost.create({
+        data: { eventId: event.id, body: `Post ${i}`, status: 'visible' },
+      });
     }
-    const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed?page=1&perPage=5` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed?page=1&perPage=5`,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.posts).toHaveLength(5);
@@ -116,9 +128,14 @@ describe('GET /events/:eventId/feed', () => {
   it('page 2 returns remaining posts', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     for (let i = 0; i < 7; i++) {
-      await prisma.feedPost.create({ data: { eventId: event.id, body: `Post ${i}`, status: 'visible' } });
+      await prisma.feedPost.create({
+        data: { eventId: event.id, body: `Post ${i}`, status: 'visible' },
+      });
     }
-    const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed?page=2&perPage=5` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed?page=2&perPage=5`,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.posts).toHaveLength(2);
@@ -127,9 +144,13 @@ describe('GET /events/:eventId/feed', () => {
 
   it('hides hidden/removed posts', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    await prisma.feedPost.create({ data: { eventId: event.id, body: 'visible', status: 'visible' } });
+    await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'visible', status: 'visible' },
+    });
     await prisma.feedPost.create({ data: { eventId: event.id, body: 'hidden', status: 'hidden' } });
-    await prisma.feedPost.create({ data: { eventId: event.id, body: 'removed', status: 'removed' } });
+    await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'removed', status: 'removed' },
+    });
     const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed` });
     const body = res.json();
     expect(body.posts).toHaveLength(1);
@@ -139,13 +160,17 @@ describe('GET /events/:eventId/feed', () => {
 
 describe('POST /events/:eventId/feed', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent();
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed`,
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
       payload: { body: 'Hello' },
     });
     expect(res.statusCode).toBe(401);
@@ -155,7 +180,8 @@ describe('POST /events/:eventId/feed', () => {
     const event = await seedEvent({ feedAccess: 'public', postingAccess: 'attendees' });
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed`,
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
       payload: { body: 'Hello' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -168,7 +194,8 @@ describe('POST /events/:eventId/feed', () => {
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
     await seedTicket(user.id, event.id, tier.id);
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed`,
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
       payload: { body: 'My first post' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -186,7 +213,8 @@ describe('POST /events/:eventId/feed', () => {
     await seedTicket(user.id, event.id, tier.id);
     const car = await seedCar(user.id);
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed`,
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
       payload: { body: 'With car', carId: car.id },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -199,14 +227,20 @@ describe('POST /events/:eventId/feed', () => {
 
 describe('PATCH /events/:eventId/feed/:postId', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent();
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'original', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'original', status: 'visible' },
+    });
     const res = await app.inject({
-      method: 'PATCH', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
       payload: { body: 'updated' },
     });
     expect(res.statusCode).toBe(401);
@@ -216,9 +250,12 @@ describe('PATCH /events/:eventId/feed/:postId', () => {
     const event = await seedEvent();
     const { user: author } = await createUser({ email: 'a@jdm.test', verified: true });
     const { user: other } = await createUser({ email: 'b@jdm.test', verified: true });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: author.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: author.id },
+    });
     const res = await app.inject({
-      method: 'PATCH', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
       payload: { body: 'hijack' },
       headers: { authorization: bearer(env, other.id) },
     });
@@ -228,9 +265,12 @@ describe('PATCH /events/:eventId/feed/:postId', () => {
   it('returns 400 when carId is included in patch', async () => {
     const event = await seedEvent();
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: user.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: user.id },
+    });
     const res = await app.inject({
-      method: 'PATCH', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
       payload: { body: 'updated', carId: 'some-car' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -240,9 +280,12 @@ describe('PATCH /events/:eventId/feed/:postId', () => {
   it('updates body for author', async () => {
     const event = await seedEvent();
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: user.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'original', status: 'visible', authorUserId: user.id },
+    });
     const res = await app.inject({
-      method: 'PATCH', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
       payload: { body: 'updated body' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -254,12 +297,17 @@ describe('PATCH /events/:eventId/feed/:postId', () => {
 
 describe('DELETE /events/:eventId/feed/:postId', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent();
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'x', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'x', status: 'visible' },
+    });
     const res = await app.inject({ method: 'DELETE', url: `/events/${event.id}/feed/${post.id}` });
     expect(res.statusCode).toBe(401);
   });
@@ -268,9 +316,12 @@ describe('DELETE /events/:eventId/feed/:postId', () => {
     const event = await seedEvent();
     const { user: author } = await createUser({ email: 'a@jdm.test' });
     const { user: other } = await createUser({ email: 'b@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: author.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: author.id },
+    });
     const res = await app.inject({
-      method: 'DELETE', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/${post.id}`,
       headers: { authorization: bearer(env, other.id) },
     });
     expect(res.statusCode).toBe(403);
@@ -279,9 +330,12 @@ describe('DELETE /events/:eventId/feed/:postId', () => {
   it('deletes post for author', async () => {
     const event = await seedEvent();
     const { user } = await createUser({ email: 'u@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: user.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: user.id },
+    });
     const res = await app.inject({
-      method: 'DELETE', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/${post.id}`,
       headers: { authorization: bearer(env, user.id) },
     });
     expect(res.statusCode).toBe(204);
@@ -293,9 +347,12 @@ describe('DELETE /events/:eventId/feed/:postId', () => {
     const event = await seedEvent();
     const { user: author } = await createUser({ email: 'a@jdm.test' });
     const { user: org } = await createUser({ email: 'org@jdm.test', role: 'organizer' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: author.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'x', status: 'visible', authorUserId: author.id },
+    });
     const res = await app.inject({
-      method: 'DELETE', url: `/events/${event.id}/feed/${post.id}`,
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/${post.id}`,
       headers: { authorization: bearer(env, org.id, 'organizer') },
     });
     expect(res.statusCode).toBe(204);
@@ -304,22 +361,35 @@ describe('DELETE /events/:eventId/feed/:postId', () => {
 
 describe('GET /events/:eventId/feed/:postId/comments', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 404 for unknown post', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed/unknown/comments` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed/unknown/comments`,
+    });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns comments with pagination', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     for (let i = 0; i < 3; i++) {
-      await prisma.feedComment.create({ data: { postId: post.id, body: `Comment ${i}`, status: 'visible' } });
+      await prisma.feedComment.create({
+        data: { postId: post.id, body: `Comment ${i}`, status: 'visible' },
+      });
     }
-    const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed/${post.id}/comments` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.comments).toHaveLength(3);
@@ -328,10 +398,19 @@ describe('GET /events/:eventId/feed/:postId/comments', () => {
 
   it('hides hidden/removed comments', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
-    await prisma.feedComment.create({ data: { postId: post.id, body: 'visible', status: 'visible' } });
-    await prisma.feedComment.create({ data: { postId: post.id, body: 'hidden', status: 'hidden' } });
-    const res = await app.inject({ method: 'GET', url: `/events/${event.id}/feed/${post.id}/comments` });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    await prisma.feedComment.create({
+      data: { postId: post.id, body: 'visible', status: 'visible' },
+    });
+    await prisma.feedComment.create({
+      data: { postId: post.id, body: 'hidden', status: 'hidden' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
+    });
     const body = res.json();
     expect(body.comments).toHaveLength(1);
     expect(body.comments[0].body).toBe('visible');
@@ -340,14 +419,20 @@ describe('GET /events/:eventId/feed/:postId/comments', () => {
 
 describe('POST /events/:eventId/feed/:postId/comments', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/comments`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
       payload: { body: 'comment' },
     });
     expect(res.statusCode).toBe(401);
@@ -358,9 +443,12 @@ describe('POST /events/:eventId/feed/:postId/comments', () => {
     const tier = await seedTier(event.id);
     const { user } = await createUser({ email: 'u@jdm.test', verified: true });
     await seedTicket(user.id, event.id, tier.id);
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/comments`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
       payload: { body: 'nice car!' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -373,14 +461,24 @@ describe('POST /events/:eventId/feed/:postId/comments', () => {
 
 describe('DELETE /events/:eventId/feed/comments/:commentId', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
-    const comment = await prisma.feedComment.create({ data: { postId: post.id, body: 'comment', status: 'visible' } });
-    const res = await app.inject({ method: 'DELETE', url: `/events/${event.id}/feed/comments/${comment.id}` });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const comment = await prisma.feedComment.create({
+      data: { postId: post.id, body: 'comment', status: 'visible' },
+    });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/comments/${comment.id}`,
+    });
     expect(res.statusCode).toBe(401);
   });
 
@@ -388,10 +486,15 @@ describe('DELETE /events/:eventId/feed/comments/:commentId', () => {
     const event = await seedEvent({ feedAccess: 'public' });
     const { user: author } = await createUser({ email: 'a@jdm.test' });
     const { user: other } = await createUser({ email: 'b@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
-    const comment = await prisma.feedComment.create({ data: { postId: post.id, body: 'comment', status: 'visible', authorUserId: author.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const comment = await prisma.feedComment.create({
+      data: { postId: post.id, body: 'comment', status: 'visible', authorUserId: author.id },
+    });
     const res = await app.inject({
-      method: 'DELETE', url: `/events/${event.id}/feed/comments/${comment.id}`,
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/comments/${comment.id}`,
       headers: { authorization: bearer(env, other.id) },
     });
     expect(res.statusCode).toBe(403);
@@ -400,10 +503,15 @@ describe('DELETE /events/:eventId/feed/comments/:commentId', () => {
   it('deletes comment for author', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     const { user } = await createUser({ email: 'u@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
-    const comment = await prisma.feedComment.create({ data: { postId: post.id, body: 'comment', status: 'visible', authorUserId: user.id } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const comment = await prisma.feedComment.create({
+      data: { postId: post.id, body: 'comment', status: 'visible', authorUserId: user.id },
+    });
     const res = await app.inject({
-      method: 'DELETE', url: `/events/${event.id}/feed/comments/${comment.id}`,
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/comments/${comment.id}`,
       headers: { authorization: bearer(env, user.id) },
     });
     expect(res.statusCode).toBe(204);
@@ -414,14 +522,20 @@ describe('DELETE /events/:eventId/feed/comments/:commentId', () => {
 
 describe('POST /events/:eventId/feed/:postId/reactions', () => {
   let app: FastifyInstance;
-  beforeEach(async () => { await resetDatabase(); app = await makeApp(); });
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
   afterEach(() => app.close());
 
   it('returns 401 without auth', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'like' },
     });
     expect(res.statusCode).toBe(401);
@@ -430,9 +544,12 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
   it('creates a like reaction', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     const { user } = await createUser({ email: 'u@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'like' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -445,14 +562,18 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
   it('toggling same kind removes reaction', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     const { user } = await createUser({ email: 'u@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'like' },
       headers: { authorization: bearer(env, user.id) },
     });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'like' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -465,14 +586,18 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
   it('switching from like to dislike removes like atomically', async () => {
     const event = await seedEvent({ feedAccess: 'public' });
     const { user } = await createUser({ email: 'u@jdm.test' });
-    const post = await prisma.feedPost.create({ data: { eventId: event.id, body: 'post', status: 'visible' } });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
     await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'like' },
       headers: { authorization: bearer(env, user.id) },
     });
     const res = await app.inject({
-      method: 'POST', url: `/events/${event.id}/feed/${post.id}/reactions`,
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
       payload: { kind: 'dislike' },
       headers: { authorization: bearer(env, user.id) },
     });
@@ -480,8 +605,97 @@ describe('POST /events/:eventId/feed/:postId/reactions', () => {
     const body = res.json();
     expect(body.likes).toBe(0);
     expect(body.mine).toBe(true);
-    const rows = await prisma.feedReaction.findMany({ where: { postId: post.id, userId: user.id } });
+    const rows = await prisma.feedReaction.findMany({
+      where: { postId: post.id, userId: user.id },
+    });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe('dislike');
+  });
+
+  it('returns 403 when user is banned from feed', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'banned@jdm.test' });
+    const { user: admin } = await createUser({ email: 'admin@jdm.test' });
+    await prisma.feedBan.create({
+      data: {
+        eventId: event.id,
+        userId: user.id,
+        scope: 'view',
+        reason: 'test ban',
+        bannedById: admin.id,
+      },
+    });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/reactions`,
+      payload: { kind: 'like' },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 when eventId does not match post', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const otherEvent = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'u@jdm.test' });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${otherEvent.id}/feed/${post.id}/reactions`,
+      payload: { kind: 'like' },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('carId ownership validation', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('rejects post create with another user car', async () => {
+    const event = await seedEvent({ feedAccess: 'public', postingAccess: 'attendees' });
+    const tier = await seedTier(event.id);
+    const { user: poster } = await createUser({ email: 'poster@jdm.test', verified: true });
+    const { user: carOwner } = await createUser({ email: 'owner@jdm.test', verified: true });
+    await seedTicket(poster.id, event.id, tier.id);
+    const car = await seedCar(carOwner.id);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed`,
+      payload: { body: 'Spoofing car', carId: car.id },
+      headers: { authorization: bearer(env, poster.id) },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().message).toContain('Car does not belong to you');
+  });
+
+  it('rejects comment create with another user car', async () => {
+    const event = await seedEvent({ feedAccess: 'public', postingAccess: 'attendees' });
+    const tier = await seedTier(event.id);
+    const { user: commenter } = await createUser({ email: 'commenter@jdm.test', verified: true });
+    const { user: carOwner } = await createUser({ email: 'owner@jdm.test', verified: true });
+    await seedTicket(commenter.id, event.id, tier.id);
+    const car = await seedCar(carOwner.id);
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/events/${event.id}/feed/${post.id}/comments`,
+      payload: { body: 'Spoofing car', carId: car.id },
+      headers: { authorization: bearer(env, commenter.id) },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().message).toContain('Car does not belong to you');
   });
 });

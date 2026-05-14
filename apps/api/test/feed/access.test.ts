@@ -1,13 +1,15 @@
 import { prisma } from '@jdm/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { checkFeedReadAccess, checkFeedPostAccess } from '../../src/services/feed/access.js';
 import { createUser, resetDatabase } from '../helpers.js';
 
-const seedEvent = (overrides: {
-  feedAccess?: 'public' | 'attendees' | 'members_only';
-  postingAccess?: 'attendees' | 'members_only' | 'organizers_only';
-} = {}) =>
+const seedEvent = (
+  overrides: {
+    feedAccess?: 'public' | 'attendees' | 'members_only';
+    postingAccess?: 'attendees' | 'members_only' | 'organizers_only';
+  } = {},
+) =>
   prisma.event.create({
     data: {
       title: 'Feed Access Event',
@@ -29,7 +31,12 @@ const seedTier = (eventId: string) =>
     data: { eventId, name: 'Geral', priceCents: 0, quantityTotal: 100 },
   });
 
-const seedTicket = (userId: string, eventId: string, tierId: string, source: 'purchase' | 'premium_grant' | 'comp' = 'purchase') =>
+const seedTicket = (
+  userId: string,
+  eventId: string,
+  tierId: string,
+  source: 'purchase' | 'premium_grant' | 'comp' = 'purchase',
+) =>
   prisma.ticket.create({
     data: { userId, eventId, tierId, source, status: 'valid' },
   });
@@ -82,7 +89,9 @@ describe('checkFeedReadAccess', () => {
     const { user } = await createUser();
     const { user: admin } = await createUser({ email: 'admin@jdm.test', role: 'admin' });
     await seedTicket(user.id, event.id, tier.id);
-    await prisma.feedBan.create({ data: { eventId: event.id, userId: user.id, scope: 'view', bannedById: admin.id } });
+    await prisma.feedBan.create({
+      data: { eventId: event.id, userId: user.id, scope: 'view', bannedById: admin.id },
+    });
     const result = await checkFeedReadAccess(event.id, user.id, 'user');
     expect(result).toBe('banned');
   });
@@ -142,7 +151,9 @@ describe('checkFeedPostAccess', () => {
     const { user } = await createUser();
     const { user: admin } = await createUser({ email: 'admin@jdm.test', role: 'admin' });
     await seedTicket(user.id, event.id, tier.id);
-    await prisma.feedBan.create({ data: { eventId: event.id, userId: user.id, scope: 'post', bannedById: admin.id } });
+    await prisma.feedBan.create({
+      data: { eventId: event.id, userId: user.id, scope: 'post', bannedById: admin.id },
+    });
     const result = await checkFeedPostAccess(event.id, user.id, 'user');
     expect(result).toBe('banned');
   });

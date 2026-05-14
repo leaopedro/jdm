@@ -127,7 +127,7 @@ export type FeedCommentListResponse = z.infer<typeof feedCommentListResponseSche
 
 export const feedPostPatchInputSchema = z.object({
   body: z.string().trim().min(1).max(2000).optional(),
-  photoObjectKeys: z.array(z.string().min(1).max(300)).max(20).optional(),
+  photoObjectKeys: z.array(z.string().min(1).max(300)).max(1).optional(),
   carId: z.undefined({ message: 'carId cannot be changed after publish' }).optional(),
 });
 export type FeedPostPatchInput = z.infer<typeof feedPostPatchInputSchema>;
@@ -142,7 +142,7 @@ export type FeedReactionInput = z.infer<typeof feedReactionInputSchema>;
 export const feedPostCreateInputSchema = z.object({
   carId: z.string().min(1).optional(),
   body: z.string().trim().min(1).max(2000),
-  photoObjectKeys: z.array(z.string().min(1).max(300)).max(20).optional(),
+  photoObjectKeys: z.array(z.string().min(1).max(300)).max(1).optional(),
 });
 export type FeedPostCreateInput = z.infer<typeof feedPostCreateInputSchema>;
 

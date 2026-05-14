@@ -9,7 +9,7 @@ import {
   feedPostResponseSchema,
   feedReactionInputSchema,
 } from '@jdm/shared/feed';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { requireUser } from '../plugins/auth.js';
@@ -44,7 +44,9 @@ const POST_SELECT = {
   authorUserId: true,
   car: { select: CAR_SELECT },
   photos: { select: { id: true, objectKey: true, width: true, height: true, sortOrder: true } },
-  _count: { select: { reactions: { where: { kind: 'like' } }, comments: { where: { status: 'visible' } } } },
+  _count: {
+    select: { reactions: { where: { kind: 'like' } }, comments: { where: { status: 'visible' } } },
+  },
 } as const;
 
 type CarSelect = {
@@ -65,12 +67,17 @@ const serializeCarProfile = (car: CarSelect | null, buildUrl: (key: string) => s
     model: car.model,
     year: car.year,
     nickname: car.nickname,
-    photo: primary ? { url: buildUrl(primary.objectKey), width: primary.width, height: primary.height } : null,
+    photo: primary
+      ? { url: buildUrl(primary.objectKey), width: primary.width, height: primary.height }
+      : null,
   };
 };
 
 /** Soft auth: sets request.user if a valid Bearer token is present, but does not reject. */
-const tryAuth = async (request: import('fastify').FastifyRequest & { server: import('fastify').FastifyInstance }, _reply: import('fastify').FastifyReply) => {
+const tryAuth = async (
+  request: FastifyRequest & { server: FastifyInstance },
+  _reply: FastifyReply,
+) => {
   const header = request.headers.authorization;
   if (!header?.startsWith('Bearer ')) return;
   const token = header.slice('Bearer '.length);
@@ -93,13 +100,16 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
       select: { id: true, feedEnabled: true, feedAccess: true },
     });
     if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
-    if (!event.feedEnabled) return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
+    if (!event.feedEnabled)
+      return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
     const userId = request.user?.sub ?? null;
     const role = request.user?.role ?? 'user';
     const access = await checkFeedReadAccess(eventId, userId, role);
-    if (access === 'banned') return reply.status(403).send({ error: 'Forbidden', message: 'Banned from feed' });
-    if (access === 'forbidden') return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
+    if (access === 'banned')
+      return reply.status(403).send({ error: 'Forbidden', message: 'Banned from feed' });
+    if (access === 'forbidden')
+      return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
 
     const where = { eventId, status: 'visible' as const };
     const [total, posts] = await Promise.all([
@@ -135,7 +145,13 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
             status: p.status,
             photos: [...p.photos]
               .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((ph) => ({ id: ph.id, url: buildUrl(ph.objectKey), width: ph.width, height: ph.height, sortOrder: ph.sortOrder })),
+              .map((ph) => ({
+                id: ph.id,
+                url: buildUrl(ph.objectKey),
+                width: ph.width,
+                height: ph.height,
+                sortOrder: ph.sortOrder,
+              })),
             reactions: { likes: p._count.reactions, mine: myReactions.get(p.id) === 'like' },
             commentCount: p._count.comments,
             createdAt: p.createdAt.toISOString(),
@@ -154,15 +170,33 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
     const { sub, role } = requireUser(request);
     const { eventId } = eventIdParam.parse(request.params);
 
-    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { feedEnabled: true } });
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { feedEnabled: true },
+    });
     if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
-    if (!event.feedEnabled) return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
+    if (!event.feedEnabled)
+      return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
     const access = await checkFeedPostAccess(eventId, sub, role);
-    if (access === 'banned') return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
-    if (access === 'forbidden') return reply.status(403).send({ error: 'Forbidden', message: 'Posting access denied' });
+    if (access === 'banned')
+      return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
+    if (access === 'forbidden')
+      return reply.status(403).send({ error: 'Forbidden', message: 'Posting access denied' });
 
     const { carId, body, photoObjectKeys } = feedPostCreateInputSchema.parse(request.body);
+
+    if (carId) {
+      const car = await prisma.car.findFirst({
+        where: { id: carId, userId: sub },
+        select: { id: true },
+      });
+      if (!car)
+        return reply
+          .status(403)
+          .send({ error: 'Forbidden', message: 'Car does not belong to you' });
+    }
+
     const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
 
     const post = await prisma.feedPost.create({
@@ -172,7 +206,9 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
         carId: carId ?? null,
         body,
         status: 'visible',
-        ...(photoObjectKeys?.length && { photos: { create: photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })) } }),
+        ...(photoObjectKeys?.length && {
+          photos: { create: photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })) },
+        }),
       },
       select: POST_SELECT,
     });
@@ -186,7 +222,13 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
         status: post.status,
         photos: [...post.photos]
           .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((ph) => ({ id: ph.id, url: buildUrl(ph.objectKey), width: ph.width, height: ph.height, sortOrder: ph.sortOrder })),
+          .map((ph) => ({
+            id: ph.id,
+            url: buildUrl(ph.objectKey),
+            width: ph.width,
+            height: ph.height,
+            sortOrder: ph.sortOrder,
+          })),
         reactions: { likes: 0, mine: false },
         commentCount: 0,
         createdAt: post.createdAt.toISOString(),
@@ -196,221 +238,325 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ---- PATCH /events/:eventId/feed/:postId ----
-  app.patch('/events/:eventId/feed/:postId', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub, role } = requireUser(request);
-    const { eventId, postId } = postIdParam.parse(request.params);
+  app.patch(
+    '/events/:eventId/feed/:postId',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub, role } = requireUser(request);
+      const { eventId, postId } = postIdParam.parse(request.params);
 
-    const parseResult = feedPostPatchInputSchema.safeParse(request.body);
-    if (!parseResult.success) {
-      return reply.status(400).send({ error: 'BadRequest', message: parseResult.error.errors[0]?.message ?? 'Invalid input' });
-    }
-    const patch = parseResult.data;
+      const parseResult = feedPostPatchInputSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply
+          .status(400)
+          .send({
+            error: 'BadRequest',
+            message: parseResult.error.errors[0]?.message ?? 'Invalid input',
+          });
+      }
+      const patch = parseResult.data;
 
-    const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
-    if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+      const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
+      if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-    const isStaff = role === 'organizer' || role === 'admin';
-    if (!isStaff && post.authorUserId !== sub) {
-      return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
-    }
+      const isStaff = role === 'organizer' || role === 'admin';
+      if (!isStaff && post.authorUserId !== sub) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
+      }
 
-    if (patch.photoObjectKeys !== undefined) {
-      await prisma.feedPostPhoto.deleteMany({ where: { postId } });
-    }
+      if (patch.photoObjectKeys !== undefined) {
+        await prisma.feedPostPhoto.deleteMany({ where: { postId } });
+      }
 
-    const updated = await prisma.feedPost.update({
-      where: { id: postId },
-      data: {
-        ...(patch.body !== undefined && { body: patch.body }),
-        ...(patch.photoObjectKeys !== undefined && {
-          photos: { create: patch.photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })) },
+      const updated = await prisma.feedPost.update({
+        where: { id: postId },
+        data: {
+          ...(patch.body !== undefined && { body: patch.body }),
+          ...(patch.photoObjectKeys !== undefined && {
+            photos: {
+              create: patch.photoObjectKeys.map((key, i) => ({ objectKey: key, sortOrder: i })),
+            },
+          }),
+        },
+        select: POST_SELECT,
+      });
+
+      const myReaction = await prisma.feedReaction.findUnique({
+        where: { postId_userId: { postId, userId: sub } },
+        select: { kind: true },
+      });
+      const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
+
+      return reply.status(200).send(
+        feedPostResponseSchema.parse({
+          id: updated.id,
+          eventId: updated.eventId,
+          car: serializeCarProfile(updated.car, buildUrl),
+          body: updated.body,
+          status: updated.status,
+          photos: [...updated.photos]
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((ph) => ({
+              id: ph.id,
+              url: buildUrl(ph.objectKey),
+              width: ph.width,
+              height: ph.height,
+              sortOrder: ph.sortOrder,
+            })),
+          reactions: { likes: updated._count.reactions, mine: myReaction?.kind === 'like' },
+          commentCount: updated._count.comments,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
         }),
-      },
-      select: POST_SELECT,
-    });
-
-    const myReaction = await prisma.feedReaction.findUnique({
-      where: { postId_userId: { postId, userId: sub } },
-      select: { kind: true },
-    });
-    const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
-
-    return reply.status(200).send(
-      feedPostResponseSchema.parse({
-        id: updated.id,
-        eventId: updated.eventId,
-        car: serializeCarProfile(updated.car, buildUrl),
-        body: updated.body,
-        status: updated.status,
-        photos: [...updated.photos]
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((ph) => ({ id: ph.id, url: buildUrl(ph.objectKey), width: ph.width, height: ph.height, sortOrder: ph.sortOrder })),
-        reactions: { likes: updated._count.reactions, mine: myReaction?.kind === 'like' },
-        commentCount: updated._count.comments,
-        createdAt: updated.createdAt.toISOString(),
-        updatedAt: updated.updatedAt.toISOString(),
-      }),
-    );
-  });
+      );
+    },
+  );
 
   // ---- DELETE /events/:eventId/feed/:postId ----
-  app.delete('/events/:eventId/feed/:postId', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub, role } = requireUser(request);
-    const { eventId, postId } = postIdParam.parse(request.params);
+  app.delete(
+    '/events/:eventId/feed/:postId',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub, role } = requireUser(request);
+      const { eventId, postId } = postIdParam.parse(request.params);
 
-    const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
-    if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+      const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
+      if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-    const isStaff = role === 'organizer' || role === 'admin';
-    if (!isStaff && post.authorUserId !== sub) {
-      return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
-    }
+      const isStaff = role === 'organizer' || role === 'admin';
+      if (!isStaff && post.authorUserId !== sub) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
+      }
 
-    await prisma.feedPost.delete({ where: { id: postId } });
-    return reply.status(204).send();
-  });
+      await prisma.feedPost.delete({ where: { id: postId } });
+      return reply.status(204).send();
+    },
+  );
 
   // ---- GET /events/:eventId/feed/:postId/comments ----
-  app.get('/events/:eventId/feed/:postId/comments', { preHandler: [tryAuth] }, async (request, reply) => {
-    const { eventId, postId } = postIdParam.parse(request.params);
-    const { page, perPage } = listQuerySchema.parse(request.query);
+  app.get(
+    '/events/:eventId/feed/:postId/comments',
+    { preHandler: [tryAuth] },
+    async (request, reply) => {
+      const { eventId, postId } = postIdParam.parse(request.params);
+      const { page, perPage } = listQuerySchema.parse(request.query);
 
-    const userId = request.user?.sub ?? null;
-    const role = request.user?.role ?? 'user';
+      const userId = request.user?.sub ?? null;
+      const role = request.user?.role ?? 'user';
 
-    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { feedEnabled: true } });
-    if (!event?.feedEnabled) return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { feedEnabled: true },
+      });
+      if (!event?.feedEnabled)
+        return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
-    const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId }, select: { id: true } });
-    if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+      const post = await prisma.feedPost.findFirst({
+        where: { id: postId, eventId },
+        select: { id: true },
+      });
+      if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-    const access = await checkFeedReadAccess(eventId, userId, role);
-    if (access !== 'ok') return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
+      const access = await checkFeedReadAccess(eventId, userId, role);
+      if (access !== 'ok')
+        return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
 
-    const where = { postId, status: 'visible' as const };
-    const [total, comments] = await Promise.all([
-      prisma.feedComment.count({ where }),
-      prisma.feedComment.findMany({
-        where,
-        select: {
-          id: true, postId: true, body: true, status: true, createdAt: true, updatedAt: true,
-          car: { select: CAR_SELECT },
-        },
-        orderBy: { createdAt: 'asc' },
-        skip: (page - 1) * perPage,
-        take: perPage,
-      }),
-    ]);
+      const where = { postId, status: 'visible' as const };
+      const [total, comments] = await Promise.all([
+        prisma.feedComment.count({ where }),
+        prisma.feedComment.findMany({
+          where,
+          select: {
+            id: true,
+            postId: true,
+            body: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            car: { select: CAR_SELECT },
+          },
+          orderBy: { createdAt: 'asc' },
+          skip: (page - 1) * perPage,
+          take: perPage,
+        }),
+      ]);
 
-    const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
-    return reply.status(200).send(
-      feedCommentListResponseSchema.parse({
-        comments: comments.map((c) =>
-          feedCommentResponseSchema.parse({
-            id: c.id,
-            postId: c.postId,
-            car: serializeCarProfile(c.car, buildUrl),
-            body: c.body,
-            status: c.status,
-            createdAt: c.createdAt.toISOString(),
-            updatedAt: c.updatedAt.toISOString(),
-          }),
-        ),
-        page,
-        total,
-        totalPages: total === 0 ? 0 : Math.ceil(total / perPage),
-      }),
-    );
-  });
+      const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
+      return reply.status(200).send(
+        feedCommentListResponseSchema.parse({
+          comments: comments.map((c) =>
+            feedCommentResponseSchema.parse({
+              id: c.id,
+              postId: c.postId,
+              car: serializeCarProfile(c.car, buildUrl),
+              body: c.body,
+              status: c.status,
+              createdAt: c.createdAt.toISOString(),
+              updatedAt: c.updatedAt.toISOString(),
+            }),
+          ),
+          page,
+          total,
+          totalPages: total === 0 ? 0 : Math.ceil(total / perPage),
+        }),
+      );
+    },
+  );
 
   // ---- POST /events/:eventId/feed/:postId/comments ----
-  app.post('/events/:eventId/feed/:postId/comments', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub, role } = requireUser(request);
-    const { eventId, postId } = postIdParam.parse(request.params);
+  app.post(
+    '/events/:eventId/feed/:postId/comments',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub, role } = requireUser(request);
+      const { eventId, postId } = postIdParam.parse(request.params);
 
-    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { feedEnabled: true } });
-    if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
-    if (!event.feedEnabled) return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { feedEnabled: true },
+      });
+      if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
+      if (!event.feedEnabled)
+        return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
-    const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId, status: 'visible' }, select: { id: true } });
-    if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+      const post = await prisma.feedPost.findFirst({
+        where: { id: postId, eventId, status: 'visible' },
+        select: { id: true },
+      });
+      if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-    const access = await checkFeedPostAccess(eventId, sub, role);
-    if (access === 'banned') return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
-    if (access === 'forbidden') return reply.status(403).send({ error: 'Forbidden', message: 'Posting access denied' });
+      const access = await checkFeedPostAccess(eventId, sub, role);
+      if (access === 'banned')
+        return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
+      if (access === 'forbidden')
+        return reply.status(403).send({ error: 'Forbidden', message: 'Posting access denied' });
 
-    const { carId, body } = feedCommentCreateInputSchema.parse(request.body);
-    const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
+      const { carId, body } = feedCommentCreateInputSchema.parse(request.body);
 
-    const comment = await prisma.feedComment.create({
-      data: { postId, authorUserId: sub, carId: carId ?? null, body, status: 'visible' },
-      select: {
-        id: true, postId: true, body: true, status: true, createdAt: true, updatedAt: true,
-        car: { select: CAR_SELECT },
-      },
-    });
+      if (carId) {
+        const car = await prisma.car.findFirst({
+          where: { id: carId, userId: sub },
+          select: { id: true },
+        });
+        if (!car)
+          return reply
+            .status(403)
+            .send({ error: 'Forbidden', message: 'Car does not belong to you' });
+      }
 
-    return reply.status(201).send(
-      feedCommentResponseSchema.parse({
-        id: comment.id,
-        postId: comment.postId,
-        car: serializeCarProfile(comment.car, buildUrl),
-        body: comment.body,
-        status: comment.status,
-        createdAt: comment.createdAt.toISOString(),
-        updatedAt: comment.updatedAt.toISOString(),
-      }),
-    );
-  });
+      const buildUrl = (key: string) => app.uploads.buildPublicUrl(key);
+
+      const comment = await prisma.feedComment.create({
+        data: { postId, authorUserId: sub, carId: carId ?? null, body, status: 'visible' },
+        select: {
+          id: true,
+          postId: true,
+          body: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          car: { select: CAR_SELECT },
+        },
+      });
+
+      return reply.status(201).send(
+        feedCommentResponseSchema.parse({
+          id: comment.id,
+          postId: comment.postId,
+          car: serializeCarProfile(comment.car, buildUrl),
+          body: comment.body,
+          status: comment.status,
+          createdAt: comment.createdAt.toISOString(),
+          updatedAt: comment.updatedAt.toISOString(),
+        }),
+      );
+    },
+  );
 
   // ---- DELETE /events/:eventId/feed/comments/:commentId ----
-  app.delete('/events/:eventId/feed/comments/:commentId', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub, role } = requireUser(request);
-    const { eventId, commentId } = commentIdParam.parse(request.params);
+  app.delete(
+    '/events/:eventId/feed/comments/:commentId',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub, role } = requireUser(request);
+      const { eventId, commentId } = commentIdParam.parse(request.params);
 
-    const comment = await prisma.feedComment.findFirst({
-      where: { id: commentId, post: { eventId } },
-      select: { id: true, authorUserId: true },
-    });
-    if (!comment) return reply.status(404).send({ error: 'NotFound', message: 'Comment not found' });
+      const comment = await prisma.feedComment.findFirst({
+        where: { id: commentId, post: { eventId } },
+        select: { id: true, authorUserId: true },
+      });
+      if (!comment)
+        return reply.status(404).send({ error: 'NotFound', message: 'Comment not found' });
 
-    const isStaff = role === 'organizer' || role === 'admin';
-    if (!isStaff && comment.authorUserId !== sub) {
-      return reply.status(403).send({ error: 'Forbidden', message: 'Not the comment author' });
-    }
+      const isStaff = role === 'organizer' || role === 'admin';
+      if (!isStaff && comment.authorUserId !== sub) {
+        return reply.status(403).send({ error: 'Forbidden', message: 'Not the comment author' });
+      }
 
-    await prisma.feedComment.delete({ where: { id: commentId } });
-    return reply.status(204).send();
-  });
+      await prisma.feedComment.delete({ where: { id: commentId } });
+      return reply.status(204).send();
+    },
+  );
 
   // ---- POST /events/:eventId/feed/:postId/reactions ----
-  app.post('/events/:eventId/feed/:postId/reactions', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const { postId } = postIdParam.parse(request.params);
-    const { kind } = feedReactionInputSchema.parse(request.body);
+  app.post(
+    '/events/:eventId/feed/:postId/reactions',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { sub, role } = requireUser(request);
+      const { eventId, postId } = postIdParam.parse(request.params);
+      const { kind } = feedReactionInputSchema.parse(request.body);
 
-    const post = await prisma.feedPost.findFirst({ where: { id: postId, status: 'visible' }, select: { id: true } });
-    if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { feedEnabled: true },
+      });
+      if (!event) return reply.status(404).send({ error: 'NotFound', message: 'Event not found' });
+      if (!event.feedEnabled)
+        return reply.status(403).send({ error: 'Forbidden', message: 'Feed disabled' });
 
-    const existing = await prisma.feedReaction.findUnique({
-      where: { postId_userId: { postId, userId: sub } },
-    });
+      const access = await checkFeedReadAccess(eventId, sub, role);
+      if (access === 'banned')
+        return reply.status(403).send({ error: 'Forbidden', message: 'Banned from feed' });
+      if (access === 'forbidden')
+        return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
 
-    if (existing) {
-      if (existing.kind === kind) {
-        await prisma.feedReaction.delete({ where: { postId_userId: { postId, userId: sub } } });
-      } else {
-        await prisma.feedReaction.update({ where: { postId_userId: { postId, userId: sub } }, data: { kind } });
-      }
-    } else {
-      await prisma.feedReaction.create({ data: { postId, userId: sub, kind } });
-    }
+      const post = await prisma.feedPost.findFirst({
+        where: { id: postId, eventId, status: 'visible' },
+        select: { id: true },
+      });
+      if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-    const [likes, mine] = await Promise.all([
-      prisma.feedReaction.count({ where: { postId, kind: 'like' } }),
-      prisma.feedReaction.findUnique({ where: { postId_userId: { postId, userId: sub } }, select: { kind: true } }),
-    ]);
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.feedReaction.findUnique({
+          where: { postId_userId: { postId, userId: sub } },
+        });
 
-    return reply.status(200).send({ likes, mine: mine !== null });
-  });
+        if (existing) {
+          if (existing.kind === kind) {
+            await tx.feedReaction.delete({ where: { postId_userId: { postId, userId: sub } } });
+          } else {
+            await tx.feedReaction.update({
+              where: { postId_userId: { postId, userId: sub } },
+              data: { kind },
+            });
+          }
+        } else {
+          await tx.feedReaction.create({ data: { postId, userId: sub, kind } });
+        }
+
+        const [likes, mine] = await Promise.all([
+          tx.feedReaction.count({ where: { postId, kind: 'like' } }),
+          tx.feedReaction.findUnique({
+            where: { postId_userId: { postId, userId: sub } },
+            select: { kind: true },
+          }),
+        ]);
+
+        return { likes, mine: mine !== null };
+      });
+
+      return reply.status(200).send(result);
+    },
+  );
 };
