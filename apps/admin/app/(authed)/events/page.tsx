@@ -20,40 +20,44 @@ export default async function EventsPage() {
           Novo evento
         </Link>
       </header>
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b border-[color:var(--color-border)] text-sm text-[color:var(--color-muted)]">
-            <th className="py-2">Título</th>
-            <th>Status</th>
-            <th>Data</th>
-            <th>Cidade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((e) => (
-            <tr key={e.id} className="border-b border-[color:var(--color-border)]">
-              <td className="py-2">
-                <Link href={`/events/${e.id}`} className="hover:underline">
-                  {e.title}
-                </Link>
-                <div className="text-xs text-[color:var(--color-muted)]">{e.slug}</div>
-              </td>
-              <td>
-                <StatusBadge status={e.status} />
-              </td>
-              <td className="text-sm">{fmtDate(e.startsAt)}</td>
-              <td className="text-sm">{[e.city, e.stateCode].filter(Boolean).join('/') || '—'}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-[color:var(--color-border)] text-sm text-[color:var(--color-muted)]">
+              <th className="py-2">Título</th>
+              <th>Status</th>
+              <th>Data</th>
+              <th>Cidade</th>
             </tr>
-          ))}
-          {items.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="py-6 text-center text-[color:var(--color-muted)]">
-                Nenhum evento ainda.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((e) => (
+              <tr key={e.id} className="border-b border-[color:var(--color-border)]">
+                <td className="py-2">
+                  <Link href={`/events/${e.id}`} className="hover:underline">
+                    {e.title}
+                  </Link>
+                  <div className="text-xs text-[color:var(--color-muted)]">{e.slug}</div>
+                </td>
+                <td>
+                  <StatusBadge status={e.status} />
+                </td>
+                <td className="text-sm">{fmtDate(e.startsAt)}</td>
+                <td className="text-sm">
+                  {[e.city, e.stateCode].filter(Boolean).join('/') || '—'}
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-[color:var(--color-muted)]">
+                  Nenhum evento ainda.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

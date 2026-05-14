@@ -22,44 +22,46 @@ export default async function ProductsPage() {
           Novo produto
         </Link>
       </header>
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b border-[color:var(--color-border)] text-sm text-[color:var(--color-muted)]">
-            <th className="py-2">Título</th>
-            <th>Status</th>
-            <th>Tipo</th>
-            <th>Preço base</th>
-            <th>Variantes</th>
-            <th>Fotos</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((p) => (
-            <tr key={p.id} className="border-b border-[color:var(--color-border)]">
-              <td className="py-2">
-                <Link href={`/loja/produtos/${p.id}`} className="hover:underline">
-                  {p.title}
-                </Link>
-                <div className="text-xs text-[color:var(--color-muted)]">{p.slug}</div>
-              </td>
-              <td>
-                <ProductStatusBadge status={p.status} />
-              </td>
-              <td className="text-sm">{p.productTypeName}</td>
-              <td className="text-sm">{fmtBRL(p.basePriceCents, p.currency)}</td>
-              <td className="text-sm">{p.variantCount}</td>
-              <td className="text-sm">{p.photoCount}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-[color:var(--color-border)] text-sm text-[color:var(--color-muted)]">
+              <th className="py-2">Título</th>
+              <th>Status</th>
+              <th>Tipo</th>
+              <th>Preço base</th>
+              <th>Variantes</th>
+              <th>Fotos</th>
             </tr>
-          ))}
-          {items.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="py-6 text-center text-[color:var(--color-muted)]">
-                Nenhum produto ainda.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((p) => (
+              <tr key={p.id} className="border-b border-[color:var(--color-border)]">
+                <td className="py-2">
+                  <Link href={`/loja/produtos/${p.id}`} className="hover:underline">
+                    {p.title}
+                  </Link>
+                  <div className="text-xs text-[color:var(--color-muted)]">{p.slug}</div>
+                </td>
+                <td>
+                  <ProductStatusBadge status={p.status} />
+                </td>
+                <td className="text-sm">{p.productTypeName}</td>
+                <td className="text-sm">{fmtBRL(p.basePriceCents, p.currency)}</td>
+                <td className="text-sm">{p.variantCount}</td>
+                <td className="text-sm">{p.photoCount}</td>
+              </tr>
+            ))}
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-[color:var(--color-muted)]">
+                  Nenhum produto ainda.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

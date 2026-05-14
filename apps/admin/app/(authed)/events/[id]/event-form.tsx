@@ -62,7 +62,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {event.status === 'draft' ? (
             <>
               <form action={publishAction}>
@@ -112,7 +112,7 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
         {statusError ? <p className="text-sm text-red-400">{statusError}</p> : null}
       </div>
 
-      <form action={action} className="grid grid-cols-2 gap-4">
+      <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Título</span>
           <input
@@ -121,13 +121,13 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2"
           />
         </label>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <CoverUploader
             initialKey={values.coverObjectKey ?? event.coverObjectKey}
             initialUrl={event.coverUrl}
           />
         </div>
-        <label className="col-span-2 flex flex-col gap-1">
+        <label className="sm:col-span-2 flex flex-col gap-1">
           <span className="text-sm text-[color:var(--color-muted)]">Descrição</span>
           <textarea
             name="description"
@@ -223,8 +223,8 @@ export const EventForm = ({ event }: { event: AdminEventDetail }) => {
             Deixe em branco para não limitar.
           </span>
         </label>
-        {state.error ? <p className="col-span-2 text-sm text-red-400">{state.error}</p> : null}
-        <div className="col-span-2">
+        {state.error ? <p className="sm:col-span-2 text-sm text-red-400">{state.error}</p> : null}
+        <div className="sm:col-span-2">
           <Submit label="Salvar" />
         </div>
       </form>
