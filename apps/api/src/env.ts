@@ -6,10 +6,8 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DATABASE_URL: z.string().url(),
   SENTRY_DSN: z.string().optional(),
-  GIT_SHA: z
-    .string()
-    .default('dev')
-    .transform((v) => v || 'dev'),
+  GIT_SHA: z.string().optional(),
+  RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
   CORS_ORIGINS: z
     .string()
     .default('')
@@ -56,7 +54,19 @@ const envSchema = z.object({
   DEV_FEE_PERCENT: z.coerce.number().int().min(0).max(100).default(10),
 });
 
-export type Env = z.infer<typeof envSchema>;
+type RawEnv = z.infer<typeof envSchema>;
+
+export type Env = Omit<RawEnv, 'GIT_SHA' | 'RAILWAY_GIT_COMMIT_SHA'> & {
+  GIT_SHA: string;
+};
+
+const resolveGitSha = (env: RawEnv): string => {
+  if (env.GIT_SHA && env.GIT_SHA.length > 0) return env.GIT_SHA;
+  if (env.RAILWAY_GIT_COMMIT_SHA && env.RAILWAY_GIT_COMMIT_SHA.length > 0) {
+    return env.RAILWAY_GIT_COMMIT_SHA;
+  }
+  return 'dev';
+};
 
 export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
   const parsed = envSchema.safeParse(source);
@@ -64,5 +74,7 @@ export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
     const flat = parsed.error.flatten().fieldErrors;
     throw new Error(`Invalid environment: ${JSON.stringify(flat)}`);
   }
-  return parsed.data;
+  const { RAILWAY_GIT_COMMIT_SHA: _railwaySha, ...rest } = parsed.data;
+  void _railwaySha;
+  return { ...rest, GIT_SHA: resolveGitSha(parsed.data) };
 };

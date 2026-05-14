@@ -24,7 +24,11 @@ Postgres database. Build + start config lives in `apps/api/railway.json`
    Bootstrap-required (must be set before first deploy):
    - `DATABASE_URL` — reference the Postgres plugin's `DATABASE_URL`.
    - `NODE_ENV=production`, `PORT=4000`, `LOG_LEVEL=info`.
-   - `GIT_SHA=${{RAILWAY_GIT_COMMIT_SHA}}` — surfaces on `/health`.
+   - `GIT_SHA` — optional override that surfaces on `/health` and in JSON
+     logs. If unset/empty the API automatically falls back to
+     `RAILWAY_GIT_COMMIT_SHA` (Railway injects this for every deploy) and
+     then to `"dev"`. Only set this manually when you need a SHA that
+     differs from the deployed commit.
    - `JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER` —
      `openssl rand -base64 48` each.
    - `APP_WEB_BASE_URL`, `MAIL_FROM`, `RESEND_API_KEY`.
