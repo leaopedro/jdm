@@ -135,10 +135,11 @@ model Car {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  photos    CarPhoto[]
-  tickets   Ticket[]
-  feedPosts FeedPost[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos       CarPhoto[]
+  tickets      Ticket[]
+  feedPosts    FeedPost[]
+  feedComments FeedComment[]
 
   @@index([userId])
 }
@@ -967,6 +968,7 @@ model FeedComment {
   id           String            @id @default(cuid())
   postId       String
   authorUserId String?
+  carId        String?
   body         String            @db.VarChar(1000)
   status       FeedCommentStatus @default(visible)
   hiddenAt     DateTime?
@@ -976,10 +978,12 @@ model FeedComment {
 
   post    FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   author  User?    @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  car     Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
   reports Report[]
 
   @@index([postId, createdAt])
   @@index([authorUserId])
+  @@index([carId])
   @@index([status, createdAt])
 }
 
