@@ -26,6 +26,24 @@ export function isScanLocked(state: ScanState): boolean {
   return state.kind !== 'idle';
 }
 
+export function makeScanCallback(
+  stateRef: { current: ScanState },
+  lastScanRef: { current: { code: string; at: number } | null },
+  onScan: (code: string) => void,
+): (res: { getText: () => string } | null) => void {
+  return (res) => {
+    if (!res) return;
+    if (stateRef.current.kind !== 'idle') return;
+    const code = res.getText();
+    const now = Date.now();
+    const last = lastScanRef.current;
+    if (last && last.code === code && now - last.at < RESCAN_COOLDOWN_MS) return;
+    stateRef.current = { kind: 'pending' };
+    lastScanRef.current = { code, at: now };
+    onScan(code);
+  };
+}
+
 function isExtraCode(code: string): boolean {
   return code.startsWith('e.');
 }
@@ -118,19 +136,13 @@ export function Scanner({ eventId }: { eventId: string }) {
         return;
       }
       try {
+        const guard = makeScanCallback(stateRef, lastScanRef, handleScan);
         const next = await reader.decodeFromConstraints(
           { video: { facingMode: { ideal: 'environment' } } },
           videoRef.current!,
           (res) => {
             if (stopped || !res) return;
-            if (stateRef.current.kind !== 'idle') return;
-            const code = res.getText();
-            const now = Date.now();
-            const last = lastScanRef.current;
-            if (last && last.code === code && now - last.at < RESCAN_COOLDOWN_MS) return;
-            stateRef.current = { kind: 'pending' };
-            lastScanRef.current = { code, at: now };
-            void handleScan(code);
+            guard(res);
           },
         );
         if (stopped) {

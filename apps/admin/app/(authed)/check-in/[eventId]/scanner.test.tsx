@@ -14,7 +14,7 @@ vi.mock('@zxing/browser', () => ({
   })),
 }));
 
-import { isScanLocked, ScanResultOverlay, type ScanState } from './scanner';
+import { isScanLocked, makeScanCallback, ScanResultOverlay, type ScanState } from './scanner';
 
 import type {
   CheckInActionResult,
@@ -267,5 +267,37 @@ describe('ScanResultOverlay', () => {
       expect(html).toContain('Voucher não encontrado');
       expect(html).toContain('Escanear próximo');
     });
+  });
+});
+
+describe('makeScanCallback — decode lock behavior', () => {
+  it('ignores a second QR scan while the lock is active', () => {
+    const stateRef: { current: ScanState } = { current: { kind: 'idle' } };
+    const lastScanRef: { current: { code: string; at: number } | null } = { current: null };
+    const onScan = vi.fn();
+    const cb = makeScanCallback(stateRef, lastScanRef, onScan);
+
+    cb({ getText: () => 'QR-1' });
+    expect(onScan).toHaveBeenCalledOnce();
+    expect(stateRef.current.kind).toBe('pending');
+
+    cb({ getText: () => 'QR-2' });
+    expect(onScan).toHaveBeenCalledOnce();
+  });
+
+  it('allows the same QR again after dismiss resets stateRef and lastScanRef', () => {
+    const stateRef: { current: ScanState } = { current: { kind: 'idle' } };
+    const lastScanRef: { current: { code: string; at: number } | null } = { current: null };
+    const onScan = vi.fn();
+    const cb = makeScanCallback(stateRef, lastScanRef, onScan);
+
+    cb({ getText: () => 'QR-1' });
+    expect(onScan).toHaveBeenCalledOnce();
+
+    stateRef.current = { kind: 'idle' };
+    lastScanRef.current = null;
+
+    cb({ getText: () => 'QR-1' });
+    expect(onScan).toHaveBeenCalledTimes(2);
   });
 });
