@@ -46,7 +46,7 @@ model User {
   avatarObjectKey String? @db.VarChar(300)
 
   // push preferences (F10)
-  pushPrefs       Json    @default("{\"transactional\":true,\"marketing\":true}")
+  pushPrefs Json @default("{\"transactional\":true,\"marketing\":true}")
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
@@ -61,6 +61,11 @@ model User {
   shippingAddresses   ShippingAddress[]
   broadcastDeliveries BroadcastDelivery[]
   supportTickets      SupportTicket[]
+  feedPosts           FeedPost[]
+  feedComments        FeedComment[]
+  feedReactions       FeedReaction[]
+  reportsFiled        Report[]             @relation("ReportReporter")
+  reportsResolved     Report[]             @relation("ReportResolver")
 
   @@index([createdAt])
 }
@@ -130,9 +135,10 @@ model Car {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  photos  CarPhoto[]
-  tickets Ticket[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos    CarPhoto[]
+  tickets   Ticket[]
+  feedPosts FeedPost[]
 
   @@index([userId])
 }
@@ -166,24 +172,29 @@ enum EventStatus {
 }
 
 model Event {
-  id                String      @id @default(cuid())
-  slug              String      @unique @db.VarChar(140)
-  title             String      @db.VarChar(140)
-  description       String      @db.Text
-  coverObjectKey    String?     @db.VarChar(300)
+  id                String        @id @default(cuid())
+  slug              String        @unique @db.VarChar(140)
+  title             String        @db.VarChar(140)
+  description       String        @db.Text
+  coverObjectKey    String?       @db.VarChar(300)
   startsAt          DateTime
   endsAt            DateTime
-  venueName         String?     @db.VarChar(140)
-  venueAddress      String?     @db.VarChar(300)
-  city              String?     @db.VarChar(100)
-  stateCode         String?     @db.VarChar(2)
+  venueName         String?       @db.VarChar(140)
+  venueAddress      String?       @db.VarChar(300)
+  city              String?       @db.VarChar(100)
+  stateCode         String?       @db.VarChar(2)
   type              EventType
-  status            EventStatus @default(draft)
+  status            EventStatus   @default(draft)
   capacity          Int
   maxTicketsPerUser Int?
   publishedAt       DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  feedEnabled       Boolean       @default(true)
+  feedAccess        FeedAccess    @default(attendees)
+  postingAccess     PostingAccess @default(attendees)
+  maxPostsPerUser   Int?
+  maxPhotosPerUser  Int           @default(5)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   tiers          TicketTier[]
   extras         TicketExtra[]
@@ -192,6 +203,8 @@ model Event {
   cartItems      CartItem[]
   orderItems     OrderItem[]
   pickupVouchers PickupVoucher[]
+  feedPosts      FeedPost[]
+  reports        Report[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -633,25 +646,25 @@ enum PickupVoucherStatus {
 }
 
 model PickupVoucher {
-  id          String              @id @default(cuid())
-  orderId     String
-  orderItemId String
-  unitIndex   Int
-  ticketId    String
-  eventId     String
-  variantId   String?
-  code        String              @unique @db.VarChar(300)
-  status      PickupVoucherStatus @default(valid)
-  usedAt      DateTime?
+  id           String              @id @default(cuid())
+  orderId      String
+  orderItemId  String
+  unitIndex    Int
+  ticketId     String
+  eventId      String
+  variantId    String?
+  code         String              @unique @db.VarChar(300)
+  status       PickupVoucherStatus @default(valid)
+  usedAt       DateTime?
   usedByUserId String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
-  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderItem OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  ticket    Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  event     Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  variant   Variant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  variant   Variant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@unique([orderItemId, unitIndex])
   @@index([orderId])
@@ -873,4 +886,141 @@ model SupportTicket {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([internalStatus, createdAt])
+}
+
+enum FeedAccess {
+  public
+  attendees
+  members_only
+}
+
+enum PostingAccess {
+  attendees
+  members_only
+  organizers_only
+}
+
+enum FeedPostStatus {
+  visible
+  hidden
+  removed
+}
+
+enum FeedCommentStatus {
+  visible
+  hidden
+  removed
+}
+
+enum ReportStatus {
+  open
+  resolved
+  dismissed
+}
+
+enum ReportTargetKind {
+  post
+  comment
+}
+
+model FeedPost {
+  id           String         @id @default(cuid())
+  eventId      String
+  carId        String?
+  authorUserId String?
+  body         String         @db.VarChar(2000)
+  status       FeedPostStatus @default(visible)
+  hiddenAt     DateTime?
+  hiddenById   String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  car       Car?            @relation(fields: [carId], references: [id], onDelete: SetNull)
+  author    User?           @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  photos    FeedPostPhoto[]
+  comments  FeedComment[]
+  reactions FeedReaction[]
+  reports   Report[]
+
+  @@index([eventId, createdAt(sort: Desc)])
+  @@index([carId])
+  @@index([authorUserId])
+  @@index([status, createdAt])
+}
+
+model FeedPostPhoto {
+  id        String   @id @default(cuid())
+  postId    String
+  objectKey String   @db.VarChar(300)
+  width     Int?
+  height    Int?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  post FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+}
+
+model FeedComment {
+  id           String            @id @default(cuid())
+  postId       String
+  authorUserId String?
+  body         String            @db.VarChar(1000)
+  status       FeedCommentStatus @default(visible)
+  hiddenAt     DateTime?
+  hiddenById   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  post    FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User?    @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  reports Report[]
+
+  @@index([postId, createdAt])
+  @@index([authorUserId])
+  @@index([status, createdAt])
+}
+
+model FeedReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  kind      String   @default("like") @db.VarChar(20)
+  createdAt DateTime @default(now())
+
+  post FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model Report {
+  id             String           @id @default(cuid())
+  eventId        String
+  targetKind     ReportTargetKind
+  postId         String?
+  commentId      String?
+  reporterUserId String?
+  reason         String           @db.VarChar(300)
+  status         ReportStatus     @default(open)
+  resolverId     String?
+  resolution     String?          @db.VarChar(300)
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  event    Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  post     FeedPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment  FeedComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter User?        @relation("ReportReporter", fields: [reporterUserId], references: [id], onDelete: SetNull)
+  resolver User?        @relation("ReportResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status, createdAt(sort: Desc)])
+  @@index([postId])
+  @@index([commentId])
+  @@index([reporterUserId])
 }
