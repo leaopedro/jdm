@@ -58,6 +58,8 @@
 
 ---
 
+> note: `Report.eventId` removed post-plan (commit `20802eb`). CTO review flagged it allowed cross-event misattribution. Event is derivable from `post.eventId` or `comment.post.eventId`. New migration `20260514141646_drop_report_eventid` drops the column. `reports Report[]` back-relation also removed from `Event` model.
+
 ## ✅ Task 1: Add Prisma enums + Feed-domain models + Event fields
 
 **Files:**
