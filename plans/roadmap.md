@@ -589,7 +589,9 @@ copyPaste, expiresAt }`.
 
 #### 9.1 Schema: FeedPost, FeedLike, FeedComment, Report
 
-- [ ] **Done when:** migration green; shared schemas in `@jdm/shared/feed`.
+- [~] **Done when:** migration green; shared schemas in `@jdm/shared/feed`.
+
+> note: model named `FeedReaction` (kind-flexible) instead of `FeedLike`; `Report` covers posts and comments; feed settings persisted on `Event`.
 
 #### 9.2 API: feed CRUD
 

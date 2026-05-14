@@ -30,6 +30,10 @@
       "types": "./src/events.ts",
       "default": "./dist/events.js"
     },
+    "./feed": {
+      "types": "./src/feed.ts",
+      "default": "./dist/feed.js"
+    },
     "./general-settings": {
       "types": "./src/general-settings.ts",
       "default": "./dist/general-settings.js"
