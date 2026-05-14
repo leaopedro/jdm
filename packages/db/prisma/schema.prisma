@@ -205,7 +205,6 @@ model Event {
   orderItems     OrderItem[]
   pickupVouchers PickupVoucher[]
   feedPosts      FeedPost[]
-  reports        Report[]
 
   @@index([stateCode, city, startsAt])
   @@index([status, startsAt])
@@ -1004,7 +1003,6 @@ model FeedReaction {
 
 model Report {
   id             String           @id @default(cuid())
-  eventId        String
   targetKind     ReportTargetKind
   postId         String?
   commentId      String?
@@ -1017,14 +1015,13 @@ model Report {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  event    Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   post     FeedPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
   comment  FeedComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
   reporter User?        @relation("ReportReporter", fields: [reporterUserId], references: [id], onDelete: SetNull)
   resolver User?        @relation("ReportResolver", fields: [resolverId], references: [id], onDelete: SetNull)
 
-  @@index([eventId, status, createdAt(sort: Desc)])
   @@index([postId])
   @@index([commentId])
   @@index([reporterUserId])
+  @@index([status, createdAt(sort: Desc)])
 }
