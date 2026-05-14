@@ -183,7 +183,7 @@ const cartSettlementPriority = (kind: 'ticket' | 'extras_only' | 'product' | 'mi
 
 export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
   await app.register(rateLimit, {
-    max: 60,
+    max: 20,
     timeWindow: '1 minute',
     keyGenerator: (req) => req.ip,
   });
@@ -251,18 +251,25 @@ export const abacatepayWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'missing id or event field' });
     }
 
-    // H1: Reject sandbox/devMode events in production unless an explicit
-    // override is enabled for controlled internal testing.
+    // M-9: Fail closed — reject sandbox/devMode events in production unless an
+    // explicit override is enabled for controlled internal testing.
     if (
       event.devMode &&
       app.env.NODE_ENV === 'production' &&
       !app.env.ABACATEPAY_DEV_WEBHOOK_ENABLED
     ) {
+      Sentry.captureMessage('abacatepay webhook: devMode event received in production', {
+        level: 'error',
+        tags: { kind: 'webhook-devmode-in-prod', provider: 'abacatepay' },
+        extra: { eventId: event.id, eventType: event.event },
+      });
       request.log.warn(
         { eventId: event.id, eventType: event.event },
         'abacatepay webhook: rejected devMode event in production',
       );
-      return reply.status(200).send({ ok: true });
+      return reply
+        .status(400)
+        .send({ error: 'BadRequest', message: 'devMode events rejected in production' });
     }
 
     // L6: Reject unknown event types

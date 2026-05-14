@@ -407,12 +407,13 @@ describe('POST /abacatepay/webhook', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  // --- devMode (H1) ---
+  // --- devMode (M-9) ---
 
-  it('skips processing for devMode events in production', async () => {
+  it('returns 400 for devMode events in production', async () => {
     const prodEnv: Env = {
       ...env,
-      NODE_ENV: 'production',
+      NODE_ENV: 'production' as const,
+      ABACATEPAY_DEV_WEBHOOK_ENABLED: false,
       RESEND_API_KEY: 'fake-resend-key',
       SENTRY_DSN: undefined,
       WORKER_ENABLED: false,
@@ -423,6 +424,7 @@ describe('POST /abacatepay/webhook', () => {
       push: new DevPushSender(),
     });
 
+    Sentry.captureMessage.mockClear();
     const payload = makePayload({ id: 'evt_devmode_1', devMode: true });
     const res = await prodApp.inject({
       method: 'POST',
@@ -434,12 +436,25 @@ describe('POST /abacatepay/webhook', () => {
       payload,
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: 'BadRequest',
+      message: 'devMode events rejected in production',
+    });
+
+    // Sentry must be alerted
+    const devModeCalls = Sentry.captureMessage.mock.calls.filter(
+      ([msg]) => typeof msg === 'string' && msg.includes('devMode event received in production'),
+    );
+    expect(devModeCalls).toHaveLength(1);
+
     // Event should NOT be stored — it was rejected
     const record = await prisma.paymentWebhookEvent.findUnique({
       where: { provider_eventId: { provider: 'abacatepay', eventId: 'evt_devmode_1' } },
     });
     expect(record).toBeNull();
+
+    Sentry.captureMessage.mockClear();
     await prodApp.close();
   });
 
