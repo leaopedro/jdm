@@ -827,3 +827,179 @@ describe('GET /events/:eventId/feed/:postId/comments - visibility guards', () =>
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('tryAuth disabled-account check', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('disabled user token is ignored on optional-auth feed read', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'disabled@jdm.test' });
+    await prisma.user.update({ where: { id: user.id }, data: { status: 'disabled' } });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/events/${event.id}/feed`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.posts).toBeDefined();
+  });
+});
+
+describe('write-side ban enforcement', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('banned user cannot PATCH own post', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'author@jdm.test' });
+    const { user: admin } = await createUser({ email: 'admin@jdm.test' });
+    const tier = await seedTier(event.id);
+    await seedTicket(user.id, event.id, tier.id);
+    const car = await seedCar(user.id);
+
+    const post = await prisma.feedPost.create({
+      data: {
+        eventId: event.id,
+        authorUserId: user.id,
+        carId: car.id,
+        body: 'hi',
+        status: 'visible',
+      },
+    });
+
+    await prisma.feedBan.create({
+      data: {
+        eventId: event.id,
+        userId: user.id,
+        scope: 'post',
+        reason: 'test',
+        bannedById: admin.id,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/events/${event.id}/feed/${post.id}`,
+      payload: { body: 'edited' },
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('banned user cannot DELETE own post', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'author@jdm.test' });
+    const { user: admin } = await createUser({ email: 'admin@jdm.test' });
+    const tier = await seedTier(event.id);
+    await seedTicket(user.id, event.id, tier.id);
+    const car = await seedCar(user.id);
+
+    const post = await prisma.feedPost.create({
+      data: {
+        eventId: event.id,
+        authorUserId: user.id,
+        carId: car.id,
+        body: 'hi',
+        status: 'visible',
+      },
+    });
+
+    await prisma.feedBan.create({
+      data: {
+        eventId: event.id,
+        userId: user.id,
+        scope: 'post',
+        reason: 'test',
+        bannedById: admin.id,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/${post.id}`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('banned user cannot DELETE own comment', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'author@jdm.test' });
+    const { user: admin } = await createUser({ email: 'admin@jdm.test' });
+    const tier = await seedTier(event.id);
+    await seedTicket(user.id, event.id, tier.id);
+    const car = await seedCar(user.id);
+
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'post', status: 'visible' },
+    });
+
+    const comment = await prisma.feedComment.create({
+      data: {
+        postId: post.id,
+        authorUserId: user.id,
+        carId: car.id,
+        body: 'hi',
+        status: 'visible',
+      },
+    });
+
+    await prisma.feedBan.create({
+      data: {
+        eventId: event.id,
+        userId: user.id,
+        scope: 'post',
+        reason: 'test',
+        bannedById: admin.id,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/events/${event.id}/feed/comments/${comment.id}`,
+      headers: { authorization: bearer(env, user.id) },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('reaction toggle race safety', () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    await resetDatabase();
+    app = await makeApp();
+  });
+  afterEach(() => app.close());
+
+  it('concurrent first likes do not 500', async () => {
+    const event = await seedEvent({ feedAccess: 'public' });
+    const { user } = await createUser({ email: 'racer@jdm.test' });
+    const post = await prisma.feedPost.create({
+      data: { eventId: event.id, body: 'race post', status: 'visible' },
+    });
+
+    const inject = () =>
+      app.inject({
+        method: 'POST',
+        url: `/events/${event.id}/feed/${post.id}/reactions`,
+        payload: { kind: 'like' },
+        headers: { authorization: bearer(env, user.id) },
+      });
+
+    const results = await Promise.all([inject(), inject()]);
+    const codes = results.map((r) => r.statusCode);
+    expect(codes).not.toContain(500);
+    expect(codes.every((c) => c === 200)).toBe(true);
+  });
+});

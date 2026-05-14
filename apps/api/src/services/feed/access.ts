@@ -57,6 +57,14 @@ export async function checkFeedReadAccess(
   return 'ok';
 }
 
+export async function isFeedBanned(eventId: string, userId: string): Promise<boolean> {
+  const ban = await prisma.feedBan.findFirst({
+    where: { eventId, userId },
+    select: { id: true },
+  });
+  return ban !== null;
+}
+
 export async function checkFeedPostAccess(
   eventId: string,
   userId: string | null,

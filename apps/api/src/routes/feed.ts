@@ -12,9 +12,10 @@ import {
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import { requireUser } from '../plugins/auth.js';
 import { verifyAccessToken } from '../services/auth/tokens.js';
-import { checkFeedPostAccess, checkFeedReadAccess } from '../services/feed/access.js';
+import { checkFeedPostAccess, checkFeedReadAccess, isFeedBanned } from '../services/feed/access.js';
 
 const eventIdParam = z.object({ eventId: z.string().min(1) });
 const postIdParam = z.object({ eventId: z.string().min(1), postId: z.string().min(1) });
@@ -82,7 +83,13 @@ const tryAuth = async (
   if (!header?.startsWith('Bearer ')) return;
   const token = header.slice('Bearer '.length);
   try {
-    request.user = verifyAccessToken(token, request.server.env);
+    const payload = verifyAccessToken(token, request.server.env);
+    const userRow = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { status: true },
+    });
+    if (!userRow || userRow.status === 'disabled') return;
+    request.user = payload;
   } catch {
     // ignore invalid token for optional-auth routes
   }
@@ -267,6 +274,9 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
       const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
       if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
+      if (await isFeedBanned(eventId, sub))
+        return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
+
       const isStaff = role === 'organizer' || role === 'admin';
       if (!isStaff && post.authorUserId !== sub) {
         return reply.status(403).send({ error: 'Forbidden', message: 'Not the post author' });
@@ -340,6 +350,9 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
 
       const post = await prisma.feedPost.findFirst({ where: { id: postId, eventId } });
       if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
+
+      if (await isFeedBanned(eventId, sub))
+        return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
 
       const isStaff = role === 'organizer' || role === 'admin';
       if (!isStaff && post.authorUserId !== sub) {
@@ -507,6 +520,9 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
       if (!comment)
         return reply.status(404).send({ error: 'NotFound', message: 'Comment not found' });
 
+      if (await isFeedBanned(eventId, sub))
+        return reply.status(403).send({ error: 'Forbidden', message: 'Banned from posting' });
+
       const isStaff = role === 'organizer' || role === 'admin';
       if (!isStaff && comment.authorUserId !== sub) {
         return reply.status(403).send({ error: 'Forbidden', message: 'Not the comment author' });
@@ -546,34 +562,34 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
       });
       if (!post) return reply.status(404).send({ error: 'NotFound', message: 'Post not found' });
 
-      const result = await prisma.$transaction(async (tx) => {
-        const existing = await tx.feedReaction.findUnique({
-          where: { postId_userId: { postId, userId: sub } },
-        });
+      const where = { postId_userId: { postId, userId: sub } };
 
-        if (existing) {
-          if (existing.kind === kind) {
-            await tx.feedReaction.delete({ where: { postId_userId: { postId, userId: sub } } });
-          } else {
-            await tx.feedReaction.update({
-              where: { postId_userId: { postId, userId: sub } },
-              data: { kind },
-            });
-          }
+      let created = false;
+      try {
+        await prisma.feedReaction.create({ data: { postId, userId: sub, kind } });
+        created = true;
+      } catch (err) {
+        if (!isUniqueConstraintError(err)) throw err;
+      }
+
+      if (!created) {
+        const existing = await prisma.feedReaction.findUnique({ where, select: { kind: true } });
+        if (existing?.kind === kind) {
+          await prisma.feedReaction.delete({ where });
         } else {
-          await tx.feedReaction.create({ data: { postId, userId: sub, kind } });
+          await prisma.feedReaction.update({ where, data: { kind } });
         }
+      }
 
-        const [likes, mine] = await Promise.all([
-          tx.feedReaction.count({ where: { postId, kind: 'like' } }),
-          tx.feedReaction.findUnique({
-            where: { postId_userId: { postId, userId: sub } },
-            select: { kind: true },
-          }),
-        ]);
+      const [likes, mine] = await Promise.all([
+        prisma.feedReaction.count({ where: { postId, kind: 'like' } }),
+        prisma.feedReaction.findUnique({
+          where,
+          select: { kind: true },
+        }),
+      ]);
 
-        return { likes, mine: mine?.kind === 'like' };
-      });
+      const result = { likes, mine: mine?.kind === 'like' };
 
       return reply.status(200).send(result);
     },
