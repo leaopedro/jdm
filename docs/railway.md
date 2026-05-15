@@ -301,9 +301,25 @@ current number.
 | ---------- | ------------ | -------------------- | ------------------------ | ------------------------------------------------ |
 | 2026-05-01 | Atlas        | Railway prod (empty) | Docker postgres:18 local | ✓ 10/10 migrations, all tables, row counts match |
 
-**Quarterly rehearsal schedule:** repeat this procedure every quarter
-(target: Feb, May, Aug, Nov) using a non-prod Postgres. Record results in
-the table above. Raise a CTO-escalation if the RTO target is missed.
+**Quarterly rehearsal schedule:** run one restore rehearsal during the first
+business week of February, May, August, and November using a non-prod
+Postgres.
+
+- **Owner:** platform/infra duty owner for the quarter. Until a dedicated
+  infra owner exists, Atlas owns scheduling, execution, and evidence capture.
+- **Paperclip reminder:** schedule the recurring run issue for 09:00
+  `America/Sao_Paulo` on the 3rd day of February, May, August, and November,
+  then complete the rehearsal during that same business week.
+- **First scheduled window:** 2026-08-03 through 2026-08-07
+  (`America/Sao_Paulo`).
+- **Evidence artifact:** attach the restore run log, row-count query output,
+  `prisma migrate status` output, and the restored target identifier to the
+  run issue or linked ops ticket.
+- **Recording:** append one row to the rehearsal log table above after each
+  run with the date, operator, source, target, and outcome summary.
+- **Escalation:** notify the CTO immediately if the rehearsal misses the
+  quarter, exceeds the 2 h RTO target, or reveals restore drift that is not
+  resolved before the run is closed.
 
 ### Backup & Restore Troubleshooting
 
