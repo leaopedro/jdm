@@ -27,7 +27,7 @@ export const initSentry = () => {
           const rawArgs: unknown = crumb.data?.['arguments'];
           if (Array.isArray(rawArgs) && rawArgs.length > 0) {
             const serialized = rawArgs
-              .map((a) => {
+              .map((a: unknown) => {
                 if (typeof a === 'string') return a;
                 try {
                   return JSON.stringify(a);

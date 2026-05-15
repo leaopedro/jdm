@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { recordConsent, withdrawConsent } from '../services/consent.js';
 import type { Uploads } from '../services/uploads/index.js';
 
 type DbUser = {
@@ -89,6 +90,21 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
       async (request, reply) => {
         const { sub } = requireUser(request);
         const input = updatePushPrefsRequestSchema.parse(request.body);
+
+        if (input.marketing) {
+          await recordConsent({
+            userId: sub,
+            purpose: 'push_marketing',
+            version: 'v1',
+            channel: 'mobile',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'] ?? null,
+            evidence: { source: 'push_preferences_toggle' },
+          });
+        } else {
+          await withdrawConsent(sub, 'push_marketing');
+        }
+
         const user = await prisma.user.findUnique({
           where: { id: sub },
           select: { pushPrefs: true },
@@ -96,15 +112,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
 
         if (!user) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const current = normalizePushPrefs(user.pushPrefs);
-        const updated = pushPrefsSchema.parse({ ...current, marketing: input.marketing });
-
-        await prisma.user.update({
-          where: { id: sub },
-          data: { pushPrefs: updated as Prisma.InputJsonValue },
-        });
-
-        return updated;
+        return normalizePushPrefs(user.pushPrefs);
       },
     );
   });

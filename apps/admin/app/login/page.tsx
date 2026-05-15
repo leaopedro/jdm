@@ -80,7 +80,7 @@ const MfaForm = ({ mfaToken }: { mfaToken: string }) => {
           type="text"
           autoComplete="one-time-code"
           inputMode={useRecovery ? 'text' : 'numeric'}
-          placeholder={useRecovery ? 'XXXX-XXXX' : '000000'}
+          placeholder={useRecovery ? 'XXXX-XXXX-XXXX' : '000000'}
           required
           className="rounded border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-center font-mono text-lg tracking-widest"
         />
