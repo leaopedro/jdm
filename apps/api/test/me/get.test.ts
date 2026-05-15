@@ -50,4 +50,24 @@ describe('GET /me', () => {
     });
     expect(res.json()).not.toHaveProperty('passwordHash');
   });
+
+  it('serializes staff users without validation errors', async () => {
+    const { user } = await createUser({
+      email: 'staff@jdm.test',
+      verified: true,
+      role: 'staff',
+    });
+    const env = loadEnv();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: bearer(env, user.id, 'staff') },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      id: user.id,
+      email: 'staff@jdm.test',
+      role: 'staff',
+    });
+  });
 });
