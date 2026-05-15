@@ -27,10 +27,10 @@ export const encryptSecret = (plaintext: string, key: string): string => {
 
 export const decryptSecret = (ciphertext: string, key: string): string => {
   const keyBuf = toKeyBuf(key);
-  const [ivB64, tagB64, dataB64] = ciphertext.split(':');
-  const iv = Buffer.from(ivB64, 'base64');
-  const authTag = Buffer.from(tagB64, 'base64');
-  const data = Buffer.from(dataB64, 'base64');
+  const parts = ciphertext.split(':');
+  const iv = Buffer.from(parts[0]!, 'base64');
+  const authTag = Buffer.from(parts[1]!, 'base64');
+  const data = Buffer.from(parts[2]!, 'base64');
   const decipher = createDecipheriv(ALGORITHM, keyBuf, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   return decipher.update(data).toString('utf8') + decipher.final('utf8');
@@ -71,7 +71,7 @@ export const generateRecoveryCodes = (count = 10): string[] => {
     const bytes = randomBytes(8);
     let code = '';
     for (let j = 0; j < 8; j++) {
-      code += SAFE_CHARS[bytes[j] % SAFE_CHARS.length];
+      code += SAFE_CHARS[bytes[j]! % SAFE_CHARS.length];
       if (j === 3) code += '-';
     }
     codes.push(code);

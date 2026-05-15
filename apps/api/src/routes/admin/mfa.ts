@@ -17,11 +17,10 @@ import {
   verifyTotp,
 } from '../../services/auth/mfa.js';
 
-const requireMfaKey = (env: { MFA_ENCRYPTION_KEY?: string }): string => {
-  if (!env.MFA_ENCRYPTION_KEY) {
-    throw new Error('MFA_ENCRYPTION_KEY is not configured');
-  }
-  return env.MFA_ENCRYPTION_KEY;
+const requireMfaKey = (env: Record<string, unknown>): string => {
+  const key = (env as { MFA_ENCRYPTION_KEY?: string }).MFA_ENCRYPTION_KEY;
+  if (!key) throw new Error('MFA_ENCRYPTION_KEY is not configured');
+  return key;
 };
 
 // eslint-disable-next-line @typescript-eslint/require-await
