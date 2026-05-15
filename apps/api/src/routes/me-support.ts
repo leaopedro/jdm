@@ -9,13 +9,18 @@ import type { SupportTicket as DbTicket } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
+import { decryptField, encryptField } from '../services/crypto/field-encryption.js';
 import type { Uploads } from '../services/uploads/index.js';
 
-const serializeTicket = async (t: DbTicket, uploads: Uploads): Promise<SupportTicket> =>
+const serializeTicket = async (
+  t: DbTicket,
+  uploads: Uploads,
+  encKey: string,
+): Promise<SupportTicket> =>
   supportTicketSchema.parse({
     id: t.id,
     phone: t.phone,
-    message: t.message,
+    message: decryptField(t.message, encKey) ?? t.message,
     attachmentUrl: t.attachmentObjectKey
       ? await uploads.buildSignedGetUrl(t.attachmentObjectKey)
       : null,
@@ -30,7 +35,11 @@ export const meSupportRoutes: FastifyPluginAsync = async (app) => {
       where: { userId: sub, status: 'open' },
       orderBy: { createdAt: 'desc' },
     });
-    return { items: await Promise.all(tickets.map((t) => serializeTicket(t, app.uploads))) };
+    return {
+      items: await Promise.all(
+        tickets.map((t) => serializeTicket(t, app.uploads, app.env.FIELD_ENCRYPTION_KEY)),
+      ),
+    };
   });
 
   await app.register(async (scoped) => {
@@ -62,13 +71,15 @@ export const meSupportRoutes: FastifyPluginAsync = async (app) => {
           data: {
             userId: sub,
             phone,
-            message,
+            message: encryptField(message, app.env.FIELD_ENCRYPTION_KEY),
             attachmentObjectKey: attachmentObjectKey ?? null,
             status: 'open',
           },
         });
 
-        return reply.status(201).send(await serializeTicket(ticket, app.uploads));
+        return reply
+          .status(201)
+          .send(await serializeTicket(ticket, app.uploads, app.env.FIELD_ENCRYPTION_KEY));
       },
     );
   });
