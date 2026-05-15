@@ -1,6 +1,10 @@
 import { prisma } from '@jdm/db';
 
-import { encryptField, isEncrypted } from '../src/services/crypto/field-encryption.js';
+import {
+  decryptField,
+  encryptField,
+  isEncrypted,
+} from '../src/services/crypto/field-encryption.js';
 
 const FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY;
 if (!FIELD_ENCRYPTION_KEY || FIELD_ENCRYPTION_KEY.length !== 64) {
@@ -27,9 +31,18 @@ async function main() {
     if (batch.length === 0) break;
 
     for (const row of batch) {
+      // isEncrypted() checks format only (prefix + hex shape). A plaintext value
+      // could match that shape. To be safe, attempt actual decryption: if it
+      // succeeds the row is genuinely encrypted; if it fails it is plaintext
+      // that happens to look like ciphertext and must be encrypted.
       if (isEncrypted(row.message)) {
-        skipped++;
-        continue;
+        const probe = decryptField(row.message, FIELD_ENCRYPTION_KEY!);
+        if (probe !== null) {
+          skipped++;
+          continue;
+        }
+        // decryptField returned null => format match but not real ciphertext.
+        // Fall through to encrypt it.
       }
       try {
         await prisma.supportTicket.update({

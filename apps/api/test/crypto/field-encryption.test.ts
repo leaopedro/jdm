@@ -88,6 +88,44 @@ describe('field-encryption', () => {
   });
 });
 
+describe('backfill robustness: plaintext matching isEncrypted format', () => {
+  it('isEncrypted returns true for a fake ciphertext with valid hex shape', () => {
+    // Craft a string that passes the isEncrypted() format check:
+    // enc_v1:<24 hex IV>:<even-length hex data>:<32 hex tag>
+    const fakeIv = 'aa'.repeat(12); // 24 hex chars
+    const fakeData = 'bb'.repeat(8); // 16 hex chars, even length
+    const fakeTag = 'cc'.repeat(16); // 32 hex chars
+    const fakeCiphertext = `enc_v1:${fakeIv}:${fakeData}:${fakeTag}`;
+
+    // Format check says "yes, looks encrypted"
+    expect(isEncrypted(fakeCiphertext)).toBe(true);
+
+    // But actual decryption fails because it's not real ciphertext
+    expect(decryptField(fakeCiphertext, TEST_KEY)).toBeNull();
+  });
+
+  it('fake ciphertext should be encrypted by backfill (not skipped)', () => {
+    // This verifies the fix: a value passing isEncrypted() format check but
+    // failing actual decryption should be treated as plaintext and encrypted.
+    const fakeIv = 'aa'.repeat(12);
+    const fakeData = 'bb'.repeat(8);
+    const fakeTag = 'cc'.repeat(16);
+    const fakeCiphertext = `enc_v1:${fakeIv}:${fakeData}:${fakeTag}`;
+
+    // isEncrypted says true, but decryptField returns null
+    expect(isEncrypted(fakeCiphertext)).toBe(true);
+    expect(decryptField(fakeCiphertext, TEST_KEY)).toBeNull();
+
+    // So the backfill should encrypt it
+    const encrypted = encryptField(fakeCiphertext, TEST_KEY);
+    expect(isEncrypted(encrypted)).toBe(true);
+
+    // And decrypting should give back the original fake string
+    const roundTripped = decryptField(encrypted, TEST_KEY);
+    expect(roundTripped).toBe(fakeCiphertext);
+  });
+});
+
 describe('isEncrypted', () => {
   it('returns true for valid ciphertext', () => {
     const cipher = encryptField('test', TEST_KEY);

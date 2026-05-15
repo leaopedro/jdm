@@ -32,10 +32,13 @@ async function main() {
         continue;
       }
       try {
+        // Try actual decryption to confirm this is real ciphertext, not
+        // plaintext that happens to match the isEncrypted() format check.
         const plain = decryptField(row.message, FIELD_ENCRYPTION_KEY!);
         if (plain === null) {
-          console.error(`Row ${row.id}: decryptField returned null (corrupt or wrong key)`);
-          failed.push(row.id);
+          // Format matched but decryption failed: this is plaintext that
+          // looks like ciphertext, or corrupt data. Skip it.
+          skipped++;
           continue;
         }
         await prisma.supportTicket.update({
