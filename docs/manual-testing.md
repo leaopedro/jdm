@@ -421,16 +421,18 @@ that opted-out users are excluded from future broadcast sends.
 
 **Step 5 — CSV export consistency with on-screen totals**
 
-1. With filters applied, click "Exportar CSV".
+1. With filters applied, click "Exportar CSV agregado".
    Expect: file downloads as `financeiro-YYYY-MM-DD.csv`.
 2. Open the CSV. Verify header row:
-   `id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at`
-3. Count data rows. Compare with on-screen order count.
-   Expect: match (assuming < 10k orders; export caps at 10k).
-4. Sum `amount_cents` for `status=paid` rows.
-   Expect: matches "Receita total" KPI (in cents).
-5. Verify CSV fields with commas or quotes are properly escaped (double-quoted).
-6. With no filters, export again. Verify it includes all orders (paid + refunded).
+   `event,city,state,currency,method,provider,status,kind,product_or_collection,order_count,total_amount_cents,total_quantity,first_order_at,last_order_at`
+3. Confirm the screen copy states the export is aggregate-only and that cohorts with fewer than 5 pedidos are hidden.
+4. Count data rows. Compare them with the visible aggregate cuts implied by the filters.
+   Expect: only cohorts with at least 5 matching orders appear. Smaller cuts are omitted entirely.
+5. Sum `total_amount_cents` for `status=paid` rows.
+   Expect: matches the visible finance slice for the same filters, allowing for suppressed small cohorts to be absent from the CSV.
+6. Verify CSV fields with commas or quotes are properly escaped (double-quoted).
+7. Apply a narrow filter that should leave fewer than 5 matching orders in one cohort.
+   Expect: header-only CSV, no user-level rows, and no direct identifiers anywhere in the file.
 
 **Step 6 — Loading/empty/error/no-permission states**
 

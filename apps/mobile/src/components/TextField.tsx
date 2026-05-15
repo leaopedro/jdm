@@ -6,11 +6,21 @@ import type { TextInputProps } from 'react-native';
 type Props = TextInputProps & {
   label: string;
   error: string | undefined;
+  hint?: string;
 };
 
 const cn = (...parts: (string | false | undefined)[]): string => parts.filter(Boolean).join(' ');
 
-export const TextField = ({ label, error, style, onFocus, onBlur, editable, ...rest }: Props) => {
+export const TextField = ({
+  label,
+  error,
+  hint,
+  style,
+  onFocus,
+  onBlur,
+  editable,
+  ...rest
+}: Props) => {
   const [focused, setFocused] = useState(false);
   const isDisabled = editable === false;
 
@@ -48,6 +58,11 @@ export const TextField = ({ label, error, style, onFocus, onBlur, editable, ...r
           {...rest}
         />
       </View>
+      {hint && !error ? (
+        <Text variant="bodySm" tone="secondary" className="mt-1">
+          {hint}
+        </Text>
+      ) : null}
       {error ? (
         <Text variant="bodySm" tone="danger" className="mt-1">
           {error}

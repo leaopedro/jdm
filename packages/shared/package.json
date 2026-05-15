@@ -89,6 +89,10 @@
     "./uploads": {
       "types": "./src/uploads.ts",
       "default": "./dist/uploads.js"
+    },
+    "./sentry-scrubber": {
+      "types": "./src/sentry-scrubber.ts",
+      "default": "./dist/sentry-scrubber.js"
     }
   },
   "scripts": {

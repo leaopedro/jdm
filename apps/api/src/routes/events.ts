@@ -119,6 +119,9 @@ const serializePublicDetail = (
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
     hasCarTier: e.tiers.some((t) => t.requiresCar),
+    feedEnabled: e.feedEnabled,
+    feedAccess: e.feedAccess,
+    postingAccess: e.postingAccess,
   });
 
 const serializeCommerceDetail = (
@@ -144,6 +147,9 @@ const serializeCommerceDetail = (
     capacity: e.capacity,
     maxTicketsPerUser: e.maxTicketsPerUser,
     hasCarTier: e.tiers.some((t) => t.requiresCar),
+    feedEnabled: e.feedEnabled,
+    feedAccess: e.feedAccess,
+    postingAccess: e.postingAccess,
     tiers: e.tiers
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
