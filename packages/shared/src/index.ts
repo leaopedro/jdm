@@ -18,3 +18,4 @@ export * from './notifications.js';
 export * from './broadcasts.js';
 export * from './feed.js';
 export * from './consent.js';
+export * from './sentry-scrubber.js';

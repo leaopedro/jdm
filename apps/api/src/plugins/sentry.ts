@@ -1,7 +1,9 @@
+import { scrubSentryEvent } from '@jdm/shared/sentry-scrubber';
 import * as Sentry from '@sentry/node';
 import fp from 'fastify-plugin';
 
 import type { Env } from '../env.js';
+import { dropRiskyConsoleBreadcrumbs } from '../lib/sentry-breadcrumb-filter.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {
@@ -15,6 +17,12 @@ export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {
     environment: opts.env.NODE_ENV,
     release: opts.env.GIT_SHA,
     tracesSampleRate: 0.1,
+    beforeSend(event) {
+      if (event.breadcrumbs) {
+        event.breadcrumbs = dropRiskyConsoleBreadcrumbs(event.breadcrumbs);
+      }
+      return scrubSentryEvent(event);
+    },
     initialScope: {
       tags: { service: 'api' },
     },

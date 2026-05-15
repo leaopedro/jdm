@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
+import { recordConsent } from '../../src/services/consent.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
 describe('/me/push-preferences', () => {
@@ -96,6 +97,41 @@ describe('/me/push-preferences', () => {
       where: { userId: user.id, purpose: 'push_marketing', withdrawnAt: null },
     });
     expect(consent).toBeNull();
+  });
+
+  it('user without consent is excluded from broadcast recipients', async () => {
+    const { user } = await createUser({ verified: true });
+
+    await prisma.deviceToken.create({
+      data: { userId: user.id, expoPushToken: 'ExponentPushToken[mkttest1]', platform: 'ios' },
+    });
+
+    const { resolveRecipients } = await import('../../src/services/broadcasts/targets.js');
+    const recipients = await resolveRecipients({ kind: 'all' });
+
+    expect(recipients.find((r) => r.userId === user.id)).toBeUndefined();
+  });
+
+  it('user with active consent is included in broadcast recipients', async () => {
+    const { user } = await createUser({ verified: true });
+
+    await prisma.deviceToken.create({
+      data: { userId: user.id, expoPushToken: 'ExponentPushToken[mkttest2]', platform: 'ios' },
+    });
+    await recordConsent({
+      userId: user.id,
+      purpose: 'push_marketing',
+      version: 'v1',
+      channel: 'mobile',
+      ipAddress: null,
+      userAgent: null,
+      evidence: { test: true },
+    });
+
+    const { resolveRecipients } = await import('../../src/services/broadcasts/targets.js');
+    const recipients = await resolveRecipients({ kind: 'all' });
+
+    expect(recipients.find((r) => r.userId === user.id)).toBeDefined();
   });
 
   it('preserves transactional when older rows omit it', async () => {
