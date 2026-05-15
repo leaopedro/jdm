@@ -187,6 +187,59 @@ async function seedOrder(
   return order;
 }
 
+async function seedBulkStandaloneOrders({
+  userId,
+  count,
+  amountCents,
+  kind = 'product',
+  method = 'card',
+  provider = 'stripe',
+  status = 'paid',
+  paidAt = new Date('2026-05-01T12:00:00Z'),
+}: {
+  userId: string;
+  count: number;
+  amountCents: number;
+  kind?: 'ticket' | 'extras_only' | 'product' | 'mixed';
+  method?: 'card' | 'pix';
+  provider?: 'stripe' | 'abacatepay';
+  status?: 'paid' | 'refunded' | 'pending';
+  paidAt?: Date;
+}) {
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "Order" ("id", "userId", "eventId", "tierId", "kind", "amountCents", "baseAmountCents", "devFeePercent", "devFeeAmountCents", "currency", "method", "provider", "providerRef", "quantity", "status", "paidAt", "refundedAt", "createdAt", "updatedAt")
+     SELECT
+       ('00000000-0000-0000-0000-' || LPAD(gs::text, 12, '0'))::uuid,
+       $1,
+       NULL,
+       NULL,
+       $2::"OrderKind",
+       $3,
+       $3,
+       0,
+       0,
+       'BRL',
+       $4::"PaymentMethod",
+       $5::"PaymentProvider",
+       CONCAT('bulk-', gs),
+       1,
+       $6::"OrderStatus",
+       $7,
+       NULL,
+       $7,
+       $7
+     FROM generate_series(1, $8) AS gs`,
+    userId,
+    kind,
+    amountCents,
+    method,
+    provider,
+    status,
+    paidAt,
+    count,
+  );
+}
+
 describe('Admin Finance Endpoints', () => {
   let app: FastifyInstance;
   const env = loadEnv();
@@ -1033,19 +1086,27 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/csv');
       expect(res.headers['content-disposition']).toContain('finance-export.csv');
+      expect(res.headers['x-jdm-k-anonymity-min']).toBe('5');
+      expect(res.headers['x-jdm-k-anonymity-suppressed-groups']).toBe('0');
     });
 
-    it('includes header row and order data', async () => {
+    it('emits aggregate rows without direct identifiers', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
 
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 10000 });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `buyer-${i}@jdm.test`,
+          name: `Buyer ${i}`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, { amountCents: 10000 });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1055,11 +1116,17 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const lines = res.body.split('\n');
       expect(lines[0]).toBe(
-        'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at,kind,product_or_collection',
+        'event,city,state,currency,method,provider,status,kind,product_or_collection,order_count,total_amount_cents,total_quantity,first_order_at,last_order_at',
       );
       expect(lines).toHaveLength(2); // header + 1 row
-      expect(lines[1]).toContain('10000');
+      expect(lines[0]).not.toContain('user_name');
+      expect(lines[0]).not.toContain('user_email');
+      expect(lines[0]).not.toContain('id,');
+      expect(lines[1]).toContain('50000');
       expect(lines[1]).toContain('Evento meet-sp');
+      expect(lines[1]).toContain(',5,50000,5,');
+      expect(lines[1]).not.toContain('buyer-0@jdm.test');
+      expect(lines[1]).not.toContain('Buyer 0');
     });
 
     it('respects filters', async () => {
@@ -1068,12 +1135,32 @@ describe('Admin Finance Endpoints', () => {
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
 
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 10000, provider: 'stripe' });
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 5000, provider: 'abacatepay' });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `stripe-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          amountCents: 10000,
+          provider: 'stripe',
+          method: 'card',
+        });
+      }
+
+      for (let i = 0; i < 4; i += 1) {
+        const { user } = await createUser({
+          email: `pix-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          amountCents: 5000,
+          provider: 'abacatepay',
+          method: 'pix',
+        });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1082,24 +1169,41 @@ describe('Admin Finance Endpoints', () => {
       });
       expect(res.statusCode).toBe(200);
       const lines = res.body.split('\n');
-      expect(lines).toHaveLength(2); // header + 1 stripe order
+      expect(lines).toHaveLength(2); // header + 1 aggregate row
       expect(lines[1]).toContain('stripe');
+      expect(lines[1]).toContain(',5,50000,5,');
+      expect(lines[1]).not.toContain('abacatepay');
+
+      const suppressed = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/export?provider=abacatepay',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(suppressed.statusCode).toBe(200);
+      expect(suppressed.body.split('\n')).toHaveLength(1);
+      expect(suppressed.headers['x-jdm-k-anonymity-suppressed-groups']).toBe('1');
     });
 
-    it('escapes CSV fields with commas', async () => {
+    it('escapes aggregate CSV fields with commas', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({
-        email: 'buyer@jdm.test',
-        name: 'User, With Comma',
-        verified: true,
-      });
       const event = await seedEvent('meet-sp');
+      await prisma.event.update({
+        where: { id: event.id },
+        data: { title: 'Evento, Especial' },
+      });
       const tier = await seedTier(event.id);
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 5000 });
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `buyer-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, { amountCents: 5000 });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1107,19 +1211,17 @@ describe('Admin Finance Endpoints', () => {
         headers: { authorization: bearer(env, admin.id, 'admin') },
       });
       expect(res.statusCode).toBe(200);
-      expect(res.body).toContain('"User, With Comma"');
+      expect(res.body).toContain('"Evento, Especial"');
     });
 
-    it('includes kind and product_or_collection for product orders', async () => {
+    it('includes kind and product_or_collection for aggregate product cohorts', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
-      const extra = await seedExtra(event.id, 1500);
 
       const productType = await prisma.productType.create({
         data: { name: 'Tipo', sortOrder: 0 },
@@ -1145,20 +1247,28 @@ describe('Admin Finance Endpoints', () => {
         },
       });
 
-      await seedOrder(buyer.id, null, null, {
-        kind: 'product',
-        amountCents: 3000,
-        orderItems: [{ kind: 'product', variantId: variant.id, unitPriceCents: 3000 }],
-      });
-      await seedOrder(buyer.id, event.id, tier.id, {
-        kind: 'ticket',
-        amountCents: 5000,
-      });
-      await seedOrder(buyer.id, event.id, null, {
-        kind: 'extras_only',
-        amountCents: 1500,
-        orderItems: [{ kind: 'extras', extraId: extra.id, unitPriceCents: 1500 }],
-      });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `product-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, null, null, {
+          kind: 'product',
+          amountCents: 3000,
+          orderItems: [{ kind: 'product', variantId: variant.id, unitPriceCents: 3000 }],
+        });
+      }
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `ticket-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          kind: 'ticket',
+          amountCents: 5000,
+        });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1169,13 +1279,92 @@ describe('Admin Finance Endpoints', () => {
       const lines = res.body.split('\n');
       const productLine = lines.find((l) => l.includes(',product,'));
       const ticketLine = lines.find((l) => l.includes(',ticket,'));
-      const extrasLine = lines.find((l) => l.includes(',extras_only,'));
       expect(productLine).toBeDefined();
       expect(ticketLine).toBeDefined();
-      expect(extrasLine).toBeDefined();
-      expect(productLine).toMatch(/Camiseta JDM$/);
-      expect(ticketLine).toMatch(/,ticket,$/);
-      expect(extrasLine).toMatch(/,extras_only,$/);
+      expect(productLine).toContain(',product,Camiseta JDM,5,15000,5,');
+      expect(ticketLine).toContain(',ticket,,5,25000,5,');
+    });
+
+    it('keeps same-label events in separate cohorts by stable identifiers', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const eventA = await seedEvent('meet-a');
+      const eventB = await seedEvent('meet-b');
+      await prisma.event.update({
+        where: { id: eventB.id },
+        data: {
+          title: eventA.title,
+          city: eventA.city,
+          stateCode: eventA.stateCode,
+        },
+      });
+      const tierA = await seedTier(eventA.id, 5000);
+      const tierB = await seedTier(eventB.id, 7000);
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `same-label-a-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, eventA.id, tierA.id, { amountCents: 5000 });
+      }
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `same-label-b-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, eventB.id, tierB.id, { amountCents: 7000 });
+      }
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/export',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const lines = res.body.split('\n');
+      expect(lines).toHaveLength(3);
+      const sameLabelRows = lines.filter((line) =>
+        line.includes('Evento meet-a,São Paulo,SP,BRL,card,stripe,paid,ticket'),
+      );
+      expect(sameLabelRows).toHaveLength(2);
+      expect(sameLabelRows[0]).not.toBe(sameLabelRows[1]);
+      expect(sameLabelRows).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(',5,25000,5,'),
+          expect.stringContaining(',5,35000,5,'),
+        ]),
+      );
+    });
+
+    it('aggregates over datasets larger than 10000 orders', async () => {
+      const { user: admin } = await createUser({
+        email: 'admin@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { user: buyer } = await createUser({ email: 'bulk-buyer@jdm.test', verified: true });
+
+      await seedBulkStandaloneOrders({
+        userId: buyer.id,
+        count: 10005,
+        amountCents: 100,
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/export',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(res.statusCode).toBe(200);
+      const lines = res.body.split('\n');
+      expect(lines).toHaveLength(2);
+      expect(lines[1]).toContain(',10005,1000500,10005,');
+      expect(res.headers['x-jdm-k-anonymity-suppressed-groups']).toBe('0');
     });
   });
 });
