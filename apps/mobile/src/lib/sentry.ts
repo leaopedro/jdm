@@ -21,9 +21,17 @@ export const initSentry = () => {
     beforeSend: (event) => {
       if (event.breadcrumbs) {
         event.breadcrumbs = event.breadcrumbs.filter((crumb) => {
-          if (crumb.type !== 'console') return true;
+          if (crumb.category !== 'console') return true;
           const msg = typeof crumb.message === 'string' ? crumb.message : '';
-          return msg.length <= MAX_CRUMB_LEN && !PII_RE.test(msg);
+          if (msg.length > MAX_CRUMB_LEN || PII_RE.test(msg)) return false;
+          const rawArgs: unknown = crumb.data?.['arguments'];
+          if (Array.isArray(rawArgs) && rawArgs.length > 0) {
+            const serialized = rawArgs
+              .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
+              .join(' ');
+            if (serialized.length > MAX_CRUMB_LEN || PII_RE.test(serialized)) return false;
+          }
+          return true;
         });
       }
       return event;
