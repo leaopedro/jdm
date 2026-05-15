@@ -3,7 +3,11 @@ import { ACCOUNT_DISABLED_ERROR, type UserRoleName } from '@jdm/shared/auth';
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 
-import { verifyAccessToken, type AccessPayload } from '../services/auth/tokens.js';
+import {
+  verifyAccessToken,
+  type AccessPayload,
+  type VerifiedAccessPayload,
+} from '../services/auth/tokens.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -35,7 +39,7 @@ export const authPlugin = fp(async (app) => {
       return reply.status(401).send({ error: 'Unauthorized', message: 'missing bearer token' });
     }
     const token = header.slice('Bearer '.length);
-    let payload: AccessPayload;
+    let payload: VerifiedAccessPayload;
     try {
       payload = verifyAccessToken(token, app.env);
     } catch {
