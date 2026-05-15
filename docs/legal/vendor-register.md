@@ -35,3 +35,86 @@ Scope note:
 | Vercel         | Frontend hosting                  | Vercel admin hosting and preview deployments                                               | Admin          | Admin session/auth state, request logs, deployment metadata               | Operator                          | US default           | Admin, Preview, Production              | Deployment access, env vars, request logs, admin traffic metadata        | Pending DPA/SCC. No signed artifact stored in repo.                                                 | Baseline inventory reviewed in JDMA-642. Hosting/legal annual review remains pending.                                              | Contract execution for admin web delivery and preview workflows; transfer mechanism still must be confirmed.                                     | 2026-05-15      | 2026-05-15       | 2027-05-15      | Move admin hosting elsewhere, rotate env vars, remove preview domains, and delete Vercel project access.                | Production use predates this register. Evidence: `LGPD_scan.md`, `docs/vercel.md`, `docs/secrets.md`.                                    |
 | EAS Build      | Mobile build and release pipeline | EAS Build / Submit via `eas-cli` and EAS-managed secrets                                   | Mobile         | Source code, signing certificates, build metadata, build logs             | Operator                          | US                   | Mobile, CI, Preview, Production         | Build secrets, signing material, source-code access                      | Terms-only posture recorded; DPA/SCC remains pending.                                               | Baseline inventory reviewed in JDMA-642. Mobile-release annual legal/security review remains pending.                              | Contract execution for mobile delivery and release automation; transfer mechanism still must be confirmed.                                       | 2026-05-15      | 2026-05-15       | 2027-05-15      | Migrate build pipeline, rotate signing secrets, and remove EAS project credentials before offboarding.                  | Production use predates this register. Evidence: `LGPD_scan.md`, `docs/eas-credentials.md`, root `package.json`, `docs/secrets.md`.      |
 | GitHub Actions | CI and automation                 | GitHub-hosted workflow runners and `.github/workflows/*` automation                        | DevOps         | Source code, CI logs, test fixtures or test data, build metadata          | Operator                          | US                   | CI, Shared packages, API, Admin, Mobile | Repository access, workflow secrets, build/test logs                     | Terms-only posture recorded; DPA/SCC remains pending.                                               | Baseline inventory reviewed in JDMA-642. CI annual legal/security review remains pending.                                          | Operational necessity for build/test/release automation; transfer mechanism still must be confirmed.                                             | 2026-05-15      | 2026-05-15       | 2027-05-15      | Move CI to replacement runner/provider, rotate secrets, and delete workflow credentials before offboarding.             | Production use predates this register. Evidence: `LGPD_scan.md`, `docs/secrets.md`, `.github/workflows/*`, root `package.json`.          |
+
+---
+
+## Art. 33 transfer mechanism (T09 / Q06)
+
+The operative rule for international transfers under LGPD Art. 33 is recorded
+in the [JDMA-631 Q06 decision comment](/JDMA/issues/JDMA-631#comment-f0f8ae6c-8f54-46c9-b610-300b98135793).
+It governs every row above whose `Country/region` is outside Brazil.
+
+Priority order per vendor:
+
+1. **ANPD Res. 19/2024 Anexo II SCC text, incorporated verbatim** as a DPA
+   addendum where the vendor signs custom riders.
+2. **Vendor's own DPA only if it incorporates Res. 19/2024 SCC text by
+   reference** or contains equivalent clauses verified clause-by-clause
+   against Anexo II.
+3. **Art. 33, IX — explicit, specific, separated titular consent** for
+   vendors that will not sign any SCC instrument (OAuth providers).
+4. **No mechanism required** for vendors processing data only inside Brazil
+   under Art. 33.
+
+No transfer may proceed under Art. 33, II (international cooperation) or any
+other hypothesis without counsel sign-off recorded on the vendor's row.
+
+### Per-vendor disposition
+
+Posture legend: `GO` mechanism confirmed and executable; `CONDITIONAL`
+mechanism depends on vendor accepting Anexo II within the 30-day outreach SLA;
+`CONSENT` Art. 33, IX gate gated on the consent UX shipping.
+
+| Vendor                       | Region                   | Mechanism (Art. 33)                                                                          | Posture                                                                                                                             | Outreach owner | Outreach status                                                                                  | Evidence path                                                                                                                                 | Escalation rule                                                                                                                              |
+| ---------------------------- | ------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stripe                       | US                       | Stripe DPA + ANPD Anexo II rider on Stripe LATAM addendum                                    | GO — verify rider                                                                                                                   | CEO            | Outreach pending; tracked under T09 follow-up                                                    | Stripe Dashboard → Compliance → DPA; signed PDF filed at `docs/legal/vendors/stripe-dpa.pdf`                                                  | If Stripe declines Anexo II rider within 30 days, escalate to replacement (Adyen / MercadoPago) and open sourcing issue                      |
+| AbacatePay                   | Brazil                   | Domestic — no SCC required                                                                   | GO — domestic                                                                                                                       | CEO            | Vendor DPA signature pending                                                                     | Vendor-signed DPA filed at `docs/legal/vendors/abacatepay-dpa.pdf`                                                                            | If vendor refuses DPA, restrict to receive-only webhook and open replacement sourcing issue                                                  |
+| Cloudflare R2                | Global → pinned EU/US    | Cloudflare DPA + ANPD Anexo II as schedule; bucket region pinned                             | GO — pin region + addendum                                                                                                          | DevOps         | Outreach pending; coordinated with [JDMA-678](/JDMA/issues/JDMA-678) (region pin)                | Cloudflare Dashboard → Account → Compliance; signed PDF filed at `docs/legal/vendors/cloudflare-r2-dpa.pdf`                                   | If Cloudflare declines Anexo II addendum, replace bucket with EU-based S3-compatible storage; T42 outcome blocks transfer-posture sign-off   |
+| Sentry (Functional Software) | US                       | Sentry DPA + ANPD Anexo II as schedule                                                       | GO — addendum                                                                                                                       | DevOps         | Outreach pending; PII-scrub work already landed under [JDMA-637](/JDMA/issues/JDMA-637)          | sentry.io → Settings → Legal & Compliance → DPA portal; signed PDF filed at `docs/legal/vendors/sentry-dpa.pdf`                               | If Sentry declines, swap to self-hosted GlitchTip on Railway BR and open sourcing issue                                                      |
+| Resend                       | US                       | ANPD Anexo II verbatim addendum to vendor DPA                                                | CONDITIONAL — confirm via support within 30 days                                                                                    | Backend        | Outreach pending; `legal@resend.com` request not yet sent                                        | `legal@resend.com` confirmation thread; signed PDF filed at `docs/legal/vendors/resend-dpa.pdf`                                               | If declined or no response within 30 days, switch transactional email to a BR or EU operator and open sourcing issue                         |
+| Expo Push                    | US                       | ANPD Anexo II verbatim addendum to Expo Terms + DPA                                          | CONDITIONAL — verify Trust portal response                                                                                          | Mobile         | Outreach pending; single Expo legal request covers Push and EAS Build                            | Expo Trust portal; signed PDF filed at `docs/legal/vendors/expo-dpa.pdf`                                                                      | If Expo refuses, fall back to Art. 33, V for device-token routing only and revisit before launch; otherwise replace push with BR alternative |
+| Google OAuth                 | US                       | Art. 33, IX explicit, specific, separated titular consent (Google will not sign custom SCC)  | CONSENT — gate                                                                                                                      | Frontend       | Depends on consent UX in [JDMA-668](/JDMA/issues/JDMA-668) and [JDMA-649](/JDMA/issues/JDMA-649) | Consent record stored in `Consent` table with version, timestamp, purpose, titular id; privacy notice paragraph names Google with destination | If consent UX cannot ship before launch, disable Google sign-in and require email/password fallback                                          |
+| Apple Sign In                | US                       | Art. 33, IX explicit, specific, separated titular consent (Apple will not sign custom SCC)   | CONSENT — gate                                                                                                                      | Mobile         | Depends on consent UX in [JDMA-668](/JDMA/issues/JDMA-668) and [JDMA-649](/JDMA/issues/JDMA-649) | Consent record stored in `Consent` table with version, timestamp, purpose, titular id; privacy notice paragraph names Apple with destination  | If consent UX cannot ship before launch, disable Apple sign-in and require email/password fallback                                           |
+| Railway                      | BR (data) / US (control) | Data plane domestic; control-plane metadata covered by Railway DPA + ANPD Anexo II rider     | GO — addendum on control plane                                                                                                      | DevOps         | Outreach pending                                                                                 | Railway Compliance docs; signed PDF filed at `docs/legal/vendors/railway-dpa.pdf`                                                             | If Railway refuses rider, document control-plane data flow as `support metadata only`, apply LIA, and escalate replacement of control plane  |
+| Vercel                       | US default               | ANPD Anexo II verbatim addendum OR move admin hosting to BR/EU region                        | CONDITIONAL — gated on [JDMA-632](/JDMA/issues/JDMA-632) (Q07 region) and [JDMA-677](/JDMA/issues/JDMA-677) (T41 admin region move) | DevOps         | Outreach pending; Q07 region decision still open                                                 | Vercel Dashboard → Settings → Legal → DPA; signed PDF filed at `docs/legal/vendors/vercel-dpa.pdf`                                            | If Vercel declines and BR/EU region not adopted, T41 admin region move becomes mandatory                                                     |
+| EAS Build                    | US                       | ANPD Anexo II verbatim addendum (same Expo vendor as Push)                                   | CONDITIONAL — same as Expo Push                                                                                                     | Mobile         | Single Expo Trust outreach covers EAS                                                            | Expo Trust portal artifact; same PDF location as Expo Push row                                                                                | If Expo refuses, restrict EAS to anonymized build artifacts and apply LIA; otherwise replace mobile-build pipeline                           |
+| GitHub Actions (Microsoft)   | US                       | Microsoft Products & Services DPA — already references SCC framework including ANPD Anexo II | GO — confirm latest DPA version covers Res. 19/2024                                                                                 | DevOps         | Outreach pending — current Microsoft DPA download required                                       | Microsoft Trust Center → DPA; PDF filed at `docs/legal/vendors/microsoft-dpa.pdf`                                                             | If current DPA does not yet cover Res. 19/2024 supplement, escalate to Microsoft account manager; replacement is a BR-hosted CI runner       |
+
+### Outreach SLA and escalation
+
+- Every CONDITIONAL vendor (Stripe, Cloudflare, Sentry, Resend, Expo / EAS,
+  Vercel, Railway, Microsoft) receives a single legal outreach within 30 days
+  of T09 closeout. The outreach asks the vendor to either sign the ANPD
+  Anexo II addendum verbatim or confirm that the vendor's own DPA already
+  incorporates equivalent clauses clause-by-clause.
+- If the vendor refuses or does not respond within 30 days, the vendor row
+  moves to a `replace` decision and the escalation rule above is opened as a
+  sourcing issue.
+- Consent-gate vendors (Google OAuth, Apple Sign In) cannot accept any SCC
+  instrument; they remain GO under Art. 33, IX once the consent UX in
+  [JDMA-649](/JDMA/issues/JDMA-649) and [JDMA-668](/JDMA/issues/JDMA-668) ships
+  and the privacy notice is updated to name each provider, purpose, and
+  destination country.
+- Domestic-only vendors (AbacatePay, Railway data plane) require no Art. 33
+  hypothesis but still need a signed vendor DPA filed at their evidence path.
+
+### Evidence storage rules
+
+- Every signed DPA, Anexo II rider, or vendor confirmation is filed at the
+  path noted in the disposition table above. Binary artifacts land in
+  `docs/legal/vendors/<vendor>-dpa.pdf` via git-lfs once the directory is
+  provisioned by the outreach follow-up issue.
+- Until the binary lands, the matching `Contract status` cell in the main
+  table stays `Pending` so the onboarding gate continues to require
+  resolution.
+- If a vendor will not accept ANPD Anexo II verbatim and the Q06 priority-2
+  clause-by-clause review fails, the row records the explicit `replace`
+  decision plus the sourcing issue link.
+
+### Verification status at T09 closeout
+
+At this commit, the register reflects the **final mechanism per vendor** in
+the Q06 hierarchy. Signed evidence does not yet exist for any vendor and the
+`Outreach status` column states this explicitly per row. Execution of the
+outreach SLA and the filing of signed DPAs is tracked as a T09 follow-up
+issue.
