@@ -38,21 +38,28 @@ Satisfy LGPD Art. 46 (security safeguards) requirement L15.
 
 ### 3.1 Public routes (no token required)
 
-| Route                          | Method | Purpose                                                               |
-| ------------------------------ | ------ | --------------------------------------------------------------------- |
-| `/health`                      | GET    | Healthcheck                                                           |
-| `/auth/*`                      | POST   | Signup, login, verify, refresh, logout, password reset (rate limited) |
-| `/events`                      | GET    | List published events                                                 |
-| `/events/:slug`                | GET    | Event detail by slug                                                  |
-| `/events/by-id/:id`            | GET    | Event detail by ID                                                    |
-| `/events/:slug/confirmed-cars` | GET    | Confirmed cars for event                                              |
-| `/store/products`              | GET    | List store products                                                   |
-| `/store/products/:slug`        | GET    | Product detail by slug                                                |
-| `/store/collections`           | GET    | List collections                                                      |
-| `/store/product-types`         | GET    | List product types                                                    |
-| `/store/settings`              | GET    | Public store settings                                                 |
-| `/stripe/webhook`              | POST   | Stripe payment webhook (signature-verified)                           |
-| `/abacatepay/webhook`          | POST   | AbacatePay Pix webhook (signature-verified)                           |
+| Route                          | Method | Purpose                                     |
+| ------------------------------ | ------ | ------------------------------------------- |
+| `/health`                      | GET    | Healthcheck                                 |
+| `/auth/signup`                 | POST   | Register new account                        |
+| `/auth/login`                  | POST   | Login with email/password                   |
+| `/auth/verify`                 | GET    | Verify email via token (query param)        |
+| `/auth/resend-verify`          | POST   | Resend verification email                   |
+| `/auth/refresh`                | POST   | Refresh access token                        |
+| `/auth/logout`                 | POST   | Revoke refresh token                        |
+| `/auth/forgot-password`        | POST   | Request password reset                      |
+| `/auth/reset-password`         | POST   | Reset password with token                   |
+| `/events`                      | GET    | List published events                       |
+| `/events/:slug`                | GET    | Event detail by slug                        |
+| `/events/by-id/:id`            | GET    | Event detail by ID                          |
+| `/events/:slug/confirmed-cars` | GET    | Confirmed cars for event                    |
+| `/store/products`              | GET    | List store products                         |
+| `/store/products/:slug`        | GET    | Product detail by slug                      |
+| `/store/collections`           | GET    | List collections                            |
+| `/store/product-types`         | GET    | List product types                          |
+| `/store/settings`              | GET    | Public store settings                       |
+| `/stripe/webhook`              | POST   | Stripe payment webhook (signature-verified) |
+| `/abacatepay/webhook`          | POST   | AbacatePay Pix webhook (signature-verified) |
 
 Feed read (`GET /events/:eventId/feed`) uses soft/optional auth via `tryAuth`.
 
@@ -103,10 +110,10 @@ User mutations with rate limit (30 req/min):
 
 ## 5. Rate limiting
 
-| Surface                       | Limit                        |
-| ----------------------------- | ---------------------------- |
-| `/auth/*`                     | 10 req/min per email+IP      |
-| Admin user mutations (Tier 3) | 30 req/min per user ID or IP |
+| Surface                       | Limit      | Key strategy                                                                 |
+| ----------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `/auth/*`                     | 10 req/min | `IP:email` from request body; bodyless routes (GET /auth/verify) use IP-only |
+| Admin user mutations (Tier 3) | 30 req/min | User ID or IP                                                                |
 
 ## 6. Safeguards
 
@@ -173,7 +180,7 @@ Result: **2 drift items found and addressed**
 ### A.5 Public routes
 
 - [x] Health check (`/health`): no auth
-- [x] Auth endpoints (`/auth/*`): no auth (rate limited)
+- [x] Auth endpoints (`/auth/*`): no auth (rate limited); mix of POST and GET (`/auth/verify` is GET)
 - [x] Event list/detail (`/events`, `/events/:slug`, `/events/by-id/:id`): no auth
 - [x] Confirmed cars (`/events/:slug/confirmed-cars`): no auth
 - [x] Store products (`/store/products`, `/store/products/:slug`): no auth
@@ -185,8 +192,8 @@ Result: **2 drift items found and addressed**
 
 ### A.6 Rate limiting
 
-- [x] `/auth/*` rate limited (10/min per email+IP)
-- [x] Admin user mutations rate limited (30/min)
+- [x] `/auth/*` rate limited (10/min, key `IP:email` from body; bodyless GET routes fall back to IP-only)
+- [x] Admin user mutations rate limited (30/min per user ID or IP)
 
 ### A.7 Drift findings
 
