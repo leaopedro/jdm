@@ -1,8 +1,8 @@
-import type { ConsentRecord } from '@jdm/shared';
+import type { ConsentRecord, GrantConsentBody, ConsentPurpose } from '@jdm/shared';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const mockGrant = vi.fn<() => Promise<ConsentRecord>>();
-const mockWithdraw = vi.fn<() => Promise<void>>();
+const mockGrant = vi.fn<(body: GrantConsentBody) => Promise<ConsentRecord>>();
+const mockWithdraw = vi.fn<(purpose: ConsentPurpose) => Promise<void>>();
 const mockMarkSeen = vi.fn<() => Promise<void>>();
 const mockHasSeen = vi.fn<() => Promise<boolean>>();
 
@@ -51,7 +51,7 @@ test('accept path: grantConsent called with correct args then markSeen', async (
 });
 
 test('decline path: withdrawConsent then markSeen', async () => {
-  await mockWithdraw('push_marketing' as never);
+  await mockWithdraw('push_marketing');
   await mockMarkSeen();
 
   expect(mockWithdraw).toHaveBeenCalledWith('push_marketing');
@@ -62,7 +62,7 @@ test('decline path: markSeen still called when withdrawConsent throws', async ()
   mockWithdraw.mockRejectedValueOnce(new Error('not found'));
 
   try {
-    await mockWithdraw('push_marketing' as never);
+    await mockWithdraw('push_marketing');
   } catch {
     // expected
   }
