@@ -58,7 +58,11 @@ export const meEmailChangeRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'BadRequest', message: 'invalid or expired token' });
     }
 
-    await app.mailer.send(emailChangeNotifyMail(result.oldEmail, result.newEmail));
+    try {
+      await app.mailer.send(emailChangeNotifyMail(result.oldEmail, result.newEmail));
+    } catch {
+      request.log.error('failed to send email-change notification to old address');
+    }
 
     return { message: 'email updated' };
   });

@@ -207,6 +207,11 @@ describe('POST /me/email-change/verify', () => {
       payload: { token: changeToken },
     });
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { tokenInvalidatedAt: new Date(Date.now() + 2_000) },
+    });
+
     const res = await app.inject({
       method: 'GET',
       url: '/me',
@@ -215,5 +220,27 @@ describe('POST /me/email-change/verify', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ message: 'session invalidated' });
+  });
+
+  it('accepts access token issued in the same second as email swap', async () => {
+    const env = loadEnv();
+    const { user } = await createUser({ email: 'old@jdm.test', verified: true });
+
+    const changeToken = await issueEmailChangeToken(user.id, 'new@jdm.test');
+    await app.inject({
+      method: 'POST',
+      url: '/me/email-change/verify',
+      payload: { token: changeToken },
+    });
+
+    const postSwapJwt = createAccessToken({ sub: user.id, role: 'user' }, env);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${postSwapJwt}` },
+    });
+
+    expect(res.statusCode).toBe(200);
   });
 });

@@ -56,7 +56,7 @@ export const authPlugin = fp(async (app) => {
     }
     if (
       userRow.tokenInvalidatedAt &&
-      payload.iat < Math.ceil(userRow.tokenInvalidatedAt.getTime() / 1000)
+      payload.iat < Math.floor(userRow.tokenInvalidatedAt.getTime() / 1000)
     ) {
       return reply.status(401).send({ error: 'Unauthorized', message: 'session invalidated' });
     }
