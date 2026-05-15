@@ -119,7 +119,7 @@ Expected to show only:
 - escalation path
 ```
 
-- [ ] **Step 3: Close the heartbeat with evidence**
+- [x] **Step 3: Close the heartbeat with evidence**
 
 Comment summary:
 
