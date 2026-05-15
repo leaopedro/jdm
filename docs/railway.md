@@ -1,9 +1,10 @@
 # Railway deploy — API + Postgres
 
 Production and per-PR preview environments for the Fastify API plus its
-Postgres database. Build + start config lives in `apps/api/railway.json`
-(Dockerfile builder, `/health` healthcheck, start command runs
-`prisma migrate deploy` before `node dist/server.js`).
+Postgres database. Build + start config lives in repo-root `railway.json`
+(Dockerfile builder, `/health` healthcheck, repo-root `preDeployCommand`
+runs `prisma migrate deploy`, then `startCommand` boots
+`node apps/api/dist/server.js`).
 
 ## One-time setup
 
@@ -17,7 +18,7 @@ Postgres database. Build + start config lives in `apps/api/railway.json`
    pinned to GRU.
 3. **API service.** Add a **Service** from this GitHub repo (`leaopedro/jdm`),
    branch `main`. Root directory `/` (monorepo build). Railway picks up
-   `apps/api/railway.json` automatically — no need to override build or
+   repo-root `railway.json` automatically — no need to override build or
    start command in the UI.
 4. **Environment variables.** In Service → Variables, set every secret
    listed in [`docs/secrets.md`](./secrets.md) under "Stored in: Railway".
@@ -56,9 +57,9 @@ Postgres database. Build + start config lives in `apps/api/railway.json`
 ## Deploy
 
 Push to `main` → Railway auto-deploys via the GitHub webhook. The
-configured start command runs `pnpm --filter @jdm/db db:deploy` before
-booting the server, so any pending Prisma migrations apply on every
-deploy.
+configured repo-root `preDeployCommand` runs `prisma migrate deploy`
+against `packages/db/prisma/schema.prisma` before the service starts, so
+any pending Prisma migrations apply on every deploy.
 
 ## Manual smoke test
 
@@ -205,9 +206,9 @@ Two options depending on severity:
    restored snapshot (does **not** overwrite the live service).
 4. Update the API service's `DATABASE_URL` env var to point at the new
    service, or swap the service reference if using a Railway reference.
-5. Trigger a redeploy — the start command runs
-   `pnpm --filter @jdm/db db:deploy` (alias for `prisma migrate deploy`)
-   on startup and confirms schema state.
+5. Trigger a redeploy — repo-root `preDeployCommand` runs
+   `prisma migrate deploy --schema packages/db/prisma/schema.prisma`
+   before startup and confirms schema state.
 6. Run the row-count check below to verify data integrity.
 7. **Verify the restored service's region is GRU (São Paulo)** — Railway may
    not inherit the source service's region on a new provision. Check
