@@ -46,7 +46,7 @@ model User {
   avatarObjectKey String? @db.VarChar(300)
 
   // push preferences (F10)
-  pushPrefs Json @default("{\"transactional\":true,\"marketing\":true}")
+  pushPrefs Json @default("{\"transactional\":true,\"marketing\":false}")
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
