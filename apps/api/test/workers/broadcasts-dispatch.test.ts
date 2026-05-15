@@ -2,6 +2,7 @@ import { prisma } from '@jdm/db';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { runBroadcastDispatchTick } from '../../src/services/broadcasts/dispatch.js';
+import { recordConsent, withdrawConsent } from '../../src/services/consent.js';
 import { DevPushSender } from '../../src/services/push/dev.js';
 import { createUser, resetDatabase } from '../helpers.js';
 
@@ -19,6 +20,15 @@ const seedRecipient = async () => {
   const { user } = await createUser({ verified: true, email: uniqueEmail('recipient') });
   await prisma.deviceToken.create({
     data: { userId: user.id, expoPushToken: `${TOKEN}-${user.id.slice(0, 6)}`, platform: 'ios' },
+  });
+  await recordConsent({
+    userId: user.id,
+    purpose: 'push_marketing',
+    version: 'v1-test',
+    channel: 'mobile',
+    ipAddress: null,
+    userAgent: null,
+    evidence: { test: true },
   });
   return user;
 };
@@ -116,10 +126,7 @@ describe('runBroadcastDispatchTick — draft vs dispatchable boundary', () => {
   it('skips push for marketing-opted-out recipients but still mints inbox + delivery rows', async () => {
     const admin = await seedAdmin();
     const recipient = await seedRecipient();
-    await prisma.user.update({
-      where: { id: recipient.id },
-      data: { pushPrefs: { transactional: true, marketing: false } },
-    });
+    await withdrawConsent(recipient.id, 'push_marketing');
 
     const past = new Date(Date.now() - 60 * 1000);
     const scheduled = await prisma.broadcast.create({
