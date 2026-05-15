@@ -20,9 +20,10 @@ type Props = {
   postId: string;
   commentCount: number;
   myCarId: string | null;
+  canPost: boolean;
 };
 
-export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) {
+export function FeedComments({ eventId, postId, commentCount, myCarId, canPost }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [comments, setComments] = useState<FeedCommentResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,7 +68,7 @@ export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) 
     }
   };
 
-  if (commentCount === 0 && !expanded && !(isAuthed && myCarId)) return null;
+  if (commentCount === 0 && !expanded && !(canPost && isAuthed && myCarId)) return null;
 
   return (
     <View style={styles.container}>
@@ -96,7 +97,7 @@ export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) 
               <Text style={styles.commentBody}>{c.body}</Text>
             </View>
           ))}
-          {isAuthed && myCarId ? (
+          {canPost && isAuthed && myCarId ? (
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}

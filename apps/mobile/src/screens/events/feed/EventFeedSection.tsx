@@ -257,6 +257,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, ticketSourc
                 post={post}
                 myCarId={myCarId}
                 isOwn={myCars.some((c) => c.id === post.car?.id)}
+                canPost={canPost}
                 reactionLoading={reactionLoadingIds.has(post.id)}
                 onToggleReaction={(postId, kind) => {
                   void handleReaction(postId, kind);

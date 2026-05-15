@@ -11,6 +11,7 @@ type Props = {
   post: FeedPostResponse;
   myCarId: string | null;
   isOwn: boolean;
+  canPost: boolean;
   reactionLoading: boolean;
   onToggleReaction: (postId: string, kind: 'like' | 'dislike') => void;
   onEdit?: (post: FeedPostResponse) => void;
@@ -21,6 +22,7 @@ export function FeedPostCard({
   post,
   myCarId,
   isOwn,
+  canPost,
   reactionLoading,
   onToggleReaction,
   onEdit,
@@ -96,6 +98,7 @@ export function FeedPostCard({
         postId={post.id}
         commentCount={post.commentCount}
         myCarId={myCarId}
+        canPost={canPost}
       />
     </View>
   );

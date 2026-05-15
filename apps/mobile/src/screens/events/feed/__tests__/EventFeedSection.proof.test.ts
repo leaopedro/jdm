@@ -312,32 +312,38 @@ describe('EventFeedSection — event feed settings passthrough', () => {
 // ── Zero-comment first-creation gate ─────────────────────────────────────────
 // FeedComments hides the section when commentCount=0 AND user cannot create
 // the first comment. The gate mirrors the component's early-return condition.
+// canPost is required in addition to isAuthed+myCarId — mirrors checkFeedPostAccess.
 
 const canShowComments = (
   commentCount: number,
   expanded: boolean,
   isAuthed: boolean,
   myCarId: string | null,
-): boolean => !(commentCount === 0 && !expanded && !(isAuthed && myCarId));
+  canPost: boolean,
+): boolean => !(commentCount === 0 && !expanded && !(canPost && isAuthed && myCarId));
 
 describe('FeedComments — zero-comment visibility gate', () => {
   it('hides when 0 comments, collapsed, and user has no car', () => {
-    expect(canShowComments(0, false, true, null)).toBe(false);
+    expect(canShowComments(0, false, true, null, true)).toBe(false);
   });
 
   it('hides when 0 comments, collapsed, and unauthenticated', () => {
-    expect(canShowComments(0, false, false, 'car1')).toBe(false);
+    expect(canShowComments(0, false, false, 'car1', true)).toBe(false);
   });
 
-  it('shows when 0 comments but user is authed with a car (first comment path)', () => {
-    expect(canShowComments(0, false, true, 'car1')).toBe(true);
+  it('hides when 0 comments, collapsed, and canPost=false (read-only user)', () => {
+    expect(canShowComments(0, false, true, 'car1', false)).toBe(false);
+  });
+
+  it('shows when 0 comments but user is authed with a car and canPost=true', () => {
+    expect(canShowComments(0, false, true, 'car1', true)).toBe(true);
   });
 
   it('shows when already expanded regardless of count', () => {
-    expect(canShowComments(0, true, false, null)).toBe(true);
+    expect(canShowComments(0, true, false, null, false)).toBe(true);
   });
 
   it('shows when comment count > 0', () => {
-    expect(canShowComments(3, false, false, null)).toBe(true);
+    expect(canShowComments(3, false, false, null, false)).toBe(true);
   });
 });
