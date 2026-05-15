@@ -17,3 +17,4 @@ export * from './general-settings.js';
 export * from './notifications.js';
 export * from './broadcasts.js';
 export * from './feed.js';
+export * from './mfa.js';
