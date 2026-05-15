@@ -12,19 +12,20 @@ Satisfy LGPD Art. 46 (security safeguards) requirement L15.
 
 ## 2. Roles
 
-| Role        | Scope                                                                                | Assignment                                                           |
-| ----------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `user`      | Default. Read public events/store, own profile, tickets, orders, feed participation. | Self-registration via `/auth/signup`.                                |
-| `staff`     | Check-in surface only: verify tickets, claim extras, issue pickup vouchers.          | Admin creates via `POST /admin/users` with `role: staff`.            |
-| `organizer` | Event/store/finance CRUD, broadcasts, feed moderation, support triage.               | Admin creates via `POST /admin/users` with `role: organizer`.        |
-| `admin`     | All organizer permissions plus user create/disable/enable. Highest privilege.        | Seeded or promoted by direct DB update (no self-service escalation). |
+| Role        | Scope                                                                                | Assignment                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `user`      | Default. Read public events/store, own profile, tickets, orders, feed participation. | Self-registration via `/auth/signup`, or admin creates via `POST /admin/users` (always `user` role).  |
+| `staff`     | Check-in surface only: verify tickets, claim extras, issue pickup vouchers.          | Direct DB update (`UPDATE "User" SET role = 'staff'`). No API endpoint for role assignment today.     |
+| `organizer` | Event/store/finance CRUD, broadcasts, feed moderation, support triage.               | Direct DB update (`UPDATE "User" SET role = 'organizer'`). No API endpoint for role assignment today. |
+| `admin`     | All organizer permissions plus user create/disable/enable. Highest privilege.        | Seeded or promoted by direct DB update. No self-service escalation.                                   |
 
 ### 2.1 Principle of least privilege
 
 - New accounts default to `user`.
-- Role escalation requires an `admin` actor.
+- Role escalation requires direct DB access (no API endpoint for role changes today).
 - No endpoint exists for self-promotion.
 - `staff` cannot access events, finance, broadcasts, or user management.
+- **Gap**: Role changes are unaudited. See follow-up issue for adding a role-change API with audit trail.
 
 ## 3. Authentication
 
@@ -97,7 +98,7 @@ User mutations with rate limit (30 req/min):
 
 1. On any PR that adds or changes routes under `/admin`, reviewer must verify the `requireRole()` guard matches the intended tier.
 2. Every 6 months, run the RBAC audit checklist (Appendix A) and attach results to a new issue.
-3. Role grants logged via admin audit trail (`adminAuditActionSchema`).
+3. **Gap**: Role grants are not logged today. The admin audit trail tracks `user.create`, `user.disable`, and `user.enable`, but has no `user.role_changed` action. Role changes happen via direct DB update with no audit record. A follow-up issue tracks adding a role-change API with audit logging.
 
 ## 8. Incident response
 
@@ -110,7 +111,7 @@ User mutations with rate limit (30 req/min):
 
 Last audit: 2026-05-15
 Auditor: Orion (JDMA-654)
-Result: **No drift detected**
+Result: **2 drift items found and addressed**
 
 ### A.1 Role definitions
 
@@ -162,4 +163,7 @@ Result: **No drift detected**
 
 ### A.7 Drift findings
 
-None. All routes correctly guarded per tier. No orphaned endpoints.
+1. **`publicProfileSchema` missing `staff` role** (`packages/shared/src/profile.ts:51`): The `/me` endpoint serialization would reject staff users because `publicProfileSchema.role` only accepted `['user', 'organizer', 'admin']`. **Fixed in this PR** by adding `'staff'` to the enum.
+2. **No role-change audit trail**: `adminAuditActionSchema` has no `user.role_changed` action. Role changes happen via direct DB update with no API endpoint and no audit record. **Follow-up issue created** to add `PATCH /admin/users/:id/role` with audit logging.
+
+All route guards are correctly applied. No unguarded endpoints found.
