@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove Railway config ambiguity, preserve the working deploy path for a repo-root Railway service, and document the exact source of truth used by production deploys.
+**Goal:** Prove the live Railway deploy path, remove repo config ambiguity, restore the failed production API deploy, and document the missing secret contract that caused the crash loop.
 
-**Architecture:** Keep Railway configuration in one canonical repo-root `railway.json` because the service root directory is `/` and the Docker image starts from `/repo`. Remove the stale nested config that points at the wrong runtime path, then update the runbook to match the actual deploy path and verification flow.
+**Architecture:** Use live Railway metadata and deployment logs as the authority for the production service, then reconcile the repo to that proven path. Keep the canonical config at repo-root `railway.json`, remove the stale nested config, document the required Railway secrets, and restore production by setting the missing `FIELD_ENCRYPTION_KEY` and redeploying.
 
 **Tech Stack:** Railway deploy config, Dockerfile builder, pnpm workspace, Fastify API, Prisma migrations, Markdown runbook docs
 
@@ -88,7 +88,7 @@ Expected: Prisma client refresh is possible locally; runtime path proof remains 
 
 > note: In the fresh `jdma-712` worktree, `pnpm --filter @jdm/db db:generate` fails before execution because the worktree does not have its own `node_modules` install (`prisma: command not found`). Verification stayed focused on the touched deploy-config paths plus the shared-root proof that `node_modules/.bin/prisma` exists and the app dist path is `apps/api/dist/server.js`.
 
-- [ ] **Step 3: Post the issue update with root cause, change, verification, and Railway follow-up**
+- [x] **Step 3: Post the issue update with root cause, change, verification, and Railway follow-up**
 
 Comment must include:
 
@@ -97,3 +97,52 @@ Comment must include:
 - note that the linked Railway page is public HTML but deploy logs require authenticated Railway access
 - rollback: restore deleted nested file and revert docs if needed
 - next action: push branch / open PR / trigger Railway redeploy
+
+> note: Live Railway CLI access made the final proof stronger than the original plan. Production explicitly reported `configFile=/railway.json`, `rootDirectory=/`, `preDeployCommand=node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma`, and `startCommand=node apps/api/dist/server.js`. The actual failed deploy root cause was not config-path selection; it was a missing production secret: `FIELD_ENCRYPTION_KEY`.
+
+### Task 4: Restore the production deployment and document the missing secret
+
+**Files:**
+
+- Modify: `docs/railway.md`
+- Modify: `docs/secrets.md`
+- Reference: Railway production service `ed15dc73-2b23-42d2-8d9c-1e7f56888b25`
+
+- [x] **Step 1: Confirm the exact deployment failure from Railway logs**
+
+Run: `railway logs 0b8a99af-d505-4996-8856-fcbf4b347582 --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --deployment --lines 200`
+Expected: migrations succeed, then API startup fails with `Invalid environment: {"FIELD_ENCRYPTION_KEY":["Required"]}`
+
+- [x] **Step 2: Confirm the missing secret in Railway production**
+
+Run: `railway variable list --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --json | jq 'has("FIELD_ENCRYPTION_KEY")'`
+Expected: `false` before remediation
+
+- [x] **Step 3: Update the runbooks so the required secret is documented**
+
+Edit `docs/railway.md` and `docs/secrets.md` to list:
+
+- `FIELD_ENCRYPTION_KEY` as required in Railway
+- generation format `openssl rand -hex 32`
+- `TICKET_CODE_SECRET` in the same required-secret inventory
+
+- [x] **Step 4: Set the missing production secret and redeploy**
+
+Run:
+
+- `FIELD_KEY=$(openssl rand -hex 32) && railway variable set FIELD_ENCRYPTION_KEY="$FIELD_KEY" --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --skip-deploys`
+- `railway deployment redeploy --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --from-source --yes --json`
+
+Expected: Railway accepts the variable and starts a new deployment from source
+
+- [x] **Step 5: Verify the production deploy is healthy**
+
+Run:
+
+- `railway deployment list --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --json | jq '.[0] | {id,status}'`
+- `curl -fsS https://jdm-production.up.railway.app/health | jq .`
+
+Expected:
+
+- latest deployment `9dd67590-4896-4c1c-8463-8d4f53dcb150` reaches `SUCCESS`
+- `/health` returns `{"status":"ok","sha":"7506b6e0999445ac5745f987c49a74357f9030d8",...}`
