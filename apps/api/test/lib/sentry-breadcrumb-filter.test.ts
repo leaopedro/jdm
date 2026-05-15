@@ -71,6 +71,34 @@ describe('dropRiskyConsoleBreadcrumbs', () => {
     expect(dropRiskyConsoleBreadcrumbs(crumbs)).toHaveLength(1);
   });
 
+  it('keeps breadcrumb when data.arguments contain a circular object (no throw)', () => {
+    const circular: Record<string, unknown> = { label: 'safe' };
+    circular['self'] = circular;
+    const crumbs = [
+      {
+        category: 'console',
+        message: 'render',
+        type: 'default',
+        data: { arguments: [circular] },
+      },
+    ];
+    expect(() => dropRiskyConsoleBreadcrumbs(crumbs)).not.toThrow();
+    expect(dropRiskyConsoleBreadcrumbs(crumbs)).toHaveLength(1);
+  });
+
+  it('keeps breadcrumb when data.arguments contain a BigInt (no throw)', () => {
+    const crumbs = [
+      {
+        category: 'console',
+        message: 'id',
+        type: 'default',
+        data: { arguments: [BigInt(12345)] },
+      },
+    ];
+    expect(() => dropRiskyConsoleBreadcrumbs(crumbs)).not.toThrow();
+    expect(dropRiskyConsoleBreadcrumbs(crumbs)).toHaveLength(1);
+  });
+
   it('mixed batch: drops only risky breadcrumbs', () => {
     const crumbs = [
       { category: 'console', message: 'safe log', type: 'default' },

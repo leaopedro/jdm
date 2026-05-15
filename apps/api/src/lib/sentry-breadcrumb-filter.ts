@@ -12,7 +12,14 @@ export function dropRiskyConsoleBreadcrumbs(crumbs: Breadcrumb[]): Breadcrumb[] 
     const rawArgs: unknown = crumb.data?.['arguments'];
     if (Array.isArray(rawArgs) && rawArgs.length > 0) {
       const serialized = rawArgs
-        .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
+        .map((a) => {
+          if (typeof a === 'string') return a;
+          try {
+            return JSON.stringify(a);
+          } catch {
+            return '[unserializable]';
+          }
+        })
         .join(' ');
       if (serialized.length > MAX_CRUMB_LEN || PII_RE.test(serialized)) return false;
     }
