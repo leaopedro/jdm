@@ -65,7 +65,10 @@ export const adminCheckInRoutes: FastifyPluginAsync = async (app) => {
         orderBy: { extra: { sortOrder: 'asc' } },
       });
 
-      const storePickup = await getPickupOrdersForTicket(outcome.ticket.id);
+      const storePickup = await getPickupOrdersForTicket(
+        outcome.ticket.id,
+        app.env.FIELD_ENCRYPTION_KEY,
+      );
 
       const { car } = outcome.ticket;
       return reply.send(

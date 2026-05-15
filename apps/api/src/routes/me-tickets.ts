@@ -81,7 +81,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
 
     const ticketIds = sorted.map((t) => t.id);
     const [pickupByTicket, vouchersByTicket] = await Promise.all([
-      getPickupOrdersByTicket(ticketIds),
+      getPickupOrdersByTicket(ticketIds, app.env.FIELD_ENCRYPTION_KEY),
       getPickupVouchersByTicket(ticketIds),
     ]);
 
@@ -109,7 +109,7 @@ export const meTicketsRoutes: FastifyPluginAsync = async (app) => {
     });
 
     const [pickupByTicket, vouchersByTicket] = await Promise.all([
-      getPickupOrdersByTicket([updated.id]),
+      getPickupOrdersByTicket([updated.id], app.env.FIELD_ENCRYPTION_KEY),
       getPickupVouchersByTicket([updated.id]),
     ]);
 

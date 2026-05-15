@@ -1,10 +1,13 @@
 import { prisma } from '@jdm/db';
 import type { StorePickupItem, StorePickupOrder } from '@jdm/shared/check-in';
 
-const parsePickupTicketId = (notes: string | null): string | null => {
+import { decryptField } from '../crypto/field-encryption.js';
+
+const parsePickupTicketId = (notes: string | null, encryptionKey: string): string | null => {
   if (!notes) return null;
+  const decrypted = decryptField(notes, encryptionKey) ?? notes;
   try {
-    const parsed = JSON.parse(notes) as unknown;
+    const parsed = JSON.parse(decrypted) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const id = (parsed as Record<string, unknown>).pickupTicketId;
       return typeof id === 'string' ? id : null;
@@ -46,7 +49,7 @@ const mapItems = (
     };
   });
 
-const queryPickupOrders = async (ticketId: string) => {
+const queryPickupOrders = async (ticketId: string, encryptionKey: string) => {
   const candidates = await prisma.order.findMany({
     where: {
       fulfillmentMethod: 'pickup',
@@ -70,12 +73,16 @@ const queryPickupOrders = async (ticketId: string) => {
     },
   });
   return candidates.filter(
-    (o) => o.pickupTicketId === ticketId || parsePickupTicketId(o.notes) === ticketId,
+    (o) =>
+      o.pickupTicketId === ticketId || parsePickupTicketId(o.notes, encryptionKey) === ticketId,
   );
 };
 
-export const getPickupOrdersForTicket = async (ticketId: string): Promise<StorePickupOrder[]> => {
-  const orders = await queryPickupOrders(ticketId);
+export const getPickupOrdersForTicket = async (
+  ticketId: string,
+  encryptionKey: string,
+): Promise<StorePickupOrder[]> => {
+  const orders = await queryPickupOrders(ticketId, encryptionKey);
   return orders.map((o) => ({
     orderId: o.id,
     shortId: o.id.slice(-8).toUpperCase(),
@@ -86,6 +93,7 @@ export const getPickupOrdersForTicket = async (ticketId: string): Promise<StoreP
 
 export const getPickupOrdersByTicket = async (
   ticketIds: string[],
+  encryptionKey: string,
 ): Promise<Map<string, StorePickupOrder[]>> => {
   const result = new Map<string, StorePickupOrder[]>();
   if (ticketIds.length === 0) return result;
@@ -120,7 +128,7 @@ export const getPickupOrdersByTicket = async (
     const linkedTicketId =
       (order.pickupTicketId && ticketIds.includes(order.pickupTicketId)
         ? order.pickupTicketId
-        : null) ?? parsePickupTicketId(order.notes);
+        : null) ?? parsePickupTicketId(order.notes, encryptionKey);
     if (!linkedTicketId || !ticketIds.includes(linkedTicketId)) continue;
 
     const entry: StorePickupOrder = {

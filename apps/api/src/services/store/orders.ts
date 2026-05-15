@@ -13,6 +13,7 @@ import { type AdminStoreFulfillmentUpdate, type StoreFulfillmentStatus } from '@
 import type { OrderKind, Prisma } from '@prisma/client';
 
 import { recordAudit } from '../admin-audit.js';
+import { decryptField } from '../crypto/field-encryption.js';
 
 const ORDER_KINDS: OrderKind[] = ['product', 'mixed'];
 
@@ -217,10 +218,12 @@ export const listAdminStoreOrders = async (
 
 const pickupRefsFromNotes = (
   notes: string | null,
+  encryptionKey: string,
 ): { eventId: string | null; ticketId: string | null } => {
   if (!notes) return { eventId: null, ticketId: null };
+  const decrypted = decryptField(notes, encryptionKey) ?? notes;
   try {
-    const parsed = JSON.parse(notes) as unknown;
+    const parsed = JSON.parse(decrypted) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       const obj = parsed as Record<string, unknown>;
       const eventId = typeof obj.pickupEventId === 'string' ? obj.pickupEventId : null;
@@ -233,7 +236,10 @@ const pickupRefsFromNotes = (
   return { eventId: null, ticketId: null };
 };
 
-export const getAdminStoreOrderDetail = async (orderId: string): Promise<AdminStoreOrderDetail> => {
+export const getAdminStoreOrderDetail = async (
+  orderId: string,
+  encryptionKey: string,
+): Promise<AdminStoreOrderDetail> => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -334,7 +340,7 @@ export const getAdminStoreOrderDetail = async (orderId: string): Promise<AdminSt
     };
   });
 
-  const pickupRefs = pickupRefsFromNotes(order.notes);
+  const pickupRefs = pickupRefsFromNotes(order.notes, encryptionKey);
   const pickupEventId = order.pickupEventId ?? pickupRefs.eventId;
   const pickupTicketId = order.pickupTicketId ?? pickupRefs.ticketId;
   const pickupEvent = pickupEventId
@@ -353,7 +359,7 @@ export const getAdminStoreOrderDetail = async (orderId: string): Promise<AdminSt
     fulfillmentMethod: order.fulfillmentMethod,
     provider: order.provider,
     providerRef: order.providerRef,
-    notes: order.notes,
+    notes: decryptField(order.notes, encryptionKey) ?? order.notes,
     amountCents: order.amountCents,
     shippingCents: order.shippingCents,
     currency: order.currency,
@@ -394,6 +400,7 @@ export type UpdateFulfillmentInput = AdminStoreFulfillmentUpdate & {
 
 export const updateAdminStoreFulfillment = async (
   input: UpdateFulfillmentInput,
+  encryptionKey: string,
 ): Promise<AdminStoreOrderDetail> => {
   const order = await prisma.order.findUnique({
     where: { id: input.orderId },
@@ -446,5 +453,5 @@ export const updateAdminStoreFulfillment = async (
     );
   });
 
-  return getAdminStoreOrderDetail(order.id);
+  return getAdminStoreOrderDetail(order.id, encryptionKey);
 };
