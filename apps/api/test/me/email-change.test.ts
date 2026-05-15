@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
 import { issueEmailChangeToken } from '../../src/services/auth/email-change.js';
+import type { DevMailer } from '../../src/services/mailer/dev.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
 describe('POST /me/email-change', () => {
@@ -13,6 +14,7 @@ describe('POST /me/email-change', () => {
   beforeEach(async () => {
     await resetDatabase();
     app = await makeApp();
+    (app.mailer as DevMailer).clear();
   });
 
   afterEach(async () => {
@@ -37,6 +39,11 @@ describe('POST /me/email-change', () => {
     });
     expect(token).not.toBeNull();
     expect(token?.pendingEmail).toBe('new@jdm.test');
+
+    const mail = (app.mailer as DevMailer).find('new@jdm.test');
+    expect(mail).toBeDefined();
+    expect(mail?.subject).toContain('confirme seu novo e-mail');
+    expect(mail?.html).toContain('/verify-email-change?token=');
   });
 
   it('rejects when new email already in use', async () => {
@@ -82,6 +89,7 @@ describe('POST /me/email-change/verify', () => {
   beforeEach(async () => {
     await resetDatabase();
     app = await makeApp();
+    (app.mailer as DevMailer).clear();
   });
 
   afterEach(async () => {
@@ -125,6 +133,11 @@ describe('POST /me/email-change/verify', () => {
       where: { userId: user.id, revokedAt: null },
     });
     expect(liveTokens).toBe(0);
+
+    const notifyMail = (app.mailer as DevMailer).find('old@jdm.test');
+    expect(notifyMail).toBeDefined();
+    expect(notifyMail?.subject).toContain('seu e-mail foi alterado');
+    expect(notifyMail?.html).toContain('new@jdm.test');
   });
 
   it('rejects stale (expired) token', async () => {
