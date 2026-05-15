@@ -38,13 +38,35 @@ Satisfy LGPD Art. 46 (security safeguards) requirement L15.
 
 ### 3.1 Public routes (no token required)
 
-`/health`, `/auth/*`, `/events` (list/detail), `/store/products`, `/store/collections`, `/store/product-types`, webhooks (`/stripe-webhook`, `/abacatepay-webhook`).
+| Route                          | Method | Purpose                                                               |
+| ------------------------------ | ------ | --------------------------------------------------------------------- |
+| `/health`                      | GET    | Healthcheck                                                           |
+| `/auth/*`                      | POST   | Signup, login, verify, refresh, logout, password reset (rate limited) |
+| `/events`                      | GET    | List published events                                                 |
+| `/events/:slug`                | GET    | Event detail by slug                                                  |
+| `/events/by-id/:id`            | GET    | Event detail by ID                                                    |
+| `/events/:slug/confirmed-cars` | GET    | Confirmed cars for event                                              |
+| `/store/products`              | GET    | List store products                                                   |
+| `/store/products/:slug`        | GET    | Product detail by slug                                                |
+| `/store/collections`           | GET    | List collections                                                      |
+| `/store/product-types`         | GET    | List product types                                                    |
+| `/store/settings`              | GET    | Public store settings                                                 |
+| `/stripe/webhook`              | POST   | Stripe payment webhook (signature-verified)                           |
+| `/abacatepay/webhook`          | POST   | AbacatePay Pix webhook (signature-verified)                           |
 
-Feed read (`GET /events/:eventId/feed`) uses soft/optional auth.
+Feed read (`GET /events/:eventId/feed`) uses soft/optional auth via `tryAuth`.
 
 ### 3.2 Authenticated routes (valid token required)
 
-All `/me/*`, `/cart/*`, `/orders/*`, `/uploads/presign`, feed write endpoints.
+| Route                        | Method  | Purpose                                                                         |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `/me`, `/me/*`               | Various | Profile, cars, tickets, orders, notifications, shipping, support, device tokens |
+| `/cart`, `/cart/*`           | Various | Cart CRUD, checkout                                                             |
+| `/orders`, `/orders/*`       | Various | Order creation, checkout                                                        |
+| `/uploads/presign`           | POST    | Pre-signed upload URL                                                           |
+| `/events/:slug/commerce`     | GET     | Event commerce data                                                             |
+| `/events/by-id/:id/commerce` | GET     | Event commerce data by ID                                                       |
+| `/events/:eventId/feed/*`    | Various | Feed write: posts, comments, reactions, reports                                 |
 
 ### 3.3 Admin routes (token + role guard)
 
@@ -146,15 +168,20 @@ Result: **2 drift items found and addressed**
 - [x] Upload presign authenticated
 - [x] Feed write endpoints authenticated
 - [x] Support ticket creation authenticated
+- [x] Commerce endpoints (`/events/:slug/commerce`, `/events/by-id/:id/commerce`) authenticated
 
 ### A.5 Public routes
 
-- [x] Health check: no auth
-- [x] Auth endpoints: no auth (rate limited)
-- [x] Event list/detail: no auth
-- [x] Store product/collection list: no auth
-- [x] Webhooks: no auth (signature-verified)
-- [x] Feed read: optional soft auth
+- [x] Health check (`/health`): no auth
+- [x] Auth endpoints (`/auth/*`): no auth (rate limited)
+- [x] Event list/detail (`/events`, `/events/:slug`, `/events/by-id/:id`): no auth
+- [x] Confirmed cars (`/events/:slug/confirmed-cars`): no auth
+- [x] Store products (`/store/products`, `/store/products/:slug`): no auth
+- [x] Store collections (`/store/collections`): no auth
+- [x] Store product types (`/store/product-types`): no auth
+- [x] Store settings (`/store/settings`): no auth
+- [x] Webhooks (`/stripe/webhook`, `/abacatepay/webhook`): no auth (signature-verified)
+- [x] Feed read (`GET /events/:eventId/feed`): optional soft auth via `tryAuth`
 
 ### A.6 Rate limiting
 
