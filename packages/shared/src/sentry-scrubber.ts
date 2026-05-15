@@ -10,7 +10,7 @@ export interface SentryEvent {
     headers?: Record<string, string>;
     cookies?: Record<string, string> | string;
     data?: unknown;
-    query_string?: string;
+    query_string?: unknown;
   };
   user?: {
     email?: string;
@@ -101,9 +101,9 @@ function scrubBreadcrumbs(
  * Deep-scrub a Sentry event of PII. Returns a new object; the original is
  * never mutated.
  */
-export function scrubSentryEvent<T extends SentryEvent>(event: T): T {
+export function scrubSentryEvent<T>(event: T): T {
   // Structural clone to avoid mutating the caller's object.
-  const e = JSON.parse(JSON.stringify(event)) as T;
+  const e = JSON.parse(JSON.stringify(event)) as SentryEvent;
 
   // -- request -----------------------------------------------------------
   if (e.request) {
@@ -126,5 +126,5 @@ export function scrubSentryEvent<T extends SentryEvent>(event: T): T {
     e.breadcrumbs = scrubBreadcrumbs(e.breadcrumbs);
   }
 
-  return e;
+  return e as unknown as T;
 }
