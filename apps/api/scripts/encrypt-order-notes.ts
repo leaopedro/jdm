@@ -43,7 +43,7 @@ async function main() {
       // queries no longer need to parse notes.
       try {
         const plaintext = isEncrypted(row.notes!)
-          ? decryptField(row.notes!, FIELD_ENCRYPTION_KEY!)
+          ? decryptField(row.notes, FIELD_ENCRYPTION_KEY!)
           : row.notes!;
 
         if (plaintext) {
@@ -52,10 +52,7 @@ async function main() {
           if (!row.pickupEventId && typeof parsed.pickupEventId === 'string') {
             updates.pickupEventId = parsed.pickupEventId;
           }
-          if (
-            !row.pickupTicketId &&
-            typeof parsed.pickupTicketId === 'string'
-          ) {
+          if (!row.pickupTicketId && typeof parsed.pickupTicketId === 'string') {
             updates.pickupTicketId = parsed.pickupTicketId;
           }
           if (Object.keys(updates).length > 0) {
@@ -75,7 +72,7 @@ async function main() {
       // succeeds the row is genuinely encrypted; if it fails it is plaintext
       // that happens to look like ciphertext and must be encrypted.
       if (isEncrypted(row.notes!)) {
-        const probe = decryptField(row.notes!, FIELD_ENCRYPTION_KEY!);
+        const probe = decryptField(row.notes, FIELD_ENCRYPTION_KEY!);
         if (probe !== null) {
           skipped++;
           continue;
