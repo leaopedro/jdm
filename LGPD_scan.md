@@ -1,7 +1,5 @@
 # LGPD Compliance Assessment — JDM Experience
 
-> **Status:** Engineering, product, security, and compliance remediation plan. **Not legal advice.** Final positions on legal basis, consent UX wording, vendor SCC adoption, and incident notification thresholds must be confirmed by counsel and the Encarregado before launch.
->
 > **Date:** 2026-05-14
 > **Scope:** monorepo `jdm-experience` (apps/mobile, apps/admin, apps/api, packages/db, packages/shared, infra/, .github/workflows)
 > **Method:** read-only static analysis + Brazilian LGPD/ANPD primary-source research

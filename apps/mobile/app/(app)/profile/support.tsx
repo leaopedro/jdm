@@ -155,6 +155,7 @@ export default function SupportScreen() {
           textAlignVertical="top"
           editable={!submitting}
         />
+        <Text style={styles.hint}>{copy.messageHint}</Text>
 
         {attachedUri ? (
           <View style={styles.attachmentRow}>
@@ -240,6 +241,11 @@ const styles = StyleSheet.create({
   },
   textarea: {
     minHeight: 96,
+  },
+  hint: {
+    color: theme.colors.muted,
+    fontSize: theme.font.size.sm,
+    marginTop: 4,
   },
   attachmentRow: {
     flexDirection: 'row',
