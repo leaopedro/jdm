@@ -46,7 +46,7 @@ model User {
   avatarObjectKey String? @db.VarChar(300)
 
   // push preferences (F10)
-  pushPrefs Json @default("{\"transactional\":true,\"marketing\":true}")
+  pushPrefs Json @default("{\"transactional\":true,\"marketing\":false}")
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
@@ -68,6 +68,9 @@ model User {
   reportsResolved     Report[]             @relation("ReportResolver")
   feedBans            FeedBan[]            @relation("FeedBanUser")
   feedBansIssued      FeedBan[]            @relation("FeedBanActor")
+  consents            Consent[]
+  mfaSecret           MfaSecret?
+  mfaRecoveryCodes    MfaRecoveryCode[]
 
   @@index([createdAt])
 }
@@ -120,6 +123,28 @@ model PasswordResetToken {
   expiresAt  DateTime
   consumedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MfaSecret {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  encryptedSecret String
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1050,4 +1075,39 @@ model Report {
   @@index([commentId])
   @@index([reporterUserId])
   @@index([status, createdAt(sort: Desc)])
+}
+
+enum ConsentPurpose {
+  privacy_notice
+  cookies_analytics
+  cookies_marketing
+  push_marketing
+  email_marketing
+  newsletter
+}
+
+enum ConsentChannel {
+  web_admin
+  web_public
+  mobile
+  email
+}
+
+model Consent {
+  id          String         @id @default(cuid())
+  userId      String?
+  purpose     ConsentPurpose
+  version     String         @db.VarChar(100)
+  givenAt     DateTime       @default(now())
+  withdrawnAt DateTime?
+  channel     ConsentChannel
+  ipAddress   String?        @db.VarChar(45)
+  userAgent   String?        @db.VarChar(500)
+  evidence    Json
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, purpose, version])
+  @@index([userId, purpose])
+  @@index([purpose, version])
 }
