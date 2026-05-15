@@ -875,7 +875,7 @@ model SupportTicket {
   id                  String                      @id @default(cuid())
   userId              String
   phone               String                      @db.VarChar(20)
-  message             String                      @db.VarChar(2000)
+  message             String                      @db.Text
   attachmentObjectKey String?                     @db.VarChar(500)
   status              SupportTicketStatus         @default(open)
   internalStatus      SupportTicketInternalStatus @default(unread)
