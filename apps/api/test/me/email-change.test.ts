@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
 import type { FastifyInstance } from 'fastify';
+import jwt from 'jsonwebtoken';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
@@ -198,18 +199,18 @@ describe('POST /me/email-change/verify', () => {
     const env = loadEnv();
     const { user } = await createUser({ email: 'old@jdm.test', verified: true });
 
-    const preSwapJwt = createAccessToken({ sub: user.id, role: 'user' }, env);
+    const staleIat = Math.floor(Date.now() / 1000) - 5;
+    const preSwapJwt = jwt.sign(
+      { sub: user.id, role: 'user', iat: staleIat },
+      env.JWT_ACCESS_SECRET,
+      { algorithm: 'HS256', expiresIn: 900 },
+    );
 
     const changeToken = await issueEmailChangeToken(user.id, 'new@jdm.test');
     await app.inject({
       method: 'POST',
       url: '/me/email-change/verify',
       payload: { token: changeToken },
-    });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { tokenInvalidatedAt: new Date(Date.now() + 2_000) },
     });
 
     const res = await app.inject({
