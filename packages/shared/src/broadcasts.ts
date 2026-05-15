@@ -95,7 +95,7 @@ export type PushPrefs = z.infer<typeof pushPrefsSchema>;
 
 export const pushPrefsStorageSchema = z.object({
   transactional: z.boolean().default(true),
-  marketing: z.boolean().default(true),
+  marketing: z.boolean().default(false),
 });
 
 export const updatePushPrefsRequestSchema = z.object({
