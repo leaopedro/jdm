@@ -14,9 +14,10 @@ import {
   View,
 } from 'react-native';
 
+import { CarPickerPopover } from './CarPickerPopover';
+
 import { feedCopy } from '~/copy/feed';
 import { theme } from '~/theme';
-import { CarPickerPopover } from './CarPickerPopover';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 

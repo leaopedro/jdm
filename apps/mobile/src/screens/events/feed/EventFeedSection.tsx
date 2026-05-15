@@ -1,5 +1,6 @@
 import type { Car } from '@jdm/shared/cars';
 import type { FeedListResponse, FeedPostResponse, FeedSettings } from '@jdm/shared/feed';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,8 +12,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 
+import { FeedComposerSheet } from './FeedComposerSheet';
+import { FeedLockedCard } from './FeedLockedCard';
+import { FeedPostCard } from './FeedPostCard';
+import { TicketStrip } from './TicketStrip';
+
+import { listCars } from '~/api/cars';
 import {
   createFeedPost,
   deleteFeedPost,
@@ -21,14 +27,10 @@ import {
   removeFeedReaction,
   toggleFeedReaction,
 } from '~/api/feed';
-import { listCars } from '~/api/cars';
 import { useAuth } from '~/auth/context';
 import { feedCopy } from '~/copy/feed';
 import { theme } from '~/theme';
-import { FeedComposerSheet } from './FeedComposerSheet';
-import { FeedLockedCard } from './FeedLockedCard';
-import { FeedPostCard } from './FeedPostCard';
-import { TicketStrip } from './TicketStrip';
+
 
 const PAGE_SIZE = 5;
 
@@ -164,13 +166,15 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
       {
         text: feedCopy.composer.delete,
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteFeedPost(post.eventId, post.id);
-            setPosts((prev) => prev.filter((p) => p.id !== post.id));
-          } catch {
-            Alert.alert(feedCopy.errors.postFailed);
-          }
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteFeedPost(post.eventId, post.id);
+              setPosts((prev) => prev.filter((p) => p.id !== post.id));
+            } catch {
+              Alert.alert(feedCopy.errors.postFailed);
+            }
+          })();
         },
       },
     ]);
@@ -238,7 +242,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
                 myCarId={myCarId}
                 isOwn={myCars.some((c) => c.id === post.car?.id)}
                 reactionLoading={reactionLoadingIds.has(post.id)}
-                onToggleReaction={handleReaction}
+                onToggleReaction={(postId, kind) => { void handleReaction(postId, kind); }}
                 {...(canPost
                   ? {
                       onEdit: (p: FeedPostResponse) => {

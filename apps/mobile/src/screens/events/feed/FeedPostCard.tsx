@@ -1,10 +1,11 @@
 import type { FeedPostResponse } from '@jdm/shared/feed';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { feedCopy } from '~/copy/feed';
-import { theme } from '~/theme';
 import { FeedComments } from './FeedComments';
 import { FeedReactionsRow } from './FeedReactionsRow';
+
+import { feedCopy } from '~/copy/feed';
+import { theme } from '~/theme';
 
 type Props = {
   post: FeedPostResponse;
