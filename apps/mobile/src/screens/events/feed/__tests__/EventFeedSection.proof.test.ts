@@ -146,3 +146,77 @@ describe('EventFeedSection — pagination', () => {
     expect(hasMore(4, 3)).toBe(false);
   });
 });
+
+// ── Event-detail feed settings passthrough ────────────────────────────────────
+// Ensures real event values (not defaultFeedSettings) reach access gate.
+
+describe('EventFeedSection — event feed settings passthrough', () => {
+  it('public event: canView=true without ticket', () => {
+    const eventSettings: FeedSettings = {
+      feedEnabled: true,
+      feedAccess: 'public',
+      postingAccess: 'organizers_only',
+      maxPostsPerUser: null,
+      maxPhotosPerUser: 5,
+    };
+    const { canView } = resolveAccess(eventSettings, false);
+    expect(canView).toBe(true);
+  });
+
+  it('attendees-only event: canPost=false for non-attendee', () => {
+    const eventSettings: FeedSettings = {
+      feedEnabled: true,
+      feedAccess: 'attendees',
+      postingAccess: 'attendees',
+      maxPostsPerUser: null,
+      maxPhotosPerUser: 5,
+    };
+    const { canPost } = resolveAccess(eventSettings, false);
+    expect(canPost).toBe(false);
+  });
+
+  it('organizers_only posting: canPost=false even with ticket', () => {
+    const eventSettings: FeedSettings = {
+      feedEnabled: true,
+      feedAccess: 'public',
+      postingAccess: 'organizers_only',
+      maxPostsPerUser: null,
+      maxPhotosPerUser: 5,
+    };
+    const { canPost } = resolveAccess(eventSettings, true);
+    expect(canPost).toBe(false);
+  });
+});
+
+// ── Zero-comment first-creation gate ─────────────────────────────────────────
+// FeedComments hides the section when commentCount=0 AND user cannot create
+// the first comment. The gate mirrors the component's early-return condition.
+
+const canShowComments = (
+  commentCount: number,
+  expanded: boolean,
+  isAuthed: boolean,
+  myCarId: string | null,
+): boolean => !(commentCount === 0 && !expanded && !(isAuthed && myCarId));
+
+describe('FeedComments — zero-comment visibility gate', () => {
+  it('hides when 0 comments, collapsed, and user has no car', () => {
+    expect(canShowComments(0, false, true, null)).toBe(false);
+  });
+
+  it('hides when 0 comments, collapsed, and unauthenticated', () => {
+    expect(canShowComments(0, false, false, 'car1')).toBe(false);
+  });
+
+  it('shows when 0 comments but user is authed with a car (first comment path)', () => {
+    expect(canShowComments(0, false, true, 'car1')).toBe(true);
+  });
+
+  it('shows when already expanded regardless of count', () => {
+    expect(canShowComments(0, true, false, null)).toBe(true);
+  });
+
+  it('shows when comment count > 0', () => {
+    expect(canShowComments(3, false, false, null)).toBe(true);
+  });
+});

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { eventExtraPublicSchema } from './extras.js';
+import { feedAccessSchema, postingAccessSchema } from './feed.js';
 import { capacityDisplayDescriptorSchema } from './general-settings.js';
 import { stateCodeSchema } from './profile.js';
 

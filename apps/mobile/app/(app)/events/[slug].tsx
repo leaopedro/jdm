@@ -38,7 +38,6 @@ import { CarDetailSheet } from '~/screens/events/confirmed-cars/CarDetailSheet';
 import { ConfirmedCarsSection } from '~/screens/events/confirmed-cars/ConfirmedCarsSection';
 import { EventFeedSection } from '~/screens/events/feed/EventFeedSection';
 import { theme } from '~/theme';
-import { defaultFeedSettings } from '@jdm/shared/feed';
 
 export default function EventDetailScreen() {
   const { slug, tierId: requestedTierId } = useLocalSearchParams<{
@@ -237,8 +236,11 @@ export default function EventDetailScreen() {
           eventSlug={event.slug}
           eventId={event.id}
           feedSettings={{
-            ...defaultFeedSettings,
-            feedEnabled: true,
+            feedEnabled: event.feedEnabled,
+            feedAccess: event.feedAccess,
+            postingAccess: event.postingAccess,
+            maxPostsPerUser: null,
+            maxPhotosPerUser: 5,
           }}
           hasTicket={hasTicket}
         />

@@ -63,7 +63,7 @@ export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) 
     }
   };
 
-  if (commentCount === 0 && !expanded) return null;
+  if (commentCount === 0 && !expanded && !(isAuthed && myCarId)) return null;
 
   return (
     <View style={styles.container}>
