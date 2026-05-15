@@ -42,7 +42,7 @@ export const meEmailChangeRoutes: FastifyPluginAsync = async (app) => {
         }
 
         const token = await issueEmailChangeToken(sub, newEmail);
-        const link = `${app.env.APP_WEB_BASE_URL}/confirmar-email?token=${encodeURIComponent(token)}`;
+        const link = `${app.env.APP_WEB_BASE_URL}/verify?token=${encodeURIComponent(token)}`;
         await app.mailer.send(emailChangeConfirmMail(newEmail, link));
 
         return reply.status(202).send({ message: 'confirmation email sent' });

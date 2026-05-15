@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { prisma } from '@jdm/db';
+import { Prisma } from '@prisma/client';
 
 import { sha256Hex } from './token-hash.js';
 
@@ -35,33 +36,45 @@ export type ConsumeEmailChangeResult =
 
 export const consumeEmailChangeToken = async (token: string): Promise<ConsumeEmailChangeResult> => {
   const hash = sha256Hex(token);
-  return prisma.$transaction(async (tx) => {
-    const now = new Date();
-    const claim = await tx.emailChangeToken.updateMany({
-      where: { tokenHash: hash, consumedAt: null, expiresAt: { gt: now } },
-      data: { consumedAt: now },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const claim = await tx.emailChangeToken.updateMany({
+        where: { tokenHash: hash, consumedAt: null, expiresAt: { gt: now } },
+        data: { consumedAt: now },
+      });
+      if (claim.count !== 1) return { ok: false };
+
+      const record = await tx.emailChangeToken.findUnique({ where: { tokenHash: hash } });
+      if (!record) return { ok: false };
+
+      const user = await tx.user.findUnique({ where: { id: record.userId } });
+      if (!user) return { ok: false };
+
+      const conflict = await tx.user.findUnique({ where: { email: record.pendingEmail } });
+      if (conflict) return { ok: false };
+
+      await tx.user.update({
+        where: { id: record.userId },
+        data: { email: record.pendingEmail, emailVerifiedAt: now },
+      });
+
+      await tx.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+
+      return {
+        ok: true,
+        userId: record.userId,
+        oldEmail: user.email,
+        newEmail: record.pendingEmail,
+      };
     });
-    if (claim.count !== 1) return { ok: false };
-
-    const record = await tx.emailChangeToken.findUnique({ where: { tokenHash: hash } });
-    if (!record) return { ok: false };
-
-    const user = await tx.user.findUnique({ where: { id: record.userId } });
-    if (!user) return { ok: false };
-
-    const conflict = await tx.user.findUnique({ where: { email: record.pendingEmail } });
-    if (conflict) return { ok: false };
-
-    await tx.user.update({
-      where: { id: record.userId },
-      data: { email: record.pendingEmail, emailVerifiedAt: now },
-    });
-
-    await tx.refreshToken.updateMany({
-      where: { userId: record.userId, revokedAt: null },
-      data: { revokedAt: now },
-    });
-
-    return { ok: true, userId: record.userId, oldEmail: user.email, newEmail: record.pendingEmail };
-  });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return { ok: false };
+    }
+    throw err;
+  }
 };
