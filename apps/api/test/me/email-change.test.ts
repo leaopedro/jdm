@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
 import { issueEmailChangeToken } from '../../src/services/auth/email-change.js';
+import { createAccessToken } from '../../src/services/auth/tokens.js';
 import type { DevMailer } from '../../src/services/mailer/dev.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
@@ -191,5 +192,28 @@ describe('POST /me/email-change/verify', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('invalidates access tokens issued before email swap', async () => {
+    const env = loadEnv();
+    const { user } = await createUser({ email: 'old@jdm.test', verified: true });
+
+    const preSwapJwt = createAccessToken({ sub: user.id, role: 'user' }, env);
+
+    const changeToken = await issueEmailChangeToken(user.id, 'new@jdm.test');
+    await app.inject({
+      method: 'POST',
+      url: '/me/email-change/verify',
+      payload: { token: changeToken },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${preSwapJwt}` },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ message: 'session invalidated' });
   });
 });

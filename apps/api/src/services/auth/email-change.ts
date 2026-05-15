@@ -56,7 +56,7 @@ export const consumeEmailChangeToken = async (token: string): Promise<ConsumeEma
 
       await tx.user.update({
         where: { id: record.userId },
-        data: { email: record.pendingEmail, emailVerifiedAt: now },
+        data: { email: record.pendingEmail, emailVerifiedAt: now, tokenInvalidatedAt: now },
       });
 
       await tx.refreshToken.updateMany({

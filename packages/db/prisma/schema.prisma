@@ -35,9 +35,10 @@ model User {
   name            String
   role            UserRole   @default(user)
   status          UserStatus @default(active)
-  emailVerifiedAt DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  emailVerifiedAt    DateTime?
+  tokenInvalidatedAt DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   // profile (F2)
   bio             String? @db.VarChar(500)
