@@ -113,10 +113,14 @@ Comment must include:
 Run: `railway logs 0b8a99af-d505-4996-8856-fcbf4b347582 --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --deployment --lines 200`
 Expected: migrations succeed, then API startup fails with `Invalid environment: {"FIELD_ENCRYPTION_KEY":["Required"]}`
 
+Observed: Railway applied the pending migrations successfully, then restarted the container repeatedly with `startup failed: Error: Invalid environment: {"FIELD_ENCRYPTION_KEY":["Required"]}` while `cwd=/repo`.
+
 - [x] **Step 2: Confirm the missing secret in Railway production**
 
 Run: `railway variable list --service ed15dc73-2b23-42d2-8d9c-1e7f56888b25 --environment f8e16840-1687-44a7-9f2c-068f882f34d3 --json | jq 'has("FIELD_ENCRYPTION_KEY")'`
 Expected: `false` before remediation
+
+Observed: `false`
 
 - [x] **Step 3: Update the runbooks so the required secret is documented**
 
@@ -135,6 +139,8 @@ Run:
 
 Expected: Railway accepts the variable and starts a new deployment from source
 
+Observed: Railway accepted the secret, and the source redeploy returned `{"success":true}`.
+
 - [x] **Step 5: Verify the production deploy is healthy**
 
 Run:
@@ -146,3 +152,8 @@ Expected:
 
 - latest deployment `9dd67590-4896-4c1c-8463-8d4f53dcb150` reaches `SUCCESS`
 - `/health` returns `{"status":"ok","sha":"7506b6e0999445ac5745f987c49a74357f9030d8",...}`
+
+Observed:
+
+- `railway deployment list ...` returned `{ "id": "9dd67590-4896-4c1c-8463-8d4f53dcb150", "status": "SUCCESS" }`
+- `curl -fsS https://jdm-production.up.railway.app/health | jq .` returned `{"status":"ok","sha":"7506b6e0999445ac5745f987c49a74357f9030d8","uptimeSeconds":7}`

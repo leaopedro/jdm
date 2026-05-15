@@ -40,10 +40,12 @@ runs `prisma migrate deploy`, then `startCommand` boots
      Permissive `*` avoids a circular dependency on Vercel admin
      (JDMA-18) being live before this can ship.
 
-   Other Railway-flagged secrets (Stripe, AbacatePay, R2, Sentry,
-   Google/Apple client IDs) can be left empty during bootstrap if their
-   features are not yet wired — the API env parser tolerates empty values
-   for not-yet-active integrations.
+   Additional optional secrets that can stay empty during bootstrap if
+   their features are not yet wired: AbacatePay, R2, Sentry,
+   `STRIPE_PUBLISHABLE_KEY`, `MFA_ENCRYPTION_KEY`, and Google/Apple
+   client IDs. Do **not** leave `STRIPE_SECRET_KEY`,
+   `STRIPE_WEBHOOK_SECRET`, `TICKET_CODE_SECRET`, or
+   `FIELD_ENCRYPTION_KEY` empty — the API refuses to boot without them.
    - `ABACATEPAY_DEV_WEBHOOK_ENABLED=false` by default. Set to `true`
      only for controlled internal tests that must process AbacatePay
      `devMode` webhooks in production, then revert to `false`.

@@ -2338,7 +2338,7 @@ git commit -m "ci: add lint/typecheck/test/build pipeline across workspaces"
 **Files:**
 
 - Create: `RAILWAY.md`
-- Create: `apps/api/railway.json`
+- Create: `railway.json`
 - Modify: `apps/api/package.json` (add `start:migrate` script)
 
 - [ ] **Step 1: Add `start:migrate` script to `apps/api/package.json`**
@@ -2349,7 +2349,7 @@ Add to `scripts`:
 "start:migrate": "pnpm --filter @jdm/db db:deploy && node dist/server.js"
 ```
 
-- [ ] **Step 2: Create `apps/api/railway.json`**
+- [ ] **Step 2: Create `railway.json`**
 
 ```json
 {
@@ -2359,9 +2359,10 @@ Add to `scripts`:
     "dockerfilePath": "apps/api/Dockerfile"
   },
   "deploy": {
-    "startCommand": "node dist/server.js",
+    "preDeployCommand": "node_modules/.bin/prisma migrate deploy --schema packages/db/prisma/schema.prisma",
+    "startCommand": "node apps/api/dist/server.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 30,
+    "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }
@@ -2379,9 +2380,8 @@ Add to `scripts`:
 2. Add a **Postgres** plugin — Railway provisions `DATABASE_URL`.
 3. Add a **Service** from this GitHub repo; set:
    - Root directory: `/` (monorepo build).
+   - Railway reads repo-root `railway.json`; no manual start command override.
    - Build: **Dockerfile** at `apps/api/Dockerfile`.
-   - Start command: `sh -c "pnpm --filter @jdm/db db:deploy && node dist/server.js"`
-     (runs pending Prisma migrations before boot).
 4. Environment variables (Service → Variables):
    - `DATABASE_URL` — reference from the Postgres plugin.
    - `NODE_ENV=production`
@@ -2391,6 +2391,8 @@ Add to `scripts`:
    - `GIT_SHA` — Railway injects `RAILWAY_GIT_COMMIT_SHA`; map via:
      `GIT_SHA=${{RAILWAY_GIT_COMMIT_SHA}}`
    - `CORS_ORIGINS` — comma-separated list of admin + mobile domains.
+   - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `TICKET_CODE_SECRET`,
+     `FIELD_ENCRYPTION_KEY` — required before the API will boot.
 5. Networking: generate a public domain. Copy it into admin & mobile env vars.
 6. PR environments: enable **PR environments** in Project Settings so every
    PR gets a throwaway service + Postgres branch.
@@ -2411,7 +2413,7 @@ Add to `scripts`:
 - [ ] **Step 4: Commit**
 
 ```bash
-git add RAILWAY.md apps/api/railway.json apps/api/package.json
+git add RAILWAY.md railway.json apps/api/package.json
 git commit -m "chore(api): add railway deploy config and runbook"
 ```
 
