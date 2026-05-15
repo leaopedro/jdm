@@ -153,7 +153,7 @@ describe('useMarketingConsentGate', () => {
     expect(snapshot!.submitting).toBe(false);
   });
 
-  it('handleDecline: markSeen still called when withdrawConsent throws', async () => {
+  it('handleDecline: does NOT markSeen when withdrawConsent throws, keeps modal visible', async () => {
     hasSeenMarketingConsentPrompt.mockResolvedValue(false);
     withdrawConsent.mockRejectedValue(new Error('network'));
 
@@ -163,11 +163,29 @@ describe('useMarketingConsentGate', () => {
     });
 
     await act(async () => {
-      await snapshot!.handleDecline();
+      await snapshot!.handleDecline().catch(() => {});
     });
 
-    expect(markMarketingConsentPromptSeen).toHaveBeenCalled();
-    expect(snapshot!.visible).toBe(false);
+    expect(markMarketingConsentPromptSeen).not.toHaveBeenCalled();
+    expect(snapshot!.visible).toBe(true);
+    expect(snapshot!.submitting).toBe(false);
+  });
+
+  it('handleAccept: does NOT markSeen when grantConsent throws, keeps modal visible', async () => {
+    hasSeenMarketingConsentPrompt.mockResolvedValue(false);
+    grantConsent.mockRejectedValue(new Error('network'));
+
+    await act(async () => {
+      root.render(<Probe authenticated={true} />);
+      await flush();
+    });
+
+    await act(async () => {
+      await snapshot!.handleAccept().catch(() => {});
+    });
+
+    expect(markMarketingConsentPromptSeen).not.toHaveBeenCalled();
+    expect(snapshot!.visible).toBe(true);
     expect(snapshot!.submitting).toBe(false);
   });
 });

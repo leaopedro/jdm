@@ -36,9 +36,9 @@ export const useMarketingConsentGate = (authenticated: boolean): MarketingConsen
         version: CONSENT_VERSION,
         evidence: { source: 'mobile_reconsent_modal' },
       });
-    } finally {
       await markMarketingConsentPromptSeen();
       setVisible(false);
+    } finally {
       setSubmitting(false);
     }
   }, []);
@@ -47,11 +47,9 @@ export const useMarketingConsentGate = (authenticated: boolean): MarketingConsen
     setSubmitting(true);
     try {
       await withdrawConsent('push_marketing');
-    } catch (e) {
-      console.warn('[MarketingConsentGate] withdrawConsent failed (best-effort):', e);
-    } finally {
       await markMarketingConsentPromptSeen();
       setVisible(false);
+    } finally {
       setSubmitting(false);
     }
   }, []);
