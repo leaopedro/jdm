@@ -48,7 +48,7 @@ export const publicProfileSchema = z.object({
   id: z.string().min(1),
   email: z.string().email().max(254),
   name: z.string().min(1),
-  role: z.enum(['user', 'organizer', 'admin']),
+  role: z.enum(['user', 'organizer', 'admin', 'staff']),
   emailVerifiedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   bio: z.string().nullable(),
