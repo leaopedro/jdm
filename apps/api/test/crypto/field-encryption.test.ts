@@ -24,7 +24,7 @@ describe('field-encryption', () => {
   it('rejects tampered ciphertext', () => {
     const cipher = encryptField('test', TEST_KEY);
     const parts = cipher.split(':');
-    parts[2] = parts[2].slice(0, -2) + 'ff';
+    parts[2] = parts[2]!.slice(0, -2) + 'ff';
     expect(() => decryptField(parts.join(':'), TEST_KEY)).toThrow();
   });
 
@@ -53,5 +53,10 @@ describe('field-encryption', () => {
 
   it('returns null for null input', () => {
     expect(decryptField(null, TEST_KEY)).toBeNull();
+  });
+
+  it('passes through plaintext that is not encrypted', () => {
+    const plain = 'just a regular message';
+    expect(decryptField(plain, TEST_KEY)).toBe(plain);
   });
 });

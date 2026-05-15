@@ -24,9 +24,11 @@ export const decryptField = (ciphertext: string | null, hexKey: string): string 
   if (ciphertext === null || ciphertext === undefined) return null;
   const parts = ciphertext.split(':');
   if (parts.length !== 4 || parts[0] !== 'v1') {
-    throw new Error(`unsupported encryption format: ${parts[0] ?? 'missing version'}`);
+    return ciphertext;
   }
-  const [, ivHex, dataHex, tagHex] = parts;
+  const ivHex = parts[1]!;
+  const dataHex = parts[2]!;
+  const tagHex = parts[3]!;
   const key = keyBuffer(hexKey);
   const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'), {
     authTagLength: AUTH_TAG_BYTES,

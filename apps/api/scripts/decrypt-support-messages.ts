@@ -30,7 +30,7 @@ async function main() {
         skipped++;
         continue;
       }
-      const plain = decryptField(row.message, FIELD_ENCRYPTION_KEY);
+      const plain = decryptField(row.message, FIELD_ENCRYPTION_KEY!);
       if (plain === null) {
         skipped++;
         continue;
@@ -42,7 +42,7 @@ async function main() {
       decrypted++;
     }
 
-    cursor = batch[batch.length - 1].id;
+    cursor = batch[batch.length - 1]!.id;
     console.log(
       `Processed ${decrypted + skipped} rows (${decrypted} decrypted, ${skipped} plaintext)`,
     );

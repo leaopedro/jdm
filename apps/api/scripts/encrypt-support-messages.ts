@@ -32,12 +32,12 @@ async function main() {
       }
       await prisma.supportTicket.update({
         where: { id: row.id },
-        data: { message: encryptField(row.message, FIELD_ENCRYPTION_KEY) },
+        data: { message: encryptField(row.message, FIELD_ENCRYPTION_KEY!) },
       });
       encrypted++;
     }
 
-    cursor = batch[batch.length - 1].id;
+    cursor = batch[batch.length - 1]!.id;
     console.log(
       `Processed ${encrypted + skipped} rows (${encrypted} encrypted, ${skipped} already encrypted)`,
     );
