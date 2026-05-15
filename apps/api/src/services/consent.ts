@@ -29,26 +29,15 @@ const syncPushMarketingPref = async (userId: string, enabled: boolean) => {
 export const recordConsent = async (params: RecordConsentParams) => {
   const { userId, purpose, version, channel, ipAddress, userAgent, evidence } = params;
 
-  const row = await prisma.consent.upsert({
-    where: {
-      userId_purpose_version: { userId, purpose, version },
-    },
-    create: {
-      userId,
-      purpose,
-      version,
-      channel,
-      ipAddress,
-      userAgent,
-      evidence,
-    },
-    update: {
-      withdrawnAt: null,
-      channel,
-      ipAddress,
-      userAgent,
-      evidence,
-    },
+  // Return existing active grant for same (userId, purpose, version) — idempotent for double-tap.
+  // Re-grant after withdrawal creates a NEW row to preserve the full LGPD audit trail.
+  const existing = await prisma.consent.findFirst({
+    where: { userId, purpose, version, withdrawnAt: null },
+  });
+  if (existing) return existing;
+
+  const row = await prisma.consent.create({
+    data: { userId, purpose, version, channel, ipAddress, userAgent, evidence },
   });
 
   if (purpose === 'push_marketing') {

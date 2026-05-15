@@ -85,7 +85,7 @@ describe('consent service', () => {
       expect((after.pushPrefs as Record<string, unknown>).marketing).toBe(true);
     });
 
-    it('re-granting after withdrawal clears withdrawnAt', async () => {
+    it('re-granting after withdrawal creates a new row preserving audit trail', async () => {
       const { user } = await createUser({ verified: true });
       const params = {
         userId: user.id,
@@ -97,10 +97,23 @@ describe('consent service', () => {
         evidence: { checkbox: true },
       };
 
-      await recordConsent(params);
+      const first = await recordConsent(params);
       await withdrawConsent(user.id, 'email_marketing');
       const regranted = await recordConsent(params);
+
+      // Re-grant must be a different row so the withdrawal is preserved
+      expect(regranted.id).not.toBe(first.id);
       expect(regranted.withdrawnAt).toBeNull();
+
+      // Original row must still have withdrawnAt set (audit trail intact)
+      const original = await prisma.consent.findUniqueOrThrow({ where: { id: first.id } });
+      expect(original.withdrawnAt).not.toBeNull();
+
+      // Two rows total for this (userId, purpose, version)
+      const count = await prisma.consent.count({
+        where: { userId: user.id, purpose: 'email_marketing' },
+      });
+      expect(count).toBe(2);
     });
   });
 

@@ -1083,7 +1083,7 @@ model Consent {
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, purpose, version])
+  @@index([userId, purpose, withdrawnAt])
   @@index([userId, purpose])
   @@index([purpose, version])
 }
