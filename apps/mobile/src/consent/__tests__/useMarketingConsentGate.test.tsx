@@ -188,4 +188,22 @@ describe('useMarketingConsentGate', () => {
     expect(snapshot!.visible).toBe(true);
     expect(snapshot!.submitting).toBe(false);
   });
+
+  it('auth loss resets visible to false', async () => {
+    hasSeenMarketingConsentPrompt.mockResolvedValue(false);
+
+    await act(async () => {
+      root.render(<Probe authenticated={true} />);
+      await flush();
+    });
+
+    expect(snapshot!.visible).toBe(true);
+
+    await act(async () => {
+      root.render(<Probe authenticated={false} />);
+      await flush();
+    });
+
+    expect(snapshot!.visible).toBe(false);
+  });
 });

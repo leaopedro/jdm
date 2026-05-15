@@ -18,7 +18,10 @@ export const useMarketingConsentGate = (authenticated: boolean): MarketingConsen
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated) {
+      setVisible(false);
+      return;
+    }
     let cancelled = false;
     void hasSeenMarketingConsentPrompt().then((seen) => {
       if (!cancelled && !seen) setVisible(true);
