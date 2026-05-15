@@ -25,17 +25,17 @@ describe('field-encryption', () => {
     expect(a).not.toBe(b);
   });
 
-  it('rejects tampered ciphertext', () => {
+  it('returns null for tampered ciphertext', () => {
     const cipher = encryptField('test', TEST_KEY);
     const parts = cipher.split(':');
     parts[2] = parts[2]!.slice(0, -2) + 'ff';
-    expect(() => decryptField(parts.join(':'), TEST_KEY)).toThrow();
+    expect(decryptField(parts.join(':'), TEST_KEY)).toBeNull();
   });
 
-  it('rejects wrong key', () => {
+  it('returns null for wrong key', () => {
     const cipher = encryptField('test', TEST_KEY);
     const wrongKey = 'cd'.repeat(32);
-    expect(() => decryptField(cipher, wrongKey)).toThrow();
+    expect(decryptField(cipher, wrongKey)).toBeNull();
   });
 
   it('handles empty string', () => {

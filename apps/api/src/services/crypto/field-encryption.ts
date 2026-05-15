@@ -43,15 +43,22 @@ export const encryptField = (plaintext: string, hexKey: string): string => {
 export const decryptField = (ciphertext: string | null, hexKey: string): string | null => {
   if (ciphertext === null || ciphertext === undefined) return null;
   if (!isEncrypted(ciphertext)) return ciphertext;
-  const parts = ciphertext.split(':');
-  const ivHex = parts[1]!;
-  const dataHex = parts[2]!;
-  const tagHex = parts[3]!;
-  const key = keyBuffer(hexKey);
-  const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'), {
-    authTagLength: AUTH_TAG_BYTES,
-  });
-  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-  const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex, 'hex')), decipher.final()]);
-  return decrypted.toString('utf8');
+  try {
+    const parts = ciphertext.split(':');
+    const ivHex = parts[1]!;
+    const dataHex = parts[2]!;
+    const tagHex = parts[3]!;
+    const key = keyBuffer(hexKey);
+    const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'), {
+      authTagLength: AUTH_TAG_BYTES,
+    });
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(dataHex, 'hex')),
+      decipher.final(),
+    ]);
+    return decrypted.toString('utf8');
+  } catch {
+    return null;
+  }
 };

@@ -14,6 +14,7 @@ async function main() {
   let cursor: string | undefined;
   let encrypted = 0;
   let skipped = 0;
+  const failed: string[] = [];
 
   for (;;) {
     const batch = await prisma.supportTicket.findMany({
@@ -30,20 +31,29 @@ async function main() {
         skipped++;
         continue;
       }
-      await prisma.supportTicket.update({
-        where: { id: row.id },
-        data: { message: encryptField(row.message, FIELD_ENCRYPTION_KEY!) },
-      });
-      encrypted++;
+      try {
+        await prisma.supportTicket.update({
+          where: { id: row.id },
+          data: { message: encryptField(row.message, FIELD_ENCRYPTION_KEY!) },
+        });
+        encrypted++;
+      } catch (err) {
+        console.error(`Failed to encrypt row ${row.id}:`, err);
+        failed.push(row.id);
+      }
     }
 
     cursor = batch[batch.length - 1]!.id;
     console.log(
-      `Processed ${encrypted + skipped} rows (${encrypted} encrypted, ${skipped} already encrypted)`,
+      `Processed ${encrypted + skipped + failed.length} rows (${encrypted} encrypted, ${skipped} already encrypted, ${failed.length} failed)`,
     );
   }
 
-  console.log(`Done. Encrypted: ${encrypted}, Skipped: ${skipped}`);
+  console.log(`Done. Encrypted: ${encrypted}, Skipped: ${skipped}, Failed: ${failed.length}`);
+  if (failed.length > 0) {
+    console.error('Failed row IDs:', failed.join(', '));
+    process.exitCode = 1;
+  }
 }
 
 main()

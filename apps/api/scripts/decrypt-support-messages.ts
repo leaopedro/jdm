@@ -14,6 +14,7 @@ async function main() {
   let cursor: string | undefined;
   let decrypted = 0;
   let skipped = 0;
+  const failed: string[] = [];
 
   for (;;) {
     const batch = await prisma.supportTicket.findMany({
@@ -30,25 +31,35 @@ async function main() {
         skipped++;
         continue;
       }
-      const plain = decryptField(row.message, FIELD_ENCRYPTION_KEY!);
-      if (plain === null) {
-        skipped++;
-        continue;
+      try {
+        const plain = decryptField(row.message, FIELD_ENCRYPTION_KEY!);
+        if (plain === null) {
+          console.error(`Row ${row.id}: decryptField returned null (corrupt or wrong key)`);
+          failed.push(row.id);
+          continue;
+        }
+        await prisma.supportTicket.update({
+          where: { id: row.id },
+          data: { message: plain },
+        });
+        decrypted++;
+      } catch (err) {
+        console.error(`Failed to decrypt row ${row.id}:`, err);
+        failed.push(row.id);
       }
-      await prisma.supportTicket.update({
-        where: { id: row.id },
-        data: { message: plain },
-      });
-      decrypted++;
     }
 
     cursor = batch[batch.length - 1]!.id;
     console.log(
-      `Processed ${decrypted + skipped} rows (${decrypted} decrypted, ${skipped} plaintext)`,
+      `Processed ${decrypted + skipped + failed.length} rows (${decrypted} decrypted, ${skipped} plaintext, ${failed.length} failed)`,
     );
   }
 
-  console.log(`Done. Decrypted: ${decrypted}, Skipped: ${skipped}`);
+  console.log(`Done. Decrypted: ${decrypted}, Skipped: ${skipped}, Failed: ${failed.length}`);
+  if (failed.length > 0) {
+    console.error('Failed row IDs:', failed.join(', '));
+    process.exitCode = 1;
+  }
 }
 
 main()
