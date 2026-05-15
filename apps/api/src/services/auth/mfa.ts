@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 
 import { TOTP, Secret } from 'otpauth';
 
@@ -68,21 +68,21 @@ const SAFE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const generateRecoveryCodes = (count = 10): string[] => {
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
-    const bytes = randomBytes(8);
+    const bytes = randomBytes(12);
     let code = '';
-    for (let j = 0; j < 8; j++) {
+    for (let j = 0; j < 12; j++) {
       code += SAFE_CHARS[bytes[j]! % SAFE_CHARS.length];
-      if (j === 3) code += '-';
+      if (j === 3 || j === 7) code += '-';
     }
     codes.push(code);
   }
   return codes;
 };
 
-export const hashRecoveryCode = (code: string): string => {
-  return createHash('sha256').update(code.toUpperCase()).digest('hex');
+export const hashRecoveryCode = (code: string, pepper: string): string => {
+  return createHmac('sha256', pepper).update(code.toUpperCase()).digest('hex');
 };
 
-export const verifyRecoveryCode = (code: string, hash: string): boolean => {
-  return hashRecoveryCode(code) === hash;
+export const verifyRecoveryCode = (code: string, hash: string, pepper: string): boolean => {
+  return hashRecoveryCode(code, pepper) === hash;
 };

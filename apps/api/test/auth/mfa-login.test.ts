@@ -24,7 +24,7 @@ const enrollMfa = async (userId: string, email: string) => {
   });
   const codes = generateRecoveryCodes();
   await prisma.mfaRecoveryCode.createMany({
-    data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c) })),
+    data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c, mfaKey) })),
   });
   return { secret, codes };
 };
@@ -213,7 +213,7 @@ describe('MFA login flow', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/auth/mfa/recovery',
-        payload: { mfaToken, code: 'XXXX-YYYY' },
+        payload: { mfaToken, code: 'XXXX-YYYY-ZZZZ' },
       });
       expect(res.statusCode).toBe(401);
     });

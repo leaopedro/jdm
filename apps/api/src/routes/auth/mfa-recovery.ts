@@ -1,6 +1,6 @@
 import { prisma } from '@jdm/db';
 import { mfaRecoverySchema } from '@jdm/shared';
-import { authResponseSchema } from '@jdm/shared/auth';
+import { ACCOUNT_DISABLED_ERROR, authResponseSchema } from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { verifyRecoveryCode } from '../../services/auth/mfa.js';
@@ -28,7 +28,12 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
       where: { userId: payload.sub, usedAt: null },
     });
 
-    const matched = codes.find((c) => verifyRecoveryCode(input.code, c.codeHash));
+    const mfaKey = app.env.MFA_ENCRYPTION_KEY;
+    if (!mfaKey) {
+      return reply.status(500).send({ error: 'ServerError', message: 'mfa not configured' });
+    }
+
+    const matched = codes.find((c) => verifyRecoveryCode(input.code, c.codeHash, mfaKey));
     if (!matched) {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid recovery code' });
     }
@@ -56,6 +61,17 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },
     });
+
+    if (user.status === 'disabled') {
+      return reply
+        .status(403)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
+    }
+    if (!user.emailVerifiedAt) {
+      return reply
+        .status(403)
+        .send({ error: 'EmailNotVerified', message: 'verify your email first' });
+    }
 
     const access = createAccessToken({ sub: user.id, role: user.role }, app.env);
     const refresh = issueRefreshToken(app.env);

@@ -58,7 +58,7 @@ export const adminMfaRoutes: FastifyPluginAsync = async (app) => {
       }
       await tx.mfaSecret.create({ data: { userId, encryptedSecret: encrypted } });
       await tx.mfaRecoveryCode.createMany({
-        data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c) })),
+        data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c, key) })),
       });
       await tx.adminAudit.create({
         data: {
@@ -124,7 +124,7 @@ export const adminMfaRoutes: FastifyPluginAsync = async (app) => {
         where: { userId, usedAt: null },
       });
       for (const rc of recoveryCodes) {
-        if (verifyRecoveryCode(code, rc.codeHash)) {
+        if (verifyRecoveryCode(code, rc.codeHash, key)) {
           await prisma.mfaRecoveryCode.update({
             where: { id: rc.id },
             data: { usedAt: new Date() },
@@ -169,7 +169,7 @@ export const adminMfaRoutes: FastifyPluginAsync = async (app) => {
     await prisma.$transaction(async (tx) => {
       await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
       await tx.mfaRecoveryCode.createMany({
-        data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c) })),
+        data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c, key) })),
       });
       await tx.adminAudit.create({
         data: {

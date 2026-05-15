@@ -58,22 +58,31 @@ describe('MFA service', () => {
       const unique = new Set(codes);
       expect(unique.size).toBe(10);
       for (const code of codes) {
-        expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+        expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
       }
     });
 
-    it('hashes and verifies a recovery code', () => {
-      const code = 'ABCD-EF23';
-      const hash = hashRecoveryCode(code);
+    it('hashes and verifies a recovery code with pepper', () => {
+      const pepper = 'test-pepper-key';
+      const code = 'ABCD-EF23-GHKM';
+      const hash = hashRecoveryCode(code, pepper);
       expect(hash).not.toBe(code);
-      expect(verifyRecoveryCode(code, hash)).toBe(true);
-      expect(verifyRecoveryCode('WXYZ-1234', hash)).toBe(false);
+      expect(verifyRecoveryCode(code, hash, pepper)).toBe(true);
+      expect(verifyRecoveryCode('WXYZ-1234-NPQR', hash, pepper)).toBe(false);
+    });
+
+    it('different pepper produces different hash', () => {
+      const code = 'ABCD-EF23-GHKM';
+      const hash1 = hashRecoveryCode(code, 'pepper-1');
+      const hash2 = hashRecoveryCode(code, 'pepper-2');
+      expect(hash1).not.toBe(hash2);
     });
 
     it('verification is case-insensitive', () => {
-      const code = 'ABCD-EF23';
-      const hash = hashRecoveryCode(code);
-      expect(verifyRecoveryCode('abcd-ef23', hash)).toBe(true);
+      const pepper = 'test-pepper-key';
+      const code = 'ABCD-EF23-GHKM';
+      const hash = hashRecoveryCode(code, pepper);
+      expect(verifyRecoveryCode('abcd-ef23-ghkm', hash, pepper)).toBe(true);
     });
   });
 });

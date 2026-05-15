@@ -1,6 +1,6 @@
 import { prisma } from '@jdm/db';
 import { mfaVerifySchema } from '@jdm/shared';
-import { authResponseSchema } from '@jdm/shared/auth';
+import { ACCOUNT_DISABLED_ERROR, authResponseSchema } from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { decryptSecret, verifyTotp } from '../../services/auth/mfa.js';
@@ -44,6 +44,17 @@ export const mfaVerifyRoute: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },
     });
+
+    if (user.status === 'disabled') {
+      return reply
+        .status(403)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
+    }
+    if (!user.emailVerifiedAt) {
+      return reply
+        .status(403)
+        .send({ error: 'EmailNotVerified', message: 'verify your email first' });
+    }
 
     const access = createAccessToken({ sub: user.id, role: user.role }, app.env);
     const refresh = issueRefreshToken(app.env);

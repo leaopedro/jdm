@@ -147,6 +147,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login: AuthContextValue['login'] = useCallback(
     async (input) => {
       const res = await loginRequest(input);
+      if ('mfaRequired' in res) {
+        throw new Error(authCopy.errors.mfaNotSupported);
+      }
       await applySession(
         { accessToken: res.accessToken, refreshToken: res.refreshToken },
         res.user,

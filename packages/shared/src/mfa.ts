@@ -19,7 +19,9 @@ export type MfaVerifyInput = z.infer<typeof mfaVerifySchema>;
 
 export const mfaRecoverySchema = z.object({
   mfaToken: z.string().min(1),
-  code: z.string().regex(/^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/, 'invalid recovery code format'),
+  code: z
+    .string()
+    .regex(/^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/, 'invalid recovery code format'),
 });
 export type MfaRecoveryInput = z.infer<typeof mfaRecoverySchema>;
 
