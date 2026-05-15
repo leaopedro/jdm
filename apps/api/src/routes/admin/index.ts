@@ -9,6 +9,7 @@ import { adminExtraRoutes } from './extras.js';
 import { adminFeedModerationRoutes } from './feed-moderation.js';
 import { adminFinanceRoutes } from './finance.js';
 import { adminGeneralSettingsRoutes } from './general-settings.js';
+import { adminMfaRoutes } from './mfa.js';
 import { adminStoreInventoryRoutes } from './store/inventory.js';
 import { adminStoreOrderRoutes } from './store/orders.js';
 import { adminStorePhotoRoutes } from './store/photos.js';
@@ -23,6 +24,12 @@ import { adminUserMutationRoutes, adminUserRoutes } from './users.js';
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', app.authenticate);
+
+  // MFA enrollment: any authenticated admin-eligible role.
+  await app.register(async (scope) => {
+    scope.addHook('preHandler', scope.requireRole('organizer', 'admin', 'staff'));
+    await scope.register(adminMfaRoutes);
+  });
 
   // Check-in surface: staff can reach this; organizer/admin can too.
   await app.register(async (scope) => {

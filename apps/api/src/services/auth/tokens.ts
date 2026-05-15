@@ -45,3 +45,27 @@ export const issueRefreshToken = (
 };
 
 export const accessTtlSeconds = ACCESS_TTL_SECONDS;
+
+const MFA_TTL_SECONDS = 5 * 60;
+
+export type MfaPayload = {
+  sub: string;
+  purpose: 'mfa_challenge';
+};
+
+export const createMfaToken = (userId: string, env: TokenEnv): string => {
+  return jwt.sign({ sub: userId, purpose: 'mfa_challenge' }, env.JWT_ACCESS_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: MFA_TTL_SECONDS,
+  });
+};
+
+export const verifyMfaToken = (token: string, env: TokenEnv): MfaPayload => {
+  const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, { algorithms: ['HS256'] });
+  if (typeof decoded === 'string') throw new Error('unexpected jwt payload');
+  const { sub, purpose } = decoded as jwt.JwtPayload & MfaPayload;
+  if (typeof sub !== 'string' || purpose !== 'mfa_challenge') {
+    throw new Error('invalid mfa token');
+  }
+  return { sub, purpose };
+};

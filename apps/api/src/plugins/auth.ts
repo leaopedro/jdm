@@ -8,6 +8,7 @@ import { verifyAccessToken, type AccessPayload } from '../services/auth/tokens.j
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    tryAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireRole: (...roles: UserRoleName[]) => preHandlerAsyncHookHandler;
   }
   interface FastifyRequest {
@@ -51,6 +52,23 @@ export const authPlugin = fp(async (app) => {
     }
     request.user = payload;
     return undefined;
+  });
+
+  app.decorate('tryAuth', async (request: FastifyRequest, _reply: FastifyReply) => {
+    const header = request.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return;
+    const token = header.slice('Bearer '.length);
+    try {
+      const payload = verifyAccessToken(token, app.env);
+      const userRow = await prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { status: true },
+      });
+      if (!userRow || userRow.status === 'disabled') return;
+      request.user = payload;
+    } catch {
+      // invalid token on optional-auth route — treat as anonymous
+    }
   });
 
   app.decorate('requireRole', (...roles: UserRoleName[]): preHandlerAsyncHookHandler => {

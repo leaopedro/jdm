@@ -9,12 +9,11 @@ import {
   feedPostResponseSchema,
   feedReactionInputSchema,
 } from '@jdm/shared/feed';
-import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { isUniqueConstraintError } from '../lib/prisma-errors.js';
 import { requireUser } from '../plugins/auth.js';
-import { verifyAccessToken } from '../services/auth/tokens.js';
 import { checkFeedPostAccess, checkFeedReadAccess, isFeedBanned } from '../services/feed/access.js';
 
 const eventIdParam = z.object({ eventId: z.string().min(1) });
@@ -74,31 +73,10 @@ const serializeCarProfile = (car: CarSelect | null, buildUrl: (key: string) => s
   };
 };
 
-/** Soft auth: sets request.user if a valid Bearer token is present, but does not reject. */
-const tryAuth = async (
-  request: FastifyRequest & { server: FastifyInstance },
-  _reply: FastifyReply,
-) => {
-  const header = request.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return;
-  const token = header.slice('Bearer '.length);
-  try {
-    const payload = verifyAccessToken(token, request.server.env);
-    const userRow = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { status: true },
-    });
-    if (!userRow || userRow.status === 'disabled') return;
-    request.user = payload;
-  } catch {
-    // ignore invalid token for optional-auth routes
-  }
-};
-
 // eslint-disable-next-line @typescript-eslint/require-await
 export const feedRoutes: FastifyPluginAsync = async (app) => {
   // ---- GET /events/:eventId/feed ----
-  app.get('/events/:eventId/feed', { preHandler: [tryAuth] }, async (request, reply) => {
+  app.get('/events/:eventId/feed', { preHandler: [app.tryAuth] }, async (request, reply) => {
     const { eventId } = eventIdParam.parse(request.params);
     const { page, perPage } = listQuerySchema.parse(request.query);
 
@@ -367,7 +345,7 @@ export const feedRoutes: FastifyPluginAsync = async (app) => {
   // ---- GET /events/:eventId/feed/:postId/comments ----
   app.get(
     '/events/:eventId/feed/:postId/comments',
-    { preHandler: [tryAuth] },
+    { preHandler: [app.tryAuth] },
     async (request, reply) => {
       const { eventId, postId } = postIdParam.parse(request.params);
       const { page, perPage } = listQuerySchema.parse(request.query);

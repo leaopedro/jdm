@@ -17,6 +17,10 @@ const seedAdmin = async () => {
 
 const seedRecipient = async () => {
   const { user } = await createUser({ verified: true, email: uniqueEmail('recipient') });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { pushPrefs: { transactional: true, marketing: true } },
+  });
   await prisma.deviceToken.create({
     data: { userId: user.id, expoPushToken: `${TOKEN}-${user.id.slice(0, 6)}`, platform: 'ios' },
   });

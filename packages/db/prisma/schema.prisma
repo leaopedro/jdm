@@ -46,7 +46,7 @@ model User {
   avatarObjectKey String? @db.VarChar(300)
 
   // push preferences (F10)
-  pushPrefs Json @default("{\"transactional\":true,\"marketing\":true}")
+  pushPrefs Json @default("{\"transactional\":true,\"marketing\":false}")
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
@@ -68,6 +68,8 @@ model User {
   reportsResolved     Report[]             @relation("ReportResolver")
   feedBans            FeedBan[]            @relation("FeedBanUser")
   feedBansIssued      FeedBan[]            @relation("FeedBanActor")
+  mfaSecret           MfaSecret?
+  mfaRecoveryCodes    MfaRecoveryCode[]
 
   @@index([createdAt])
 }
@@ -120,6 +122,28 @@ model PasswordResetToken {
   expiresAt  DateTime
   consumedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MfaSecret {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  encryptedSecret String
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1051,3 +1075,4 @@ model Report {
   @@index([reporterUserId])
   @@index([status, createdAt(sort: Desc)])
 }
+

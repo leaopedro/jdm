@@ -31,6 +31,7 @@ const envSchema = z.object({
     .string()
     .length(64)
     .regex(/^[0-9a-f]+$/i),
+  MFA_ENCRYPTION_KEY: z.string().min(32).optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   ABACATEPAY_API_KEY: z.string().min(1).optional(),
   ABACATEPAY_WEBHOOK_SECRET: z.string().min(1).optional(),

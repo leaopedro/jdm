@@ -112,4 +112,27 @@ describe('AccountDisabled flows', () => {
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
   });
+
+  it('tryAuth treats disabled user as anonymous', async () => {
+    const testApp = await makeApp();
+    testApp.get(
+      '/test-tryauth',
+      { preHandler: [testApp.tryAuth] },
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (request) => ({ authed: !!request.user }),
+    );
+    await testApp.ready();
+
+    const { user } = await createUser({ email: 'try@jdm.test', verified: true });
+    await prisma.user.update({ where: { id: user.id }, data: { status: 'disabled' } });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/test-tryauth',
+      headers: { authorization: bearer(loadEnv(), user.id, 'user') },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ authed: false });
+    await testApp.close();
+  });
 });
