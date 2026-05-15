@@ -29,7 +29,7 @@ export const adminStoreOrderRoutes: FastifyPluginAsync = async (app) => {
   app.get('/store/orders/:id', async (request, reply) => {
     const { id } = paramsSchema.parse(request.params);
     try {
-      const detail = await getAdminStoreOrderDetail(id);
+      const detail = await getAdminStoreOrderDetail(id, app.env.FIELD_ENCRYPTION_KEY);
       return adminStoreOrderDetailSchema.parse(detail);
     } catch (err) {
       if (err instanceof OrderNotFoundError) {
@@ -50,11 +50,10 @@ export const adminStoreOrderRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: 'Unauthorized', message: 'no actor' });
     }
     try {
-      const detail = await updateAdminStoreFulfillment({
-        ...body,
-        actorId,
-        orderId: id,
-      });
+      const detail = await updateAdminStoreFulfillment(
+        { ...body, actorId, orderId: id },
+        app.env.FIELD_ENCRYPTION_KEY,
+      );
       return adminStoreOrderDetailSchema.parse(detail);
     } catch (err) {
       if (err instanceof OrderNotFoundError) {
