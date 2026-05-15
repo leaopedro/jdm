@@ -74,14 +74,15 @@ function scrubHeaders(headers: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of Object.keys(headers)) {
     if (SAFE_HEADERS.has(key.toLowerCase())) {
-      out[key] = headers[key];
+      out[key] = headers[key]!;
     }
   }
   return out;
 }
 
-function scrubBreadcrumbs(breadcrumbs: SentryEvent['breadcrumbs']): SentryEvent['breadcrumbs'] {
-  if (!breadcrumbs) return breadcrumbs;
+function scrubBreadcrumbs(
+  breadcrumbs: NonNullable<SentryEvent['breadcrumbs']>,
+): NonNullable<SentryEvent['breadcrumbs']> {
   return breadcrumbs.map((bc) => {
     const clean = { ...bc };
 
