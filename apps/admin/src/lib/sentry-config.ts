@@ -26,6 +26,9 @@ import type { BrowserOptions } from '@sentry/nextjs';
 const MAX_CRUMB_LEN = 200;
 const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-\d{2}/;
 
+// BrowserOptions is used here because @sentry/nextjs unified init() accepts it
+// as a union member. skipLibCheck:true is project-wide; server/edge runtimes
+// omit replay fields at runtime, which is what matters for correctness.
 export function buildAdminSentryOptions(
   dsn: string | undefined,
   runtime: 'client' | 'server' | 'edge',
