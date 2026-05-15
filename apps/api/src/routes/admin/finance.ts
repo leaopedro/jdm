@@ -25,6 +25,7 @@ type FinanceOrderRecord = {
 const MIN_FINANCE_EXPORT_COHORT_SIZE = 5;
 
 type FinanceExportBucket = {
+  eventId: string;
   eventTitle: string;
   city: string;
   stateCode: string;
@@ -33,6 +34,7 @@ type FinanceExportBucket = {
   provider: PaymentProvider;
   status: OrderStatus;
   kind: string;
+  productSignature: string;
   productOrCollection: string;
   orderCount: number;
   totalAmountCents: number;
@@ -105,6 +107,7 @@ function hasProductItems(order: Pick<FinanceOrderRecord, 'items'>): boolean {
 function buildFinanceExportBucketKey(
   bucket: Pick<
     FinanceExportBucket,
+    | 'eventId'
     | 'eventTitle'
     | 'city'
     | 'stateCode'
@@ -113,10 +116,12 @@ function buildFinanceExportBucketKey(
     | 'provider'
     | 'status'
     | 'kind'
+    | 'productSignature'
     | 'productOrCollection'
   >,
 ): string {
   return [
+    bucket.eventId,
     bucket.eventTitle,
     bucket.city,
     bucket.stateCode,
@@ -125,6 +130,7 @@ function buildFinanceExportBucketKey(
     bucket.provider,
     bucket.status,
     bucket.kind,
+    bucket.productSignature,
     bucket.productOrCollection,
   ].join('\u001f');
 }
@@ -465,18 +471,21 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
         createdAt: true,
         quantity: true,
         kind: true,
-        event: { select: { title: true, city: true, stateCode: true } },
-        user: { select: { name: true, email: true } },
+        event: { select: { id: true, title: true, city: true, stateCode: true } },
       },
       orderBy: { paidAt: 'desc' },
-      take: 10_000,
     });
 
     const exportOrderIds = orders.map((o) => o.id);
     const productRows =
       exportOrderIds.length > 0
-        ? await prisma.$queryRaw<Array<{ orderId: string; productTitles: string }>>(Prisma.sql`
-        SELECT oi."orderId", STRING_AGG(DISTINCT p."title", '; ' ORDER BY p."title") AS "productTitles"
+        ? await prisma.$queryRaw<
+            Array<{ orderId: string; productTitles: string; productIds: string }>
+          >(Prisma.sql`
+        SELECT
+          oi."orderId",
+          STRING_AGG(DISTINCT p."title", '; ' ORDER BY p."title") AS "productTitles",
+          STRING_AGG(DISTINCT p."id", ';' ORDER BY p."id") AS "productIds"
         FROM "OrderItem" oi
         JOIN "Variant" v ON oi."variantId" = v."id"
         JOIN "Product" p ON v."productId" = p."id"
@@ -485,14 +494,22 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
           AND oi."variantId" IS NOT NULL
         GROUP BY oi."orderId"
       `)
-        : ([] as Array<{ orderId: string; productTitles: string }>);
-    const productsByOrderId = new Map<string, string>(
-      productRows.map((r) => [r.orderId, r.productTitles]),
+        : ([] as Array<{ orderId: string; productTitles: string; productIds: string }>);
+    const productsByOrderId = new Map<string, { productTitles: string; productIds: string }>(
+      productRows.map((r) => [
+        r.orderId,
+        {
+          productTitles: r.productTitles,
+          productIds: r.productIds,
+        },
+      ]),
     );
 
     const buckets = new Map<string, FinanceExportBucket>();
     for (const order of orders) {
+      const productSummary = productsByOrderId.get(order.id);
       const bucketBase = {
+        eventId: order.event?.id ?? '',
         eventTitle: order.event?.title ?? '',
         city: order.event?.city ?? '',
         stateCode: order.event?.stateCode ?? '',
@@ -501,7 +518,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
         provider: order.provider,
         status: order.status,
         kind: order.kind,
-        productOrCollection: productsByOrderId.get(order.id) ?? '',
+        productSignature: productSummary?.productIds ?? '',
+        productOrCollection: productSummary?.productTitles ?? '',
       };
       const bucketKey = buildFinanceExportBucketKey(bucketBase);
       const activityAt = order.paidAt ?? order.createdAt;
