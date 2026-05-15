@@ -1,5 +1,6 @@
 import rateLimit from '@fastify/rate-limit';
 import { consentPurposeSchema, grantConsentBodySchema } from '@jdm/shared';
+import type { Prisma } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { requireUser } from '../plugins/auth.js';
@@ -35,7 +36,7 @@ export const meConsentRoutes: FastifyPluginAsync = async (app) => {
         channel: body.channel,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] ?? null,
-        evidence: body.evidence,
+        evidence: body.evidence as Prisma.InputJsonValue,
       });
 
       return {

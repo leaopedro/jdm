@@ -1,5 +1,5 @@
 import { prisma } from '@jdm/db';
-import type { ConsentChannel, ConsentPurpose } from '@prisma/client';
+import type { ConsentChannel, ConsentPurpose, Prisma } from '@prisma/client';
 
 type RecordConsentParams = {
   userId: string;
@@ -8,7 +8,7 @@ type RecordConsentParams = {
   channel: ConsentChannel;
   ipAddress: string | null;
   userAgent: string | null;
-  evidence: Record<string, unknown>;
+  evidence: Prisma.InputJsonValue;
 };
 
 export const recordConsent = async (params: RecordConsentParams) => {

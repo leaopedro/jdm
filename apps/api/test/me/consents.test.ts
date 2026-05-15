@@ -168,7 +168,7 @@ describe('/me/consents', () => {
       expect(res.statusCode).toBe(200);
       const body = consentListResponseSchema.parse(res.json());
       expect(body.items).toHaveLength(1);
-      expect(body.items[0].purpose).toBe('push_marketing');
+      expect(body.items[0]!.purpose).toBe('push_marketing');
     });
 
     it('returns empty list when no consents exist', async () => {

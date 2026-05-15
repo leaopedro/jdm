@@ -46,9 +46,9 @@ describe('GET /admin/consents', () => {
     expect(res.statusCode).toBe(200);
     const body = adminConsentListResponseSchema.parse(res.json());
     expect(body.items).toHaveLength(1);
-    expect(body.items[0].purpose).toBe('push_marketing');
-    expect(body.items[0].userName).toBe('Test User');
-    expect(body.items[0].userEmail).toBe('user@jdm.test');
+    expect(body.items[0]!.purpose).toBe('push_marketing');
+    expect(body.items[0]!.userName).toBe('Test User');
+    expect(body.items[0]!.userEmail).toBe('user@jdm.test');
   });
 
   it('filters by userId', async () => {
@@ -89,7 +89,7 @@ describe('GET /admin/consents', () => {
     expect(res.statusCode).toBe(200);
     const body = adminConsentListResponseSchema.parse(res.json());
     expect(body.items).toHaveLength(1);
-    expect(body.items[0].userEmail).toBe('u1@jdm.test');
+    expect(body.items[0]!.userEmail).toBe('u1@jdm.test');
   });
 
   it('filters by purpose', async () => {
