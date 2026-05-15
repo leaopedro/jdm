@@ -19,14 +19,14 @@ import { authedRequest, request } from './client';
 
 const enc = encodeURIComponent;
 
-export const listFeedPosts = (slug: string, page: number): Promise<FeedListResponse> =>
-  request(`/events/${enc(slug)}/feed?page=${page}`, feedListResponseSchema);
+export const listFeedPosts = (eventId: string, page: number): Promise<FeedListResponse> =>
+  request(`/events/${enc(eventId)}/feed?page=${page}`, feedListResponseSchema);
 
 export const createFeedPost = (
-  slug: string,
+  eventId: string,
   input: FeedPostCreateInput,
 ): Promise<FeedPostResponse> =>
-  authedRequest(`/events/${enc(slug)}/feed`, feedPostResponseSchema, {
+  authedRequest(`/events/${enc(eventId)}/feed`, feedPostResponseSchema, {
     method: 'POST',
     body: input,
   });
@@ -75,8 +75,7 @@ export const createFeedComment = (
   postId: string,
   input: FeedCommentCreateInput,
 ): Promise<FeedCommentResponse> =>
-  authedRequest(
-    `/events/${enc(eventId)}/feed/${enc(postId)}/comments`,
-    feedCommentResponseSchema,
-    { method: 'POST', body: input },
-  );
+  authedRequest(`/events/${enc(eventId)}/feed/${enc(postId)}/comments`, feedCommentResponseSchema, {
+    method: 'POST',
+    body: input,
+  });

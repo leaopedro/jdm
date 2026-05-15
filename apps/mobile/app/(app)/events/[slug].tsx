@@ -40,9 +40,14 @@ import { EventFeedSection } from '~/screens/events/feed/EventFeedSection';
 import { theme } from '~/theme';
 
 export default function EventDetailScreen() {
-  const { slug, tierId: requestedTierId } = useLocalSearchParams<{
+  const {
+    slug,
+    tierId: requestedTierId,
+    purchaseMode,
+  } = useLocalSearchParams<{
     slug: string;
     tierId?: string;
+    purchaseMode?: string;
   }>();
   const router = useRouter();
   const [publicEvent, setPublicEvent] = useState<EventDetailPublic | null>(null);
@@ -207,7 +212,7 @@ export default function EventDetailScreen() {
   const selectedTier = commerceEvent?.tiers.find((t) => t.id === selectedTierId) ?? null;
   const isSheetOpen = selectedCar !== null || allSheetOpen;
 
-  if (event.feedEnabled) {
+  if (event.feedEnabled && purchaseMode !== '1') {
     return (
       <View style={[styles.root, styles.feedRoot]}>
         <View>

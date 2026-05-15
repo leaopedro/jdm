@@ -1,6 +1,7 @@
 import type { FeedCommentResponse } from '@jdm/shared/feed';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   Pressable,
   StyleSheet,
@@ -47,17 +48,20 @@ export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) 
     return () => {
       cancelled = true;
     };
-  }, [expanded, postId]);
+  }, [expanded, eventId, postId]);
 
   const handleSubmit = async () => {
     if (!draft.trim() || !myCarId) return;
     setSubmitting(true);
     try {
-      const comment = await createFeedComment(eventId, postId, { body: draft.trim(), carId: myCarId });
+      const comment = await createFeedComment(eventId, postId, {
+        body: draft.trim(),
+        carId: myCarId,
+      });
       setComments((prev) => [...prev, comment]);
       setDraft('');
     } catch {
-      // silent — no UX crash on comment error
+      Alert.alert(feedCopy.errors.commentFailed);
     } finally {
       setSubmitting(false);
     }
@@ -71,17 +75,13 @@ export function FeedComments({ eventId, postId, commentCount, myCarId }: Props) 
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
         accessibilityLabel={
-          expanded
-            ? feedCopy.post.comments.hide
-            : feedCopy.post.comments.show(commentCount)
+          expanded ? feedCopy.post.comments.hide : feedCopy.post.comments.show(commentCount)
         }
         hitSlop={8}
         style={styles.toggle}
       >
         <Text style={styles.toggleText}>
-          {expanded
-            ? feedCopy.post.comments.hide
-            : feedCopy.post.comments.show(commentCount)}
+          {expanded ? feedCopy.post.comments.hide : feedCopy.post.comments.show(commentCount)}
         </Text>
       </Pressable>
 

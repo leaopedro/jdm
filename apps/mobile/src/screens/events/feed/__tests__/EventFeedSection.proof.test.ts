@@ -7,8 +7,11 @@ import { describe, expect, it } from 'vitest';
 const resolveAccess = (feedSettings: FeedSettings, hasTicket: boolean) => ({
   canView:
     feedSettings.feedAccess === 'public' ||
-    (feedSettings.feedAccess === 'attendees' && hasTicket),
-  canPost: feedSettings.postingAccess === 'attendees' && hasTicket,
+    (feedSettings.feedAccess === 'attendees' && hasTicket) ||
+    (feedSettings.feedAccess === 'members_only' && hasTicket),
+  canPost:
+    (feedSettings.postingAccess === 'attendees' && hasTicket) ||
+    (feedSettings.postingAccess === 'members_only' && hasTicket),
 });
 
 const BASE_SETTINGS: FeedSettings = {
@@ -46,19 +49,28 @@ describe('EventFeedSection — access gates', () => {
   });
 
   it('organizers_only posting, has ticket: canPost=false', () => {
-    const { canPost } = resolveAccess(
-      { ...BASE_SETTINGS, postingAccess: 'organizers_only' },
-      true,
-    );
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'organizers_only' }, true);
     expect(canPost).toBe(false);
   });
 
-  it('members_only posting, has ticket: canPost=false', () => {
-    const { canPost } = resolveAccess(
-      { ...BASE_SETTINGS, postingAccess: 'members_only' },
-      true,
-    );
+  it('members_only posting, has ticket: canPost=true', () => {
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'members_only' }, true);
+    expect(canPost).toBe(true);
+  });
+
+  it('members_only posting, no ticket: canPost=false', () => {
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'members_only' }, false);
     expect(canPost).toBe(false);
+  });
+
+  it('members_only feed, has ticket: canView=true', () => {
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, true);
+    expect(canView).toBe(true);
+  });
+
+  it('members_only feed, no ticket: canView=false', () => {
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, false);
+    expect(canView).toBe(false);
   });
 });
 
@@ -101,9 +113,7 @@ describe('EventFeedSection — optimistic reaction state', () => {
     const post = makePost({ reactions: { likes: 3, mine: false } });
     const serverResponse = { likes: 4, mine: true };
     const posts = [post];
-    const updated = posts.map((p) =>
-      p.id === post.id ? { ...p, reactions: serverResponse } : p,
-    );
+    const updated = posts.map((p) => (p.id === post.id ? { ...p, reactions: serverResponse } : p));
     expect(updated[0]?.reactions).toEqual({ likes: 4, mine: true });
   });
 });

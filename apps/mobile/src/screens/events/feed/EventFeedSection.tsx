@@ -31,7 +31,6 @@ import { useAuth } from '~/auth/context';
 import { feedCopy } from '~/copy/feed';
 import { theme } from '~/theme';
 
-
 const PAGE_SIZE = 5;
 
 type Props = {
@@ -65,13 +64,16 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
 
   const canView =
     feedSettings.feedAccess === 'public' ||
-    (feedSettings.feedAccess === 'attendees' && hasTicket);
-  const canPost = feedSettings.postingAccess === 'attendees' && hasTicket;
+    (feedSettings.feedAccess === 'attendees' && hasTicket) ||
+    (feedSettings.feedAccess === 'members_only' && hasTicket);
+  const canPost =
+    (feedSettings.postingAccess === 'attendees' && hasTicket) ||
+    (feedSettings.postingAccess === 'members_only' && hasTicket);
 
   const loadPage = useCallback(
     async (p: number, replace: boolean) => {
       try {
-        const res: FeedListResponse = await listFeedPosts(eventSlug, p);
+        const res: FeedListResponse = await listFeedPosts(eventId, p);
         setPosts((prev) => (replace ? res.posts : [...prev, ...res.posts]));
         setPage(res.page);
         setTotalPages(res.totalPages);
@@ -80,13 +82,17 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
         setLoadError(true);
       }
     },
-    [eventSlug],
+    [eventId],
   );
 
   useEffect(() => {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     void loadPage(1, true).finally(() => setLoading(false));
-  }, [loadPage]);
+  }, [canView, loadPage]);
 
   useEffect(() => {
     if (!isAuthed) {
@@ -148,7 +154,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
         const updated = await patchFeedPost(editingPost.eventId, editingPost.id, { body });
         setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
-        const newPost = await createFeedPost(eventSlug, { body, carId });
+        const newPost = await createFeedPost(eventId, { body, carId });
         setPosts((prev) => [newPost, ...prev]);
       }
       setComposerOpen(false);
@@ -184,7 +190,10 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
     if (hasTicket) {
       router.push({ pathname: '/tickets', params: { eventId } } as never);
     } else {
-      router.push(`/events/${eventSlug}/buy` as never);
+      router.push({
+        pathname: '/events/[slug]',
+        params: { slug: eventSlug, purchaseMode: '1' },
+      } as never);
     }
   };
 
@@ -199,9 +208,7 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
 
       {!canView ? <FeedLockedCard kind="view" onCtaPress={navigateToTicket} /> : null}
 
-      {canView && !canPost ? (
-        <FeedLockedCard kind="post" onCtaPress={navigateToTicket} />
-      ) : null}
+      {canView && !canPost ? <FeedLockedCard kind="post" onCtaPress={navigateToTicket} /> : null}
 
       {canView && canPost && isAuthed ? (
         <TouchableOpacity
@@ -242,7 +249,9 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
                 myCarId={myCarId}
                 isOwn={myCars.some((c) => c.id === post.car?.id)}
                 reactionLoading={reactionLoadingIds.has(post.id)}
-                onToggleReaction={(postId, kind) => { void handleReaction(postId, kind); }}
+                onToggleReaction={(postId, kind) => {
+                  void handleReaction(postId, kind);
+                }}
                 {...(canPost
                   ? {
                       onEdit: (p: FeedPostResponse) => {

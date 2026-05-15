@@ -15,14 +15,14 @@ describe('feed API', () => {
     vi.clearAllMocks();
   });
 
-  it('listFeedPosts calls GET /events/:slug/feed with page param', async () => {
+  it('listFeedPosts calls GET /events/:eventId/feed with page param', async () => {
     const { listFeedPosts } = await import('../../../../api/feed');
     mockRequest.mockResolvedValueOnce({ posts: [], page: 1, totalPages: 1, total: 0 });
-    await listFeedPosts('slug-a', 1);
-    expect(mockRequest).toHaveBeenCalledWith('/events/slug-a/feed?page=1', expect.anything());
+    await listFeedPosts('event-id-1', 1);
+    expect(mockRequest).toHaveBeenCalledWith('/events/event-id-1/feed?page=1', expect.anything());
   });
 
-  it('createFeedPost calls POST /events/:slug/feed', async () => {
+  it('createFeedPost calls POST /events/:eventId/feed', async () => {
     const { createFeedPost } = await import('../../../../api/feed');
     const post = {
       id: '1',
@@ -37,8 +37,8 @@ describe('feed API', () => {
       updatedAt: '',
     };
     mockAuthed.mockResolvedValueOnce(post);
-    await createFeedPost('slug-a', { body: 'hi' });
-    expect(mockAuthed).toHaveBeenCalledWith('/events/slug-a/feed', expect.anything(), {
+    await createFeedPost('event-id-1', { body: 'hi' });
+    expect(mockAuthed).toHaveBeenCalledWith('/events/event-id-1/feed', expect.anything(), {
       method: 'POST',
       body: { body: 'hi' },
     });
@@ -79,22 +79,19 @@ describe('feed API', () => {
     const { toggleFeedReaction } = await import('../../../../api/feed');
     mockAuthed.mockResolvedValueOnce({ likes: 1, mine: true });
     await toggleFeedReaction('e1', 'post-1', 'like');
-    expect(mockAuthed).toHaveBeenCalledWith(
-      '/events/e1/feed/post-1/reactions',
-      expect.anything(),
-      { method: 'POST', body: { kind: 'like' } },
-    );
+    expect(mockAuthed).toHaveBeenCalledWith('/events/e1/feed/post-1/reactions', expect.anything(), {
+      method: 'POST',
+      body: { kind: 'like' },
+    });
   });
 
   it('removeFeedReaction calls DELETE /events/:eventId/feed/:postId/reactions', async () => {
     const { removeFeedReaction } = await import('../../../../api/feed');
     mockAuthed.mockResolvedValueOnce(undefined);
     await removeFeedReaction('e1', 'post-1');
-    expect(mockAuthed).toHaveBeenCalledWith(
-      '/events/e1/feed/post-1/reactions',
-      expect.anything(),
-      { method: 'DELETE' },
-    );
+    expect(mockAuthed).toHaveBeenCalledWith('/events/e1/feed/post-1/reactions', expect.anything(), {
+      method: 'DELETE',
+    });
   });
 
   it('listFeedComments calls GET /events/:eventId/feed/:postId/comments', async () => {
@@ -120,10 +117,9 @@ describe('feed API', () => {
     };
     mockAuthed.mockResolvedValueOnce(comment);
     await createFeedComment('e1', 'post-1', { body: 'nice' });
-    expect(mockAuthed).toHaveBeenCalledWith(
-      '/events/e1/feed/post-1/comments',
-      expect.anything(),
-      { method: 'POST', body: { body: 'nice' } },
-    );
+    expect(mockAuthed).toHaveBeenCalledWith('/events/e1/feed/post-1/comments', expect.anything(), {
+      method: 'POST',
+      body: { body: 'nice' },
+    });
   });
 });
