@@ -143,6 +143,23 @@ describe('GET /admin/consents', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('rejects organizer users (LGPD audit data is admin-only)', async () => {
+    const { user: organizer } = await createUser({
+      role: 'organizer',
+      verified: true,
+      email: 'organizer@jdm.test',
+    });
+    const env = loadEnv();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/consents',
+      headers: { authorization: bearer(env, organizer.id, 'organizer') },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
   it('paginates with cursor', async () => {
     const { user: admin } = await createUser({
       role: 'admin',
