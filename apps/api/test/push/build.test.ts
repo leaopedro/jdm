@@ -14,6 +14,7 @@ const baseEnv = {
   STRIPE_SECRET_KEY: 'test_stripe_secret_key_minimum_32_chars_xx',
   STRIPE_WEBHOOK_SECRET: 'test_stripe_webhook_secret_32_chars_min_xx',
   TICKET_CODE_SECRET: 'test_ticket_code_secret_32_chars_min_xx',
+  FIELD_ENCRYPTION_KEY: 'ab'.repeat(32),
 };
 
 describe('buildPushSender', () => {
