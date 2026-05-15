@@ -5,7 +5,7 @@ import type { Env } from '../env.js';
 
 const MAX_CRUMB_LEN = 200;
 // matches email addresses or formatted CPF (e.g. 123.456.789-01)
-const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-?\d{2}/;
+const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-\d{2}/;
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {

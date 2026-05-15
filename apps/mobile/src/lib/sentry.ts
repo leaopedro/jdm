@@ -6,7 +6,7 @@ type Extra = { sentryDsn?: string };
 const dsn = (): string | undefined => (Constants.expoConfig?.extra as Extra | undefined)?.sentryDsn;
 
 const MAX_CRUMB_LEN = 200;
-const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-?\d{2}/;
+const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-\d{2}/;
 
 export const initSentry = () => {
   const sentryDsn = dsn();

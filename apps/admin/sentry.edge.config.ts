@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 
 const MAX_CRUMB_LEN = 200;
-const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-?\d{2}/;
+const PII_RE = /[^@\s]+@[^@\s]+\.[^@\s]+|\d{3}\.\d{3}\.\d{3}-\d{2}/;
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
