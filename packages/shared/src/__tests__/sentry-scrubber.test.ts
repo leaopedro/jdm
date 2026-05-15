@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hashEmail, scrubSentryEvent, type SentryEvent } from '../sentry-scrubber.js';
+import { scrubSentryEvent, type SentryEvent } from '../sentry-scrubber.js';
 
 describe('scrubSentryEvent', () => {
   it('strips unsafe request headers and keeps safe ones', () => {
@@ -21,6 +21,21 @@ describe('scrubSentryEvent', () => {
       'content-type': 'application/json',
       'x-request-id': 'abc-123',
     });
+  });
+
+  it('strips referer header', () => {
+    const event: SentryEvent = {
+      request: {
+        headers: {
+          referer: 'https://admin.jdm.app/users/123?token=secret',
+          'content-type': 'text/html',
+        },
+      },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.headers).toEqual({ 'content-type': 'text/html' });
   });
 
   it('removes cookies from request', () => {
@@ -53,30 +68,15 @@ describe('scrubSentryEvent', () => {
     expect(scrubbed.request!.query_string).toBeUndefined();
   });
 
-  it('hashes user email and preserves other user fields', () => {
+  it('deletes user email and preserves other user fields', () => {
     const event: SentryEvent = {
       user: { email: 'alice@example.com', id: 'u_42' },
     };
 
     const scrubbed = scrubSentryEvent(event);
 
-    expect(scrubbed.user!.email).toMatch(/^redacted-[0-9a-f]{8}$/);
-    expect(scrubbed.user!.email).not.toContain('@');
+    expect(scrubbed.user!.email).toBeUndefined();
     expect(scrubbed.user!.id).toBe('u_42');
-  });
-
-  it('produces consistent hash for same email', () => {
-    const a = hashEmail('alice@example.com');
-    const b = hashEmail('alice@example.com');
-
-    expect(a).toBe(b);
-  });
-
-  it('normalizes email case and whitespace before hashing', () => {
-    const a = hashEmail('Alice@Example.COM');
-    const b = hashEmail('  alice@example.com  ');
-
-    expect(a).toBe(b);
   });
 
   it('truncates long breadcrumb messages', () => {

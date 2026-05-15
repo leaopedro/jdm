@@ -37,37 +37,11 @@ const SAFE_HEADERS = new Set([
   'content-type',
   'host',
   'origin',
-  'referer',
   'user-agent',
   'x-request-id',
 ]);
 
 const MAX_BREADCRUMB_LENGTH = 200;
-
-/* ---- Helpers ----------------------------------------------------------- */
-
-/**
- * FNV-1a 32-bit hash. Returns hex string padded to 8 chars.
- */
-function fnv1a(input: string): string {
-  let hash = 0x811c9dc5; // offset basis
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    // Multiply by FNV prime 0x01000193.
-    // Math.imul keeps us in 32-bit integer space.
-    hash = Math.imul(hash, 0x01000193);
-  }
-  // Coerce to unsigned 32-bit, then hex-pad.
-  return (hash >>> 0).toString(16).padStart(8, '0');
-}
-
-/**
- * Hash an email into a non-reversible, stable token.
- * Output: `redacted-<8-hex-chars>`
- */
-export function hashEmail(email: string): string {
-  return `redacted-${fnv1a(email.trim().toLowerCase())}`;
-}
 
 /* ---- Scrub helpers ----------------------------------------------------- */
 
@@ -123,8 +97,8 @@ export function scrubSentryEvent<T>(event: T): T {
   }
 
   // -- user --------------------------------------------------------------
-  if (e.user?.email) {
-    e.user.email = hashEmail(e.user.email);
+  if (e.user) {
+    delete e.user.email;
   }
 
   // -- breadcrumbs -------------------------------------------------------
