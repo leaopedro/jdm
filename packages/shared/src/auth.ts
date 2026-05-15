@@ -96,6 +96,15 @@ export const authResponseSchema = z.object({
 });
 export type AuthResponse = z.infer<typeof authResponseSchema>;
 
+export const mfaChallengeResponseSchema = z.object({
+  mfaRequired: z.literal(true),
+  mfaToken: z.string().min(1),
+});
+export type MfaChallengeResponse = z.infer<typeof mfaChallengeResponseSchema>;
+
+export const loginResponseSchema = z.union([authResponseSchema, mfaChallengeResponseSchema]);
+export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
 export const messageResponseSchema = z.object({
   message: z.string().min(1),
 });

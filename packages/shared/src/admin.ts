@@ -65,6 +65,11 @@ export const adminAuditActionSchema = z.enum([
   'feed.report.dismiss',
   'feed.ban.create',
   'feed.ban.delete',
+  'mfa.setup_started',
+  'mfa.enrolled',
+  'mfa.disabled',
+  'mfa.recovery_code_used',
+  'mfa.recovery_codes_regenerated',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 

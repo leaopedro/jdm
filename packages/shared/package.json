@@ -34,6 +34,10 @@
       "types": "./src/feed.ts",
       "default": "./dist/feed.js"
     },
+    "./mfa": {
+      "types": "./src/mfa.ts",
+      "default": "./dist/mfa.js"
+    },
     "./general-settings": {
       "types": "./src/general-settings.ts",
       "default": "./dist/general-settings.js"

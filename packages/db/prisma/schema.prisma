@@ -69,6 +69,8 @@ model User {
   feedBans            FeedBan[]            @relation("FeedBanUser")
   feedBansIssued      FeedBan[]            @relation("FeedBanActor")
   consents            Consent[]
+  mfaSecret           MfaSecret?
+  mfaRecoveryCodes    MfaRecoveryCode[]
 
   @@index([createdAt])
 }
@@ -121,6 +123,28 @@ model PasswordResetToken {
   expiresAt  DateTime
   consumedAt DateTime?
   createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MfaSecret {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  encryptedSecret String
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

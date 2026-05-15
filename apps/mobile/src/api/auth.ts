@@ -3,6 +3,8 @@ import {
   type AuthResponse,
   type ForgotPasswordInput,
   type LoginInput,
+  loginResponseSchema,
+  type LoginResponse,
   type ResendVerifyInput,
   type ResetPasswordInput,
   type SignupInput,
@@ -18,8 +20,8 @@ import { authedRequest, request } from './client';
 export const signupRequest = (input: SignupInput): Promise<AuthResponse> =>
   request('/auth/signup', authResponseSchema, { method: 'POST', body: input });
 
-export const loginRequest = (input: LoginInput): Promise<AuthResponse> =>
-  request('/auth/login', authResponseSchema, { method: 'POST', body: input });
+export const loginRequest = (input: LoginInput): Promise<LoginResponse> =>
+  request('/auth/login', loginResponseSchema, { method: 'POST', body: input });
 
 export const refreshRequest = (refreshToken: string): Promise<AuthResponse> =>
   request('/auth/refresh', authResponseSchema, { method: 'POST', body: { refreshToken } });
