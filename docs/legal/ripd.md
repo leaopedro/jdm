@@ -31,13 +31,13 @@ each cluster can be traced end-to-end.
 
 ## Activity-cluster index
 
-| #       | Cluster                               | Activities (ROPA IDs)           | Legal basis                                | LIA cross-ref                                                         | Outcome                                                                        |
-| ------- | ------------------------------------- | ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| RIPD-01 | Payments + payment-flow fraud signals | `PAY-01`, `PAY-02`, `PAY-03`    | Art. 7, V (contract) + Art. 7, IX (fraud)  | [LIA-07](/JDMA/issues/JDMA-661#document-plan)                         | **Approved**, conditional on counsel SCC sign-off                              |
-| RIPD-02 | Feed UGC + moderation + reports/bans  | `COMM-01`, `SAFE-02`, `SAFE-03` | Art. 7, V (contract) + Art. 7, IX (safety) | [LIA-02](/JDMA/issues/JDMA-661), [LIA-03](/JDMA/issues/JDMA-661)      | **Conditional** — preconditions named below                                    |
-| RIPD-03 | City-targeted operational broadcasts  | `OPS-01`                        | Art. 7, V (operational/contract)           | n/a (operational, not LI)                                             | **Approved**, conditional on broadcast cap and logging                         |
-| RIPD-04 | Marketing push                        | `MKT-01`                        | Art. 7, I (consent)                        | n/a (consent-only; LI rejected per [JDMA-628](/JDMA/issues/JDMA-628)) | **Conditional** — pending T20 (re-consent flow) and T12 (consent-event record) |
-| RIPD-05 | Sentry PII handling (error tracking)  | `OBS-01`                        | Art. 7, IX (legitimate interest)           | [LIA-05](/JDMA/issues/JDMA-661)                                       | **Conditional / not effective** until T01 + T12 + SCC                          |
+| #       | Cluster                               | Activities (ROPA IDs)           | Legal basis                                | LIA cross-ref                                                         | Outcome                                                                              |
+| ------- | ------------------------------------- | ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| RIPD-01 | Payments + payment-flow fraud signals | `PAY-01`, `PAY-02`, `PAY-03`    | Art. 7, V (contract) + Art. 7, IX (fraud)  | [LIA-07](/JDMA/issues/JDMA-661#document-plan)                         | **Approved**, conditional on counsel SCC sign-off                                    |
+| RIPD-02 | Feed UGC + moderation + reports/bans  | `COMM-01`, `SAFE-02`, `SAFE-03` | Art. 7, V (contract) + Art. 7, IX (safety) | [LIA-02](/JDMA/issues/JDMA-661), [LIA-03](/JDMA/issues/JDMA-661)      | **Conditional** — preconditions named below                                          |
+| RIPD-03 | City-targeted operational broadcasts  | `OPS-01`                        | Art. 7, V (operational/contract)           | n/a (operational, not LI)                                             | **Approved**, conditional on broadcast cap and logging                               |
+| RIPD-04 | Marketing push                        | `MKT-01`                        | Art. 7, I (consent)                        | n/a (consent-only; LI rejected per [JDMA-628](/JDMA/issues/JDMA-628)) | **Conditional** — pending T20 legacy-user re-consent UX and T12 admin consent banner |
+| RIPD-05 | Sentry PII handling (error tracking)  | `OBS-01`                        | Art. 7, IX (legitimate interest)           | [LIA-05](/JDMA/issues/JDMA-661)                                       | **Conditional / not effective** until T01 + T12 + SCC                                |
 
 Excluded from this RIPD by current scope (will require a separate RIPD before
 launch):
@@ -121,11 +121,10 @@ third-party controllers other than the payment providers themselves
 **Implemented today:**
 
 - Orders flip to `paid` only from a verified provider webhook event. Client calls cannot promote an order (load-bearing invariant — `CLAUDE.md`).
-- Webhook handlers verify the provider signature on every call and dedupe by `provider_ref` to make replay idempotent.
+- Webhook handlers verify the provider signature on every call. Idempotency is enforced by the `PaymentWebhookEvent` Prisma model's composite `@@unique([provider, eventId])` constraint (`packages/db/prisma/schema.prisma`), so duplicate provider events cannot be processed twice.
 - Rate limiting in place on `/auth/*` and ticket purchase endpoints (`LGPD_scan.md` §11; cross-cutting requirement in `CLAUDE.md`).
-- Field-level encryption shipped for payment-adjacent free-text fields (`Order.notes` under [JDMA-705](/JDMA/issues/JDMA-705); rollout history covered by T37 work in `f6acdfe`).
 - Stripe / AbacatePay risk scores stored as opaque provider values; we do not attempt to reverse-engineer them.
-- Admin actions on orders and refunds are recorded in `AdminAudit` (`packages/db/prisma/schema.prisma`) via the server-side `recordAudit` helper.
+- Admin actions on orders and refunds are recorded in `AdminAudit` (`packages/db/prisma/schema.prisma`) via the server-side `recordAudit` helper called from `apps/api/src/services/admin-audit.ts`.
 
 **Future-state preconditions (must land before this RIPD is fully effective):**
 
@@ -133,6 +132,7 @@ third-party controllers other than the payment providers themselves
 - Documented Art. 20 recourse path: a human-review queue for high-stakes fraud denials (e.g., banning a verified member). Recourse copy must be approved by counsel.
 - 24-month retention enforcement on fraud-signal rows aligned with chargeback / dispute windows, with a purge job at the end of that window.
 - Privacy notice (T05) discloses the fraud screening, the international transfer to Stripe / Resend / Sentry, and the Art. 20 recourse path.
+- Field-level encryption for payment-adjacent free-text fields. `Order.notes` is **plain text on `main` today** (`String? @db.Text` in `packages/db/prisma/schema.prisma`); the encryption work is in flight under [JDMA-705](/JDMA/issues/JDMA-705) (PR #309, open) and must land before any production data accumulates in that column.
 
 ### 8. Risco residual
 
@@ -227,7 +227,7 @@ marketing partners (per [JDMA-636](/JDMA/issues/JDMA-636) / Q11).
 
 **Implemented today:**
 
-- Moderation admin routes are gated by `requireRole('organizer','admin','staff')` in `apps/api/src/plugins/auth.ts` (recorded in [LIA-02](/JDMA/issues/JDMA-661)). The gate is coarse but server-side and does prevent end-user access to moderation data.
+- Moderation admin routes are mounted under the `requireRole('organizer','admin')` scope in `apps/api/src/routes/admin/index.ts` (verified at the registration block that registers `adminFeedModerationRoutes`). `staff` is **excluded** from the moderation gate; the only role-bearing accounts that can act on moderation are `organizer` and `admin`. End users have no path to moderation data. The LIA-02 wording in `docs/legal/lia-pack.md` predates this narrowing and is being corrected in a follow-up; this RIPD reflects the actual `main` wiring.
 - `Report` and `FeedBan` rows persist reporter id, resolver id, decision reason, ban actor id, and ban metadata in `packages/db/prisma/schema.prisma`.
 - Admin actions on reports / bans / posts go through `recordAudit` and land in `AdminAudit` for accountability.
 - Sentry `beforeSend` scrubbing (`packages/shared/src/sentry-scrubber.ts`) is wired across `api`, `admin`, and `mobile`; it removes breadcrumb `data` payloads and limits headers to a `SAFE_HEADERS` allowlist.
@@ -235,7 +235,7 @@ marketing partners (per [JDMA-636](/JDMA/issues/JDMA-636) / Q11).
 
 **Future-state preconditions (must land before this RIPD is fully effective):**
 
-- Fine-grained `moderation` capability narrower than `organizer/admin/staff`, so non-moderators on those roles cannot read moderation data.
+- Fine-grained `moderation` capability narrower than the current `organizer/admin` gate, so non-moderator organizers/admins cannot read moderation data.
 - Server-side sanitization on `Report.reason` and moderator `reason` free-text fields (length cap, redaction pass) plus a fixed reason taxonomy enforced at write time.
 - User-facing moderation appeal flow with documented SLA, surfaced before public launch.
 - Retention policy enforced as a deletion job (LIA proposal: removed-post records 24 months for appeal and repeat-offender detection; `Report` 2 years from resolution; `FeedBan` while in effect + 1 year — `LGPD_scan.md` §10).
@@ -328,11 +328,14 @@ marketing-push flow assessed in RIPD-04 below.
 **Implemented today:**
 
 - City-only targeting attribute exists in the schema (`User.city`, `stateCode` per `LGPD_scan.md` §5); no neighbourhood / GPS targeting is wired.
-- Broadcast endpoints sit behind `requireRole('organizer','admin','staff')` and broadcast actions land in `AdminAudit` via `recordAudit`.
+- Broadcast endpoints (`apps/api/src/routes/admin/broadcasts.ts`) are mounted under the `requireRole('organizer','admin')` admin scope in `apps/api/src/routes/admin/index.ts`. `staff` is **excluded**.
+- Each `Broadcast` row captures `createdByAdminId` server-side, so the actor for every broadcast is recorded in the broadcast table itself even though the routes do **not** currently call `recordAudit`.
+- For marketing-target broadcasts, `apps/api/src/services/broadcasts/targets.ts` filters recipients with `hasActiveConsent(u.id, 'push_marketing')`, so users without an active consent record are excluded from the audience set at compute time.
 - `BroadcastDelivery` rows are persisted on the BR-region Railway DB.
 
 **Future-state preconditions (must land before this RIPD is fully effective):**
 
+- `recordAudit` calls in `apps/api/src/routes/admin/broadcasts.ts` for create / update / cancel and (later) send actions, so the `AdminAudit` trail covers broadcasts the same way it covers other admin mutations. Today only `Broadcast.createdByAdminId` is recorded; no `AdminAudit` rows are written from this surface.
 - Rate-limiting on the admin broadcast endpoint (called out as required in `CLAUDE.md`'s cross-cutting requirements).
 - A documented audience cap and / or a 4-eyes / approval gate on broadcasts above a threshold size (CTO + CEO sign-off on the threshold).
 - Operational-vs-marketing classification at write time: an admin issuing a broadcast must explicitly label it `operational` or `marketing`, and `marketing` falls into RIPD-04's consent-gated flow.
@@ -343,10 +346,13 @@ marketing-push flow assessed in RIPD-04 below.
 
 After the implemented controls and assuming the future-state preconditions
 above land, the residual risk is **medium-low**. The dominant residual
-driver is operator discipline at write time: even with classification
+driver today is the **absence of `AdminAudit` writes from broadcast
+routes**: only `Broadcast.createdByAdminId` is persisted, so the canonical
+admin-action audit trail does not yet cover broadcasts. Operator
+discipline at write time is the secondary driver — even with classification
 labels, a careless admin can still mis-tag a marketing message as
-operational. The `AdminAudit` trail and the rate-limit + audience-cap
-controls bound the blast radius but do not eliminate the risk.
+operational. The rate-limit + audience-cap controls bound the blast radius
+once they land, but do not eliminate the risk.
 
 ### 9. Aprovações
 
@@ -383,11 +389,13 @@ activity.
 
 Marketing push is **not necessary** for the service. It is, by definition,
 discretionary processing that requires the controller to obtain a free,
-informed, unambiguous, and granular consent (LGPD Art. 8). The current
-default of `User.pushPrefs.marketing = true` recorded in
-`packages/db/prisma/schema.prisma` is **invalid consent** under ANPD
-guidance and must be flipped to `false` with explicit opt-in collection
-(re-consent flow under T20 / [JDMA-668](/JDMA/issues/JDMA-668)).
+informed, unambiguous, and granular consent (LGPD Art. 8). The schema
+default `User.pushPrefs` is `{"transactional":true,"marketing":false}`
+on `main` (`packages/db/prisma/schema.prisma`), so new users start
+opted-out of marketing push. Existing users who pre-date the consent
+work must still pass through the T20 re-consent flow
+([JDMA-668](/JDMA/issues/JDMA-668)) before marketing push can be sent
+to them.
 
 ### 4. Categorias de dados e titulares
 
@@ -407,44 +415,44 @@ guidance and must be flipped to `false` with explicit opt-in collection
 
 ### 6. Riscos para os titulares (probabilidade × impacto)
 
-| Risk                                                                                          | Probability  | Impact | Inherent rating |
-| --------------------------------------------------------------------------------------------- | ------------ | ------ | --------------- |
-| Default-on opt-in gives invalid consent under ANPD                                            | High (today) | High   | **Critical**    |
-| No record of consent event (timestamp, version, channel, evidence)                            | High         | High   | High            |
-| Dark-pattern UI making opt-out harder than opt-in                                             | Medium       | High   | High            |
-| Drift between `pushPrefs.marketing` and `Consent` table (state desync)                        | Medium       | Medium | Medium          |
-| Marketing message sent to a withdrawn-consent user                                            | Medium       | High   | High            |
-| Engagement-analytics reuse of marketing push (open / click profiling) without further consent | Medium       | High   | High            |
+| Risk                                                                                                | Probability | Impact | Inherent rating |
+| --------------------------------------------------------------------------------------------------- | ----------- | ------ | --------------- |
+| Pre-consent legacy users receiving marketing push before T20 re-consent UI ships                    | Medium      | High   | High            |
+| Dark-pattern UI making opt-out harder than opt-in                                                   | Medium      | High   | High            |
+| Drift between `pushPrefs.marketing` toggle, `Consent` row, and the broadcast `targets` audience set | Medium      | Medium | Medium          |
+| Marketing message sent to a withdrawn-consent user (race between withdrawal and queued send)        | Medium      | High   | High            |
+| Engagement-analytics reuse of marketing push (open / click profiling) without further consent       | Medium      | High   | High            |
 
 ### 7. Salvaguardas técnicas e administrativas
 
 **Implemented today:**
 
 - `Consent` Prisma model exists with `id, userId, purpose, version, givenAt, withdrawnAt, channel, evidence` columns (per `LGPD_scan.md` §9 required spec; consent foundation shipped under PR #304 — `bf4ab1c`).
-- Push preference scaffolding exists on `User.pushPrefs`.
-- Mobile re-consent modal scaffolding shipped on `feat/jdma-668-marketing-consent` (T20) — wired into `app/_layout.tsx` root gate.
+- Schema default on `main` is `pushPrefs = {"transactional":true,"marketing":false}` (`packages/db/prisma/schema.prisma`), so new users start opted-out of marketing push.
+- `PATCH /me/push-preferences` (`apps/api/src/routes/me.ts`) writes a `recordConsent({ purpose: 'push_marketing', ... })` row when the user opts in, and calls `withdrawConsent(sub, 'push_marketing')` when the user opts out. The toggle and the `Consent` row are mutated in the same request, so the consent event is recorded with timestamp, version, channel, IP, UA, and evidence.
+- Server-side audience filtering: `apps/api/src/services/broadcasts/targets.ts` excludes any user without `hasActiveConsent(u.id, 'push_marketing')` from the marketing-target audience set. Users without a current consent row are dropped before the broadcast send.
+- Mobile re-consent modal scaffolding shipped on `feat/jdma-668-marketing-consent` (T20) — wired into `app/_layout.tsx` root gate. Not yet merged to `main`.
 
 **Future-state preconditions (must land before this RIPD is fully effective):**
 
-- Default `User.pushPrefs.marketing = false` for new users; existing users must pass through the T20 re-consent flow before any marketing push is sent.
-- Re-consent flow ([JDMA-668](/JDMA/issues/JDMA-668) / T20) merged and verified end-to-end on iOS and Android.
-- Granular consent banner / preference centre with equal-prominence Accept and Reject (T12).
-- Server-side enforcement: marketing send must check the latest non-withdrawn `Consent` row for `purpose = marketing_push` immediately before send; absence = no send.
-- Withdrawal honoured within 24h, including in any queued sends.
+- T20 mobile re-consent flow ([JDMA-668](/JDMA/issues/JDMA-668)) merged to `main` and verified end-to-end on iOS and Android, so legacy users without a `push_marketing` consent row pass through the modal before any marketing push is composed.
+- Granular consent banner / preference centre on `admin` with equal-prominence Accept and Reject (T12).
+- Withdrawal honoured within 24h, including in any queued sends — `targets.ts` already enforces at audience-compute time, but the queue worker should re-check `hasActiveConsent` immediately before the per-recipient send for the long-tail case.
 - Engagement analytics on marketing push remain **out of scope** of this RIPD until a separate consent purpose and balancing test cover them.
 - Privacy notice (T05) discloses marketing push as a separate, opt-in purpose with the withdrawal path.
 
 ### 8. Risco residual
 
-Today the residual risk is **high** because the schema default remains
-opt-out (`pushPrefs.marketing = true`) and the re-consent flow is not yet
-on `main`. After the future-state preconditions above land, residual risk
-falls to **low**: the activity is consent-based, narrowly scoped, with a
-documented withdrawal path and server-side enforcement.
-
-This RIPD is therefore **conditional / not effective** until T20 ships and
-the schema default flips. No marketing push may be sent under this RIPD
-in its current state.
+Schema default opt-out, the consent record on `/me/push-preferences`, and
+the audience-set filter in `targets.ts` are live on `main`, so the
+residual risk for **new users** is already **low-medium**. The dominant
+residual driver today is **legacy users**: any pre-consent user account
+that pre-dates the `Consent` table cannot have a recorded
+`push_marketing` consent until T20 ships and forces a re-consent decision.
+Until then, this RIPD remains **conditional**: the audience filter
+already excludes those users from a marketing send (no live consent row),
+so no actual marketing push goes out, but the formal sign-off cannot
+land until the re-consent UX is on `main`.
 
 ### 9. Aprovações
 
@@ -588,9 +596,10 @@ that approval of this RIPD does not implicitly accept them:
 - T05 — PT-BR privacy notice and cookie policy publication.
 - T12 — Granular cookie / consent banner on `admin` with equal-prominence Accept and Reject.
 - T19 / T28 — Counter-signed DPA + ANPD-aligned SCC for Stripe, AbacatePay, Sentry, Resend, Expo Push, R2, Vercel, EAS, GitHub Actions.
-- T20 ([JDMA-668](/JDMA/issues/JDMA-668)) — Mobile marketing push re-consent flow + schema default flip to `pushPrefs.marketing = false`.
-- Fine-grained `moderation` capability narrower than `organizer/admin/staff` and a user-facing moderation appeal flow before public launch.
-- Broadcast rate-limit, audience-cap policy, and operational-vs-marketing classification flag at write time.
+- T20 ([JDMA-668](/JDMA/issues/JDMA-668)) — Mobile marketing push re-consent flow for legacy users (the schema default is already `marketing = false` on `main`; the residual gap is the legacy-user re-consent UX, not the default).
+- Fine-grained `moderation` capability narrower than the current `organizer/admin` gate, and a user-facing moderation appeal flow before public launch.
+- Broadcast rate-limit, audience-cap policy, operational-vs-marketing classification flag at write time, and `recordAudit` calls on broadcast create / update / cancel routes (`apps/api/src/routes/admin/broadcasts.ts`).
+- Field-level encryption for `Order.notes` ([JDMA-705](/JDMA/issues/JDMA-705) / PR #309) — currently plain text on `main`.
 - Append-only enforcement on `AdminAudit`, narrowed audit-reader role, structured metadata redaction, IP / UA capture, and 5-year retention.
 - Retention-and-purge jobs per `LGPD_scan.md` §10 (tokens, webhook events, removed-post records, reports, bans, broadcasts, support tickets).
 
@@ -607,6 +616,7 @@ upgrade an outcome from "Conditional" to "Approved" without that refresh.
 
 ### Change history
 
-| Date       | Author | Change                                                                                                                                                                                                                                   |
-| ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-05-15 | CEO    | Initial v1 draft. 5 RIPD clusters covering payments + fraud, feed UGC + moderation, city-targeted operational broadcasts, marketing push, and Sentry PII handling. Partner sharing excluded per [JDMA-636](/JDMA/issues/JDMA-636) / Q11. |
+| Date       | Author | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-15 | CEO    | Initial v1 draft. 5 RIPD clusters covering payments + fraud, feed UGC + moderation, city-targeted operational broadcasts, marketing push, and Sentry PII handling. Partner sharing excluded per [JDMA-636](/JDMA/issues/JDMA-636) / Q11.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-05-15 | CEO    | v1.1 — CTO review on PR #311. Five `Implemented today` claims contradicted `main`: (a) `pushPrefs.marketing` already defaults to `false` and `/me/push-preferences` already records / withdraws `push_marketing` consent (RIPD-04 reframed); (b) moderation routes are `requireRole('organizer','admin')` with `staff` excluded (RIPD-02 corrected); (c) broadcast routes are `requireRole('organizer','admin')` with **no** `recordAudit` calls — only `Broadcast.createdByAdminId` is captured (RIPD-03 corrected, audit gap moved to preconditions); (d) webhook idempotency is enforced by the `PaymentWebhookEvent.@@unique([provider, eventId])` constraint, not by `provider_ref` (RIPD-01 corrected); (e) `Order.notes` is plain text on `main`; encryption work is open under PR #309 (RIPD-01 moved to preconditions). |
