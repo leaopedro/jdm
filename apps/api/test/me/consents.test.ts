@@ -30,8 +30,7 @@ describe('/me/consents', () => {
         payload: {
           purpose: 'push_marketing',
           version: 'v1-2026-05-14',
-          channel: 'mobile',
-          evidence: { checkbox: true, text: 'Aceito marketing push' },
+          evidence: { source: 'consent_screen', checkbox: true, text: 'Aceito marketing push' },
         },
       });
 
@@ -47,8 +46,7 @@ describe('/me/consents', () => {
       const payload = {
         purpose: 'push_marketing',
         version: 'v1',
-        channel: 'mobile',
-        evidence: { checkbox: true },
+        evidence: { source: 'consent_screen', checkbox: true },
       };
 
       const r1 = await app.inject({
@@ -78,8 +76,7 @@ describe('/me/consents', () => {
         payload: {
           purpose: 'push_marketing',
           version: 'v1',
-          channel: 'mobile',
-          evidence: { checkbox: true },
+          evidence: { source: 'consent_screen', checkbox: true },
         },
       });
 
@@ -99,8 +96,7 @@ describe('/me/consents', () => {
         payload: {
           purpose: 'push_marketing',
           version: 'v1',
-          channel: 'mobile',
-          evidence: { checkbox: true },
+          evidence: { source: 'consent_screen', checkbox: true },
         },
       });
 
@@ -154,8 +150,7 @@ describe('/me/consents', () => {
         payload: {
           purpose: 'push_marketing',
           version: 'v1',
-          channel: 'mobile',
-          evidence: { checkbox: true },
+          evidence: { source: 'consent_screen', checkbox: true },
         },
       });
 

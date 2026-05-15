@@ -85,6 +85,33 @@ describe('consent service', () => {
       expect((after.pushPrefs as Record<string, unknown>).marketing).toBe(true);
     });
 
+    it('concurrent grants produce exactly one active row', async () => {
+      const { user } = await createUser({ verified: true });
+      const params = {
+        userId: user.id,
+        purpose: 'push_marketing' as const,
+        version: 'v1-concurrent',
+        channel: 'mobile' as const,
+        ipAddress: '127.0.0.1',
+        userAgent: 'TestAgent/1.0',
+        evidence: { checkbox: true },
+      };
+
+      const results = await Promise.all([
+        recordConsent(params),
+        recordConsent(params),
+        recordConsent(params),
+      ]);
+
+      const ids = new Set(results.map((r) => r.id));
+      expect(ids.size).toBe(1);
+
+      const count = await prisma.consent.count({
+        where: { userId: user.id, purpose: 'push_marketing', version: 'v1-concurrent' },
+      });
+      expect(count).toBe(1);
+    });
+
     it('re-granting after withdrawal creates a new row preserving audit trail', async () => {
       const { user } = await createUser({ verified: true });
       const params = {

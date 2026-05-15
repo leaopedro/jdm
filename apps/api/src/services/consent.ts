@@ -1,5 +1,6 @@
 import { prisma } from '@jdm/db';
-import type { ConsentChannel, ConsentPurpose, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { ConsentChannel, ConsentPurpose } from '@prisma/client';
 
 type RecordConsentParams = {
   userId: string;
@@ -29,22 +30,30 @@ const syncPushMarketingPref = async (userId: string, enabled: boolean) => {
 export const recordConsent = async (params: RecordConsentParams) => {
   const { userId, purpose, version, channel, ipAddress, userAgent, evidence } = params;
 
-  // Return existing active grant for same (userId, purpose, version) — idempotent for double-tap.
-  // Re-grant after withdrawal creates a NEW row to preserve the full LGPD audit trail.
   const existing = await prisma.consent.findFirst({
     where: { userId, purpose, version, withdrawnAt: null },
   });
   if (existing) return existing;
 
-  const row = await prisma.consent.create({
-    data: { userId, purpose, version, channel, ipAddress, userAgent, evidence },
-  });
+  try {
+    const row = await prisma.consent.create({
+      data: { userId, purpose, version, channel, ipAddress, userAgent, evidence },
+    });
 
-  if (purpose === 'push_marketing') {
-    await syncPushMarketingPref(userId, true);
+    if (purpose === 'push_marketing') {
+      await syncPushMarketingPref(userId, true);
+    }
+
+    return row;
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      const winner = await prisma.consent.findFirstOrThrow({
+        where: { userId, purpose, version, withdrawnAt: null },
+      });
+      return winner;
+    }
+    throw e;
   }
-
-  return row;
 };
 
 export const withdrawConsent = async (

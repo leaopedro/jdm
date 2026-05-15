@@ -80,7 +80,7 @@ export const mfaRecoveryAction = async (
   const mfaToken = formData.get('mfaToken') as string;
   const code = formData.get('code') as string;
   const parsed = mfaRecoverySchema.safeParse({ mfaToken, code });
-  if (!parsed.success) return { error: 'Formato inválido. Use XXXX-XXXX.', mfaToken };
+  if (!parsed.success) return { error: 'Formato inválido. Use XXXX-XXXX-XXXX.', mfaToken };
   let role: string;
   try {
     const res = await apiFetch('/auth/mfa/recovery', {

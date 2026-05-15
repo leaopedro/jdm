@@ -33,7 +33,7 @@ export const meConsentRoutes: FastifyPluginAsync = async (app) => {
         userId: sub,
         purpose: body.purpose,
         version: body.version,
-        channel: body.channel,
+        channel: 'mobile',
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] ?? null,
         evidence: body.evidence as Prisma.InputJsonValue,

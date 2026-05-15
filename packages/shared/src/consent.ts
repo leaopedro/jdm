@@ -13,11 +13,13 @@ export type ConsentPurpose = z.infer<typeof consentPurposeSchema>;
 export const consentChannelSchema = z.enum(['web_admin', 'web_public', 'mobile', 'email']);
 export type ConsentChannel = z.infer<typeof consentChannelSchema>;
 
+export const consentEvidenceSchema = z.object({ source: z.string().min(1) }).passthrough();
+export type ConsentEvidence = z.infer<typeof consentEvidenceSchema>;
+
 export const grantConsentBodySchema = z.object({
   purpose: consentPurposeSchema,
   version: z.string().min(1).max(100),
-  channel: consentChannelSchema,
-  evidence: z.record(z.unknown()),
+  evidence: consentEvidenceSchema,
 });
 export type GrantConsentBody = z.infer<typeof grantConsentBodySchema>;
 
