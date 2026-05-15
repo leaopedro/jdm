@@ -47,8 +47,8 @@ export const useMarketingConsentGate = (authenticated: boolean): MarketingConsen
     setSubmitting(true);
     try {
       await withdrawConsent('push_marketing');
-    } catch {
-      // best-effort — user has no active consent, that is fine
+    } catch (e) {
+      console.warn('[MarketingConsentGate] withdrawConsent failed (best-effort):', e);
     } finally {
       await markMarketingConsentPromptSeen();
       setVisible(false);
