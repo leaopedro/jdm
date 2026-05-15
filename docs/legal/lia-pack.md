@@ -35,15 +35,15 @@ the activity is also high-risk.
 
 ## LIA index
 
-| #      | Activity                                 | LGPD basis                     | RIPD required?                          | Outcome                                          |
-| ------ | ---------------------------------------- | ------------------------------ | --------------------------------------- | ------------------------------------------------ |
-| LIA-01 | Ticket QR signing and anti-fraud         | Art. 7, IX                     | No (low risk)                           | Approved                                         |
-| LIA-02 | Feed moderation — automated and admin    | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                         |
-| LIA-03 | Reports and bans (user-flagged abuse)    | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                         |
-| LIA-04 | Admin audit log — accountability portion | Art. 7, II + Art. 7, IX (dual) | No                                      | **Conditional** — `AuditLog` not yet implemented |
-| LIA-05 | Error tracking (Sentry)                  | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | **Conditional** — see preconditions              |
-| LIA-06 | Push delivery diagnostics                | Art. 7, IX                     | No (operational telemetry)              | Approved                                         |
-| LIA-07 | Payment-flow fraud signals               | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                         |
+| #      | Activity                                 | LGPD basis                     | RIPD required?                          | Outcome                                                    |
+| ------ | ---------------------------------------- | ------------------------------ | --------------------------------------- | ---------------------------------------------------------- |
+| LIA-01 | Ticket QR signing and anti-fraud         | Art. 7, IX                     | No (low risk)                           | Approved                                                   |
+| LIA-02 | Feed moderation — automated and admin    | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                                   |
+| LIA-03 | Reports and bans (user-flagged abuse)    | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                                   |
+| LIA-04 | Admin audit log — accountability portion | Art. 7, II + Art. 7, IX (dual) | No                                      | **Conditional** — `AdminAudit` live; LI safeguards pending |
+| LIA-05 | Error tracking (Sentry)                  | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | **Conditional** — see preconditions                        |
+| LIA-06 | Push delivery diagnostics                | Art. 7, IX                     | No (operational telemetry)              | Approved                                                   |
+| LIA-07 | Payment-flow fraud signals               | Art. 7, IX                     | Yes ([JDMA-672](/JDMA/issues/JDMA-672)) | Approved                                                   |
 
 ---
 
@@ -210,13 +210,16 @@ section on `Reports/bans`.
 | Recipients         | Internal: compliance, CTO, CEO. External: ANPD on regulatory request.                                                                                                                                                                                                                   |
 | Retention          | 5 years aligned with CDC and ANPD investigation timelines.                                                                                                                                                                                                                              |
 
-**Current implementation reality.** The repo does **not** ship a dedicated
-admin audit-log table today. There is no `AuditLog` Prisma model and no
-append-only / tamper-evident DB-layer enforcement. This LIA therefore
-documents the _target_ state of the admin audit log, and its LI basis is
-**not effective** until the table and the safeguards below land. A
-follow-up implementation issue is required before this LIA is defensible
-in production.
+**Current implementation reality.** The repo ships an `AdminAudit` Prisma
+model (`packages/db/prisma/schema.prisma`, columns `id`, `actorId`,
+`action`, `entityType`, `entityId`, `metadata` (Json), `createdAt`; indexed
+on `actorId+createdAt`, `entityType+entityId`, `createdAt`). Writes go
+through `recordAudit` in `apps/api/src/services/admin-audit.ts`, which
+inserts one row per recorded admin action with optional `metadata` JSON.
+The table is therefore live, but the LI-specific safeguards listed below
+(append-only DB enforcement, narrowed audit-reader role, structured diff
+redaction, IP/UA capture, defined retention) are **not** in place yet, so
+the LI portion of this LIA stays conditional until they land.
 
 **Necessity test.** The legal-obligation floor (Art. 7, II) covers a minimal
 audit. The richer dataset (diffs, internal review notes) is not strictly
@@ -232,13 +235,19 @@ action).
 - Data-subject rights: admin actors have reduced expectation of privacy on actions taken in their privileged role; affected end users gain a record they can request via Art. 18 II (access).
 - Net balance: proportionate **once the safeguards below are implemented**. LI portion strictly additive to the legal-obligation floor; no behavioural profiling of admins beyond action logging.
 
-**Future-state safeguards (must land before LI claim is effective).**
+**Current safeguards already in code.**
 
-- `AuditLog` table created in Prisma with actor id, target id, action verb, diff snippet, timestamp, IP, UA.
-- Diff redaction allowlist that excludes secret fields by name.
-- DB-layer append-only enforcement (e.g., `REVOKE UPDATE, DELETE` on the table for app roles, or row-level immutability trigger) so the log is tamper-evident as claimed.
-- A dedicated audit reader role (a follow-up beyond today's coarse `organizer/admin/staff`) so read access can be narrowed to compliance/CTO/CEO; bulk export gated and logged.
-- Admin IP and UA retained only on this log, not reused for marketing or scoring.
+- `AdminAudit` rows are created server-side by `recordAudit` only, called from admin routes. Clients cannot author audit entries directly.
+- `entityType` is constrained to a fixed string union in `RecordAuditInput` (e.g., `event`, `tier`, `ticket`, `order`, `user`, `feed_post`, `report`, `feed_ban`, etc.), which bounds what can be logged.
+- The Prisma model captures actor id, action verb, target entity type and id, free-form `metadata` JSON, and creation timestamp, with indexes on `(actorId, createdAt)`, `(entityType, entityId)`, and `(createdAt)`.
+
+**Future-state safeguards (must land before the LI portion is effective).**
+
+- DB-layer append-only enforcement (`REVOKE UPDATE, DELETE` on `AdminAudit` for application roles, or a row-level immutability trigger) so the log is tamper-evident. Today nothing prevents an UPDATE/DELETE through the same Prisma connection.
+- Structured `metadata` redaction allowlist that excludes secret fields by name, plus a documented schema for the diff fields actually stored under `metadata`.
+- A dedicated audit-reader role narrower than the current coarse `requireRole('organizer','admin','staff')` gate (e.g., compliance/CTO/CEO only); bulk export gated and itself audited.
+- Captured fields for actor IP and user-agent on each audit row, retained only on this log and not reused for marketing or scoring.
+- Defined retention (proposal: 5 years aligned with CDC + ANPD investigation timelines) enforced as policy and as a deletion job; today retention is implicit and indefinite.
 
 **Opt-out and Art. 18 §2 objection.** Admins cannot opt out of being logged
 on the role, it is a condition of holding admin access (Art. 7, V, contract
@@ -251,9 +260,12 @@ needed to defend other users.
 
 **Decision owner.** CEO (temporary). CTO co-sign for the technical retention model.
 
-**Outcome.** **Conditional / not effective** until the `AuditLog` table,
-append-only enforcement, and narrowed audit-reader role are implemented.
-Until then, no LI claim is asserted over the absent log.
+**Outcome.** **Conditional.** The `AdminAudit` table and `recordAudit`
+writes are live, so the legal-obligation floor (Art. 7, II) is supported
+in code today. The LI portion (richer accountability dataset on top of
+that floor) is **not yet defensible** until append-only DB enforcement,
+narrowed audit-reader role, structured metadata redaction, IP/UA capture,
+and defined retention are implemented.
 
 ---
 
@@ -285,14 +297,14 @@ callback) where a consent record may not exist before the failure.
 **Current implementation reality.**
 
 - `beforeSend` PII scrubbing is wired in `apps/api/src/plugins/sentry.ts`, `apps/admin/sentry.{client,server,edge}.config.ts`, and `apps/mobile/src/lib/sentry.ts` via `scrubSentryEvent` (`packages/shared/src/sentry-scrubber.ts`). The scrubber strips request headers to a fixed `SAFE_HEADERS` allowlist (accept, content-type, host, origin, user-agent, x-request-id, etc.), removes breadcrumb `data` payloads, and truncates long breadcrumb messages. Console breadcrumbs run through an additional `dropRiskyConsoleBreadcrumbs` filter on the api.
-- Sentry session replay is **not** configured today in any `apps/admin/sentry.*.config.ts`, so the replay-specific risk vector is not currently active.
+- Sentry session replay **is configured today** on the admin client in `apps/admin/sentry.client.config.ts` with `replaysSessionSampleRate: 0` and `replaysOnErrorSampleRate: 1.0`, so steady-state sessions are not sampled but every error-bearing session is fully replayed. `apps/admin/sentry.client.config.ts` also runs an additional console-breadcrumb filter that drops breadcrumbs over 200 chars or matching an email/CPF regex. Replay is not configured on `api` or `mobile`. Until the cookie-consent gate ships, error-replay processing on `admin` runs without an explicit consent record, which is the gap that drives this LIA's conditional status.
 - The Sentry DPA / SCC posture for ANPD purposes is **not** yet confirmed; tracked under vendor governance (T19/T28).
 - A cookie-consent banner gating optional telemetry is **not** in place today.
 
 **Preconditions for LI defensibility (still open).**
 
 1. Confirm and harden the `beforeSend` PII scrubber against email, CPF, plate, payment refs, and free-text PII paths the current `SAFE_HEADERS` + breadcrumb-data scrubber does not yet explicitly target (follow-up under T01).
-2. Before Sentry session replay is enabled on `admin`, gate it behind an explicit cookie-consent banner (T12). Until then, replay must stay disabled in code.
+2. Admin Sentry replay (today: `replaysSessionSampleRate: 0`, `replaysOnErrorSampleRate: 1.0`) must either be set to `0/0` until a cookie-consent banner ships (T12), or kept on error only after the consent gate is live and recorded per user. The LI claim is not defensible while error-replay runs ungated.
 3. Sentry DPA must include ANPD-aligned SCC (T19/T28).
 
 Until all three conditions hold, the Sentry LI claim is treated as
@@ -303,7 +315,7 @@ is not yet defensible without the follow-ups above.
 **Future-state minimization targets (not all live yet).**
 
 - Explicit scrub list for `email`, `cpf`, `plate`, `Authorization` headers, payment refs — to be verified against the current scrubber and extended where gaps exist.
-- Sentry replay disabled on `mobile` and `api`, and disabled on `admin` until the consent gate ships.
+- Sentry replay remains absent on `mobile` and `api`; on `admin` it stays disabled (or, post-consent gate, gated) so error-replay never runs without a recorded consent.
 - Sentry user-context limited to `userId` UUID with an opt-in to drop the id entirely on objection.
 
 **Opt-out and Art. 18 §2 objection.** Authenticated users may request that
@@ -439,7 +451,8 @@ apply to **all** LIAs in this pack:
 
 ### Change history
 
-| Date       | Author | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-05-15 | CEO    | Initial v1 draft. 7 LIAs covering activities flagged "LI approved" in [JDMA-628](/JDMA/issues/JDMA-628). LIA-05 (Sentry) marked conditional pending T01 + T12.                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 2026-05-15 | CEO    | v1.1 — CTO review on PR #308. Reframed LIA-02, LIA-03, LIA-04, LIA-05 to separate current-state safeguards from future-state preconditions. LIA-04 outcome flipped to "Conditional / not effective" because the `AuditLog` table and append-only enforcement do not exist in the repo today. LIA-02 dropped the unimplemented `admin:moderation` RBAC claim; today's gate is the coarse `requireRole('organizer','admin','staff')`. LIA-05 dropped claims that scrubber coverage is complete and that a cookie-consent banner exists; both are tracked as still-open follow-ups. |
+| Date       | Author | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-15 | CEO    | Initial v1 draft. 7 LIAs covering activities flagged "LI approved" in [JDMA-628](/JDMA/issues/JDMA-628). LIA-05 (Sentry) marked conditional pending T01 + T12.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2026-05-15 | CEO    | v1.1 — CTO review on PR #308. Reframed LIA-02, LIA-03, LIA-04, LIA-05 to separate current-state safeguards from future-state preconditions. LIA-04 outcome flipped to "Conditional / not effective" because the `AuditLog` table and append-only enforcement do not exist in the repo today. LIA-02 dropped the unimplemented `admin:moderation` RBAC claim; today's gate is the coarse `requireRole('organizer','admin','staff')`. LIA-05 dropped claims that scrubber coverage is complete and that a cookie-consent banner exists; both are tracked as still-open follow-ups.                                                                                                                                                                      |
+| 2026-05-15 | CEO    | v1.2 — CTO second review on PR #308. Two v1.1 claims contradicted the repo: (a) the audit-log table does exist as `AdminAudit` in `packages/db/prisma/schema.prisma` with live writes via `apps/api/src/services/admin-audit.ts`, and (b) Sentry session replay is configured on the admin client (`replaysSessionSampleRate: 0`, `replaysOnErrorSampleRate: 1.0`). LIA-04 now states the table is live and lists the LI-specific safeguards (append-only enforcement, narrowed reader role, metadata redaction, IP/UA capture, retention) as the still-open conditions. LIA-05 now describes the actual admin replay sample rates and frames the LI gap as ungated error-replay until the consent banner ships, not as replay being entirely absent. |
