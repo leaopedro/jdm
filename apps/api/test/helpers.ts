@@ -73,6 +73,8 @@ export const resetDatabase = async (): Promise<void> => {
   await prisma.productType.deleteMany();
   await prisma.storeSettings.deleteMany();
   await prisma.supportTicket.deleteMany();
+  await prisma.mfaRecoveryCode.deleteMany();
+  await prisma.mfaSecret.deleteMany();
   await prisma.passwordResetToken.deleteMany();
   await prisma.verificationToken.deleteMany();
   await prisma.refreshToken.deleteMany();

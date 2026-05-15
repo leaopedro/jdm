@@ -18,16 +18,15 @@ export const sentryPlugin = fp<{ env: Env }>(async (app, opts) => {
     release: opts.env.GIT_SHA,
     tracesSampleRate: 0.1,
     beforeSend(event) {
-      return scrubSentryEvent(event);
+      const scrubbed = scrubSentryEvent(event);
+      if (!scrubbed) return null;
+      if (scrubbed.breadcrumbs) {
+        scrubbed.breadcrumbs = dropRiskyConsoleBreadcrumbs(scrubbed.breadcrumbs);
+      }
+      return scrubbed;
     },
     initialScope: {
       tags: { service: 'api' },
-    },
-    beforeSend: (event) => {
-      if (event.breadcrumbs) {
-        event.breadcrumbs = dropRiskyConsoleBreadcrumbs(event.breadcrumbs);
-      }
-      return event;
     },
   });
 

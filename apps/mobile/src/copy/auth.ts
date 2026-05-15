@@ -19,6 +19,7 @@ export const authCopy = {
     rateLimited: 'Muitas tentativas. Aguarde um instante.',
     invalidLink: 'Link inválido.',
     accountDisabled: 'Sua conta foi desabilitada. Contate o suporte.',
+    mfaNotSupported: 'Essa conta exige verificação em duas etapas. Use o painel admin para entrar.',
   },
   login: {
     title: 'Entrar',

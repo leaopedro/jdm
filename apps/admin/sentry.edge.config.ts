@@ -8,14 +8,10 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   tracesSampleRate: 0.1,
   beforeSend(event) {
-    return scrubSentryEvent(event);
-  },
-  initialScope: {
-    tags: { service: 'admin', runtime: 'edge' },
-  },
-  beforeSend: (event) => {
-    if (event.breadcrumbs) {
-      event.breadcrumbs = event.breadcrumbs.filter((crumb) => {
+    const scrubbed = scrubSentryEvent(event);
+    if (!scrubbed) return null;
+    if (scrubbed.breadcrumbs) {
+      scrubbed.breadcrumbs = scrubbed.breadcrumbs.filter((crumb) => {
         if (crumb.category !== 'console') return true;
         const msg = typeof crumb.message === 'string' ? crumb.message : '';
         if (msg.length > MAX_CRUMB_LEN || PII_RE.test(msg)) return false;
@@ -36,6 +32,9 @@ Sentry.init({
         return true;
       });
     }
-    return event;
+    return scrubbed;
+  },
+  initialScope: {
+    tags: { service: 'admin', runtime: 'edge' },
   },
 });
