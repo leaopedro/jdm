@@ -34,6 +34,7 @@ Satisfy LGPD Art. 46 (security safeguards) requirement L15.
 | Token format        | JWT (access + refresh pair)                                    |
 | Verification        | `verifyAccessToken()` in `plugins/auth.ts`                     |
 | Account status gate | Disabled users rejected at auth layer before any route handler |
+| MFA                 | Optional TOTP for admin-panel users; challenge issued at login |
 | Token payload       | `sub` (user ID), `role`                                        |
 
 ### 3.1 Public routes (no token required)
@@ -49,6 +50,8 @@ Satisfy LGPD Art. 46 (security safeguards) requirement L15.
 | `/auth/logout`                 | POST   | Revoke refresh token                        |
 | `/auth/forgot-password`        | POST   | Request password reset                      |
 | `/auth/reset-password`         | POST   | Reset password with token                   |
+| `/auth/mfa/verify`             | POST   | Complete MFA challenge with TOTP code       |
+| `/auth/mfa/recovery`           | POST   | Complete MFA challenge with recovery code   |
 | `/events`                      | GET    | List published events                       |
 | `/events/:slug`                | GET    | Event detail by slug                        |
 | `/events/by-id/:id`            | GET    | Event detail by ID                          |
@@ -77,11 +80,23 @@ Feed read (`GET /events/:eventId/feed`) uses soft/optional auth via `tryAuth`.
 
 ### 3.3 Admin routes (token + role guard)
 
-All routes under `/admin` prefix. Three authorization tiers enforced by scope-level `requireRole()` hooks in `routes/admin/index.ts`.
+All routes under `/admin` prefix. Four authorization scopes enforced by scope-level `requireRole()` hooks in `routes/admin/index.ts`.
 
 ## 4. Authorization tiers
 
-### Tier 1: Staff + Organizer + Admin
+### Tier 1a: Staff + Organizer + Admin (MFA enrollment)
+
+MFA self-service for any admin-panel user.
+
+| Endpoint                    | Method | Purpose                            |
+| --------------------------- | ------ | ---------------------------------- |
+| `/admin/mfa/status`         | GET    | Check own MFA enrollment status    |
+| `/admin/mfa/setup`          | POST   | Start TOTP enrollment (returns QR) |
+| `/admin/mfa/verify-setup`   | POST   | Confirm enrollment with first code |
+| `/admin/mfa`                | DELETE | Disable MFA (requires valid code)  |
+| `/admin/mfa/recovery-codes` | POST   | Regenerate recovery codes          |
+
+### Tier 1b: Staff + Organizer + Admin (Check-in)
 
 Check-in surface only.
 
@@ -131,7 +146,7 @@ User mutations with rate limit (30 req/min):
 
 ## 8. Incident response
 
-- Compromised admin account: disable via `POST /admin/users/:id/disable`, rotate JWT signing secret, invalidate all refresh tokens.
+- Compromised admin account: disable via `POST /admin/users/:id/disable`, rotate JWT signing secret, rotate `MFA_ENCRYPTION_KEY`, invalidate all refresh tokens.
 - Unauthorized access detected: check admin audit log, disable account, escalate to CTO.
 
 ---
@@ -140,7 +155,7 @@ User mutations with rate limit (30 req/min):
 
 Last audit: 2026-05-15
 Auditor: Orion (JDMA-654)
-Result: **2 drift items found and addressed**
+Result: **3 drift items found and addressed**
 
 ### A.1 Role definitions
 
@@ -156,12 +171,14 @@ Result: **2 drift items found and addressed**
 - [x] Disabled-user check at auth layer (line 47-50)
 - [x] `requireRole()` returns 403 for unauthorized roles
 - [x] `requireUser()` helper narrows TypeScript type after auth
+- [x] MFA challenge flow: login returns short-lived `mfaToken` when MFA enrolled; `/auth/mfa/verify` and `/auth/mfa/recovery` exchange it for full session
 
 ### A.3 Admin route guards
 
 - [x] All admin routes nested under `/admin` prefix
-- [x] Three scope tiers with cascading `requireRole()` hooks in `routes/admin/index.ts:23-68`
-- [x] Tier 1 (staff+organizer+admin): check-in surface only
+- [x] Four scope blocks with cascading `requireRole()` hooks in `routes/admin/index.ts`
+- [x] Tier 1a (staff+organizer+admin): MFA enrollment self-service
+- [x] Tier 1b (staff+organizer+admin): check-in surface only
 - [x] Tier 2 (organizer+admin): events, tiers, extras, tickets, finance, store, broadcasts, feed moderation, support, settings
 - [x] Tier 3 (admin only): user create/disable/enable with rate limit
 - [x] No admin routes exist outside `/admin` prefix
@@ -180,7 +197,7 @@ Result: **2 drift items found and addressed**
 ### A.5 Public routes
 
 - [x] Health check (`/health`): no auth
-- [x] Auth endpoints (`/auth/*`): no auth (rate limited); mix of POST and GET (`/auth/verify` is GET)
+- [x] Auth endpoints (`/auth/*`): no auth (rate limited); mix of POST and GET (`/auth/verify` is GET); MFA challenge routes (`/auth/mfa/verify`, `/auth/mfa/recovery`) use short-lived MFA token, no session auth
 - [x] Event list/detail (`/events`, `/events/:slug`, `/events/by-id/:id`): no auth
 - [x] Confirmed cars (`/events/:slug/confirmed-cars`): no auth
 - [x] Store products (`/store/products`, `/store/products/:slug`): no auth
@@ -199,5 +216,7 @@ Result: **2 drift items found and addressed**
 
 1. **`publicProfileSchema` missing `staff` role** (`packages/shared/src/profile.ts:51`): The `/me` endpoint serialization would reject staff users because `publicProfileSchema.role` only accepted `['user', 'organizer', 'admin']`. **Fixed in this PR** by adding `'staff'` to the enum.
 2. **No role-change audit trail**: `adminAuditActionSchema` has no `user.role_changed` action. Role changes happen via direct DB update with no API endpoint and no audit record. **Follow-up issue created** to add `PATCH /admin/users/:id/role` with audit logging.
+
+3. **MFA routes not documented**: Admin MFA enrollment routes (`/admin/mfa/*`) and auth MFA challenge routes (`/auth/mfa/verify`, `/auth/mfa/recovery`) were added in #307 but not reflected in this policy. **Fixed in this PR** by adding Tier 1a, updating public route table, and updating audit checklist.
 
 All route guards are correctly applied. No unguarded endpoints found.
