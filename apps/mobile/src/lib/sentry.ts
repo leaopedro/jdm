@@ -1,3 +1,4 @@
+import { scrubSentryEvent } from '@jdm/shared/sentry-scrubber';
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
 
@@ -12,6 +13,9 @@ export const initSentry = () => {
     dsn: sentryDsn,
     debug: false,
     tracesSampleRate: 0.1,
+    beforeSend(event) {
+      return scrubSentryEvent(event);
+    },
     initialScope: {
       tags: { service: 'mobile' },
     },
