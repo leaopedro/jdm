@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { prisma } from '@jdm/db';
 import { adminStoreOrderDetailSchema } from '@jdm/shared/admin';
 import type { FastifyInstance } from 'fastify';
@@ -5,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
 import { encryptField } from '../../src/services/crypto/field-encryption.js';
+import { signTicketCode } from '../../src/services/tickets/codes.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
 const FIELD_KEY = process.env.FIELD_ENCRYPTION_KEY!;
@@ -160,5 +162,166 @@ describe('Order.notes field-level encryption', () => {
     // pickupRefs should be null since notes couldn't be decrypted
     expect(body.pickupEventId).toBeNull();
     expect(body.pickupTicketId).toBeNull();
+  });
+});
+
+const env = loadEnv();
+
+const seedEventAndTicket = async (userId: string) => {
+  const event = await prisma.event.create({
+    data: {
+      slug: `ev-enc-${Math.random().toString(36).slice(2, 8)}`,
+      title: 'Encryption Pickup Event',
+      description: 'Test',
+      startsAt: new Date(Date.now() + 3600_000),
+      endsAt: new Date(Date.now() + 7200_000),
+      venueName: 'Venue',
+      venueAddress: 'Addr',
+      city: 'SP',
+      stateCode: 'SP',
+      type: 'meeting',
+      status: 'published',
+      publishedAt: new Date(),
+      capacity: 10,
+    },
+  });
+  const tier = await prisma.ticketTier.create({
+    data: {
+      eventId: event.id,
+      name: 'GA',
+      priceCents: 1000,
+      quantityTotal: 10,
+      quantitySold: 1,
+      sortOrder: 0,
+    },
+  });
+  const ticket = await prisma.ticket.create({
+    data: {
+      userId,
+      eventId: event.id,
+      tierId: tier.id,
+      status: 'valid',
+      source: 'purchase',
+    },
+  });
+  return { event, tier, ticket };
+};
+
+describe('Pickup read paths with encrypted Order.notes', () => {
+  let app: Awaited<ReturnType<typeof makeApp>>;
+
+  beforeEach(async () => {
+    app = await makeApp();
+    await resetDatabase();
+  });
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('/me/tickets returns pickup orders when notes are encrypted', async () => {
+    const { user } = await createUser({ email: 'pickup-buyer@jdm.test', verified: true });
+    const { event, ticket } = await seedEventAndTicket(user.id);
+
+    const notesJson = JSON.stringify({ pickupEventId: event.id, pickupTicketId: ticket.id });
+    const encryptedNotes = encryptField(notesJson, env.FIELD_ENCRYPTION_KEY);
+
+    const product = await seedProduct();
+    const variant = await seedVariant(product.id);
+    await prisma.order.create({
+      data: {
+        userId: user.id,
+        kind: 'product',
+        amountCents: 5000,
+        quantity: 1,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        providerRef: `pi_${Math.random().toString(36).slice(2, 10)}`,
+        fulfillmentMethod: 'pickup',
+        status: 'paid',
+        paidAt: new Date(),
+        pickupEventId: event.id,
+        pickupTicketId: ticket.id,
+        notes: encryptedNotes,
+        items: {
+          create: {
+            kind: 'product',
+            variantId: variant.id,
+            quantity: 1,
+            unitPriceCents: 5000,
+            subtotalCents: 5000,
+          },
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me/tickets',
+      headers: { authorization: bearer(env, user.id) },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].pickupOrders).toHaveLength(1);
+    expect(body.items[0].pickupOrders[0].fulfillmentStatus).toBe('unfulfilled');
+  });
+
+  it('admin check-in returns storePickup when notes are encrypted', async () => {
+    const { user: holder } = await createUser({ email: 'checkin-holder@jdm.test', verified: true });
+    const { user: admin } = await createUser({
+      email: 'checkin-admin@jdm.test',
+      verified: true,
+      role: 'staff',
+    });
+    const { event, ticket } = await seedEventAndTicket(holder.id);
+
+    const notesJson = JSON.stringify({ pickupEventId: event.id, pickupTicketId: ticket.id });
+    const encryptedNotes = encryptField(notesJson, env.FIELD_ENCRYPTION_KEY);
+
+    const product = await seedProduct();
+    const variant = await seedVariant(product.id);
+    await prisma.order.create({
+      data: {
+        userId: holder.id,
+        kind: 'product',
+        amountCents: 5000,
+        quantity: 1,
+        currency: 'BRL',
+        method: 'card',
+        provider: 'stripe',
+        providerRef: `pi_${Math.random().toString(36).slice(2, 10)}`,
+        fulfillmentMethod: 'pickup',
+        status: 'paid',
+        paidAt: new Date(),
+        pickupEventId: event.id,
+        pickupTicketId: ticket.id,
+        notes: encryptedNotes,
+        items: {
+          create: {
+            kind: 'product',
+            variantId: variant.id,
+            quantity: 1,
+            unitPriceCents: 5000,
+            subtotalCents: 5000,
+          },
+        },
+      },
+    });
+
+    const code = signTicketCode(ticket.id, env);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tickets/check-in',
+      headers: { authorization: bearer(env, admin.id, 'staff') },
+      payload: { code, eventId: event.id },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.result).toBe('admitted');
+    expect(body.storePickup).toHaveLength(1);
+    expect(body.storePickup[0].fulfillmentStatus).toBe('unfulfilled');
   });
 });

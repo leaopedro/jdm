@@ -37,9 +37,10 @@ async function main() {
         // plaintext that happens to match the isEncrypted() format check.
         const plain = decryptField(row.notes, FIELD_ENCRYPTION_KEY!);
         if (plain === null) {
-          // Format matched but decryption failed: this is plaintext that
-          // looks like ciphertext, or corrupt data. Skip it.
-          skipped++;
+          console.error(
+            `Row ${row.id}: encrypted format detected but decryption failed (key mismatch or corruption)`,
+          );
+          failed.push(row.id);
           continue;
         }
         await prisma.order.update({
