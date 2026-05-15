@@ -85,6 +85,7 @@ export default function ProfileEditScreen() {
         render={({ field, fieldState }) => (
           <TextField
             label={profileCopy.profile.bioLabel}
+            hint={profileCopy.profile.bioHint}
             value={field.value ?? ''}
             onChangeText={field.onChange}
             multiline
