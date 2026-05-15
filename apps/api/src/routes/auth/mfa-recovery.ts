@@ -33,21 +33,25 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid recovery code' });
     }
 
-    await prisma.$transaction([
-      prisma.mfaRecoveryCode.update({
-        where: { id: matched.id },
-        data: { usedAt: new Date() },
-      }),
-      prisma.adminAudit.create({
-        data: {
-          actorId: payload.sub,
-          action: 'mfa.recovery_code_used',
-          entityType: 'user',
-          entityId: payload.sub,
-          metadata: { recoveryCodeId: matched.id },
-        },
-      }),
-    ]);
+    const claimed = await prisma.mfaRecoveryCode.updateMany({
+      where: { id: matched.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return reply
+        .status(401)
+        .send({ error: 'Unauthorized', message: 'recovery code already used' });
+    }
+
+    await prisma.adminAudit.create({
+      data: {
+        actorId: payload.sub,
+        action: 'mfa.recovery_code_used',
+        entityType: 'user',
+        entityId: payload.sub,
+        metadata: { recoveryCodeId: matched.id },
+      },
+    });
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },

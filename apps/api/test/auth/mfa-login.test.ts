@@ -217,5 +217,45 @@ describe('MFA login flow', () => {
       });
       expect(res.statusCode).toBe(401);
     });
+
+    it('concurrent redemption of same code: only one succeeds', async () => {
+      const { user, password } = await createUser({
+        email: 'mfa@jdm.test',
+        verified: true,
+        role: 'admin',
+      });
+      const { codes } = await enrollMfa(user.id, user.email);
+      const targetCode = codes[0];
+
+      const login1 = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: user.email, password },
+      });
+      const { mfaToken: token1 } = mfaChallengeResponseSchema.parse(login1.json());
+
+      const login2 = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: user.email, password },
+      });
+      const { mfaToken: token2 } = mfaChallengeResponseSchema.parse(login2.json());
+
+      const [res1, res2] = await Promise.all([
+        app.inject({
+          method: 'POST',
+          url: '/auth/mfa/recovery',
+          payload: { mfaToken: token1, code: targetCode },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/auth/mfa/recovery',
+          payload: { mfaToken: token2, code: targetCode },
+        }),
+      ]);
+
+      const statuses = [res1.statusCode, res2.statusCode].sort();
+      expect(statuses).toEqual([200, 401]);
+    });
   });
 });

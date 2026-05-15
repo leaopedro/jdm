@@ -46,7 +46,7 @@ model User {
   avatarObjectKey String? @db.VarChar(300)
 
   // push preferences (F10)
-  pushPrefs Json @default("{\"transactional\":true,\"marketing\":false}")
+  pushPrefs Json @default("{\"transactional\":true,\"marketing\":true}")
 
   authProviders       AuthProvider[]
   refreshTokens       RefreshToken[]
@@ -68,7 +68,6 @@ model User {
   reportsResolved     Report[]             @relation("ReportResolver")
   feedBans            FeedBan[]            @relation("FeedBanUser")
   feedBansIssued      FeedBan[]            @relation("FeedBanActor")
-  consents            Consent[]
   mfaSecret           MfaSecret?
   mfaRecoveryCodes    MfaRecoveryCode[]
 
@@ -1077,37 +1076,3 @@ model Report {
   @@index([status, createdAt(sort: Desc)])
 }
 
-enum ConsentPurpose {
-  privacy_notice
-  cookies_analytics
-  cookies_marketing
-  push_marketing
-  email_marketing
-  newsletter
-}
-
-enum ConsentChannel {
-  web_admin
-  web_public
-  mobile
-  email
-}
-
-model Consent {
-  id          String         @id @default(cuid())
-  userId      String?
-  purpose     ConsentPurpose
-  version     String         @db.VarChar(100)
-  givenAt     DateTime       @default(now())
-  withdrawnAt DateTime?
-  channel     ConsentChannel
-  ipAddress   String?        @db.VarChar(45)
-  userAgent   String?        @db.VarChar(500)
-  evidence    Json
-
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@unique([userId, purpose, version])
-  @@index([userId, purpose])
-  @@index([purpose, version])
-}
