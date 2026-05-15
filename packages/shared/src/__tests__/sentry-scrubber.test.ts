@@ -1,0 +1,142 @@
+import { describe, expect, it } from 'vitest';
+
+import { hashEmail, scrubSentryEvent, type SentryEvent } from '../sentry-scrubber.js';
+
+describe('scrubSentryEvent', () => {
+  it('strips unsafe request headers and keeps safe ones', () => {
+    const event: SentryEvent = {
+      request: {
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer secret',
+          'x-request-id': 'abc-123',
+          'x-custom': 'nope',
+        },
+      },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.headers).toEqual({
+      'content-type': 'application/json',
+      'x-request-id': 'abc-123',
+    });
+  });
+
+  it('removes cookies from request', () => {
+    const event: SentryEvent = {
+      request: { cookies: { session: 'abc' } },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.cookies).toBeUndefined();
+  });
+
+  it('removes request body (data)', () => {
+    const event: SentryEvent = {
+      request: { data: { password: 'hunter2' } },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.data).toBeUndefined();
+  });
+
+  it('removes query_string from request', () => {
+    const event: SentryEvent = {
+      request: { query_string: 'token=secret&foo=bar' },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.query_string).toBeUndefined();
+  });
+
+  it('hashes user email and preserves other user fields', () => {
+    const event: SentryEvent = {
+      user: { email: 'alice@example.com', id: 'u_42' },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.user!.email).toMatch(/^redacted-[0-9a-f]{8}$/);
+    expect(scrubbed.user!.email).not.toContain('@');
+    expect(scrubbed.user!.id).toBe('u_42');
+  });
+
+  it('produces consistent hash for same email', () => {
+    const a = hashEmail('alice@example.com');
+    const b = hashEmail('alice@example.com');
+
+    expect(a).toBe(b);
+  });
+
+  it('normalizes email case and whitespace before hashing', () => {
+    const a = hashEmail('Alice@Example.COM');
+    const b = hashEmail('  alice@example.com  ');
+
+    expect(a).toBe(b);
+  });
+
+  it('truncates long breadcrumb messages', () => {
+    const longMsg = 'a'.repeat(300);
+    const event: SentryEvent = {
+      breadcrumbs: [{ message: longMsg }],
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+    const msg = scrubbed.breadcrumbs![0].message!;
+
+    expect(msg.length).toBeLessThanOrEqual(215);
+    expect(msg).toContain('…[truncated]');
+  });
+
+  it('keeps short breadcrumb messages intact', () => {
+    const event: SentryEvent = {
+      breadcrumbs: [{ message: 'clicked button' }],
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.breadcrumbs![0].message).toBe('clicked button');
+  });
+
+  it('strips breadcrumb data payloads', () => {
+    const event: SentryEvent = {
+      breadcrumbs: [{ message: 'nav', data: { url: '/secret' } }],
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.breadcrumbs![0].data).toBeUndefined();
+  });
+
+  it('passes through events with no PII fields', () => {
+    const event: SentryEvent = {
+      extra: { build: '1.2.3' },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed).toEqual(event);
+  });
+
+  it('does not mutate the original event', () => {
+    const event: SentryEvent = {
+      request: {
+        headers: { authorization: 'Bearer x' },
+        cookies: { sid: '123' },
+        data: { cpf: '123.456.789-00' },
+        query_string: 'token=abc',
+      },
+      user: { email: 'bob@test.com' },
+      breadcrumbs: [{ message: 'click', data: { target: '#btn' } }],
+    };
+
+    const snapshot = JSON.parse(JSON.stringify(event)) as SentryEvent;
+    scrubSentryEvent(event);
+
+    expect(event).toEqual(snapshot);
+  });
+});
