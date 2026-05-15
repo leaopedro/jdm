@@ -26,7 +26,7 @@ async function main() {
     if (batch.length === 0) break;
 
     for (const row of batch) {
-      if (!row.message.startsWith('v1:')) {
+      if (!row.message.startsWith('enc_v1:')) {
         skipped++;
         continue;
       }

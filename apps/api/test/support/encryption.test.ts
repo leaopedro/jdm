@@ -33,7 +33,7 @@ describe('SupportTicket field encryption', () => {
 
     const dbRow = await prisma.supportTicket.findFirst({ where: { userId: user.id } });
     expect(dbRow!.message).not.toBe(plainMessage);
-    expect(dbRow!.message.startsWith('v1:')).toBe(true);
+    expect(dbRow!.message.startsWith('enc_v1:')).toBe(true);
 
     const decrypted = decryptField(dbRow!.message, env.FIELD_ENCRYPTION_KEY);
     expect(decrypted).toBe(plainMessage);

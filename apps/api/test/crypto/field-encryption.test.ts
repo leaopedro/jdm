@@ -9,7 +9,7 @@ describe('field-encryption', () => {
     const plain = 'Olá, preciso de ajuda com meu ingresso';
     const cipher = encryptField(plain, TEST_KEY);
     expect(cipher).not.toBe(plain);
-    expect(cipher.startsWith('v1:')).toBe(true);
+    expect(cipher.startsWith('enc_v1:')).toBe(true);
     const decrypted = decryptField(cipher, TEST_KEY);
     expect(decrypted).toBe(plain);
   });
@@ -57,6 +57,11 @@ describe('field-encryption', () => {
 
   it('passes through plaintext that is not encrypted', () => {
     const plain = 'just a regular message';
+    expect(decryptField(plain, TEST_KEY)).toBe(plain);
+  });
+
+  it('passes through plaintext starting with v1: (collision safety)', () => {
+    const plain = 'v1:some:legacy:data';
     expect(decryptField(plain, TEST_KEY)).toBe(plain);
   });
 });

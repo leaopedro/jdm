@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
-const CURRENT_VERSION = 'v1';
+const CURRENT_VERSION = 'enc_v1';
 
 const keyBuffer = (hexKey: string): Buffer => {
   const buf = Buffer.from(hexKey, 'hex');
@@ -23,7 +23,7 @@ export const encryptField = (plaintext: string, hexKey: string): string => {
 export const decryptField = (ciphertext: string | null, hexKey: string): string | null => {
   if (ciphertext === null || ciphertext === undefined) return null;
   const parts = ciphertext.split(':');
-  if (parts.length !== 4 || parts[0] !== 'v1') {
+  if (parts.length !== 4 || parts[0] !== 'enc_v1') {
     return ciphertext;
   }
   const ivHex = parts[1]!;
