@@ -35,9 +35,10 @@ model User {
   name            String
   role            UserRole   @default(user)
   status          UserStatus @default(active)
-  emailVerifiedAt DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  emailVerifiedAt    DateTime?
+  tokenInvalidatedAt DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   // profile (F2)
   bio             String? @db.VarChar(500)
@@ -52,6 +53,7 @@ model User {
   refreshTokens       RefreshToken[]
   verificationTokens  VerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  emailChangeTokens   EmailChangeToken[]
   cars                Car[]
   orders              Order[]
   tickets             Ticket[]
@@ -145,6 +147,20 @@ model MfaRecoveryCode {
   codeHash  String
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailChangeToken {
+  id           String    @id @default(cuid())
+  userId       String
+  pendingEmail String
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

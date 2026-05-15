@@ -23,12 +23,15 @@ export const createAccessToken = (payload: AccessPayload, env: TokenEnv): string
   });
 };
 
-export const verifyAccessToken = (token: string, env: TokenEnv): AccessPayload => {
+export type VerifiedAccessPayload = AccessPayload & { iat: number };
+
+export const verifyAccessToken = (token: string, env: TokenEnv): VerifiedAccessPayload => {
   const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, { algorithms: ['HS256'] });
   if (typeof decoded === 'string') throw new Error('unexpected jwt payload');
-  const { sub, role } = decoded as jwt.JwtPayload & AccessPayload;
+  const { sub, role, iat } = decoded as jwt.JwtPayload & AccessPayload;
   if (typeof sub !== 'string' || typeof role !== 'string') throw new Error('invalid jwt payload');
-  return { sub, role };
+  if (typeof iat !== 'number') throw new Error('missing iat in jwt');
+  return { sub, role, iat };
 };
 
 export const hashRefreshToken = (token: string, env: TokenEnv): string => {

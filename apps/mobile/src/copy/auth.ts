@@ -91,6 +91,11 @@ export const authCopy = {
     loading: 'Confirmando seu e-mail...',
     done: 'E-mail confirmado. Redirecionando...',
   },
+  verifyEmailChange: {
+    loading: 'Confirmando alteração de e-mail...',
+    done: 'E-mail atualizado. Faça login novamente.',
+    error: 'Link inválido ou expirado.',
+  },
   verifyPending: {
     title: 'Confirme seu e-mail',
     body: (email: string) => `Enviamos um link para ${email}. Toque no link para ativar sua conta.`,

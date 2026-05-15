@@ -22,6 +22,7 @@ import { feedRoutes } from './routes/feed.js';
 import { healthRoutes } from './routes/health.js';
 import { meConsentRoutes } from './routes/me-consents.js';
 import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
+import { meEmailChangeRoutes } from './routes/me-email-change.js';
 import { meNotificationsRoutes } from './routes/me-notifications.js';
 import { meOrdersRoutes } from './routes/me-orders.js';
 import { meShippingAddressRoutes } from './routes/me-shipping-addresses.js';
@@ -99,6 +100,7 @@ export const buildApp = async (
   await app.register(healthRoutes);
   await app.register(authPlugin);
   await app.register(meRoutes);
+  await app.register(meEmailChangeRoutes);
   await app.register(meTicketsRoutes);
   await app.register(meOrdersRoutes);
   await app.register(meDeviceTokenRoutes);

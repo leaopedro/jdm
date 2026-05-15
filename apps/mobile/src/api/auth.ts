@@ -53,6 +53,9 @@ export const appleSignInRequest = (
     body: { idToken, fullName },
   });
 
+export const verifyEmailChangeRequest = (token: string): Promise<MessageResponse> =>
+  request('/me/email-change/verify', messageResponseSchema, { method: 'POST', body: { token } });
+
 export const meRequest = (token: string): Promise<PublicUser> =>
   request('/me', publicUserSchema, { token });
 
