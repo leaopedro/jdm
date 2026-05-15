@@ -1,6 +1,6 @@
 import { prisma } from '@jdm/db';
 
-import { decryptField } from '../src/services/crypto/field-encryption.js';
+import { decryptField, isEncrypted } from '../src/services/crypto/field-encryption.js';
 
 const FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY;
 if (!FIELD_ENCRYPTION_KEY || FIELD_ENCRYPTION_KEY.length !== 64) {
@@ -26,7 +26,7 @@ async function main() {
     if (batch.length === 0) break;
 
     for (const row of batch) {
-      if (!row.message.startsWith('enc_v1:')) {
+      if (!isEncrypted(row.message)) {
         skipped++;
         continue;
       }
