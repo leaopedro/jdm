@@ -301,15 +301,16 @@ current number.
 | ---------- | ------------ | -------------------- | ------------------------ | ------------------------------------------------ |
 | 2026-05-01 | Atlas        | Railway prod (empty) | Docker postgres:18 local | ✓ 10/10 migrations, all tables, row counts match |
 
-**Quarterly rehearsal schedule:** run one restore rehearsal during the first
-business week of February, May, August, and November using a non-prod
+**Quarterly rehearsal schedule:** complete one restore rehearsal during the
+first business week of February, May, August, and November using a non-prod
 Postgres.
 
 - **Owner:** platform/infra duty owner for the quarter. Until a dedicated
   infra owner exists, Atlas owns scheduling, execution, and evidence capture.
-- **Paperclip reminder:** schedule the recurring run issue for 09:00
-  `America/Sao_Paulo` on the 3rd day of February, May, August, and November,
-  then complete the rehearsal during that same business week.
+- **Paperclip reminder:** the recurring run issue fires at 09:00
+  `America/Sao_Paulo` on the 3rd calendar day of February, May, August, and
+  November. If that day lands on a weekend, move execution to the next
+  business day inside the same first-business-week window.
 - **First scheduled window:** 2026-08-03 through 2026-08-07
   (`America/Sao_Paulo`).
 - **Evidence artifact:** attach the restore run log, row-count query output,

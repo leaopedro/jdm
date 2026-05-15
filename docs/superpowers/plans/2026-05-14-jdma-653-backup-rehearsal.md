@@ -99,7 +99,7 @@ Add the failure path:
 
 Create one quarterly routine assigned to Atlas with a São Paulo timezone schedule. If cron constraints do not support the documented "first business week" window cleanly, keep the routine description aligned to that window and note the exact trigger used in the issue comment.
 
-> note: Used routine `f84cf98e-00b2-47f7-bbb0-4961ad253c29` with trigger `3f47a7fd-3b5f-4a71-b796-56e50b6d767d` on `0 9 3 2,5,8,11 *` in `America/Sao_Paulo` so the reminder lands inside the first business week without implying weekend execution.
+> note: CTO review found that `0 9 3 2,5,8,11 *` can fall on a weekend. The final runbook language and routine metadata now describe the exact 3rd-calendar-day trigger plus the required manual shift to the next business day when that happens.
 
 - [x] **Step 2: Verify the doc diff is minimal and complete**
 
