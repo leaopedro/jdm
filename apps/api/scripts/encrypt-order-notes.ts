@@ -67,18 +67,19 @@ async function main() {
         // notes not valid JSON - skip backfill, still encrypt
       }
 
-      // isEncrypted() checks format only (prefix + hex shape). A plaintext value
-      // could match that shape. To be safe, attempt actual decryption: if it
-      // succeeds the row is genuinely encrypted; if it fails it is plaintext
-      // that happens to look like ciphertext and must be encrypted.
       if (isEncrypted(row.notes!)) {
         const probe = decryptField(row.notes, FIELD_ENCRYPTION_KEY!);
         if (probe !== null) {
           skipped++;
           continue;
         }
-        // decryptField returned null => format match but not real ciphertext.
-        // Fall through to encrypt it.
+        // Encrypted shape but decryption failed: key mismatch or corruption.
+        // Fail closed — do NOT re-encrypt, as that would double-encrypt.
+        console.error(
+          `Row ${row.id}: encrypted format detected but decryption failed (key mismatch or corruption)`,
+        );
+        failed.push(row.id);
+        continue;
       }
       try {
         await prisma.order.update({

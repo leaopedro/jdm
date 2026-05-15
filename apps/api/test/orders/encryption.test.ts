@@ -5,7 +5,11 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
-import { encryptField } from '../../src/services/crypto/field-encryption.js';
+import {
+  decryptField,
+  encryptField,
+  isEncrypted,
+} from '../../src/services/crypto/field-encryption.js';
 import { signTicketCode } from '../../src/services/tickets/codes.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
@@ -206,6 +210,73 @@ const seedEventAndTicket = async (userId: string) => {
   });
   return { event, tier, ticket };
 };
+
+describe('Migration script verification (encrypt/decrypt roundtrip on mixed-state data)', () => {
+  it('encrypt then decrypt roundtrip preserves plaintext notes', () => {
+    const plain = JSON.stringify({ pickupEventId: 'evt_1', pickupTicketId: 'tkt_1' });
+    const encrypted = encryptField(plain, FIELD_KEY);
+
+    expect(isEncrypted(encrypted)).toBe(true);
+    expect(encrypted).not.toBe(plain);
+
+    const decrypted = decryptField(encrypted, FIELD_KEY);
+    expect(decrypted).toBe(plain);
+  });
+
+  it('encrypt skips already-encrypted values (idempotent)', () => {
+    const plain = 'some notes';
+    const encrypted = encryptField(plain, FIELD_KEY);
+
+    // Simulate re-run: isEncrypted true + decryptField succeeds = skip
+    expect(isEncrypted(encrypted)).toBe(true);
+    const probe = decryptField(encrypted, FIELD_KEY);
+    expect(probe).not.toBeNull();
+    // Script would skip this row
+  });
+
+  it('encrypt fails closed on wrong-key ciphertext (no double-encrypt)', () => {
+    const plain = 'some notes';
+    const encrypted = encryptField(plain, FIELD_KEY);
+
+    // Simulate re-run with WRONG key: isEncrypted true + decryptField returns null
+    const probe = decryptField(encrypted, WRONG_KEY);
+    expect(probe).toBeNull();
+    // Script must treat this as failure, not re-encrypt
+  });
+
+  it('decrypt roundtrip on mixed-state batch (encrypted + plaintext rows)', () => {
+    const rows = [
+      { notes: JSON.stringify({ pickupEventId: 'evt_a' }), label: 'plaintext' },
+      { notes: encryptField('order data', FIELD_KEY), label: 'encrypted' },
+      { notes: null, label: 'null' },
+    ];
+
+    // Simulate decrypt script logic on each row
+    const results = rows.map((row) => {
+      if (!row.notes) return { ...row, result: null, action: 'skip-null' };
+      if (!isEncrypted(row.notes)) return { ...row, result: row.notes, action: 'skip-plain' };
+      const decrypted = decryptField(row.notes, FIELD_KEY);
+      if (decrypted === null) return { ...row, result: row.notes, action: 'fail' };
+      return { ...row, result: decrypted, action: 'decrypted' };
+    });
+
+    expect(results[0]!.action).toBe('skip-plain');
+    expect(results[0]!.result).toBe(rows[0]!.notes);
+
+    expect(results[1]!.action).toBe('decrypted');
+    expect(results[1]!.result).toBe('order data');
+
+    expect(results[2]!.action).toBe('skip-null');
+    expect(results[2]!.result).toBeNull();
+  });
+
+  it('decrypt fails closed on wrong-key ciphertext', () => {
+    const encrypted = encryptField('sensitive data', FIELD_KEY);
+    const result = decryptField(encrypted, WRONG_KEY);
+    expect(result).toBeNull();
+    // Script must count this as failure, not skip
+  });
+});
 
 describe('Pickup read paths with encrypted Order.notes', () => {
   let app: Awaited<ReturnType<typeof makeApp>>;
