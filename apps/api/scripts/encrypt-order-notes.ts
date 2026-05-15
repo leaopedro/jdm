@@ -43,7 +43,7 @@ async function main() {
       // queries no longer need to parse notes.
       try {
         const plaintext = isEncrypted(row.notes!)
-          ? decryptField(row.notes, FIELD_ENCRYPTION_KEY!)
+          ? (decryptField(row.notes, FIELD_ENCRYPTION_KEY!) ?? row.notes!)
           : row.notes!;
 
         if (plaintext) {
