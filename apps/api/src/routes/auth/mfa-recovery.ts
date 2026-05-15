@@ -1,0 +1,77 @@
+import { prisma } from '@jdm/db';
+import { mfaRecoverySchema } from '@jdm/shared';
+import { authResponseSchema } from '@jdm/shared/auth';
+import type { FastifyPluginAsync } from 'fastify';
+
+import { verifyRecoveryCode } from '../../services/auth/mfa.js';
+import {
+  createAccessToken,
+  issueRefreshToken,
+  verifyMfaToken,
+} from '../../services/auth/tokens.js';
+
+// eslint-disable-next-line @typescript-eslint/require-await
+export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
+  app.post('/mfa/recovery', async (request, reply) => {
+    const input = mfaRecoverySchema.parse(request.body);
+
+    let payload: { sub: string };
+    try {
+      payload = verifyMfaToken(input.mfaToken, app.env);
+    } catch {
+      return reply
+        .status(401)
+        .send({ error: 'Unauthorized', message: 'invalid or expired mfa token' });
+    }
+
+    const codes = await prisma.mfaRecoveryCode.findMany({
+      where: { userId: payload.sub, usedAt: null },
+    });
+
+    const matched = codes.find((c) => verifyRecoveryCode(input.code, c.codeHash));
+    if (!matched) {
+      return reply.status(401).send({ error: 'Unauthorized', message: 'invalid recovery code' });
+    }
+
+    await prisma.$transaction([
+      prisma.mfaRecoveryCode.update({
+        where: { id: matched.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.adminAudit.create({
+        data: {
+          actorId: payload.sub,
+          action: 'mfa.recovery_code_used',
+          entityType: 'user',
+          entityId: payload.sub,
+          metadata: { recoveryCodeId: matched.id },
+        },
+      }),
+    ]);
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: payload.sub },
+    });
+
+    const access = createAccessToken({ sub: user.id, role: user.role }, app.env);
+    const refresh = issueRefreshToken(app.env);
+    await prisma.refreshToken.create({
+      data: { userId: user.id, tokenHash: refresh.hash, expiresAt: refresh.expiresAt },
+    });
+
+    return reply.status(200).send(
+      authResponseSchema.parse({
+        accessToken: access,
+        refreshToken: refresh.token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+          createdAt: user.createdAt.toISOString(),
+        },
+      }),
+    );
+  });
+};

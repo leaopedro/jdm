@@ -1,9 +1,18 @@
 import { prisma } from '@jdm/db';
-import { ACCOUNT_DISABLED_ERROR, authResponseSchema, loginSchema } from '@jdm/shared/auth';
+import {
+  ACCOUNT_DISABLED_ERROR,
+  authResponseSchema,
+  loginSchema,
+  mfaChallengeResponseSchema,
+} from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { verifyPassword } from '../../services/auth/password.js';
-import { createAccessToken, issueRefreshToken } from '../../services/auth/tokens.js';
+import {
+  createAccessToken,
+  createMfaToken,
+  issueRefreshToken,
+} from '../../services/auth/tokens.js';
 
 // eslint-disable-next-line @typescript-eslint/require-await
 export const loginRoute: FastifyPluginAsync = async (app) => {
@@ -30,6 +39,17 @@ export const loginRoute: FastifyPluginAsync = async (app) => {
       return reply
         .status(403)
         .send({ error: 'EmailNotVerified', message: 'verify your email first' });
+    }
+
+    const mfaSecret = await prisma.mfaSecret.findUnique({
+      where: { userId: user.id },
+      select: { verifiedAt: true },
+    });
+    if (mfaSecret?.verifiedAt) {
+      const mfaToken = createMfaToken(user.id, app.env);
+      return reply
+        .status(200)
+        .send(mfaChallengeResponseSchema.parse({ mfaRequired: true, mfaToken }));
     }
 
     const access = createAccessToken({ sub: user.id, role: user.role }, app.env);

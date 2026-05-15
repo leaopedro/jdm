@@ -4,6 +4,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { forgotPasswordRoute } from './forgot-password.js';
 import { loginRoute } from './login.js';
 import { logoutRoute } from './logout.js';
+import { mfaRecoveryRoute } from './mfa-recovery.js';
+import { mfaVerifyRoute } from './mfa-verify.js';
 import { refreshRoute } from './refresh.js';
 import { resendVerifyRoute } from './resend-verify.js';
 import { resetPasswordRoute } from './reset-password.js';
@@ -30,5 +32,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     await scoped.register(logoutRoute);
     await scoped.register(forgotPasswordRoute);
     await scoped.register(resetPasswordRoute);
+    await scoped.register(mfaVerifyRoute);
+    await scoped.register(mfaRecoveryRoute);
   });
 };
