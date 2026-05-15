@@ -111,6 +111,61 @@ describe('Admin MFA routes', () => {
     });
   });
 
+  describe('POST /admin/mfa/recovery-codes', () => {
+    const enrollAndVerify = async (user: { id: string }, role: 'admin' | 'organizer' | 'staff') => {
+      await app.inject({
+        method: 'POST',
+        url: '/admin/mfa/setup',
+        headers: { authorization: bearer(env, user.id, role) },
+      });
+      const code = await makeTotpCode(user.id);
+      await app.inject({
+        method: 'POST',
+        url: '/admin/mfa/verify-setup',
+        headers: { authorization: bearer(env, user.id, role) },
+        payload: { code },
+      });
+    };
+
+    it('regenerates recovery codes with valid TOTP proof', async () => {
+      const { user } = await createUser({ email: 'admin@jdm.test', verified: true, role: 'admin' });
+      await enrollAndVerify(user, 'admin');
+
+      const oldCodes = await prisma.mfaRecoveryCode.findMany({ where: { userId: user.id } });
+      expect(oldCodes).toHaveLength(10);
+
+      const code = await makeTotpCode(user.id);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/admin/mfa/recovery-codes',
+        headers: { authorization: bearer(env, user.id, 'admin') },
+        payload: { code },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = mfaSetupResponseSchema.pick({ recoveryCodes: true }).parse(res.json());
+      expect(body.recoveryCodes).toHaveLength(10);
+
+      const newCodes = await prisma.mfaRecoveryCode.findMany({ where: { userId: user.id } });
+      expect(newCodes).toHaveLength(10);
+      const oldIds = oldCodes.map((c) => c.id).sort();
+      const newIds = newCodes.map((c) => c.id).sort();
+      expect(newIds).not.toEqual(oldIds);
+    });
+
+    it('rejects without valid TOTP code', async () => {
+      const { user } = await createUser({ email: 'admin@jdm.test', verified: true, role: 'admin' });
+      await enrollAndVerify(user, 'admin');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/admin/mfa/recovery-codes',
+        headers: { authorization: bearer(env, user.id, 'admin') },
+        payload: { code: '000000' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
   describe('DELETE /admin/mfa', () => {
     it('disables MFA with valid TOTP code', async () => {
       const { user } = await createUser({ email: 'admin@jdm.test', verified: true, role: 'admin' });
