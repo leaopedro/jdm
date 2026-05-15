@@ -35,7 +35,7 @@ describe('/me/push-preferences', () => {
     });
   });
 
-  it('updates only the marketing preference', async () => {
+  it('updates only the marketing preference and creates a consent row', async () => {
     const { user } = await createUser({ verified: true });
     const env = loadEnv();
 
@@ -61,6 +61,41 @@ describe('/me/push-preferences', () => {
       transactional: true,
       marketing: true,
     });
+
+    const consent = await prisma.consent.findFirst({
+      where: { userId: user.id, purpose: 'push_marketing', withdrawnAt: null },
+    });
+    expect(consent).not.toBeNull();
+  });
+
+  it('withdraws consent when marketing is set to false', async () => {
+    const { user } = await createUser({ verified: true });
+    const env = loadEnv();
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/me/push-preferences',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { marketing: true },
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/me/push-preferences',
+      headers: { authorization: bearer(env, user.id) },
+      payload: { marketing: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(pushPrefsSchema.parse(res.json())).toEqual({
+      transactional: true,
+      marketing: false,
+    });
+
+    const consent = await prisma.consent.findFirst({
+      where: { userId: user.id, purpose: 'push_marketing', withdrawnAt: null },
+    });
+    expect(consent).toBeNull();
   });
 
   it('preserves transactional when older rows omit it', async () => {
