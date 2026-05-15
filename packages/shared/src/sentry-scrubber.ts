@@ -7,6 +7,7 @@
 
 export interface SentryEvent {
   request?: {
+    url?: string;
     headers?: Record<string, string>;
     cookies?: Record<string, string> | string;
     data?: unknown;
@@ -110,6 +111,11 @@ export function scrubSentryEvent<T>(event: T): T {
     delete e.request.cookies;
     delete e.request.data;
     delete e.request.query_string;
+
+    if (e.request.url) {
+      const qIdx = e.request.url.indexOf('?');
+      if (qIdx !== -1) e.request.url = e.request.url.slice(0, qIdx);
+    }
 
     if (e.request.headers) {
       e.request.headers = scrubHeaders(e.request.headers);

@@ -86,7 +86,9 @@ describe('scrubSentryEvent', () => {
     };
 
     const scrubbed = scrubSentryEvent(event);
-    const msg = scrubbed.breadcrumbs![0].message!;
+    const bc = scrubbed.breadcrumbs;
+    expect(bc).toHaveLength(1);
+    const msg = bc![0]!.message!;
 
     expect(msg.length).toBeLessThanOrEqual(215);
     expect(msg).toContain('…[truncated]');
@@ -99,7 +101,8 @@ describe('scrubSentryEvent', () => {
 
     const scrubbed = scrubSentryEvent(event);
 
-    expect(scrubbed.breadcrumbs![0].message).toBe('clicked button');
+    expect(scrubbed.breadcrumbs).toHaveLength(1);
+    expect(scrubbed.breadcrumbs![0]!.message).toBe('clicked button');
   });
 
   it('strips breadcrumb data payloads', () => {
@@ -109,7 +112,28 @@ describe('scrubSentryEvent', () => {
 
     const scrubbed = scrubSentryEvent(event);
 
-    expect(scrubbed.breadcrumbs![0].data).toBeUndefined();
+    expect(scrubbed.breadcrumbs).toHaveLength(1);
+    expect(scrubbed.breadcrumbs![0]!.data).toBeUndefined();
+  });
+
+  it('strips query params from request URL', () => {
+    const event: SentryEvent = {
+      request: { url: 'https://api.jdm.app/events?token=secret&email=a@b.com' },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.url).toBe('https://api.jdm.app/events');
+  });
+
+  it('preserves request URL without query params', () => {
+    const event: SentryEvent = {
+      request: { url: 'https://api.jdm.app/events/123' },
+    };
+
+    const scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.request!.url).toBe('https://api.jdm.app/events/123');
   });
 
   it('passes through events with no PII fields', () => {
