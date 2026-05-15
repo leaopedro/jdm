@@ -25,6 +25,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '~/auth/context';
 import { buildLoginHref, isPublicPath, sanitizeNext } from '~/auth/redirect-intent';
+import { MarketingConsentModal } from '~/consent/MarketingConsentModal';
+import { useMarketingConsentGate } from '~/consent/useMarketingConsentGate';
 import { captureException, initSentry } from '~/lib/sentry';
 import { ToastHost } from '~/lib/toast';
 import { usePushOpenHandler } from '~/notifications/use-push-open-handler';
@@ -55,6 +57,8 @@ const Gate = () => {
   const params = useGlobalSearchParams<{ next?: string }>();
   const next = sanitizeNext(params.next);
   usePushOpenHandler();
+  const isAuthenticated = auth.status === 'authenticated' && !!auth.user?.emailVerifiedAt;
+  const consentGate = useMarketingConsentGate(isAuthenticated);
   const inAuth =
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
@@ -87,7 +91,17 @@ const Gate = () => {
   ) {
     return <Redirect href={(next ?? '/welcome') as never} />;
   }
-  return <Slot />;
+  return (
+    <>
+      <Slot />
+      <MarketingConsentModal
+        visible={consentGate.visible}
+        submitting={consentGate.submitting}
+        onAccept={() => void consentGate.handleAccept()}
+        onDecline={() => void consentGate.handleDecline()}
+      />
+    </>
+  );
 };
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {

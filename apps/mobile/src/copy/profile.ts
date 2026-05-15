@@ -31,6 +31,13 @@ export const profileCopy = {
     supportHint: 'Abra um chamado ou acompanhe seus tickets',
     logoutHint: 'Encerrar sessão neste aparelho',
   },
+  consent: {
+    title: 'Comunicações de marketing',
+    body: 'A JDM Experience gostaria de enviar notificações sobre eventos, promoções e novidades. Você pode mudar isso a qualquer momento em Configurações → Notificações.',
+    acceptLabel: 'Aceitar',
+    declineLabel: 'Agora não',
+    channel: 'Push marketing',
+  },
   pushPreferences: {
     title: 'Notificações de marketing',
     description: 'Receba campanhas, novidades e avisos promocionais da JDM Experience no app.',
