@@ -28,6 +28,9 @@ const PUBLIC_FIXTURE = {
   capacity: 200,
   maxTicketsPerUser: 4,
   hasCarTier: false,
+  feedEnabled: false,
+  feedAccess: 'attendees',
+  postingAccess: 'attendees',
 } as const;
 
 const COMMERCE_FIXTURE = {
