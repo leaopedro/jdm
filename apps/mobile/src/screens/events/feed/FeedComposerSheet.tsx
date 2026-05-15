@@ -193,7 +193,9 @@ export function FeedComposerSheet({
             disabled={!canSubmit}
             style={[styles.submitBtn, !canSubmit && styles.submitDisabled]}
             accessibilityRole="button"
-            accessibilityLabel={submitting ? feedCopy.composer.submitting : feedCopy.composer.submit}
+            accessibilityLabel={
+              submitting ? feedCopy.composer.submitting : feedCopy.composer.submit
+            }
             accessibilityState={{ disabled: !canSubmit }}
           >
             <Text style={styles.submitText}>

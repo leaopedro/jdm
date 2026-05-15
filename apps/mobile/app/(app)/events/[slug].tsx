@@ -4,6 +4,7 @@ import type {
   EventDetailPublic,
   TicketTier,
 } from '@jdm/shared/events';
+import type { TicketSource } from '@jdm/shared/tickets';
 import { Button } from '@jdm/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Ticket as TicketIcon } from 'lucide-react-native';
@@ -54,7 +55,7 @@ export default function EventDetailScreen() {
   const [commerceEvent, setCommerceEvent] = useState<EventDetailCommerce | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
-  const [hasTicket, setHasTicket] = useState(false);
+  const [ticketSource, setTicketSource] = useState<TicketSource | null>(null);
   const [confirmedCars, setConfirmedCars] = useState<ConfirmedCar[]>([]);
   const [confirmedCarsLoading, setConfirmedCarsLoading] = useState(false);
   const [selectedCar, setSelectedCar] = useState<ConfirmedCar | null>(null);
@@ -104,6 +105,8 @@ export default function EventDetailScreen() {
 
   const event: EventDetailPublic | EventDetailCommerce | null = commerceEvent ?? publicEvent;
 
+  const hasTicket = ticketSource !== null;
+
   // Prefer commerce tiers (authed); fall back to the public hasCarTier flag for anonymous users.
   const hasCarTier =
     commerceEvent?.tiers.some((t) => t.requiresCar) ?? publicEvent?.hasCarTier ?? false;
@@ -129,16 +132,16 @@ export default function EventDetailScreen() {
 
   useEffect(() => {
     if (!event || isAnon || authStatus === 'loading') {
-      setHasTicket(false);
+      setTicketSource(null);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
         const ticket = await getMyTicketForEvent(event.id);
-        if (!cancelled) setHasTicket(ticket !== null);
+        if (!cancelled) setTicketSource(ticket?.source ?? null);
       } catch {
-        if (!cancelled) setHasTicket(false);
+        if (!cancelled) setTicketSource(null);
       }
     })();
     return () => {
@@ -247,7 +250,7 @@ export default function EventDetailScreen() {
             maxPostsPerUser: null,
             maxPhotosPerUser: 5,
           }}
-          hasTicket={hasTicket}
+          ticketSource={ticketSource}
         />
       </View>
     );

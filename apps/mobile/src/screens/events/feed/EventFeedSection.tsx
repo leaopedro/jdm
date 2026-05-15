@@ -1,5 +1,6 @@
 import type { Car } from '@jdm/shared/cars';
 import type { FeedListResponse, FeedPostResponse, FeedSettings } from '@jdm/shared/feed';
+import type { TicketSource } from '@jdm/shared/tickets';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -37,10 +38,10 @@ type Props = {
   eventSlug: string;
   eventId: string;
   feedSettings: FeedSettings;
-  hasTicket: boolean;
+  ticketSource: TicketSource | null;
 };
 
-export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }: Props) {
+export function EventFeedSection({ eventSlug, eventId, feedSettings, ticketSource }: Props) {
   const { status: authStatus } = useAuth();
   const router = useRouter();
   const isAuthed = authStatus === 'authenticated';
@@ -62,13 +63,16 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, hasTicket }
 
   const myCarId = myCars[0]?.id ?? null;
 
+  const hasTicket = ticketSource !== null;
+  const isMember = ticketSource === 'premium_grant';
+
   const canView =
     feedSettings.feedAccess === 'public' ||
     (feedSettings.feedAccess === 'attendees' && hasTicket) ||
-    (feedSettings.feedAccess === 'members_only' && hasTicket);
+    (feedSettings.feedAccess === 'members_only' && isMember);
   const canPost =
     (feedSettings.postingAccess === 'attendees' && hasTicket) ||
-    (feedSettings.postingAccess === 'members_only' && hasTicket);
+    (feedSettings.postingAccess === 'members_only' && isMember);
 
   const loadPage = useCallback(
     async (p: number, replace: boolean) => {

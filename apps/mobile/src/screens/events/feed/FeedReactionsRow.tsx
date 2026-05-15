@@ -35,9 +35,7 @@ export function FeedReactionsRow({ reactions, myKind, loading, onToggle }: Props
           color={likeActive ? theme.colors.accent : theme.colors.muted}
         />
         {reactions.likes > 0 ? (
-          <Text style={[styles.count, likeActive && styles.countActive]}>
-            {reactions.likes}
-          </Text>
+          <Text style={[styles.count, likeActive && styles.countActive]}>{reactions.likes}</Text>
         ) : null}
       </Pressable>
     </View>

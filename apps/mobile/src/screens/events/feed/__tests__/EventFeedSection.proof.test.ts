@@ -1,18 +1,24 @@
 import type { FeedPostResponse, FeedSettings } from '@jdm/shared/feed';
+import type { TicketSource } from '@jdm/shared/tickets';
 import { describe, expect, it } from 'vitest';
 
 // ── Access gate logic ─────────────────────────────────────────────────────────
 // Mirrors EventFeedSection canView / canPost derivation exactly.
+// members_only requires premium_grant source — mirrors API access.ts hasMemberTicket.
 
-const resolveAccess = (feedSettings: FeedSettings, hasTicket: boolean) => ({
-  canView:
-    feedSettings.feedAccess === 'public' ||
-    (feedSettings.feedAccess === 'attendees' && hasTicket) ||
-    (feedSettings.feedAccess === 'members_only' && hasTicket),
-  canPost:
-    (feedSettings.postingAccess === 'attendees' && hasTicket) ||
-    (feedSettings.postingAccess === 'members_only' && hasTicket),
-});
+const resolveAccess = (feedSettings: FeedSettings, ticketSource: TicketSource | null) => {
+  const hasTicket = ticketSource !== null;
+  const isMember = ticketSource === 'premium_grant';
+  return {
+    canView:
+      feedSettings.feedAccess === 'public' ||
+      (feedSettings.feedAccess === 'attendees' && hasTicket) ||
+      (feedSettings.feedAccess === 'members_only' && isMember),
+    canPost:
+      (feedSettings.postingAccess === 'attendees' && hasTicket) ||
+      (feedSettings.postingAccess === 'members_only' && isMember),
+  };
+};
 
 const BASE_SETTINGS: FeedSettings = {
   feedEnabled: true,
@@ -24,52 +30,82 @@ const BASE_SETTINGS: FeedSettings = {
 
 describe('EventFeedSection — access gates', () => {
   it('public feed: canView=true regardless of ticket', () => {
-    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'public' }, false);
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'public' }, null);
     expect(canView).toBe(true);
   });
 
   it('attendees feed, no ticket: canView=false', () => {
-    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'attendees' }, false);
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'attendees' }, null);
     expect(canView).toBe(false);
   });
 
-  it('attendees feed, has ticket: canView=true', () => {
-    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'attendees' }, true);
+  it('attendees feed, purchase ticket: canView=true', () => {
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'attendees' }, 'purchase');
+    expect(canView).toBe(true);
+  });
+
+  it('attendees feed, premium_grant ticket: canView=true', () => {
+    const { canView } = resolveAccess(
+      { ...BASE_SETTINGS, feedAccess: 'attendees' },
+      'premium_grant',
+    );
     expect(canView).toBe(true);
   });
 
   it('attendees posting, no ticket: canPost=false', () => {
-    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'attendees' }, false);
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'attendees' }, null);
     expect(canPost).toBe(false);
   });
 
-  it('attendees posting, has ticket: canPost=true', () => {
-    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'attendees' }, true);
+  it('attendees posting, purchase ticket: canPost=true', () => {
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'attendees' }, 'purchase');
     expect(canPost).toBe(true);
   });
 
-  it('organizers_only posting, has ticket: canPost=false', () => {
-    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'organizers_only' }, true);
+  it('organizers_only posting, purchase ticket: canPost=false', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'organizers_only' },
+      'purchase',
+    );
     expect(canPost).toBe(false);
   });
 
-  it('members_only posting, has ticket: canPost=true', () => {
-    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'members_only' }, true);
+  it('members_only posting, premium_grant ticket: canPost=true', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'members_only' },
+      'premium_grant',
+    );
     expect(canPost).toBe(true);
+  });
+
+  it('members_only posting, purchase ticket: canPost=false (not a member)', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'members_only' },
+      'purchase',
+    );
+    expect(canPost).toBe(false);
   });
 
   it('members_only posting, no ticket: canPost=false', () => {
-    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'members_only' }, false);
+    const { canPost } = resolveAccess({ ...BASE_SETTINGS, postingAccess: 'members_only' }, null);
     expect(canPost).toBe(false);
   });
 
-  it('members_only feed, has ticket: canView=true', () => {
-    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, true);
+  it('members_only feed, premium_grant ticket: canView=true', () => {
+    const { canView } = resolveAccess(
+      { ...BASE_SETTINGS, feedAccess: 'members_only' },
+      'premium_grant',
+    );
     expect(canView).toBe(true);
   });
 
+  it('members_only feed, purchase ticket: canView=false (not a member)', () => {
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, 'purchase');
+    expect(canView).toBe(false);
+  });
+
   it('members_only feed, no ticket: canView=false', () => {
-    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, false);
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, null);
     expect(canView).toBe(false);
   });
 });
@@ -169,7 +205,7 @@ describe('EventFeedSection — event feed settings passthrough', () => {
       maxPostsPerUser: null,
       maxPhotosPerUser: 5,
     };
-    const { canView } = resolveAccess(eventSettings, false);
+    const { canView } = resolveAccess(eventSettings, null);
     expect(canView).toBe(true);
   });
 
@@ -181,11 +217,11 @@ describe('EventFeedSection — event feed settings passthrough', () => {
       maxPostsPerUser: null,
       maxPhotosPerUser: 5,
     };
-    const { canPost } = resolveAccess(eventSettings, false);
+    const { canPost } = resolveAccess(eventSettings, null);
     expect(canPost).toBe(false);
   });
 
-  it('organizers_only posting: canPost=false even with ticket', () => {
+  it('organizers_only posting: canPost=false even with purchase ticket', () => {
     const eventSettings: FeedSettings = {
       feedEnabled: true,
       feedAccess: 'public',
@@ -193,7 +229,7 @@ describe('EventFeedSection — event feed settings passthrough', () => {
       maxPostsPerUser: null,
       maxPhotosPerUser: 5,
     };
-    const { canPost } = resolveAccess(eventSettings, true);
+    const { canPost } = resolveAccess(eventSettings, 'purchase');
     expect(canPost).toBe(false);
   });
 });

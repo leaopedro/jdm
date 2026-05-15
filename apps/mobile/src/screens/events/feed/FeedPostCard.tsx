@@ -91,7 +91,12 @@ export function FeedPostCard({
         onToggle={(kind) => onToggleReaction(post.id, kind)}
       />
 
-      <FeedComments eventId={post.eventId} postId={post.id} commentCount={post.commentCount} myCarId={myCarId} />
+      <FeedComments
+        eventId={post.eventId}
+        postId={post.id}
+        commentCount={post.commentCount}
+        myCarId={myCarId}
+      />
     </View>
   );
 }
