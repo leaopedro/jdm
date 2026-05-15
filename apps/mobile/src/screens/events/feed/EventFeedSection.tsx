@@ -42,7 +42,7 @@ type Props = {
 };
 
 export function EventFeedSection({ eventSlug, eventId, feedSettings, ticketSource }: Props) {
-  const { status: authStatus } = useAuth();
+  const { status: authStatus, user } = useAuth();
   const router = useRouter();
   const isAuthed = authStatus === 'authenticated';
 
@@ -65,12 +65,17 @@ export function EventFeedSection({ eventSlug, eventId, feedSettings, ticketSourc
 
   const hasTicket = ticketSource !== null;
   const isMember = ticketSource === 'premium_grant';
+  const role = user?.role ?? 'user';
+  const isViewStaff = role === 'organizer' || role === 'admin' || role === 'staff';
+  const isPostStaff = role === 'organizer' || role === 'admin';
 
   const canView =
+    isViewStaff ||
     feedSettings.feedAccess === 'public' ||
     (feedSettings.feedAccess === 'attendees' && hasTicket) ||
     (feedSettings.feedAccess === 'members_only' && isMember);
   const canPost =
+    isPostStaff ||
     (feedSettings.postingAccess === 'attendees' && hasTicket) ||
     (feedSettings.postingAccess === 'members_only' && isMember);
 

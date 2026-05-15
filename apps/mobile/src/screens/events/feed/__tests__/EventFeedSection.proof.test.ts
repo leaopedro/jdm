@@ -1,3 +1,4 @@
+import type { UserRoleName } from '@jdm/shared/auth';
 import type { FeedPostResponse, FeedSettings } from '@jdm/shared/feed';
 import type { TicketSource } from '@jdm/shared/tickets';
 import { describe, expect, it } from 'vitest';
@@ -5,16 +6,25 @@ import { describe, expect, it } from 'vitest';
 // ── Access gate logic ─────────────────────────────────────────────────────────
 // Mirrors EventFeedSection canView / canPost derivation exactly.
 // members_only requires premium_grant source — mirrors API access.ts hasMemberTicket.
+// Staff bypass mirrors access.ts: view=(organizer|admin|staff), post=(organizer|admin).
 
-const resolveAccess = (feedSettings: FeedSettings, ticketSource: TicketSource | null) => {
+const resolveAccess = (
+  feedSettings: FeedSettings,
+  ticketSource: TicketSource | null,
+  role: UserRoleName = 'user',
+) => {
   const hasTicket = ticketSource !== null;
   const isMember = ticketSource === 'premium_grant';
+  const isViewStaff = role === 'organizer' || role === 'admin' || role === 'staff';
+  const isPostStaff = role === 'organizer' || role === 'admin';
   return {
     canView:
+      isViewStaff ||
       feedSettings.feedAccess === 'public' ||
       (feedSettings.feedAccess === 'attendees' && hasTicket) ||
       (feedSettings.feedAccess === 'members_only' && isMember),
     canPost:
+      isPostStaff ||
       (feedSettings.postingAccess === 'attendees' && hasTicket) ||
       (feedSettings.postingAccess === 'members_only' && isMember),
   };
@@ -107,6 +117,71 @@ describe('EventFeedSection — access gates', () => {
   it('members_only feed, no ticket: canView=false', () => {
     const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'members_only' }, null);
     expect(canView).toBe(false);
+  });
+});
+
+// ── Role-based staff bypass — mirrors access.ts isStaff rules ────────────────
+// view bypass: organizer | admin | staff
+// post bypass: organizer | admin (staff cannot post)
+
+describe('EventFeedSection — staff/organizer bypass', () => {
+  it('organizer: canView=true on members_only feed without ticket', () => {
+    const { canView } = resolveAccess(
+      { ...BASE_SETTINGS, feedAccess: 'members_only' },
+      null,
+      'organizer',
+    );
+    expect(canView).toBe(true);
+  });
+
+  it('admin: canView=true on members_only feed without ticket', () => {
+    const { canView } = resolveAccess(
+      { ...BASE_SETTINGS, feedAccess: 'members_only' },
+      null,
+      'admin',
+    );
+    expect(canView).toBe(true);
+  });
+
+  it('staff: canView=true on attendees feed without ticket', () => {
+    const { canView } = resolveAccess({ ...BASE_SETTINGS, feedAccess: 'attendees' }, null, 'staff');
+    expect(canView).toBe(true);
+  });
+
+  it('organizer: canPost=true on organizers_only feed', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'organizers_only' },
+      null,
+      'organizer',
+    );
+    expect(canPost).toBe(true);
+  });
+
+  it('admin: canPost=true on members_only posting without ticket', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'members_only' },
+      null,
+      'admin',
+    );
+    expect(canPost).toBe(true);
+  });
+
+  it('staff: canPost=false (staff cannot post per API contract)', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'attendees' },
+      null,
+      'staff',
+    );
+    expect(canPost).toBe(false);
+  });
+
+  it('user role: canPost=false on organizers_only without ticket', () => {
+    const { canPost } = resolveAccess(
+      { ...BASE_SETTINGS, postingAccess: 'organizers_only' },
+      null,
+      'user',
+    );
+    expect(canPost).toBe(false);
   });
 });
 
