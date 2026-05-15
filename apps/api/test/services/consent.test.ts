@@ -59,6 +59,32 @@ describe('consent service', () => {
       expect(count).toBe(1);
     });
 
+    it('syncs pushPrefs.marketing to true on push_marketing grant', async () => {
+      const { user } = await createUser({ verified: true });
+
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { pushPrefs: true },
+      });
+      expect((before.pushPrefs as Record<string, unknown>).marketing).toBe(false);
+
+      await recordConsent({
+        userId: user.id,
+        purpose: 'push_marketing',
+        version: 'v1',
+        channel: 'mobile',
+        ipAddress: null,
+        userAgent: null,
+        evidence: { checkbox: true },
+      });
+
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { pushPrefs: true },
+      });
+      expect((after.pushPrefs as Record<string, unknown>).marketing).toBe(true);
+    });
+
     it('re-granting after withdrawal clears withdrawnAt', async () => {
       const { user } = await createUser({ verified: true });
       const params = {
@@ -104,6 +130,64 @@ describe('consent service', () => {
       const { user } = await createUser({ verified: true });
       const result = await withdrawConsent(user.id, 'push_marketing');
       expect(result).toBe(false);
+    });
+
+    it('withdraws ALL active versions, not just the latest', async () => {
+      const { user } = await createUser({ verified: true });
+      await recordConsent({
+        userId: user.id,
+        purpose: 'push_marketing',
+        version: 'v1',
+        channel: 'mobile',
+        ipAddress: null,
+        userAgent: null,
+        evidence: { checkbox: true },
+      });
+      await recordConsent({
+        userId: user.id,
+        purpose: 'push_marketing',
+        version: 'v2',
+        channel: 'mobile',
+        ipAddress: null,
+        userAgent: null,
+        evidence: { checkbox: true },
+      });
+
+      const result = await withdrawConsent(user.id, 'push_marketing');
+      expect(result).toBe(true);
+
+      const active = await prisma.consent.count({
+        where: { userId: user.id, purpose: 'push_marketing', withdrawnAt: null },
+      });
+      expect(active).toBe(0);
+      expect(await hasActiveConsent(user.id, 'push_marketing')).toBe(false);
+    });
+
+    it('syncs pushPrefs.marketing to false on push_marketing withdrawal', async () => {
+      const { user } = await createUser({ verified: true });
+      await recordConsent({
+        userId: user.id,
+        purpose: 'push_marketing',
+        version: 'v1',
+        channel: 'mobile',
+        ipAddress: null,
+        userAgent: null,
+        evidence: { checkbox: true },
+      });
+
+      const afterGrant = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { pushPrefs: true },
+      });
+      expect((afterGrant.pushPrefs as Record<string, unknown>).marketing).toBe(true);
+
+      await withdrawConsent(user.id, 'push_marketing');
+
+      const afterWithdraw = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { pushPrefs: true },
+      });
+      expect((afterWithdraw.pushPrefs as Record<string, unknown>).marketing).toBe(false);
     });
   });
 

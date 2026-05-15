@@ -1,6 +1,8 @@
 import { prisma } from '@jdm/db';
 import type { BroadcastTarget } from '@jdm/shared';
 
+import { hasActiveConsent } from '../consent.js';
+
 export type AudienceRow = {
   userId: string;
   tokens: string[];
@@ -53,19 +55,20 @@ export const resolveAudience = async (target: BroadcastTarget): Promise<Audience
     where: { id: { in: userIds }, status: 'active' },
     select: {
       id: true,
-      pushPrefs: true,
       deviceTokens: { select: { expoPushToken: true } },
     },
   });
 
-  return rows.map((u) => {
-    const prefs = u.pushPrefs as { marketing?: boolean } | null;
-    return {
+  const audience: AudienceRow[] = [];
+  for (const u of rows) {
+    const consented = await hasActiveConsent(u.id, 'push_marketing');
+    audience.push({
       userId: u.id,
       tokens: u.deviceTokens.map((dt) => dt.expoPushToken),
-      marketingOptedIn: prefs?.marketing !== false,
-    };
-  });
+      marketingOptedIn: consented,
+    });
+  }
+  return audience;
 };
 
 /**

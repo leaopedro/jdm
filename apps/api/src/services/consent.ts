@@ -11,10 +11,25 @@ type RecordConsentParams = {
   evidence: Prisma.InputJsonValue;
 };
 
+const syncPushMarketingPref = async (userId: string, enabled: boolean) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { pushPrefs: true },
+  });
+  if (!user) return;
+  const current = (user.pushPrefs as Record<string, unknown>) ?? {};
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      pushPrefs: { ...current, marketing: enabled } as Prisma.InputJsonValue,
+    },
+  });
+};
+
 export const recordConsent = async (params: RecordConsentParams) => {
   const { userId, purpose, version, channel, ipAddress, userAgent, evidence } = params;
 
-  return prisma.consent.upsert({
+  const row = await prisma.consent.upsert({
     where: {
       userId_purpose_version: { userId, purpose, version },
     },
@@ -35,23 +50,28 @@ export const recordConsent = async (params: RecordConsentParams) => {
       evidence,
     },
   });
+
+  if (purpose === 'push_marketing') {
+    await syncPushMarketingPref(userId, true);
+  }
+
+  return row;
 };
 
 export const withdrawConsent = async (
   userId: string,
   purpose: ConsentPurpose,
 ): Promise<boolean> => {
-  const row = await prisma.consent.findFirst({
+  const result = await prisma.consent.updateMany({
     where: { userId, purpose, withdrawnAt: null },
-    orderBy: { givenAt: 'desc' },
-  });
-
-  if (!row) return false;
-
-  await prisma.consent.update({
-    where: { id: row.id },
     data: { withdrawnAt: new Date() },
   });
+
+  if (result.count === 0) return false;
+
+  if (purpose === 'push_marketing') {
+    await syncPushMarketingPref(userId, false);
+  }
 
   return true;
 };

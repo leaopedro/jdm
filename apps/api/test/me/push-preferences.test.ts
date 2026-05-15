@@ -18,7 +18,7 @@ describe('/me/push-preferences', () => {
     await app.close();
   });
 
-  it('returns the current push preferences', async () => {
+  it('returns the current push preferences (marketing defaults false)', async () => {
     const { user } = await createUser({ verified: true });
     const env = loadEnv();
 
@@ -31,7 +31,7 @@ describe('/me/push-preferences', () => {
     expect(res.statusCode).toBe(200);
     expect(pushPrefsSchema.parse(res.json())).toEqual({
       transactional: true,
-      marketing: true,
+      marketing: false,
     });
   });
 
@@ -43,13 +43,13 @@ describe('/me/push-preferences', () => {
       method: 'PATCH',
       url: '/me/push-preferences',
       headers: { authorization: bearer(env, user.id) },
-      payload: { marketing: false },
+      payload: { marketing: true },
     });
 
     expect(res.statusCode).toBe(200);
     expect(pushPrefsSchema.parse(res.json())).toEqual({
       transactional: true,
-      marketing: false,
+      marketing: true,
     });
 
     const row = await prisma.user.findUniqueOrThrow({
@@ -59,7 +59,7 @@ describe('/me/push-preferences', () => {
 
     expect(pushPrefsSchema.parse(row.pushPrefs)).toEqual({
       transactional: true,
-      marketing: false,
+      marketing: true,
     });
   });
 
