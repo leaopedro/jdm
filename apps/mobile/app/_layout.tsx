@@ -60,7 +60,8 @@ const Gate = () => {
     pathname.startsWith('/signup') ||
     pathname.startsWith('/forgot') ||
     pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/verify');
+    pathname === '/verify' ||
+    pathname === '/verify-email-pending';
 
   if (auth.status === 'loading') {
     return <View style={{ flex: 1, backgroundColor: theme.colors.bg }} />;

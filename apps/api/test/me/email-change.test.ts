@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
 import { issueEmailChangeToken } from '../../src/services/auth/email-change.js';
-import { createAccessToken } from '../../src/services/auth/tokens.js';
 import type { DevMailer } from '../../src/services/mailer/dev.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
@@ -223,7 +222,7 @@ describe('POST /me/email-change/verify', () => {
     expect(res.json()).toMatchObject({ message: 'session invalidated' });
   });
 
-  it('accepts access token issued in the same second as email swap', async () => {
+  it('rejects access token issued in the same second as email swap', async () => {
     const env = loadEnv();
     const { user } = await createUser({ email: 'old@jdm.test', verified: true });
 
@@ -234,12 +233,49 @@ describe('POST /me/email-change/verify', () => {
       payload: { token: changeToken },
     });
 
-    const postSwapJwt = createAccessToken({ sub: user.id, role: 'user' }, env);
+    // Read the exact tokenInvalidatedAt and craft a JWT with iat in the same second
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const sameSecondIat = Math.floor(updated.tokenInvalidatedAt!.getTime() / 1000);
+    const sameSecondJwt = jwt.sign(
+      { sub: user.id, role: 'user', iat: sameSecondIat },
+      env.JWT_ACCESS_SECRET,
+      { algorithm: 'HS256', expiresIn: 900 },
+    );
 
     const res = await app.inject({
       method: 'GET',
       url: '/me',
-      headers: { authorization: `Bearer ${postSwapJwt}` },
+      headers: { authorization: `Bearer ${sameSecondJwt}` },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ message: 'session invalidated' });
+  });
+
+  it('accepts access token issued after the email swap second', async () => {
+    const env = loadEnv();
+    const { user } = await createUser({ email: 'old@jdm.test', verified: true });
+
+    const changeToken = await issueEmailChangeToken(user.id, 'new@jdm.test');
+    await app.inject({
+      method: 'POST',
+      url: '/me/email-change/verify',
+      payload: { token: changeToken },
+    });
+
+    // Read the exact tokenInvalidatedAt and craft a JWT one second after
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const afterSwapIat = Math.floor(updated.tokenInvalidatedAt!.getTime() / 1000) + 1;
+    const freshJwt = jwt.sign(
+      { sub: user.id, role: 'user', iat: afterSwapIat },
+      env.JWT_ACCESS_SECRET,
+      { algorithm: 'HS256', expiresIn: 900 },
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/me',
+      headers: { authorization: `Bearer ${freshJwt}` },
     });
 
     expect(res.statusCode).toBe(200);
