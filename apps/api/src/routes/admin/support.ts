@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { requireUser } from '../../plugins/auth.js';
 import { recordAudit } from '../../services/admin-audit.js';
+import { decryptField } from '../../services/crypto/field-encryption.js';
 import type { Uploads } from '../../services/uploads/index.js';
 
 const listQuerySchema = z.object({
@@ -89,7 +90,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
         page.map(async (t) => ({
           id: t.id,
           phone: t.phone,
-          message: t.message,
+          message: decryptField(t.message, app.env.FIELD_ENCRYPTION_KEY) ?? t.message,
           attachmentUrl: await attachmentUrl(t, app.uploads),
           status: t.status,
           internalStatus: t.internalStatus,
@@ -128,7 +129,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
     return adminSupportTicketDetailSchema.parse({
       id: ticket.id,
       phone: ticket.phone,
-      message: ticket.message,
+      message: decryptField(ticket.message, app.env.FIELD_ENCRYPTION_KEY) ?? ticket.message,
       attachmentUrl: await attachmentUrl(ticket, app.uploads),
       status: ticket.status,
       internalStatus: ticket.internalStatus,
@@ -167,7 +168,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
       return adminSupportTicketDetailSchema.parse({
         id: existing.id,
         phone: existing.phone,
-        message: existing.message,
+        message: decryptField(existing.message, app.env.FIELD_ENCRYPTION_KEY) ?? existing.message,
         attachmentUrl: await attachmentUrl(existing, app.uploads),
         status: existing.status,
         internalStatus: existing.internalStatus,
@@ -209,7 +210,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
     return adminSupportTicketDetailSchema.parse({
       id: updated.id,
       phone: updated.phone,
-      message: updated.message,
+      message: decryptField(updated.message, app.env.FIELD_ENCRYPTION_KEY) ?? updated.message,
       attachmentUrl: await attachmentUrl(updated, app.uploads),
       status: updated.status,
       internalStatus: updated.internalStatus,
@@ -261,7 +262,7 @@ export const adminSupportRoutes: FastifyPluginAsync = async (app) => {
     return adminSupportTicketDetailSchema.parse({
       id: updated.id,
       phone: updated.phone,
-      message: updated.message,
+      message: decryptField(updated.message, app.env.FIELD_ENCRYPTION_KEY) ?? updated.message,
       attachmentUrl: await attachmentUrl(updated, app.uploads),
       status: updated.status,
       internalStatus: updated.internalStatus,
