@@ -1033,19 +1033,27 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/csv');
       expect(res.headers['content-disposition']).toContain('finance-export.csv');
+      expect(res.headers['x-jdm-k-anonymity-min']).toBe('5');
+      expect(res.headers['x-jdm-k-anonymity-suppressed-groups']).toBe('0');
     });
 
-    it('includes header row and order data', async () => {
+    it('emits aggregate rows without direct identifiers', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
 
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 10000 });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `buyer-${i}@jdm.test`,
+          name: `Buyer ${i}`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, { amountCents: 10000 });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1055,11 +1063,17 @@ describe('Admin Finance Endpoints', () => {
       expect(res.statusCode).toBe(200);
       const lines = res.body.split('\n');
       expect(lines[0]).toBe(
-        'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at,kind,product_or_collection',
+        'event,city,state,currency,method,provider,status,kind,product_or_collection,order_count,total_amount_cents,total_quantity,first_order_at,last_order_at',
       );
       expect(lines).toHaveLength(2); // header + 1 row
-      expect(lines[1]).toContain('10000');
+      expect(lines[0]).not.toContain('user_name');
+      expect(lines[0]).not.toContain('user_email');
+      expect(lines[0]).not.toContain('id,');
+      expect(lines[1]).toContain('50000');
       expect(lines[1]).toContain('Evento meet-sp');
+      expect(lines[1]).toContain(',5,50000,5,');
+      expect(lines[1]).not.toContain('buyer-0@jdm.test');
+      expect(lines[1]).not.toContain('Buyer 0');
     });
 
     it('respects filters', async () => {
@@ -1068,12 +1082,32 @@ describe('Admin Finance Endpoints', () => {
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
 
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 10000, provider: 'stripe' });
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 5000, provider: 'abacatepay' });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `stripe-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          amountCents: 10000,
+          provider: 'stripe',
+          method: 'card',
+        });
+      }
+
+      for (let i = 0; i < 4; i += 1) {
+        const { user } = await createUser({
+          email: `pix-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          amountCents: 5000,
+          provider: 'abacatepay',
+          method: 'pix',
+        });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1082,24 +1116,41 @@ describe('Admin Finance Endpoints', () => {
       });
       expect(res.statusCode).toBe(200);
       const lines = res.body.split('\n');
-      expect(lines).toHaveLength(2); // header + 1 stripe order
+      expect(lines).toHaveLength(2); // header + 1 aggregate row
       expect(lines[1]).toContain('stripe');
+      expect(lines[1]).toContain(',5,50000,5,');
+      expect(lines[1]).not.toContain('abacatepay');
+
+      const suppressed = await app.inject({
+        method: 'GET',
+        url: '/admin/finance/export?provider=abacatepay',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+      });
+      expect(suppressed.statusCode).toBe(200);
+      expect(suppressed.body.split('\n')).toHaveLength(1);
+      expect(suppressed.headers['x-jdm-k-anonymity-suppressed-groups']).toBe('1');
     });
 
-    it('escapes CSV fields with commas', async () => {
+    it('escapes aggregate CSV fields with commas', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({
-        email: 'buyer@jdm.test',
-        name: 'User, With Comma',
-        verified: true,
-      });
       const event = await seedEvent('meet-sp');
+      await prisma.event.update({
+        where: { id: event.id },
+        data: { title: 'Evento, Especial' },
+      });
       const tier = await seedTier(event.id);
-      await seedOrder(buyer.id, event.id, tier.id, { amountCents: 5000 });
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `buyer-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, { amountCents: 5000 });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1107,19 +1158,17 @@ describe('Admin Finance Endpoints', () => {
         headers: { authorization: bearer(env, admin.id, 'admin') },
       });
       expect(res.statusCode).toBe(200);
-      expect(res.body).toContain('"User, With Comma"');
+      expect(res.body).toContain('"Evento, Especial"');
     });
 
-    it('includes kind and product_or_collection for product orders', async () => {
+    it('includes kind and product_or_collection for aggregate product cohorts', async () => {
       const { user: admin } = await createUser({
         email: 'admin@jdm.test',
         verified: true,
         role: 'admin',
       });
-      const { user: buyer } = await createUser({ email: 'buyer@jdm.test', verified: true });
       const event = await seedEvent('meet-sp');
       const tier = await seedTier(event.id);
-      const extra = await seedExtra(event.id, 1500);
 
       const productType = await prisma.productType.create({
         data: { name: 'Tipo', sortOrder: 0 },
@@ -1145,20 +1194,28 @@ describe('Admin Finance Endpoints', () => {
         },
       });
 
-      await seedOrder(buyer.id, null, null, {
-        kind: 'product',
-        amountCents: 3000,
-        orderItems: [{ kind: 'product', variantId: variant.id, unitPriceCents: 3000 }],
-      });
-      await seedOrder(buyer.id, event.id, tier.id, {
-        kind: 'ticket',
-        amountCents: 5000,
-      });
-      await seedOrder(buyer.id, event.id, null, {
-        kind: 'extras_only',
-        amountCents: 1500,
-        orderItems: [{ kind: 'extras', extraId: extra.id, unitPriceCents: 1500 }],
-      });
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `product-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, null, null, {
+          kind: 'product',
+          amountCents: 3000,
+          orderItems: [{ kind: 'product', variantId: variant.id, unitPriceCents: 3000 }],
+        });
+      }
+
+      for (let i = 0; i < 5; i += 1) {
+        const { user } = await createUser({
+          email: `ticket-${i}@jdm.test`,
+          verified: true,
+        });
+        await seedOrder(user.id, event.id, tier.id, {
+          kind: 'ticket',
+          amountCents: 5000,
+        });
+      }
 
       const res = await app.inject({
         method: 'GET',
@@ -1169,13 +1226,10 @@ describe('Admin Finance Endpoints', () => {
       const lines = res.body.split('\n');
       const productLine = lines.find((l) => l.includes(',product,'));
       const ticketLine = lines.find((l) => l.includes(',ticket,'));
-      const extrasLine = lines.find((l) => l.includes(',extras_only,'));
       expect(productLine).toBeDefined();
       expect(ticketLine).toBeDefined();
-      expect(extrasLine).toBeDefined();
-      expect(productLine).toMatch(/Camiseta JDM$/);
-      expect(ticketLine).toMatch(/,ticket,$/);
-      expect(extrasLine).toMatch(/,extras_only,$/);
+      expect(productLine).toContain(',product,Camiseta JDM,5,15000,5,');
+      expect(ticketLine).toContain(',ticket,,5,25000,5,');
     });
   });
 });

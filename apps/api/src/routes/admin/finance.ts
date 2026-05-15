@@ -22,6 +22,25 @@ type FinanceOrderRecord = {
   };
 };
 
+const MIN_FINANCE_EXPORT_COHORT_SIZE = 5;
+
+type FinanceExportBucket = {
+  eventTitle: string;
+  city: string;
+  stateCode: string;
+  currency: string;
+  method: PaymentMethod;
+  provider: PaymentProvider;
+  status: OrderStatus;
+  kind: string;
+  productOrCollection: string;
+  orderCount: number;
+  totalAmountCents: number;
+  totalQuantity: number;
+  firstOrderAt: Date;
+  lastOrderAt: Date;
+};
+
 function buildWhere(query: unknown): Prisma.OrderWhereInput {
   const q = adminFinanceQuerySchema.parse(query);
   const where: Prisma.OrderWhereInput = {};
@@ -81,6 +100,33 @@ function getOrderItemRevenueCents(
 
 function hasProductItems(order: Pick<FinanceOrderRecord, 'items'>): boolean {
   return order.items.some((i) => i.kind === 'product');
+}
+
+function buildFinanceExportBucketKey(
+  bucket: Pick<
+    FinanceExportBucket,
+    | 'eventTitle'
+    | 'city'
+    | 'stateCode'
+    | 'currency'
+    | 'method'
+    | 'provider'
+    | 'status'
+    | 'kind'
+    | 'productOrCollection'
+  >,
+): string {
+  return [
+    bucket.eventTitle,
+    bucket.city,
+    bucket.stateCode,
+    bucket.currency,
+    bucket.method,
+    bucket.provider,
+    bucket.status,
+    bucket.kind,
+    bucket.productOrCollection,
+  ].join('\u001f');
 }
 
 async function findFinanceOrders(
@@ -444,26 +490,65 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
       productRows.map((r) => [r.orderId, r.productTitles]),
     );
 
+    const buckets = new Map<string, FinanceExportBucket>();
+    for (const order of orders) {
+      const bucketBase = {
+        eventTitle: order.event?.title ?? '',
+        city: order.event?.city ?? '',
+        stateCode: order.event?.stateCode ?? '',
+        currency: order.currency,
+        method: order.method,
+        provider: order.provider,
+        status: order.status,
+        kind: order.kind,
+        productOrCollection: productsByOrderId.get(order.id) ?? '',
+      };
+      const bucketKey = buildFinanceExportBucketKey(bucketBase);
+      const activityAt = order.paidAt ?? order.createdAt;
+      const current = buckets.get(bucketKey) ?? {
+        ...bucketBase,
+        orderCount: 0,
+        totalAmountCents: 0,
+        totalQuantity: 0,
+        firstOrderAt: activityAt,
+        lastOrderAt: activityAt,
+      };
+
+      current.orderCount += 1;
+      current.totalAmountCents += order.amountCents;
+      current.totalQuantity += order.quantity;
+      if (activityAt < current.firstOrderAt) current.firstOrderAt = activityAt;
+      if (activityAt > current.lastOrderAt) current.lastOrderAt = activityAt;
+      buckets.set(bucketKey, current);
+    }
+
+    const aggregatedRows = Array.from(buckets.values())
+      .filter((bucket) => bucket.orderCount >= MIN_FINANCE_EXPORT_COHORT_SIZE)
+      .sort((a, b) => {
+        if (b.totalAmountCents !== a.totalAmountCents)
+          return b.totalAmountCents - a.totalAmountCents;
+        return a.eventTitle.localeCompare(b.eventTitle);
+      });
+    const suppressedGroups = buckets.size - aggregatedRows.length;
+
     const header =
-      'id,event,city,state,user_name,user_email,amount_cents,currency,method,provider,status,quantity,paid_at,created_at,kind,product_or_collection';
-    const rows = orders.map((o) => {
+      'event,city,state,currency,method,provider,status,kind,product_or_collection,order_count,total_amount_cents,total_quantity,first_order_at,last_order_at';
+    const rows = aggregatedRows.map((o) => {
       const cols = [
-        o.id,
-        csvEscape(o.event?.title ?? ''),
-        csvEscape(o.event?.city ?? ''),
-        o.event?.stateCode ?? '',
-        csvEscape(o.user.name),
-        csvEscape(o.user.email),
-        o.amountCents,
+        csvEscape(o.eventTitle),
+        csvEscape(o.city),
+        o.stateCode,
         o.currency,
         o.method,
         o.provider,
         o.status,
-        o.quantity,
-        o.paidAt?.toISOString() ?? '',
-        o.createdAt.toISOString(),
         o.kind,
-        csvEscape(productsByOrderId.get(o.id) ?? ''),
+        csvEscape(o.productOrCollection),
+        o.orderCount,
+        o.totalAmountCents,
+        o.totalQuantity,
+        o.firstOrderAt.toISOString(),
+        o.lastOrderAt.toISOString(),
       ];
       return cols.join(',');
     });
@@ -471,6 +556,8 @@ export const adminFinanceRoutes: FastifyPluginAsync = async (app) => {
     const csv = [header, ...rows].join('\n');
     void reply.header('content-type', 'text/csv; charset=utf-8');
     void reply.header('content-disposition', 'attachment; filename="finance-export.csv"');
+    void reply.header('x-jdm-k-anonymity-min', String(MIN_FINANCE_EXPORT_COHORT_SIZE));
+    void reply.header('x-jdm-k-anonymity-suppressed-groups', String(suppressedGroups));
     return csv;
   });
 };

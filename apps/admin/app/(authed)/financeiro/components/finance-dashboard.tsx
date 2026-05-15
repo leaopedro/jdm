@@ -183,13 +183,19 @@ function DashboardInner() {
   return (
     <section className="flex flex-col gap-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Financeiro</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Financeiro</h1>
+          <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+            O CSV exporta apenas grupos agregados. Recortes com menos de 5 pedidos ficam ocultos por
+            privacidade.
+          </p>
+        </div>
         <button
           onClick={() => void handleExport()}
           disabled={isExporting || view.status === 'loading'}
           className="rounded border border-[color:var(--color-border)] px-3 py-2 text-sm font-semibold disabled:opacity-50"
         >
-          {isExporting ? 'Exportando...' : 'Exportar CSV'}
+          {isExporting ? 'Exportando...' : 'Exportar CSV agregado'}
         </button>
       </header>
 
