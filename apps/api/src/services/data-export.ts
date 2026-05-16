@@ -264,10 +264,14 @@ const uploadBundle = async (
 export const buildSignedDownloadUrl = async (
   config: R2Config,
   objectKey: string,
+  maxExpiresIn?: number,
 ): Promise<string> => {
   const client = buildR2Client(config);
   const command = new GetObjectCommand({ Bucket: config.bucket, Key: objectKey });
-  return getSignedUrl(client, command, { expiresIn: EXPORT_EXPIRY_DAYS * 24 * 60 * 60 });
+  const defaultExpiry = EXPORT_EXPIRY_DAYS * 24 * 60 * 60;
+  const expiresIn =
+    maxExpiresIn !== undefined ? Math.min(defaultExpiry, Math.max(1, maxExpiresIn)) : defaultExpiry;
+  return getSignedUrl(client, command, { expiresIn });
 };
 
 export const getR2ConfigFromEnv = (env: Env): R2Config | null => {
@@ -282,14 +286,16 @@ export const getR2ConfigFromEnv = (env: Env): R2Config | null => {
   };
 };
 
-export const processExportJob = async (jobId: string, env: Env): Promise<void> => {
+export type ProcessExportResult = 'completed' | 'failed' | 'skipped';
+
+export const processExportJob = async (jobId: string, env: Env): Promise<ProcessExportResult> => {
   // Atomic claim: only one worker can transition pending->processing
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
   const { count } = (await (prisma as any).dataExportJob.updateMany({
     where: { id: jobId, status: 'pending' },
     data: { status: 'processing', startedAt: new Date() },
   })) as { count: number };
-  if (count === 0) return;
+  if (count === 0) return 'skipped';
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
   const job = (await (prisma as any).dataExportJob.findUnique({ where: { id: jobId } })) as {
@@ -297,7 +303,7 @@ export const processExportJob = async (jobId: string, env: Env): Promise<void> =
     userId: string;
     status: DataExportJobStatus;
   } | null;
-  if (!job) return;
+  if (!job) return 'skipped';
 
   try {
     const bundle = await collectUserData(job.userId);
@@ -317,6 +323,7 @@ export const processExportJob = async (jobId: string, env: Env): Promise<void> =
       where: { id: jobId },
       data: { status: 'completed', objectKey, expiresAt, completedAt: new Date() },
     });
+    return 'completed';
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
@@ -328,6 +335,7 @@ export const processExportJob = async (jobId: string, env: Env): Promise<void> =
         completedAt: new Date(),
       },
     });
+    return 'failed';
   }
 };
 

@@ -139,6 +139,30 @@ describe('data-export routes', () => {
       expect(body.status).toBe('pending');
     });
 
+    it('failed job returns generic error code, not internal details', async () => {
+      const { user } = await createUser({ verified: true });
+      const job = await dataExportJob.create({ data: { userId: user.id } });
+      await dataExportJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'failed',
+          errorMessage: 'PrismaClientKnownRequestError: connection refused at /internal/path',
+          completedAt: new Date(),
+        },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/data-export/${job.id}`,
+        headers: { authorization: bearer(env, user.id) },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.error).toBe('ExportFailed');
+      expect(body.errorMessage).toBeUndefined();
+      expect(JSON.stringify(body)).not.toContain('PrismaClient');
+    });
+
     it('410 when export has expired', async () => {
       const { user } = await createUser({ verified: true });
       const job = await dataExportJob.create({ data: { userId: user.id } });
@@ -188,8 +212,9 @@ describe('data-export service', () => {
     const { user } = await createUser({ verified: true });
     const { id } = await createExportJob(user.id);
 
-    await processExportJob(id, env);
+    const outcome = await processExportJob(id, env);
 
+    expect(outcome).toBe('completed');
     const job = await dataExportJob.findUnique({ where: { id } });
     expect(job!.status).toBe('completed');
     expect(job!.objectKey).toContain('data-export/');
@@ -221,8 +246,10 @@ describe('data-export service', () => {
     const { user } = await createUser({ verified: true });
     const { id } = await createExportJob(user.id);
 
-    await Promise.all([processExportJob(id, env), processExportJob(id, env)]);
+    const outcomes = await Promise.all([processExportJob(id, env), processExportJob(id, env)]);
 
+    expect(outcomes.filter((o) => o === 'completed')).toHaveLength(1);
+    expect(outcomes.filter((o) => o === 'skipped')).toHaveLength(1);
     const job = await dataExportJob.findUnique({ where: { id } });
     expect(job!.status).toBe('completed');
   });

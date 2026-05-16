@@ -44,8 +44,15 @@ export const meDataExportRoutes: FastifyPluginAsync = async (app) => {
       if (job.status === 'completed' && job.objectKey) {
         const r2Config = getR2ConfigFromEnv(app.env);
         if (r2Config) {
-          downloadUrl = await buildSignedDownloadUrl(r2Config, job.objectKey);
+          const remainingSec = job.expiresAt
+            ? Math.floor((job.expiresAt.getTime() - Date.now()) / 1000)
+            : undefined;
+          downloadUrl = await buildSignedDownloadUrl(r2Config, job.objectKey, remainingSec);
         }
+      }
+
+      if (job.status === 'failed' && job.errorMessage) {
+        request.log.error({ jobId: job.id, detail: job.errorMessage }, 'data-export job failed');
       }
 
       return {
@@ -55,7 +62,7 @@ export const meDataExportRoutes: FastifyPluginAsync = async (app) => {
         expiresAt: job.expiresAt?.toISOString() ?? null,
         createdAt: job.createdAt.toISOString(),
         completedAt: job.completedAt?.toISOString() ?? null,
-        errorMessage: job.errorMessage,
+        ...(job.status === 'failed' && { error: 'ExportFailed' }),
       };
     },
   );

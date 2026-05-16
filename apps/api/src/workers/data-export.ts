@@ -19,10 +19,14 @@ const tick = async (deps: DataExportWorkerDeps) => {
 
   for (const job of jobs) {
     try {
-      await processExportJob(job.id, deps.env);
-      deps.log?.info({ jobId: job.id, userId: job.userId }, '[data-export-worker] job processed');
+      const outcome = await processExportJob(job.id, deps.env);
+      if (outcome === 'completed') {
+        deps.log?.info({ jobId: job.id, userId: job.userId }, '[data-export-worker] job completed');
+      } else if (outcome === 'failed') {
+        deps.log?.error({ jobId: job.id, userId: job.userId }, '[data-export-worker] job failed');
+      }
     } catch (err) {
-      deps.log?.error({ err, jobId: job.id }, '[data-export-worker] job failed');
+      deps.log?.error({ err, jobId: job.id }, '[data-export-worker] unexpected error');
     }
   }
 };
