@@ -187,6 +187,22 @@ export const adminDsrRoutes: FastifyPluginAsync = async (app) => {
     if (body.evidenceKey) data.evidenceKey = body.evidenceKey;
 
     if (body.status && body.status !== existing.status) {
+      const resolving = body.status === 'completed' || body.status === 'denied';
+      const identityVerified = (data.identityStatus ?? existing.identityStatus) === 'verified';
+
+      if (resolving && !identityVerified) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          message: 'Identity must be verified before resolving',
+        });
+      }
+
+      if (body.status === 'denied' && !body.denialReason) {
+        return reply
+          .status(422)
+          .send({ error: 'UnprocessableEntity', message: 'denialReason is required when denying' });
+      }
+
       data.status = body.status;
       if (body.status === 'in_progress') {
         auditAction = 'dsr.start_processing';
@@ -198,8 +214,12 @@ export const adminDsrRoutes: FastifyPluginAsync = async (app) => {
         auditAction = 'dsr.deny';
         data.resolverId = sub;
         data.resolvedAt = new Date();
-        if (body.denialReason) data.denialReason = body.denialReason;
+        data.denialReason = body.denialReason!;
       }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return reply.status(200).send({ message: 'no changes' });
     }
 
     const updated = await prisma.$transaction(async (tx) => {

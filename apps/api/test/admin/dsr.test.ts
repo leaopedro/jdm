@@ -253,6 +253,92 @@ describe('Admin DSR routes', () => {
       expect(res.statusCode).toBe(409);
     });
 
+    it('rejects completing before identity is verified', async () => {
+      const { user: admin } = await createUser({ role: 'admin', email: 'admin@jdm.test' });
+      const { user } = await createUser({ verified: true });
+
+      const createRes = await createDsr(admin.id, user.id);
+      const dsrId = dsrDetailSchema.omit({ actions: true }).parse(createRes.json()).id;
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/admin/dsr/${dsrId}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: { status: 'completed' },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const err = res.json<{ message: string }>();
+      expect(err.message).toContain('Identity must be verified');
+    });
+
+    it('rejects denying before identity is verified', async () => {
+      const { user: admin } = await createUser({ role: 'admin', email: 'admin@jdm.test' });
+      const { user } = await createUser({ verified: true });
+
+      const createRes = await createDsr(admin.id, user.id);
+      const dsrId = dsrDetailSchema.omit({ actions: true }).parse(createRes.json()).id;
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/admin/dsr/${dsrId}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: { status: 'denied', denialReason: 'Not applicable' },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const err = res.json<{ message: string }>();
+      expect(err.message).toContain('Identity must be verified');
+    });
+
+    it('rejects denied status without denialReason', async () => {
+      const { user: admin } = await createUser({ role: 'admin', email: 'admin@jdm.test' });
+      const { user } = await createUser({ verified: true });
+
+      const createRes = await createDsr(admin.id, user.id);
+      const dsrId = dsrDetailSchema.omit({ actions: true }).parse(createRes.json()).id;
+
+      await app.inject({
+        method: 'PATCH',
+        url: `/admin/dsr/${dsrId}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: { identityStatus: 'verified' },
+      });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/admin/dsr/${dsrId}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: { status: 'denied' },
+      });
+
+      expect(res.statusCode).toBe(422);
+      const err = res.json<{ message: string }>();
+      expect(err.message).toContain('denialReason is required');
+    });
+
+    it('no-op PATCH does not create DsrAction entries', async () => {
+      const { user: admin } = await createUser({ role: 'admin', email: 'admin@jdm.test' });
+      const { user } = await createUser({ verified: true });
+
+      const createRes = await createDsr(admin.id, user.id);
+      const dsrId = dsrDetailSchema.omit({ actions: true }).parse(createRes.json()).id;
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/admin/dsr/${dsrId}`,
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: { note: 'just a note' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ message: string }>();
+      expect(body.message).toBe('no changes');
+
+      const actions = await prisma.dsrAction.findMany({ where: { dsrId } });
+      expect(actions).toHaveLength(1); // only the initial 'created' action
+    });
+
     it('records action history for each update', async () => {
       const { user: admin } = await createUser({ role: 'admin', email: 'admin@jdm.test' });
       const { user } = await createUser({ verified: true });
