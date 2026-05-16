@@ -44,7 +44,10 @@ export const runDeletionWorkerTick = async (deps: DeletionWorkerDeps): Promise<v
           data: { error: errorMsg },
         });
       } else {
-        deps.log?.warn({ userId: id }, '[deletion-worker] no DeletionLog row found for failed user');
+        deps.log?.warn(
+          { userId: id },
+          '[deletion-worker] no DeletionLog row found for failed user',
+        );
       }
     }
   }

@@ -12,25 +12,26 @@
 
 ## File Structure
 
-| Action | Path | Responsibility |
-|--------|------|----------------|
-| Create | `packages/db/prisma/migrations/YYYYMMDD_deletion_log/migration.sql` | DeletionLog table |
-| Modify | `packages/db/prisma/schema.prisma` | Add DeletionLog model |
-| Create | `apps/api/src/routes/me-account-delete.ts` | POST /me/account/delete route |
-| Modify | `apps/api/src/app.ts` | Register route + worker |
-| Create | `apps/api/src/services/account-deletion/request.ts` | Soft-delete + token revocation logic |
-| Create | `apps/api/src/services/account-deletion/anonymize.ts` | PII scrub, R2 cleanup, status flip |
-| Create | `apps/api/src/services/account-deletion/vendor-fanout.ts` | Stripe detach, Expo cleanup |
-| Create | `apps/api/src/workers/account-deletion.ts` | Cron worker picking up expired grace periods |
-| Modify | `apps/api/src/env.ts` | DELETION_GRACE_DAYS env var |
-| Create | `apps/api/test/me/account-delete.test.ts` | Endpoint integration tests |
-| Create | `apps/api/test/account-deletion/worker.test.ts` | Worker integration tests |
+| Action | Path                                                                | Responsibility                               |
+| ------ | ------------------------------------------------------------------- | -------------------------------------------- |
+| Create | `packages/db/prisma/migrations/YYYYMMDD_deletion_log/migration.sql` | DeletionLog table                            |
+| Modify | `packages/db/prisma/schema.prisma`                                  | Add DeletionLog model                        |
+| Create | `apps/api/src/routes/me-account-delete.ts`                          | POST /me/account/delete route                |
+| Modify | `apps/api/src/app.ts`                                               | Register route + worker                      |
+| Create | `apps/api/src/services/account-deletion/request.ts`                 | Soft-delete + token revocation logic         |
+| Create | `apps/api/src/services/account-deletion/anonymize.ts`               | PII scrub, R2 cleanup, status flip           |
+| Create | `apps/api/src/services/account-deletion/vendor-fanout.ts`           | Stripe detach, Expo cleanup                  |
+| Create | `apps/api/src/workers/account-deletion.ts`                          | Cron worker picking up expired grace periods |
+| Modify | `apps/api/src/env.ts`                                               | DELETION_GRACE_DAYS env var                  |
+| Create | `apps/api/test/me/account-delete.test.ts`                           | Endpoint integration tests                   |
+| Create | `apps/api/test/account-deletion/worker.test.ts`                     | Worker integration tests                     |
 
 ---
 
 ### Task 1: DeletionLog Schema Migration
 
 **Files:**
+
 - Modify: `packages/db/prisma/schema.prisma`
 - Create: migration via `prisma migrate dev`
 
@@ -55,6 +56,7 @@ model DeletionLog {
 ```
 
 Add the relation to User model (after `mfaRecoveryCodes`):
+
 ```prisma
   deletionLog     DeletionLog?
 ```
@@ -81,6 +83,7 @@ git commit -m "feat(db): add DeletionLog model for DSR audit trail"
 ### Task 2: Add DELETION_GRACE_DAYS env var
 
 **Files:**
+
 - Modify: `apps/api/src/env.ts`
 
 - [ ] **Step 1: Add env var to schema**
@@ -108,6 +111,7 @@ git commit -m "feat(api): add DELETION_GRACE_DAYS env var (default 30)"
 ### Task 3: Account Deletion Request Service
 
 **Files:**
+
 - Create: `apps/api/src/services/account-deletion/request.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -280,13 +284,15 @@ export const meAccountDeleteRoutes: FastifyPluginAsync = async (app) => {
 - [ ] **Step 5: Register route in app.ts**
 
 In `apps/api/src/app.ts`, add import:
+
 ```typescript
 import { meAccountDeleteRoutes } from './routes/me-account-delete.js';
 ```
 
 Register after `meConsentRoutes`:
+
 ```typescript
-  await app.register(meAccountDeleteRoutes);
+await app.register(meAccountDeleteRoutes);
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
@@ -306,6 +312,7 @@ git commit -m "feat(api): add POST /me/account/delete endpoint with token revoca
 ### Task 4: Anonymization Service
 
 **Files:**
+
 - Create: `apps/api/src/services/account-deletion/anonymize.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -456,14 +463,9 @@ import type { Uploads } from '../uploads/index.js';
 
 type StepEntry = { step: string; status: 'ok' | 'error'; error?: string; at: string };
 
-type AnonymizeResult =
-  | { ok: true; skipped?: boolean }
-  | { ok: false; error: string };
+type AnonymizeResult = { ok: true; skipped?: boolean } | { ok: false; error: string };
 
-export const anonymizeUser = async (
-  userId: string,
-  uploads: Uploads,
-): Promise<AnonymizeResult> => {
+export const anonymizeUser = async (userId: string, uploads: Uploads): Promise<AnonymizeResult> => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { status: true, avatarObjectKey: true },
@@ -497,9 +499,7 @@ export const anonymizeUser = async (
     select: { attachmentObjectKey: true },
   });
   objectKeys.push(
-    ...supportAttachments
-      .map((s) => s.attachmentObjectKey)
-      .filter((k): k is string => k !== null),
+    ...supportAttachments.map((s) => s.attachmentObjectKey).filter((k): k is string => k !== null),
   );
 
   // 2. Delete R2 objects
@@ -509,7 +509,12 @@ export const anonymizeUser = async (
       steps.push({ step: `r2_delete:${key}`, status: 'ok', at: new Date().toISOString() });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      steps.push({ step: `r2_delete:${key}`, status: 'error', error: msg, at: new Date().toISOString() });
+      steps.push({
+        step: `r2_delete:${key}`,
+        status: 'error',
+        error: msg,
+        at: new Date().toISOString(),
+      });
     }
   }
 
@@ -593,6 +598,7 @@ git commit -m "feat(api): add anonymizeUser service for LGPD data purge"
 ### Task 5: Vendor Fanout Service
 
 **Files:**
+
 - Create: `apps/api/src/services/account-deletion/vendor-fanout.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -687,6 +693,7 @@ git commit -m "feat(api): add vendor fanout service for account deletion DSR"
 ### Task 6: Account Deletion Worker (Cron)
 
 **Files:**
+
 - Create: `apps/api/src/workers/account-deletion.ts`
 - Modify: `apps/api/src/app.ts`
 
@@ -817,24 +824,26 @@ export const startDeletionWorker = (deps: DeletionWorkerDeps) => {
 - [ ] **Step 4: Register worker in app.ts**
 
 In `apps/api/src/app.ts`, add import:
+
 ```typescript
 import { startDeletionWorker } from './workers/account-deletion.js';
 ```
 
 After the broadcast worker block (around line 153), add:
+
 ```typescript
-  if (env.WORKER_ENABLED && env.NODE_ENV === 'production') {
-    const deletionWorker = startDeletionWorker({
-      graceDays: env.DELETION_GRACE_DAYS,
-      uploads: app.uploads,
-      stripe: app.stripe,
-      env,
-      log: app.log,
-    });
-    app.addHook('onClose', () => {
-      deletionWorker.stop();
-    });
-  }
+if (env.WORKER_ENABLED && env.NODE_ENV === 'production') {
+  const deletionWorker = startDeletionWorker({
+    graceDays: env.DELETION_GRACE_DAYS,
+    uploads: app.uploads,
+    stripe: app.stripe,
+    env,
+    log: app.log,
+  });
+  app.addHook('onClose', () => {
+    deletionWorker.stop();
+  });
+}
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -859,6 +868,7 @@ git commit -m "feat(api): add account-deletion cron worker (30-day grace, batch 
 ### Task 7: Final Verification & Edge Case Tests
 
 **Files:**
+
 - Modify: `apps/api/test/me/account-delete.test.ts`
 
 - [ ] **Step 1: Add edge-case tests**
@@ -866,38 +876,36 @@ git commit -m "feat(api): add account-deletion cron worker (30-day grace, batch 
 Append to `apps/api/test/me/account-delete.test.ts`:
 
 ```typescript
-  it('rate limits excessive deletion requests', async () => {
-    const { user } = await createUser({ email: 'rate@jdm.test', verified: true });
-    const auth = { authorization: bearer(env, user.id) };
+it('rate limits excessive deletion requests', async () => {
+  const { user } = await createUser({ email: 'rate@jdm.test', verified: true });
+  const auth = { authorization: bearer(env, user.id) };
 
-    // First request succeeds
-    const r1 = await app.inject({ method: 'POST', url: '/me/account/delete', headers: auth });
-    expect(r1.statusCode).toBe(200);
+  // First request succeeds
+  const r1 = await app.inject({ method: 'POST', url: '/me/account/delete', headers: auth });
+  expect(r1.statusCode).toBe(200);
 
-    // User is now deleted so subsequent requests get 401 from auth middleware
-    // Rate limit tested by creating fresh users in rapid succession
-    const users = await Promise.all(
-      Array.from({ length: 4 }, (_, i) =>
-        createUser({ email: `rate${i}@jdm.test`, verified: true }),
-      ),
-    );
+  // User is now deleted so subsequent requests get 401 from auth middleware
+  // Rate limit tested by creating fresh users in rapid succession
+  const users = await Promise.all(
+    Array.from({ length: 4 }, (_, i) => createUser({ email: `rate${i}@jdm.test`, verified: true })),
+  );
 
-    for (let i = 0; i < 3; i++) {
-      await app.inject({
-        method: 'POST',
-        url: '/me/account/delete',
-        headers: { authorization: bearer(env, users[i].user.id) },
-      });
-    }
-
-    // 4th request should be rate-limited
-    const last = await app.inject({
+  for (let i = 0; i < 3; i++) {
+    await app.inject({
       method: 'POST',
       url: '/me/account/delete',
-      headers: { authorization: bearer(env, users[3].user.id) },
+      headers: { authorization: bearer(env, users[i].user.id) },
     });
-    expect(last.statusCode).toBe(429);
+  }
+
+  // 4th request should be rate-limited
+  const last = await app.inject({
+    method: 'POST',
+    url: '/me/account/delete',
+    headers: { authorization: bearer(env, users[3].user.id) },
   });
+  expect(last.statusCode).toBe(429);
+});
 ```
 
 - [ ] **Step 2: Run all tests**

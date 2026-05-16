@@ -80,7 +80,12 @@ describe('POST /me/account/delete', () => {
       ),
     );
 
-    const [u0, u1, u2, u3] = users as [typeof users[0], typeof users[0], typeof users[0], typeof users[0]];
+    const [u0, u1, u2, u3] = users as [
+      (typeof users)[0],
+      (typeof users)[0],
+      (typeof users)[0],
+      (typeof users)[0],
+    ];
 
     for (const u of [u0, u1, u2]) {
       const r = await app.inject({

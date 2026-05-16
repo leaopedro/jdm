@@ -216,7 +216,13 @@ describe('runDeletionWorkerTick', () => {
 
     const log = await prisma.deletionLog.findUnique({ where: { userId: user.id } });
     const steps = log?.steps as Array<{ step: string; status: string }>;
-    const fanoutSteps = steps.filter((s) => s.step.startsWith('stripe_') || s.step.startsWith('expo_') || s.step.startsWith('sentry_') || s.step.startsWith('resend_'));
+    const fanoutSteps = steps.filter(
+      (s) =>
+        s.step.startsWith('stripe_') ||
+        s.step.startsWith('expo_') ||
+        s.step.startsWith('sentry_') ||
+        s.step.startsWith('resend_'),
+    );
     expect(fanoutSteps.length).toBeGreaterThan(0);
   });
 
