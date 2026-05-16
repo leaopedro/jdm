@@ -40,6 +40,7 @@ import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
+import { startDeletionWorker } from './workers/account-deletion.js';
 import { startBroadcastWorker } from './workers/broadcasts.js';
 import { startEventRemindersWorker } from './workers/event-reminders.js';
 
@@ -127,6 +128,17 @@ export const buildApp = async (
     const worker = startEventRemindersWorker({ sender: app.push, log: app.log });
     app.addHook('onClose', () => {
       worker.stop();
+    });
+
+    const deletionWorker = startDeletionWorker({
+      graceDays: env.DELETION_GRACE_DAYS,
+      uploads: app.uploads,
+      stripe: app.stripe,
+      env,
+      log: app.log,
+    });
+    app.addHook('onClose', () => {
+      deletionWorker.stop();
     });
   }
 
