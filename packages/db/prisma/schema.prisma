@@ -78,6 +78,8 @@ model User {
   mfaSecret           MfaSecret?
   mfaRecoveryCodes    MfaRecoveryCode[]
   deletionLog         DeletionLog?
+  dsrRequests         DataSubjectRequest[]
+  dsrResolutions      DataSubjectRequest[] @relation("DsrResolver")
 
   @@index([createdAt])
   @@index([deletedAt])
@@ -1149,4 +1151,67 @@ model Consent {
   @@index([userId, purpose, withdrawnAt])
   @@index([userId, purpose])
   @@index([purpose, version])
+}
+
+// LGPD Data Subject Requests (L10)
+enum DsrType {
+  access
+  deletion
+  rectification
+  portability
+  objection
+}
+
+enum DsrStatus {
+  pending_identity
+  open
+  in_progress
+  completed
+  denied
+}
+
+enum DsrIdentityStatus {
+  not_requested
+  requested
+  verified
+  failed
+}
+
+model DataSubjectRequest {
+  id               String            @id @default(cuid())
+  userId           String
+  type             DsrType
+  status           DsrStatus         @default(pending_identity)
+  identityStatus   DsrIdentityStatus @default(not_requested)
+  description      String?           @db.Text
+  dueDate          DateTime
+  identityProofKey String?           @db.VarChar(300)
+  evidenceKey      String?           @db.VarChar(300)
+  resolverId       String?
+  resolvedAt       DateTime?
+  denialReason     String?           @db.Text
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resolver User?       @relation("DsrResolver", fields: [resolverId], references: [id], onDelete: SetNull)
+  actions  DsrAction[]
+
+  @@index([userId])
+  @@index([status, dueDate])
+  @@index([dueDate])
+}
+
+model DsrAction {
+  id        String   @id @default(cuid())
+  dsrId     String
+  actorId   String
+  action    String   @db.VarChar(60)
+  note      String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  dsr DataSubjectRequest @relation(fields: [dsrId], references: [id], onDelete: Cascade)
+
+  @@index([dsrId, createdAt])
 }

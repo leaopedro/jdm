@@ -97,6 +97,10 @@
     "./legal": {
       "types": "./src/legal.ts",
       "default": "./dist/legal.js"
+    },
+    "./dsr": {
+      "types": "./src/dsr.ts",
+      "default": "./dist/dsr.js"
     }
   },
   "scripts": {

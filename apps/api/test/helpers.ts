@@ -30,6 +30,8 @@ export const makeAppWithFakes = async (): Promise<{
 };
 
 export const resetDatabase = async (): Promise<void> => {
+  await prisma.dsrAction.deleteMany();
+  await prisma.dataSubjectRequest.deleteMany();
   await prisma.feedBan.deleteMany();
   await prisma.report.deleteMany();
   await prisma.feedReaction.deleteMany();
