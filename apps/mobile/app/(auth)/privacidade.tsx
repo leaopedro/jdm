@@ -55,7 +55,7 @@ export default function PrivacidadeScreen() {
 
         {privacyPolicySections.map((section) => (
           <View key={section.id} style={{ marginBottom: 28 }}>
-            <Text variant="bodyMd" weight="semibold" style={{ marginBottom: 8 }}>
+            <Text variant="body" weight="semibold" style={{ marginBottom: 8 }}>
               {section.title}
             </Text>
             <PolicyBody text={section.body} />
