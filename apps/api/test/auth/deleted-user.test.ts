@@ -1,18 +1,40 @@
 import { prisma } from '@jdm/db';
+import { mfaChallengeResponseSchema } from '@jdm/shared/auth';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
+import {
+  encryptSecret,
+  generateRecoveryCodes,
+  generateTotpSecret,
+  hashRecoveryCode,
+} from '../../src/services/auth/mfa.js';
 import { issueRefreshToken } from '../../src/services/auth/tokens.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
 
+const env = loadEnv();
+
 const seedRefresh = async (userId: string) => {
-  const env = loadEnv();
   const issued = issueRefreshToken(env);
   await prisma.refreshToken.create({
     data: { userId, tokenHash: issued.hash, expiresAt: issued.expiresAt },
   });
   return issued.token;
+};
+
+const enrollMfa = async (userId: string, email: string) => {
+  const mfaKey = env.MFA_ENCRYPTION_KEY!;
+  const { secret } = generateTotpSecret(email);
+  const encrypted = encryptSecret(secret, mfaKey);
+  await prisma.mfaSecret.create({
+    data: { userId, encryptedSecret: encrypted, verifiedAt: new Date() },
+  });
+  const codes = generateRecoveryCodes();
+  await prisma.mfaRecoveryCode.createMany({
+    data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c, mfaKey) })),
+  });
+  return { secret, codes };
 };
 
 describe('deleted / anonymized user auth guards', () => {
@@ -177,6 +199,40 @@ describe('deleted / anonymized user auth guards', () => {
     });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
+  });
+
+  it('deleted user cannot use mfa recovery (code not consumed)', async () => {
+    const { user, password } = await createUser({
+      email: 'del@jdm.test',
+      verified: true,
+      role: 'admin',
+    });
+    const { codes } = await enrollMfa(user.id, user.email);
+
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: user.email, password },
+    });
+    const { mfaToken } = mfaChallengeResponseSchema.parse(loginRes.json());
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'deleted', deletedAt: new Date() },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/mfa/recovery',
+      payload: { mfaToken, code: codes[0] },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
+
+    const unused = await prisma.mfaRecoveryCode.findMany({
+      where: { userId: user.id, usedAt: null },
+    });
+    expect(unused.length).toBe(codes.length);
   });
 
   it('deletedAt and anonymizedAt are null for active users', async () => {

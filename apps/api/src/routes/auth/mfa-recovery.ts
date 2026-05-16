@@ -28,6 +28,21 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
         .send({ error: 'Unauthorized', message: 'invalid or expired mfa token' });
     }
 
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: payload.sub },
+    });
+
+    if ((INACTIVE_USER_STATUSES as readonly string[]).includes(user.status)) {
+      return reply
+        .status(403)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
+    }
+    if (!user.emailVerifiedAt) {
+      return reply
+        .status(403)
+        .send({ error: 'EmailNotVerified', message: 'verify your email first' });
+    }
+
     const codes = await prisma.mfaRecoveryCode.findMany({
       where: { userId: payload.sub, usedAt: null },
     });
@@ -61,21 +76,6 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
         metadata: { recoveryCodeId: matched.id },
       },
     });
-
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: payload.sub },
-    });
-
-    if ((INACTIVE_USER_STATUSES as readonly string[]).includes(user.status)) {
-      return reply
-        .status(403)
-        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
-    }
-    if (!user.emailVerifiedAt) {
-      return reply
-        .status(403)
-        .send({ error: 'EmailNotVerified', message: 'verify your email first' });
-    }
 
     const access = createAccessToken({ sub: user.id, role: user.role }, app.env);
     const refresh = issueRefreshToken(app.env);
