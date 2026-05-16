@@ -333,6 +333,8 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
       storeEnabled: settings.storeEnabled,
       defaultShippingFeeCents: settings.defaultShippingFeeCents,
       lowStockThreshold: settings.lowStockThreshold,
+      storeHeaderTitle: settings.storeHeaderTitle,
+      storeHeaderSubtitle: settings.storeHeaderSubtitle,
       eventPickupEnabled: settings.eventPickupEnabled,
       pickupDisplayLabel: settings.pickupDisplayLabel,
       supportPhone: settings.supportPhone,

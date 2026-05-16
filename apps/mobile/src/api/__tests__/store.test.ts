@@ -106,6 +106,8 @@ describe('mobile store API client', () => {
             storeEnabled: true,
             defaultShippingFeeCents: 0,
             lowStockThreshold: 5,
+            storeHeaderTitle: 'Drop novo. Corre antes que acabe.',
+            storeHeaderSubtitle: 'Itens oficiais da cena JDM com estoque limitado.',
             eventPickupEnabled: true,
             pickupDisplayLabel: 'Retirada no evento',
             supportPhone: null,
@@ -119,6 +121,8 @@ describe('mobile store API client', () => {
     const settings = await getStoreSettings();
 
     expect(settings.eventPickupEnabled).toBe(true);
+    expect(settings.storeHeaderTitle).toBe('Drop novo. Corre antes que acabe.');
+    expect(settings.storeHeaderSubtitle).toBe('Itens oficiais da cena JDM com estoque limitado.');
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:4000/store/settings', {
       headers: { 'content-type': 'application/json' },
       method: 'GET',

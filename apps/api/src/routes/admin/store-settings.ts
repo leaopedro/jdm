@@ -32,6 +32,12 @@ export const adminStoreSettingsRoutes: FastifyPluginAsync = async (app) => {
     if (input.lowStockThreshold !== undefined) {
       data.lowStockThreshold = input.lowStockThreshold;
     }
+    if (input.storeHeaderTitle !== undefined) {
+      data.storeHeaderTitle = input.storeHeaderTitle;
+    }
+    if (input.storeHeaderSubtitle !== undefined) {
+      data.storeHeaderSubtitle = input.storeHeaderSubtitle;
+    }
     if (input.eventPickupEnabled !== undefined) {
       data.eventPickupEnabled = input.eventPickupEnabled;
     }

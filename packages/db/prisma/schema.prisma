@@ -505,6 +505,8 @@ model StoreSettings {
   storeEnabled            Boolean  @default(true)
   defaultShippingFeeCents Int      @default(0)
   lowStockThreshold       Int      @default(5)
+  storeHeaderTitle        String?  @db.VarChar(140)
+  storeHeaderSubtitle     String?  @db.VarChar(240)
   eventPickupEnabled      Boolean  @default(false)
   pickupDisplayLabel      String?  @db.VarChar(140)
   supportPhone            String?  @db.VarChar(20)

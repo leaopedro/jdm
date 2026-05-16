@@ -2,6 +2,7 @@ import type {
   StoreCollection,
   StoreProduct,
   StoreProductSummary,
+  StoreSettings,
   StoreProductType,
   StoreProductVariant,
 } from '@jdm/shared/store';
@@ -27,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   getStoreProduct,
+  getStoreSettings,
   listStoreCollections,
   listStoreProducts,
   listStoreProductTypes,
@@ -71,6 +73,12 @@ export default function StoreIndex() {
   const [search, setSearch] = useState('');
   const [collections, setCollections] = useState<StoreCollection[]>([]);
   const [productTypes, setProductTypes] = useState<StoreProductType[]>([]);
+  const [heroHeader, setHeroHeader] = useState<
+    Pick<StoreSettings, 'storeHeaderTitle' | 'storeHeaderSubtitle'>
+  >({
+    storeHeaderTitle: null,
+    storeHeaderSubtitle: null,
+  });
   const [items, setItems] = useState<StoreProductSummary[] | null>(null);
   const [collectionSlug, setCollectionSlug] = useState<string | null>(null);
   const [productTypeSlug, setProductTypeSlug] = useState<string | null>(null);
@@ -90,12 +98,17 @@ export default function StoreIndex() {
   const loadFilters = useCallback(async () => {
     setLoadingFilters(true);
     try {
-      const [nextCollections, nextProductTypes] = await Promise.all([
+      const [nextCollections, nextProductTypes, settings] = await Promise.all([
         listStoreCollections(),
         listStoreProductTypes(),
+        getStoreSettings(),
       ]);
       setCollections(nextCollections.items);
       setProductTypes(nextProductTypes.items);
+      setHeroHeader({
+        storeHeaderTitle: settings.storeHeaderTitle,
+        storeHeaderSubtitle: settings.storeHeaderSubtitle,
+      });
     } finally {
       setLoadingFilters(false);
     }
@@ -251,10 +264,10 @@ export default function StoreIndex() {
             {storeCopy.header.eyebrow}
           </Text>
           <Text variant="h1" className="mt-2">
-            {storeCopy.header.title}
+            {heroHeader.storeHeaderTitle ?? storeCopy.header.title}
           </Text>
           <Text variant="body" tone="secondary" className="mt-3">
-            {storeCopy.header.subtitle}
+            {heroHeader.storeHeaderSubtitle ?? storeCopy.header.subtitle}
           </Text>
         </View>
         <Pressable
