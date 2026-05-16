@@ -72,4 +72,30 @@ describe('POST /me/account/delete', () => {
     const res = await app.inject({ method: 'POST', url: '/me/account/delete' });
     expect(res.statusCode).toBe(401);
   });
+
+  it('rate limits after 3 requests from same IP', async () => {
+    const users = await Promise.all(
+      Array.from({ length: 4 }, (_, i) =>
+        createUser({ email: `rate${i}@jdm.test`, verified: true }),
+      ),
+    );
+
+    const [u0, u1, u2, u3] = users as [typeof users[0], typeof users[0], typeof users[0], typeof users[0]];
+
+    for (const u of [u0, u1, u2]) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/me/account/delete',
+        headers: { authorization: bearer(env, u.user.id) },
+      });
+      expect(r.statusCode).toBe(200);
+    }
+
+    const last = await app.inject({
+      method: 'POST',
+      url: '/me/account/delete',
+      headers: { authorization: bearer(env, u3.user.id) },
+    });
+    expect(last.statusCode).toBe(429);
+  });
 });
