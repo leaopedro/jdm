@@ -724,11 +724,12 @@ model PickupVoucher {
 }
 
 model PaymentWebhookEvent {
-  id        String          @id @default(cuid())
-  provider  PaymentProvider
-  eventId   String          @db.VarChar(200)
-  payload   Json
-  createdAt DateTime        @default(now())
+  id                 String          @id @default(cuid())
+  provider           PaymentProvider
+  eventId            String          @db.VarChar(200)
+  payload            Json
+  retentionHoldUntil DateTime?
+  createdAt          DateTime        @default(now())
 
   @@unique([provider, eventId])
   @@index([createdAt])

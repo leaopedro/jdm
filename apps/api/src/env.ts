@@ -56,6 +56,10 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   BROADCAST_BATCH_SIZE: z.coerce.number().int().positive().default(100),
+  RETENTION_WORKER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   DEV_FEE_PERCENT: z.coerce.number().int().min(0).max(100).default(10),
 });
 
