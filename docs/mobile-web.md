@@ -37,7 +37,8 @@ config lives in `apps/mobile/vercel.json`.
    - **Framework preset:** Other (not Next.js).
    - **Build & Output Settings:** leave overrides empty. Vercel detects the
      repo's Turbo monorepo and runs `turbo build --filter=@jdm/mobile`,
-     which invokes `apps/mobile`'s `build` script (`expo export --platform web`).
+     which invokes `apps/mobile`'s `build` script
+     (`pnpm --filter @jdm/shared build && expo export --platform web`).
      `apps/mobile/vercel.json` sets `outputDirectory: dist` so Vercel knows
      where Expo wrote the static export.
 
