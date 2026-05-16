@@ -21,6 +21,7 @@ import { eventRoutes } from './routes/events.js';
 import { feedRoutes } from './routes/feed.js';
 import { healthRoutes } from './routes/health.js';
 import { meConsentRoutes } from './routes/me-consents.js';
+import { meDataExportRoutes } from './routes/me-data-export.js';
 import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
 import { meEmailChangeRoutes } from './routes/me-email-change.js';
 import { meNotificationsRoutes } from './routes/me-notifications.js';
@@ -40,6 +41,7 @@ import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 import { startBroadcastWorker } from './workers/broadcasts.js';
+import { startDataExportWorker } from './workers/data-export.js';
 import { startEventRemindersWorker } from './workers/event-reminders.js';
 
 declare module 'fastify' {
@@ -107,6 +109,7 @@ export const buildApp = async (
   await app.register(meNotificationsRoutes);
   await app.register(meShippingAddressRoutes);
   await app.register(meConsentRoutes);
+  await app.register(meDataExportRoutes);
   await app.register(meSupportRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
@@ -152,6 +155,13 @@ export const buildApp = async (
     });
     app.addHook('onClose', () => {
       void bWorker.stop();
+    });
+  }
+
+  if (env.WORKER_ENABLED || env.NODE_ENV !== 'production') {
+    const exportWorker = startDataExportWorker({ env, log: app.log });
+    app.addHook('onClose', () => {
+      void exportWorker.stop();
     });
   }
 
