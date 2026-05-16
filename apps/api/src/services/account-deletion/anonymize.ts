@@ -5,11 +5,14 @@ import type { Prisma } from '@prisma/client';
 
 import type { Uploads } from '../uploads/index.js';
 
-export type StepEntry = { step: string; status: 'ok' | 'skipped' | 'error'; error?: string; at: string };
+export type StepEntry = {
+  step: string;
+  status: 'ok' | 'skipped' | 'error';
+  error?: string;
+  at: string;
+};
 
-export type AnonymizeResult =
-  | { ok: true; skipped?: boolean }
-  | { ok: false; error: string };
+export type AnonymizeResult = { ok: true; skipped?: boolean } | { ok: false; error: string };
 
 export const anonymizeUser = async (
   userId: string,
@@ -49,9 +52,7 @@ export const anonymizeUser = async (
     select: { attachmentObjectKey: true },
   });
   objectKeys.push(
-    ...supportAttachments
-      .map((s) => s.attachmentObjectKey)
-      .filter((k): k is string => k !== null),
+    ...supportAttachments.map((s) => s.attachmentObjectKey).filter((k): k is string => k !== null),
   );
 
   // Delete R2 objects (best-effort, log failures)
@@ -61,7 +62,12 @@ export const anonymizeUser = async (
       steps.push({ step: `r2_delete:${key}`, status: 'ok', at: new Date().toISOString() });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      steps.push({ step: `r2_delete:${key}`, status: 'error', error: msg, at: new Date().toISOString() });
+      steps.push({
+        step: `r2_delete:${key}`,
+        status: 'error',
+        error: msg,
+        at: new Date().toISOString(),
+      });
     }
   }
 
@@ -76,8 +82,14 @@ export const anonymizeUser = async (
   steps.push({ step: 'delete_support_tickets', status: 'ok', at: new Date().toISOString() });
 
   // Nullify feed authorship (preserve content, remove identity link)
-  await prisma.feedPost.updateMany({ where: { authorUserId: userId }, data: { authorUserId: null } });
-  await prisma.feedComment.updateMany({ where: { authorUserId: userId }, data: { authorUserId: null } });
+  await prisma.feedPost.updateMany({
+    where: { authorUserId: userId },
+    data: { authorUserId: null },
+  });
+  await prisma.feedComment.updateMany({
+    where: { authorUserId: userId },
+    data: { authorUserId: null },
+  });
   steps.push({ step: 'nullify_feed_authorship', status: 'ok', at: new Date().toISOString() });
 
   // Delete auth artifacts
@@ -109,10 +121,16 @@ export const anonymizeUser = async (
   });
   steps.push({ step: 'anonymize_user_row', status: 'ok', at: new Date().toISOString() });
 
-  // Mark DeletionLog complete
-  await prisma.deletionLog.update({
+  // Mark DeletionLog complete (upsert in case row is missing for pre-existing deletions)
+  await prisma.deletionLog.upsert({
     where: { userId },
-    data: {
+    update: {
+      completedAt: now,
+      steps: steps as unknown as Prisma.InputJsonValue,
+    },
+    create: {
+      userId,
+      requestedAt: now,
       completedAt: now,
       steps: steps as unknown as Prisma.InputJsonValue,
     },
