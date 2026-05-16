@@ -39,6 +39,7 @@ import { cartCopy } from '~/copy/cart';
 import { storeCopy } from '~/copy/store';
 import { showMessage } from '~/lib/confirm';
 import { formatBRL } from '~/lib/format';
+import { DEFAULT_STORE_HERO_HEADER, loadStoreHeroHeader } from '~/store/hero-header';
 import { resolveAddToCartVariantSelection } from '~/store/variant-selection';
 import { theme } from '~/theme';
 
@@ -73,12 +74,10 @@ export default function StoreIndex() {
   const [search, setSearch] = useState('');
   const [collections, setCollections] = useState<StoreCollection[]>([]);
   const [productTypes, setProductTypes] = useState<StoreProductType[]>([]);
-  const [heroHeader, setHeroHeader] = useState<
-    Pick<StoreSettings, 'storeHeaderTitle' | 'storeHeaderSubtitle'>
-  >({
-    storeHeaderTitle: null,
-    storeHeaderSubtitle: null,
-  });
+  const [heroHeader, setHeroHeader] =
+    useState<Pick<StoreSettings, 'storeHeaderTitle' | 'storeHeaderSubtitle'>>(
+      DEFAULT_STORE_HERO_HEADER,
+    );
   const [items, setItems] = useState<StoreProductSummary[] | null>(null);
   const [collectionSlug, setCollectionSlug] = useState<string | null>(null);
   const [productTypeSlug, setProductTypeSlug] = useState<string | null>(null);
@@ -98,17 +97,13 @@ export default function StoreIndex() {
   const loadFilters = useCallback(async () => {
     setLoadingFilters(true);
     try {
-      const [nextCollections, nextProductTypes, settings] = await Promise.all([
-        listStoreCollections(),
-        listStoreProductTypes(),
-        getStoreSettings(),
+      const [[nextCollections, nextProductTypes], header] = await Promise.all([
+        Promise.all([listStoreCollections(), listStoreProductTypes()]),
+        loadStoreHeroHeader(getStoreSettings),
       ]);
       setCollections(nextCollections.items);
       setProductTypes(nextProductTypes.items);
-      setHeroHeader({
-        storeHeaderTitle: settings.storeHeaderTitle,
-        storeHeaderSubtitle: settings.storeHeaderSubtitle,
-      });
+      setHeroHeader(header);
     } finally {
       setLoadingFilters(false);
     }
