@@ -1,5 +1,7 @@
 'use server';
 
+import type { UserStatusName } from '@jdm/shared/auth';
+
 import { createAdminUser, disableAdminUser, enableAdminUser } from './admin-api';
 import { ApiError } from './api';
 
@@ -24,7 +26,7 @@ export const createAdminUserAction = async (email: string): Promise<CreateUserAc
 };
 
 export type StatusActionResult =
-  | { ok: true; status: 'partial' | 'active' | 'disabled' }
+  | { ok: true; status: UserStatusName }
   | { ok: false; error: string };
 
 export const disableAdminUserAction = async (id: string): Promise<StatusActionResult> => {
