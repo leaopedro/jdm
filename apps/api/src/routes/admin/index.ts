@@ -5,6 +5,7 @@ import { adminBroadcastRoutes } from './broadcasts.js';
 import { adminCheckInRoutes } from './check-in.js';
 import { adminCollectionRoutes } from './collections.js';
 import { adminConsentRoutes } from './consents.js';
+import { adminDsrRoutes } from './dsr.js';
 import { adminEventRoutes } from './events.js';
 import { adminExtraRoutes } from './extras.js';
 import { adminFeedModerationRoutes } from './feed-moderation.js';
@@ -75,10 +76,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminBroadcastRoutes);
   });
 
-  // LGPD consent audit: admin-only (exposes PII: email, IP, UA).
+  // LGPD consent audit + DSR management: admin-only (exposes PII).
   await app.register(async (scope) => {
     scope.addHook('preHandler', scope.requireRole('admin'));
     await scope.register(adminConsentRoutes);
+    await scope.register(adminDsrRoutes);
   });
 
   // User create/disable/enable: admin-only with tighter rate limit.
