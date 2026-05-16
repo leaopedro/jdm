@@ -245,4 +245,69 @@ describe('deleted / anonymized user auth guards', () => {
     expect(row?.deletedAt).toBeNull();
     expect(row?.anonymizedAt).toBeNull();
   });
+
+  describe('DB lifecycle check constraints', () => {
+    it('rejects deleted status without deletedAt', async () => {
+      const { user } = await createUser({ email: 'c1@jdm.test', verified: true });
+      await expect(
+        prisma.user.update({
+          where: { id: user.id },
+          data: { status: 'deleted' },
+        }),
+      ).rejects.toThrow(/User_deleted_requires_deletedAt/);
+    });
+
+    it('rejects anonymized status without anonymizedAt', async () => {
+      const { user } = await createUser({ email: 'c2@jdm.test', verified: true });
+      await expect(
+        prisma.user.update({
+          where: { id: user.id },
+          data: { status: 'anonymized' },
+        }),
+      ).rejects.toThrow(/User_anonymized_requires_anonymizedAt/);
+    });
+
+    it('rejects deletedAt on active user', async () => {
+      const { user } = await createUser({ email: 'c3@jdm.test', verified: true });
+      await expect(
+        prisma.user.update({
+          where: { id: user.id },
+          data: { deletedAt: new Date() },
+        }),
+      ).rejects.toThrow(/User_deletedAt_requires_deleted_status/);
+    });
+
+    it('rejects anonymizedAt on active user', async () => {
+      const { user } = await createUser({ email: 'c4@jdm.test', verified: true });
+      await expect(
+        prisma.user.update({
+          where: { id: user.id },
+          data: { anonymizedAt: new Date() },
+        }),
+      ).rejects.toThrow(/User_anonymizedAt_requires_anonymized_status/);
+    });
+
+    it('allows valid deleted state', async () => {
+      const { user } = await createUser({ email: 'c5@jdm.test', verified: true });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'deleted', deletedAt: new Date() },
+      });
+      const row = await prisma.user.findUnique({ where: { id: user.id } });
+      expect(row?.status).toBe('deleted');
+      expect(row?.deletedAt).not.toBeNull();
+    });
+
+    it('allows valid anonymized state', async () => {
+      const { user } = await createUser({ email: 'c6@jdm.test', verified: true });
+      const now = new Date();
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'anonymized', deletedAt: now, anonymizedAt: now },
+      });
+      const row = await prisma.user.findUnique({ where: { id: user.id } });
+      expect(row?.status).toBe('anonymized');
+      expect(row?.anonymizedAt).not.toBeNull();
+    });
+  });
 });
