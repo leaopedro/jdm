@@ -1,11 +1,22 @@
 import { prisma } from '@jdm/db';
-import { authResponseSchema, signupSchema } from '@jdm/shared/auth';
+import { UNDERAGE_ERROR, authResponseSchema, signupSchema } from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { verificationMail } from '../../services/auth/mail-templates.js';
 import { hashPassword } from '../../services/auth/password.js';
 import { createAccessToken, issueRefreshToken } from '../../services/auth/tokens.js';
 import { issueVerificationToken } from '../../services/auth/verification.js';
+
+function computeAge(dob: Date, now = new Date()): number {
+  // Use UTC values throughout — dob is stored as UTC midnight, and comparing
+  // against UTC "today" avoids timezone-induced off-by-one errors.
+  let age = now.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - dob.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < dob.getUTCDate())) {
+    age--;
+  }
+  return age;
+}
 
 // Signup intentionally returns an access+refresh pair so mobile can navigate
 // straight to the verify-email-pending screen without a separate login round
@@ -17,6 +28,15 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
   app.post('/signup', async (request, reply) => {
     const input = signupSchema.parse(request.body);
 
+    const dob = new Date(`${input.dateOfBirth}T00:00:00.000Z`);
+    if (computeAge(dob) < 18) {
+      return reply.status(422).send({
+        error: UNDERAGE_ERROR,
+        code: 'UNDERAGE',
+        message: 'Você precisa ter 18 anos ou mais para criar uma conta.',
+      });
+    }
+
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
       return reply.status(409).send({ error: 'Conflict', message: 'email already registered' });
@@ -27,6 +47,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         email: input.email,
         name: input.name,
         passwordHash: await hashPassword(input.password),
+        dateOfBirth: dob,
       },
     });
 
