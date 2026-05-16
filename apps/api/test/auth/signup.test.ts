@@ -172,4 +172,18 @@ describe('POST /auth/signup', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('rejects semantically invalid dateOfBirth (Feb 30)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: {
+        email: 'feb30@jdm.test',
+        password: 'correct-horse-battery-staple',
+        name: 'Feb30',
+        dateOfBirth: '2000-02-30',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

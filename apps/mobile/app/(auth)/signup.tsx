@@ -33,7 +33,12 @@ function parseDobInput(raw: string): string | null {
   const m = parseInt(mm, 10);
   const y = parseInt(yyyy, 10);
   if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) return null;
-  return `${yyyy}-${mm}-${dd}`;
+  const iso = `${yyyy}-${mm}-${dd}`;
+  const date = new Date(`${iso}T00:00:00.000Z`);
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d) {
+    return null;
+  }
+  return iso;
 }
 
 function isAdult(isoDate: string): boolean {
@@ -101,8 +106,13 @@ export default function SignupScreen() {
       });
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
-        const body = err.body as { code?: string } | undefined;
-        if (body?.code === 'UNDERAGE') {
+        const body: unknown = err.body;
+        if (
+          typeof body === 'object' &&
+          body !== null &&
+          'code' in body &&
+          (body as { code: unknown }).code === 'UNDERAGE'
+        ) {
           showUnderageAlert();
           return;
         }

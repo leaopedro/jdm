@@ -41,7 +41,15 @@ export const signupSchema = z.object({
   name: z.string().trim().min(1).max(100),
   dateOfBirth: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento inválida (use AAAA-MM-DD)'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento inválida (use AAAA-MM-DD)')
+    .refine((s) => {
+      const parts = s.split('-');
+      const y = Number(parts[0]);
+      const m = Number(parts[1]);
+      const d = Number(parts[2]);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      return date.getUTCFullYear() === y && date.getUTCMonth() + 1 === m && date.getUTCDate() === d;
+    }, 'Data de nascimento inválida'),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
