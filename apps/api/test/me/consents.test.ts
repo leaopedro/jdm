@@ -82,6 +82,79 @@ describe('/me/consents', () => {
 
       expect(res.statusCode).toBe(401);
     });
+
+    it.each([
+      ['admin', 'web_admin'],
+      ['staff', 'web_admin'],
+      ['organizer', 'web_admin'],
+    ] as const)(
+      'role %s produces channel=%s',
+      async (role, expectedChannel) => {
+        const { user } = await createUser({ verified: true, role });
+        const env = loadEnv();
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/me/consents',
+          headers: { authorization: bearer(env, user.id, role) },
+          payload: {
+            purpose: 'cookies_analytics',
+            version: 'v1-2026-05-14',
+            evidence: { source: 'cookie_banner', accepted: true },
+          },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = consentRecordSchema.parse(res.json());
+        expect(body.channel).toBe(expectedChannel);
+      },
+    );
+
+    it('user role produces channel=mobile', async () => {
+      const { user } = await createUser({ verified: true, role: 'user' });
+      const env = loadEnv();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/consents',
+        headers: { authorization: bearer(env, user.id, 'user') },
+        payload: {
+          purpose: 'push_marketing',
+          version: 'v1-2026-05-14',
+          evidence: { source: 'consent_screen', checkbox: true },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = consentRecordSchema.parse(res.json());
+      expect(body.channel).toBe('mobile');
+    });
+
+    it('admin consent persists cookies_analytics row with web_admin channel', async () => {
+      const { user: admin } = await createUser({ verified: true, role: 'admin' });
+      const env = loadEnv();
+      const version = 'v1-2026-05-14';
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/me/consents',
+        headers: { authorization: bearer(env, admin.id, 'admin') },
+        payload: {
+          purpose: 'cookies_analytics',
+          version,
+          evidence: { source: 'cookie_banner', accepted: true },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const row = await prisma.consent.findFirst({ where: { userId: admin.id } });
+      expect(row).not.toBeNull();
+      expect(row!.purpose).toBe('cookies_analytics');
+      expect(row!.channel).toBe('web_admin');
+      expect(row!.version).toBe(version);
+      expect(row!.withdrawnAt).toBeNull();
+    });
   });
 
   describe('DELETE /me/consents/:purpose', () => {
