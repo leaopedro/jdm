@@ -16,9 +16,7 @@ export type RetentionWorkerDeps = {
 async function purgeExpiredRefreshTokens(now: Date): Promise<PurgeResult> {
   const cutoff = new Date(now.getTime() - 7 * MS_PER_DAY);
   const { count } = await prisma.refreshToken.deleteMany({
-    where: {
-      OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { not: null } }],
-    },
+    where: { expiresAt: { lt: cutoff } },
   });
   return { table: 'RefreshToken', deletedCount: count, skippedHolds: 0 };
 }
@@ -101,31 +99,29 @@ export const runRetentionTick = async (deps: RetentionWorkerDeps): Promise<Purge
     }
   }
 
-  const totalDeleted = results.reduce((sum, r) => sum + r.deletedCount, 0);
-  if (totalDeleted > 0) {
-    await recordAudit({
-      actorId: 'system:retention',
-      action: 'retention.purge',
-      entityType: 'retention_run',
-      entityId: now.toISOString().slice(0, 10),
-      metadata: Object.fromEntries(
-        results
-          .filter((r) => r.deletedCount > 0 || r.skippedHolds > 0)
-          .map((r) => [r.table, { deleted: r.deletedCount, skippedHolds: r.skippedHolds }]),
-      ),
-    });
-  }
+  await recordAudit({
+    actorId: 'system:retention',
+    action: 'retention.purge',
+    entityType: 'retention_run',
+    entityId: now.toISOString().slice(0, 10),
+    metadata: Object.fromEntries(
+      results.map((r) => [r.table, { deleted: r.deletedCount, skippedHolds: r.skippedHolds }]),
+    ),
+  });
 
   return results;
 };
 
 export const startRetentionWorker = (deps: { log: FastifyBaseLogger }): { stop: () => void } => {
-  // Daily at 02:00 BRT (05:00 UTC)
-  const task = cron.schedule('0 5 * * *', () => {
-    void runRetentionTick({ log: deps.log }).catch((err: unknown) => {
-      deps.log.error({ err }, '[retention] tick failed');
-    });
-  });
+  const task = cron.schedule(
+    '0 2 * * *',
+    () => {
+      void runRetentionTick({ log: deps.log }).catch((err: unknown) => {
+        deps.log.error({ err }, '[retention] tick failed');
+      });
+    },
+    { timezone: 'America/Sao_Paulo' },
+  );
   return {
     stop: () => {
       void task.stop();

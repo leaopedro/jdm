@@ -39,7 +39,7 @@ describe('runRetentionTick', () => {
     expect(await prisma.refreshToken.findUnique({ where: { id: fresh.id } })).not.toBeNull();
   });
 
-  it('deletes revoked refresh tokens regardless of expiry', async () => {
+  it('keeps revoked refresh tokens until 7 days past expiry', async () => {
     const { user } = await createUser({ verified: true });
     await prisma.refreshToken.create({
       data: {
@@ -53,7 +53,8 @@ describe('runRetentionTick', () => {
     const results = await runRetentionTick({ now: new Date() });
 
     const rt = results.find((r) => r.table === 'RefreshToken')!;
-    expect(rt.deletedCount).toBe(1);
+    expect(rt.deletedCount).toBe(0);
+    expect(await prisma.refreshToken.count()).toBe(1);
   });
 
   it('deletes expired verification tokens', async () => {
@@ -265,12 +266,15 @@ describe('runRetentionTick', () => {
     expect(meta.RefreshToken?.deleted).toBe(1);
   });
 
-  it('skips audit record when nothing is purged', async () => {
+  it('writes audit record even when nothing is purged', async () => {
     await runRetentionTick({ now: new Date() });
 
     const audit = await prisma.adminAudit.findFirst({
       where: { actorId: 'system:retention', action: 'retention.purge' },
     });
-    expect(audit).toBeNull();
+    expect(audit).not.toBeNull();
+    expect(audit!.entityType).toBe('retention_run');
+    const meta = audit!.metadata as Record<string, { deleted: number } | undefined>;
+    expect(meta.RefreshToken?.deleted).toBe(0);
   });
 });
