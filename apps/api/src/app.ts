@@ -41,6 +41,7 @@ import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
 import { startBroadcastWorker } from './workers/broadcasts.js';
 import { startEventRemindersWorker } from './workers/event-reminders.js';
+import { startRetentionWorker } from './workers/retention.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -152,6 +153,13 @@ export const buildApp = async (
     });
     app.addHook('onClose', () => {
       void bWorker.stop();
+    });
+  }
+
+  if (env.RETENTION_WORKER_ENABLED) {
+    const rWorker = startRetentionWorker({ log: app.log });
+    app.addHook('onClose', () => {
+      void rWorker.stop();
     });
   }
 

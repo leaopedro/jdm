@@ -24,7 +24,8 @@ export type RecordAuditInput = {
     | 'feed_post'
     | 'feed_comment'
     | 'report'
-    | 'feed_ban';
+    | 'feed_ban'
+    | 'retention_run';
   entityId: string;
   metadata?: Record<string, unknown>;
 };

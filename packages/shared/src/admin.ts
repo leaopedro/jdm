@@ -70,6 +70,7 @@ export const adminAuditActionSchema = z.enum([
   'mfa.disabled',
   'mfa.recovery_code_used',
   'mfa.recovery_codes_regenerated',
+  'retention.purge',
 ]);
 export type AdminAuditAction = z.infer<typeof adminAuditActionSchema>;
 
