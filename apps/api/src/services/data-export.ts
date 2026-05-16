@@ -283,19 +283,21 @@ export const getR2ConfigFromEnv = (env: Env): R2Config | null => {
 };
 
 export const processExportJob = async (jobId: string, env: Env): Promise<void> => {
+  // Atomic claim: only one worker can transition pending->processing
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+  const { count } = (await (prisma as any).dataExportJob.updateMany({
+    where: { id: jobId, status: 'pending' },
+    data: { status: 'processing', startedAt: new Date() },
+  })) as { count: number };
+  if (count === 0) return;
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
   const job = (await (prisma as any).dataExportJob.findUnique({ where: { id: jobId } })) as {
     id: string;
     userId: string;
     status: DataExportJobStatus;
   } | null;
-  if (!job || job.status !== 'pending') return;
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-  await (prisma as any).dataExportJob.update({
-    where: { id: jobId },
-    data: { status: 'processing', startedAt: new Date() },
-  });
+  if (!job) return;
 
   try {
     const bundle = await collectUserData(job.userId);
@@ -332,21 +334,34 @@ export const processExportJob = async (jobId: string, env: Env): Promise<void> =
 export const createExportJob = async (
   userId: string,
 ): Promise<{ id: string; status: DataExportJobStatus }> => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-  const recent = (await (prisma as any).dataExportJob.findFirst({
-    where: {
-      userId,
-      status: { in: ['pending', 'processing'] },
-    },
-    orderBy: { createdAt: 'desc' },
-  })) as { id: string; status: DataExportJobStatus } | null;
-  if (recent) return { id: recent.id, status: recent.status };
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+          const recent = (await (tx as any).dataExportJob.findFirst({
+            where: {
+              userId,
+              status: { in: ['pending', 'processing'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          })) as { id: string; status: DataExportJobStatus } | null;
+          if (recent) return { id: recent.id, status: recent.status };
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-  const job = (await (prisma as any).dataExportJob.create({
-    data: { userId },
-  })) as { id: string; status: DataExportJobStatus };
-  return { id: job.id, status: job.status };
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+          const job = (await (tx as any).dataExportJob.create({
+            data: { userId },
+          })) as { id: string; status: DataExportJobStatus };
+          return { id: job.id, status: job.status };
+        },
+        { isolationLevel: 'Serializable' },
+      );
+    } catch (err) {
+      const isSerializationError = err instanceof Error && err.message.includes('write conflict');
+      if (!isSerializationError || attempt >= MAX_RETRIES) throw err;
+    }
+  }
 };
 
 export const getExportJob = async (

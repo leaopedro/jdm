@@ -35,7 +35,8 @@ export const meDataExportRoutes: FastifyPluginAsync = async (app) => {
       if (!job) return reply.status(404).send({ error: 'NotFound' });
 
       let downloadUrl: string | null = null;
-      if (job.status === 'completed' && job.objectKey) {
+      const notExpired = job.expiresAt && job.expiresAt.getTime() > Date.now();
+      if (job.status === 'completed' && job.objectKey && notExpired) {
         const r2Config = getR2ConfigFromEnv(app.env);
         if (r2Config) {
           downloadUrl = await buildSignedDownloadUrl(r2Config, job.objectKey);

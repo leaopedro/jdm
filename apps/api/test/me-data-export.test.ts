@@ -180,6 +180,27 @@ describe('data-export service', () => {
     expect(await getExportJob(id, u2.id)).toBeNull();
   });
 
+  it('concurrent createExportJob calls produce a single job', async () => {
+    const { user } = await createUser({ verified: true });
+    const results = await Promise.all([
+      createExportJob(user.id),
+      createExportJob(user.id),
+      createExportJob(user.id),
+    ]);
+    const ids = new Set(results.map((r) => r.id));
+    expect(ids.size).toBe(1);
+  });
+
+  it('concurrent processExportJob calls only process once', async () => {
+    const { user } = await createUser({ verified: true });
+    const { id } = await createExportJob(user.id);
+
+    await Promise.all([processExportJob(id, env), processExportJob(id, env)]);
+
+    const job = await dataExportJob.findUnique({ where: { id } });
+    expect(job!.status).toBe('completed');
+  });
+
   it('processExportJob collects consent history', async () => {
     const { user } = await createUser({ verified: true });
     await prisma.consent.create({
