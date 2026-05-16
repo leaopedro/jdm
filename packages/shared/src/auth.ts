@@ -23,6 +23,8 @@ export const INACTIVE_USER_STATUSES = ['disabled', 'deleted', 'anonymized'] as c
 
 export const ACCOUNT_DISABLED_ERROR = 'AccountDisabled' as const;
 
+export const UNDERAGE_ERROR = 'Underage' as const;
+
 export const publicUserSchema = z.object({
   id: z.string().min(1),
   email: emailSchema,
@@ -37,6 +39,9 @@ export const signupSchema = z.object({
   email: emailInputSchema,
   password: passwordSchema,
   name: z.string().trim().min(1).max(100),
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento inválida (use AAAA-MM-DD)'),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 
