@@ -40,4 +40,27 @@ describe('rate-limit gaps', () => {
     });
     expect(res11.statusCode).toBe(429);
   });
+
+  it('returns 429 after 30 POST /events/:eventId/feed from the same user', async () => {
+    const env = loadEnv();
+    const { user } = await createUser({ verified: true });
+    const token = bearer(env, user.id);
+
+    for (let i = 0; i < 30; i += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/events/fake-event/feed',
+        headers: { authorization: token },
+      });
+      // 404 is expected since the event doesn't exist; not 429 yet
+      expect(res.statusCode).toBe(404);
+    }
+
+    const res31 = await app.inject({
+      method: 'POST',
+      url: '/events/fake-event/feed',
+      headers: { authorization: token },
+    });
+    expect(res31.statusCode).toBe(429);
+  });
 });
