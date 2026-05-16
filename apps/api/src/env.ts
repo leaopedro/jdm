@@ -57,6 +57,7 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   BROADCAST_BATCH_SIZE: z.coerce.number().int().positive().default(100),
   DEV_FEE_PERCENT: z.coerce.number().int().min(0).max(100).default(10),
+  DELETION_GRACE_DAYS: z.coerce.number().int().min(0).default(30),
 });
 
 type RawEnv = z.infer<typeof envSchema>;
