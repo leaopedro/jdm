@@ -20,6 +20,10 @@ const dataExportJob = (prisma as any).dataExportJob as {
     expiresAt: Date | null;
     completedAt: Date | null;
   } | null>;
+  update: (args: {
+    where: { id: string };
+    data: Record<string, unknown>;
+  }) => Promise<{ id: string; status: string }>;
 };
 
 describe('data-export routes', () => {
@@ -133,6 +137,28 @@ describe('data-export routes', () => {
       const body = res.json();
       expect(body.id).toBe(job.id);
       expect(body.status).toBe('pending');
+    });
+
+    it('410 when export has expired', async () => {
+      const { user } = await createUser({ verified: true });
+      const job = await dataExportJob.create({ data: { userId: user.id } });
+      await dataExportJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'completed',
+          objectKey: 'data-export/test/expired.json',
+          expiresAt: new Date(Date.now() - 1000),
+          completedAt: new Date(Date.now() - 86400_000),
+        },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/me/data-export/${job.id}`,
+        headers: { authorization: bearer(env, user.id) },
+      });
+      expect(res.statusCode).toBe(410);
+      expect(res.json().error).toBe('ExportExpired');
     });
   });
 });
