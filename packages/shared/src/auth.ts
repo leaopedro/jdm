@@ -16,8 +16,10 @@ export const passwordSchema = z.string().min(MIN_PASSWORD_LENGTH).max(200);
 export const userRoleSchema = z.enum(['user', 'organizer', 'admin', 'staff']);
 export type UserRoleName = z.infer<typeof userRoleSchema>;
 
-export const userStatusSchema = z.enum(['partial', 'active', 'disabled']);
+export const userStatusSchema = z.enum(['partial', 'active', 'disabled', 'deleted', 'anonymized']);
 export type UserStatusName = z.infer<typeof userStatusSchema>;
+
+export const INACTIVE_USER_STATUSES = ['disabled', 'deleted', 'anonymized'] as const;
 
 export const ACCOUNT_DISABLED_ERROR = 'AccountDisabled' as const;
 

@@ -1,6 +1,7 @@
 import { prisma } from '@jdm/db';
 import {
   ACCOUNT_DISABLED_ERROR,
+  INACTIVE_USER_STATUSES,
   authResponseSchema,
   loginSchema,
   mfaChallengeResponseSchema,
@@ -29,7 +30,7 @@ export const loginRoute: FastifyPluginAsync = async (app) => {
       return reply.status(401).send({ error: 'Unauthorized', message: 'invalid credentials' });
     }
 
-    if (user.status === 'disabled') {
+    if ((INACTIVE_USER_STATUSES as readonly string[]).includes(user.status)) {
       return reply
         .status(403)
         .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });

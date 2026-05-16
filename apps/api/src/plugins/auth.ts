@@ -1,5 +1,9 @@
 import { prisma } from '@jdm/db';
-import { ACCOUNT_DISABLED_ERROR, type UserRoleName } from '@jdm/shared/auth';
+import {
+  ACCOUNT_DISABLED_ERROR,
+  INACTIVE_USER_STATUSES,
+  type UserRoleName,
+} from '@jdm/shared/auth';
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 
@@ -49,7 +53,7 @@ export const authPlugin = fp(async (app) => {
       where: { id: payload.sub },
       select: { status: true, tokenInvalidatedAt: true },
     });
-    if (!userRow || userRow.status === 'disabled') {
+    if (!userRow || (INACTIVE_USER_STATUSES as readonly string[]).includes(userRow.status)) {
       return reply
         .status(401)
         .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
@@ -74,7 +78,8 @@ export const authPlugin = fp(async (app) => {
         where: { id: payload.sub },
         select: { status: true },
       });
-      if (!userRow || userRow.status === 'disabled') return;
+      if (!userRow || (INACTIVE_USER_STATUSES as readonly string[]).includes(userRow.status))
+        return;
       request.user = payload;
     } catch {
       // invalid token on optional-auth route — treat as anonymous

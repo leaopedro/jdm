@@ -1,6 +1,10 @@
 import { prisma } from '@jdm/db';
 import { mfaRecoverySchema } from '@jdm/shared';
-import { ACCOUNT_DISABLED_ERROR, authResponseSchema } from '@jdm/shared/auth';
+import {
+  ACCOUNT_DISABLED_ERROR,
+  INACTIVE_USER_STATUSES,
+  authResponseSchema,
+} from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { verifyRecoveryCode } from '../../services/auth/mfa.js';
@@ -62,7 +66,7 @@ export const mfaRecoveryRoute: FastifyPluginAsync = async (app) => {
       where: { id: payload.sub },
     });
 
-    if (user.status === 'disabled') {
+    if ((INACTIVE_USER_STATUSES as readonly string[]).includes(user.status)) {
       return reply
         .status(403)
         .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
