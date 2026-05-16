@@ -39,7 +39,7 @@ describe('runRetentionTick', () => {
     expect(await prisma.refreshToken.findUnique({ where: { id: fresh.id } })).not.toBeNull();
   });
 
-  it('keeps revoked refresh tokens until 7 days past expiry', async () => {
+  it('keeps revoked refresh tokens until 7 days after revocation', async () => {
     const { user } = await createUser({ verified: true });
     await prisma.refreshToken.create({
       data: {
@@ -55,6 +55,25 @@ describe('runRetentionTick', () => {
     const rt = results.find((r) => r.table === 'RefreshToken')!;
     expect(rt.deletedCount).toBe(0);
     expect(await prisma.refreshToken.count()).toBe(1);
+  });
+
+  it('deletes revoked refresh tokens after 7 days from revocation', async () => {
+    const now = new Date();
+    const { user } = await createUser({ verified: true });
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: 'revoked-old-hash',
+        expiresAt: new Date(now.getTime() + 30 * MS_PER_DAY),
+        revokedAt: new Date(now.getTime() - 8 * MS_PER_DAY),
+      },
+    });
+
+    const results = await runRetentionTick({ now });
+
+    const rt = results.find((r) => r.table === 'RefreshToken')!;
+    expect(rt.deletedCount).toBe(1);
+    expect(await prisma.refreshToken.count()).toBe(0);
   });
 
   it('deletes expired verification tokens', async () => {

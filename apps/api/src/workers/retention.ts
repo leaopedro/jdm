@@ -16,7 +16,9 @@ export type RetentionWorkerDeps = {
 async function purgeExpiredRefreshTokens(now: Date): Promise<PurgeResult> {
   const cutoff = new Date(now.getTime() - 7 * MS_PER_DAY);
   const { count } = await prisma.refreshToken.deleteMany({
-    where: { expiresAt: { lt: cutoff } },
+    where: {
+      OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }],
+    },
   });
   return { table: 'RefreshToken', deletedCount: count, skippedHolds: 0 };
 }
