@@ -15,6 +15,8 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
   const [eventPickupEnabled, setEventPickupEnabled] = useState(initial.eventPickupEnabled);
   const [shippingFee, setShippingFee] = useState(String(initial.defaultShippingFeeCents));
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
+  const [storeHeaderTitle, setStoreHeaderTitle] = useState(initial.storeHeaderTitle ?? '');
+  const [storeHeaderSubtitle, setStoreHeaderSubtitle] = useState(initial.storeHeaderSubtitle ?? '');
   const [pickup, setPickup] = useState(initial.pickupDisplayLabel ?? '');
   const [phone, setPhone] = useState(initial.supportPhone ?? '');
   const [updatedAt, setUpdatedAt] = useState(initial.updatedAt);
@@ -41,6 +43,8 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
 
     const pickupTrimmed = pickup.trim();
     const phoneTrimmed = phone.trim();
+    const titleTrimmed = storeHeaderTitle.trim();
+    const subtitleTrimmed = storeHeaderSubtitle.trim();
 
     startTransition(async () => {
       const result = await updateAdminStoreSettingsAction({
@@ -48,6 +52,8 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
         eventPickupEnabled,
         defaultShippingFeeCents: shippingCents,
         lowStockThreshold: lowStockNumber,
+        storeHeaderTitle: titleTrimmed === '' ? null : titleTrimmed,
+        storeHeaderSubtitle: subtitleTrimmed === '' ? null : subtitleTrimmed,
         pickupDisplayLabel: pickupTrimmed === '' ? null : pickupTrimmed,
         supportPhone: phoneTrimmed === '' ? null : phoneTrimmed,
       });
@@ -56,6 +62,8 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
         setEventPickupEnabled(result.settings.eventPickupEnabled);
         setShippingFee(String(result.settings.defaultShippingFeeCents));
         setLowStock(String(result.settings.lowStockThreshold));
+        setStoreHeaderTitle(result.settings.storeHeaderTitle ?? '');
+        setStoreHeaderSubtitle(result.settings.storeHeaderSubtitle ?? '');
         setPickup(result.settings.pickupDisplayLabel ?? '');
         setPhone(result.settings.supportPhone ?? '');
         setUpdatedAt(result.settings.updatedAt);
@@ -131,6 +139,36 @@ export function StoreSettingsForm({ initial }: { initial: StoreSettings }) {
         />
         <span className="text-xs text-[color:var(--color-muted)]">
           Variantes com estoque igual ou abaixo deste limite são destacadas no painel.
+        </span>
+      </label>
+
+      <label className={labelCls}>
+        <span className="font-medium">Título do topo da loja (mobile)</span>
+        <input
+          type="text"
+          maxLength={140}
+          value={storeHeaderTitle}
+          onChange={(e) => setStoreHeaderTitle(e.target.value)}
+          className={inputCls}
+          placeholder="Ex.: Drop novo. Corre antes que acabe."
+        />
+        <span className="text-xs text-[color:var(--color-muted)]">
+          Quando preenchido, substitui o título padrão do hero da loja no app.
+        </span>
+      </label>
+
+      <label className={labelCls}>
+        <span className="font-medium">Subtítulo do topo da loja (mobile)</span>
+        <input
+          type="text"
+          maxLength={240}
+          value={storeHeaderSubtitle}
+          onChange={(e) => setStoreHeaderSubtitle(e.target.value)}
+          className={inputCls}
+          placeholder="Ex.: Itens oficiais da cena JDM com estoque limitado."
+        />
+        <span className="text-xs text-[color:var(--color-muted)]">
+          Quando preenchido, substitui o subtítulo padrão do hero da loja no app.
         </span>
       </label>
 
