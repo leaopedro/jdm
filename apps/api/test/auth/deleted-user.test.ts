@@ -50,7 +50,7 @@ describe('deleted / anonymized user auth guards', () => {
   });
 
   it('deleted user cannot login', async () => {
-    const { user } = await createUser({ email: 'del@jdm.test', verified: true });
+    const { user, password } = await createUser({ email: 'del@jdm.test', verified: true });
     await prisma.user.update({
       where: { id: user.id },
       data: { status: 'deleted', deletedAt: new Date() },
@@ -59,14 +59,14 @@ describe('deleted / anonymized user auth guards', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/auth/login',
-      payload: { email: 'del@jdm.test', password: 'Test1234!' },
+      payload: { email: 'del@jdm.test', password },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
   });
 
   it('anonymized user cannot login', async () => {
-    const { user } = await createUser({ email: 'anon@jdm.test', verified: true });
+    const { user, password } = await createUser({ email: 'anon@jdm.test', verified: true });
     await prisma.user.update({
       where: { id: user.id },
       data: { status: 'anonymized', anonymizedAt: new Date() },
@@ -75,7 +75,7 @@ describe('deleted / anonymized user auth guards', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/auth/login',
-      payload: { email: 'anon@jdm.test', password: 'Test1234!' },
+      payload: { email: 'anon@jdm.test', password },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
