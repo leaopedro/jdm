@@ -7,6 +7,7 @@ import { ArrowLeft, Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +22,27 @@ import { buildLoginHref, sanitizeNext } from '~/auth/redirect-intent';
 import { TextField } from '~/components/TextField';
 import { authCopy } from '~/copy/auth';
 
+function parseDobInput(raw: string): string | null {
+  // Accepts DD/MM/AAAA and returns YYYY-MM-DD, or null if invalid
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw.trim());
+  if (!match) return null;
+  const [, dd, mm, yyyy] = match;
+  const d = parseInt(dd, 10);
+  const m = parseInt(mm, 10);
+  const y = parseInt(yyyy, 10);
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isAdult(isoDate: string): boolean {
+  const dob = new Date(`${isoDate}T00:00:00.000Z`);
+  const now = new Date();
+  let age = now.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - dob.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < dob.getUTCDate())) age--;
+  return age >= 18;
+}
+
 export default function SignupScreen() {
   const { signup } = useAuth();
   const router = useRouter();
@@ -28,15 +50,29 @@ export default function SignupScreen() {
   const next = sanitizeNext(nextParam);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
+  const [dobRaw, setDobRaw] = useState('');
   const {
     control,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SignupInput>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: '', password: '', name: '' },
+    defaultValues: { email: '', password: '', name: '', dateOfBirth: '' },
   });
+
+  function handleDobChange(text: string) {
+    setDobRaw(text);
+    const iso = parseDobInput(text);
+    setValue('dateOfBirth', iso ?? text, { shouldValidate: false });
+  }
+
+  function showUnderageAlert() {
+    Alert.alert(authCopy.signup.underageTitle, authCopy.signup.underageBody, [
+      { text: authCopy.signup.underageDismiss, style: 'default' },
+    ]);
+  }
 
   const onSubmit = handleSubmit(async (values) => {
     if (!termsAccepted) {
@@ -44,13 +80,31 @@ export default function SignupScreen() {
       return;
     }
     setTermsError(null);
+
+    const iso = parseDobInput(dobRaw);
+    if (!iso) {
+      setError('dateOfBirth', { message: authCopy.signup.dobInvalid });
+      return;
+    }
+    if (!isAdult(iso)) {
+      showUnderageAlert();
+      return;
+    }
+
     try {
-      await signup(values);
+      await signup({ ...values, dateOfBirth: iso });
       router.replace({
         pathname: '/verify-email-pending',
         params: next ? { email: values.email, next } : { email: values.email },
       });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        const body = err.body as { code?: string } | undefined;
+        if (body?.code === 'UNDERAGE') {
+          showUnderageAlert();
+          return;
+        }
+      }
       if (err instanceof ApiError && err.status === 409) {
         setError('email', { message: authCopy.errors.emailExists });
       } else if (err instanceof ApiError && (err.status === 400 || err.status === 422)) {
@@ -113,6 +167,16 @@ export default function SignupScreen() {
                   error={errors.name?.message}
                 />
               )}
+            />
+
+            <TextField
+              label={authCopy.signup.dob}
+              placeholder={authCopy.signup.dobPlaceholder}
+              value={dobRaw}
+              onChangeText={handleDobChange}
+              keyboardType="numeric"
+              error={errors.dateOfBirth?.message}
+              hint={!errors.dateOfBirth?.message ? authCopy.signup.dobHint : undefined}
             />
 
             <Controller
