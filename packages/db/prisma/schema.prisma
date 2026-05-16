@@ -26,6 +26,8 @@ enum UserStatus {
   partial
   active
   disabled
+  deleted
+  anonymized
 }
 
 model User {
@@ -37,6 +39,8 @@ model User {
   status          UserStatus @default(active)
   emailVerifiedAt    DateTime?
   tokenInvalidatedAt DateTime?
+  deletedAt          DateTime?
+  anonymizedAt       DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
@@ -75,6 +79,7 @@ model User {
   mfaRecoveryCodes    MfaRecoveryCode[]
 
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model AuthProvider {
