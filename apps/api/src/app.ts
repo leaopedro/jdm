@@ -20,6 +20,7 @@ import { devUploadRoutes } from './routes/dev-uploads.js';
 import { eventRoutes } from './routes/events.js';
 import { feedRoutes } from './routes/feed.js';
 import { healthRoutes } from './routes/health.js';
+import { meAccountDeleteRoutes } from './routes/me-account-delete.js';
 import { meConsentRoutes } from './routes/me-consents.js';
 import { meDeviceTokenRoutes } from './routes/me-device-tokens.js';
 import { meEmailChangeRoutes } from './routes/me-email-change.js';
@@ -39,6 +40,7 @@ import { buildPushSender, type PushSender } from './services/push/index.js';
 import { buildStripe, type StripeClient } from './services/stripe/index.js';
 import { DevUploads } from './services/uploads/dev.js';
 import { buildUploads, type Uploads } from './services/uploads/index.js';
+import { startDeletionWorker } from './workers/account-deletion.js';
 import { startBroadcastWorker } from './workers/broadcasts.js';
 import { startEventRemindersWorker } from './workers/event-reminders.js';
 import { startRetentionWorker } from './workers/retention.js';
@@ -108,6 +110,7 @@ export const buildApp = async (
   await app.register(meNotificationsRoutes);
   await app.register(meShippingAddressRoutes);
   await app.register(meConsentRoutes);
+  await app.register(meAccountDeleteRoutes);
   await app.register(meSupportRoutes);
   await app.register(uploadRoutes);
   await app.register(carRoutes);
@@ -126,6 +129,17 @@ export const buildApp = async (
     const worker = startEventRemindersWorker({ sender: app.push, log: app.log });
     app.addHook('onClose', () => {
       worker.stop();
+    });
+
+    const deletionWorker = startDeletionWorker({
+      graceDays: env.DELETION_GRACE_DAYS,
+      uploads: app.uploads,
+      stripe: app.stripe,
+      env,
+      log: app.log,
+    });
+    app.addHook('onClose', () => {
+      void deletionWorker.stop();
     });
   }
 
