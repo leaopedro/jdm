@@ -3,6 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as client from '../../../../api/client';
 
 vi.mock('../../../../api/client', () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
   request: vi.fn(),
   authedRequest: vi.fn(),
 }));
@@ -17,6 +24,22 @@ describe('feed API', () => {
 
   it('listFeedPosts calls GET /events/:eventId/feed with page param', async () => {
     const { listFeedPosts } = await import('../../../../api/feed');
+    mockAuthed.mockResolvedValueOnce({ posts: [], page: 1, totalPages: 1, total: 0 });
+    await listFeedPosts('event-id-1', 1);
+    expect(mockAuthed).toHaveBeenCalledWith('/events/event-id-1/feed?page=1', expect.anything());
+  });
+
+  it('listFeedPosts falls back to public request on 401', async () => {
+    const { listFeedPosts } = await import('../../../../api/feed');
+    mockAuthed.mockRejectedValueOnce(new client.ApiError(401, 'no access token'));
+    mockRequest.mockResolvedValueOnce({ posts: [], page: 1, totalPages: 1, total: 0 });
+    await listFeedPosts('event-id-1', 1);
+    expect(mockRequest).toHaveBeenCalledWith('/events/event-id-1/feed?page=1', expect.anything());
+  });
+
+  it('listFeedPosts falls back to public request when auth provider is not ready', async () => {
+    const { listFeedPosts } = await import('../../../../api/feed');
+    mockAuthed.mockRejectedValueOnce(new Error('token provider not registered'));
     mockRequest.mockResolvedValueOnce({ posts: [], page: 1, totalPages: 1, total: 0 });
     await listFeedPosts('event-id-1', 1);
     expect(mockRequest).toHaveBeenCalledWith('/events/event-id-1/feed?page=1', expect.anything());

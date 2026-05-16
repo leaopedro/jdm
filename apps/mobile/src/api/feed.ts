@@ -15,12 +15,27 @@ import {
 } from '@jdm/shared/feed';
 import { z } from 'zod';
 
-import { authedRequest, request } from './client';
+import { ApiError, authedRequest, request } from './client';
 
 const enc = encodeURIComponent;
 
-export const listFeedPosts = (eventId: string, page: number): Promise<FeedListResponse> =>
-  request(`/events/${enc(eventId)}/feed?page=${page}`, feedListResponseSchema);
+export const listFeedPosts = async (eventId: string, page: number): Promise<FeedListResponse> => {
+  const path = `/events/${enc(eventId)}/feed?page=${page}`;
+  try {
+    return await authedRequest(path, feedListResponseSchema);
+  } catch (error) {
+    // Web boot can hit feed before auth provider/token is ready.
+    // Feed read supports anonymous access; safely fall back to public request.
+    if (
+      (error instanceof ApiError && error.status === 401) ||
+      (error instanceof Error &&
+        (error.message === 'token provider not registered' || error.message === 'no access token'))
+    ) {
+      return request(path, feedListResponseSchema);
+    }
+    throw error;
+  }
+};
 
 export const createFeedPost = (
   eventId: string,
