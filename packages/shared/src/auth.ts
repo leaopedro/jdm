@@ -23,7 +23,7 @@ export const INACTIVE_USER_STATUSES = ['disabled', 'deleted', 'anonymized'] as c
 
 export const ACCOUNT_DISABLED_ERROR = 'AccountDisabled' as const;
 
-export const UNDERAGE_ERROR = 'Underage' as const;
+export const UNDERAGE_ERROR = 'UNDERAGE' as const;
 
 export const publicUserSchema = z.object({
   id: z.string().min(1),

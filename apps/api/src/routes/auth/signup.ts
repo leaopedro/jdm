@@ -32,7 +32,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     if (computeAge(dob) < 18) {
       return reply.status(422).send({
         error: UNDERAGE_ERROR,
-        code: 'UNDERAGE',
+        code: UNDERAGE_ERROR,
         message: 'Você precisa ter 18 anos ou mais para criar uma conta.',
       });
     }
