@@ -107,6 +107,18 @@ export default function LoginPage() {
         {mfaToken ? 'Verificação em duas etapas' : 'JDM Admin · Entrar'}
       </h1>
       {mfaToken ? <MfaForm mfaToken={mfaToken} /> : <LoginForm onMfaRequired={setMfaToken} />}
+      <footer className="border-t border-[color:var(--color-border)] pt-4 text-center text-xs text-[color:var(--color-muted)]">
+        <a href="/privacidade" className="underline hover:text-[color:var(--color-foreground)]">
+          Política de privacidade
+        </a>
+        {' · '}
+        <a
+          href="mailto:privacidade@jdmexperience.com.br"
+          className="underline hover:text-[color:var(--color-foreground)]"
+        >
+          privacidade@jdmexperience.com.br
+        </a>
+      </footer>
     </main>
   );
 }

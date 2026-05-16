@@ -93,6 +93,10 @@
     "./sentry-scrubber": {
       "types": "./src/sentry-scrubber.ts",
       "default": "./dist/sentry-scrubber.js"
+    },
+    "./legal": {
+      "types": "./src/legal.ts",
+      "default": "./dist/legal.js"
     }
   },
   "scripts": {

@@ -2,7 +2,10 @@
   "extends": "@jdm/tsconfig/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "paths": { "~/*": ["./src/*"] },
+    "paths": {
+      "~/*": ["./src/*"],
+      "@jdm/shared/legal": ["../../packages/shared/src/legal.ts"]
+    },
     "incremental": true,
     "plugins": [{ "name": "next" }]
   },
