@@ -1,5 +1,10 @@
 import { prisma } from '@jdm/db';
-import { authResponseSchema, refreshSchema } from '@jdm/shared/auth';
+import {
+  ACCOUNT_DISABLED_ERROR,
+  INACTIVE_USER_STATUSES,
+  authResponseSchema,
+  refreshSchema,
+} from '@jdm/shared/auth';
 import type { FastifyPluginAsync } from 'fastify';
 
 import {
@@ -22,6 +27,16 @@ export const refreshRoute: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.findUnique({ where: { id: record.userId } });
     if (!user) {
       return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    if ((INACTIVE_USER_STATUSES as readonly string[]).includes(user.status)) {
+      await prisma.refreshToken.update({
+        where: { id: record.id },
+        data: { revokedAt: new Date() },
+      });
+      return reply
+        .status(401)
+        .send({ error: ACCOUNT_DISABLED_ERROR, message: 'account is disabled' });
     }
 
     const next = issueRefreshToken(app.env);

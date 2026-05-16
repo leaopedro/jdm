@@ -3,7 +3,17 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadEnv } from '../../src/env.js';
+import { issueRefreshToken } from '../../src/services/auth/tokens.js';
 import { bearer, createUser, makeApp, resetDatabase } from '../helpers.js';
+
+const seedRefresh = async (userId: string) => {
+  const env = loadEnv();
+  const issued = issueRefreshToken(env);
+  await prisma.refreshToken.create({
+    data: { userId, tokenHash: issued.hash, expiresAt: issued.expiresAt },
+  });
+  return issued.token;
+};
 
 describe('deleted / anonymized user auth guards', () => {
   let app: FastifyInstance;
@@ -128,6 +138,45 @@ describe('deleted / anonymized user auth guards', () => {
     });
     const ids = activeUsers.map((u) => u.id);
     expect(ids).not.toContain(user.id);
+  });
+
+  it('deleted user cannot refresh token', async () => {
+    const { user } = await createUser({ email: 'del@jdm.test', verified: true });
+    const token = await seedRefresh(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'deleted', deletedAt: new Date() },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: token },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
+
+    const tokens = await prisma.refreshToken.findMany({
+      where: { userId: user.id, revokedAt: { not: null } },
+    });
+    expect(tokens.length).toBe(1);
+  });
+
+  it('anonymized user cannot refresh token', async () => {
+    const { user } = await createUser({ email: 'anon@jdm.test', verified: true });
+    const token = await seedRefresh(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'anonymized', anonymizedAt: new Date() },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: token },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error: 'AccountDisabled' });
   });
 
   it('deletedAt and anonymizedAt are null for active users', async () => {
