@@ -153,35 +153,44 @@ export default function SignupScreen() {
               ) : null}
             </View>
 
-            <Pressable
-              onPress={() => {
-                setTermsAccepted((v) => !v);
-                if (!termsAccepted) setTermsError(null);
-              }}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: termsAccepted }}
-              accessibilityLabel="Aceito os termos e a política de privacidade"
-              className="flex-row items-start pt-2 gap-3 active:opacity-80"
-            >
-              <View
-                className={
-                  'h-6 w-6 rounded-md border items-center justify-center ' +
-                  (termsAccepted ? 'bg-brand border-brand' : 'border-border-strong')
-                }
+            <View className="flex-row items-start pt-2 gap-3">
+              <Pressable
+                onPress={() => {
+                  setTermsAccepted((v) => !v);
+                  if (!termsAccepted) setTermsError(null);
+                }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: termsAccepted }}
+                accessibilityLabel="Aceito os termos e a política de privacidade"
+                hitSlop={8}
+                className="active:opacity-70"
               >
-                {termsAccepted ? <Check color="#0A0A0A" size={16} strokeWidth={3} /> : null}
-              </View>
+                <View
+                  className={
+                    'h-6 w-6 rounded-md border items-center justify-center ' +
+                    (termsAccepted ? 'bg-brand border-brand' : 'border-border-strong')
+                  }
+                >
+                  {termsAccepted ? <Check color="#0A0A0A" size={16} strokeWidth={3} /> : null}
+                </View>
+              </Pressable>
               <Text variant="bodySm" tone="secondary" className="flex-1">
                 {authCopy.signup.termsAccept}
                 <Text variant="bodySm" tone="brand" weight="semibold">
                   {authCopy.signup.termsLink}
                 </Text>
                 {authCopy.signup.termsAnd}
-                <Text variant="bodySm" tone="brand" weight="semibold">
+                <Text
+                  variant="bodySm"
+                  tone="brand"
+                  weight="semibold"
+                  onPress={() => router.push('/(auth)/privacidade' as never)}
+                  accessibilityRole="link"
+                >
                   {authCopy.signup.privacyLink}
                 </Text>
               </Text>
-            </Pressable>
+            </View>
             {termsError ? (
               <Text variant="bodySm" tone="danger" className="-mt-1">
                 {termsError}
