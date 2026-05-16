@@ -138,7 +138,7 @@ export const buildApp = async (
       log: app.log,
     });
     app.addHook('onClose', () => {
-      deletionWorker.stop();
+      void deletionWorker.stop();
     });
   }
 

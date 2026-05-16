@@ -5,13 +5,17 @@ import type { Prisma } from '@prisma/client';
 
 import type { Uploads } from '../uploads/index.js';
 
-type StepEntry = { step: string; status: 'ok' | 'error'; error?: string; at: string };
+export type StepEntry = { step: string; status: 'ok' | 'skipped' | 'error'; error?: string; at: string };
 
 export type AnonymizeResult =
   | { ok: true; skipped?: boolean }
   | { ok: false; error: string };
 
-export const anonymizeUser = async (userId: string, uploads: Uploads): Promise<AnonymizeResult> => {
+export const anonymizeUser = async (
+  userId: string,
+  uploads: Uploads,
+  priorSteps: StepEntry[] = [],
+): Promise<AnonymizeResult> => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { status: true, avatarObjectKey: true },
@@ -21,7 +25,7 @@ export const anonymizeUser = async (userId: string, uploads: Uploads): Promise<A
   if (user.status === 'anonymized') return { ok: true, skipped: true };
   if (user.status !== 'deleted') return { ok: false, error: 'user_not_deleted' };
 
-  const steps: StepEntry[] = [];
+  const steps: StepEntry[] = [...priorSteps];
   const now = new Date();
 
   // Collect R2 keys to delete

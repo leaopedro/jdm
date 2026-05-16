@@ -2,8 +2,7 @@ import { prisma } from '@jdm/db';
 
 import type { Env } from '../../env.js';
 import type { StripeClient } from '../stripe/index.js';
-
-type StepEntry = { step: string; status: 'ok' | 'skipped' | 'error'; error?: string; at: string };
+import type { StepEntry } from './anonymize.js';
 
 export const runVendorFanout = async (
   userId: string,

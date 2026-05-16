@@ -32,14 +32,20 @@ export const runDeletionWorkerTick = async (deps: DeletionWorkerDeps): Promise<v
 
   for (const { id } of candidates) {
     try {
-      await runVendorFanout(id, deps.stripe, deps.env);
-      await anonymizeUser(id, deps.uploads);
+      const fanoutSteps = await runVendorFanout(id, deps.stripe, deps.env);
+      await anonymizeUser(id, deps.uploads, fanoutSteps);
     } catch (err) {
       deps.log?.error({ err, userId: id }, '[deletion-worker] failed to anonymize user');
-      await prisma.deletionLog.update({
-        where: { userId: id },
-        data: { error: err instanceof Error ? err.message : String(err) },
-      });
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const existing = await prisma.deletionLog.findUnique({ where: { userId: id } });
+      if (existing) {
+        await prisma.deletionLog.update({
+          where: { userId: id },
+          data: { error: errorMsg },
+        });
+      } else {
+        deps.log?.warn({ userId: id }, '[deletion-worker] no DeletionLog row found for failed user');
+      }
     }
   }
 };

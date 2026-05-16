@@ -196,4 +196,48 @@ describe('runDeletionWorkerTick', () => {
     const row = await prisma.user.findUnique({ where: { id: user.id } });
     expect(row?.status).toBe('deleted');
   });
+
+  it('persists vendor fanout steps in DeletionLog', async () => {
+    const { user } = await createUser({ email: 'fanout@jdm.test', verified: true });
+    const deletedAt = new Date(Date.now() - 31 * 24 * 3600_000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'deleted', deletedAt },
+    });
+    await prisma.deletionLog.create({ data: { userId: user.id, requestedAt: deletedAt } });
+
+    await runDeletionWorkerTick({
+      graceDays: 30,
+      uploads: app.uploads,
+      stripe: app.stripe,
+      env,
+      batchSize: 10,
+    });
+
+    const log = await prisma.deletionLog.findUnique({ where: { userId: user.id } });
+    const steps = log?.steps as Array<{ step: string; status: string }>;
+    const fanoutSteps = steps.filter((s) => s.step.startsWith('stripe_') || s.step.startsWith('expo_') || s.step.startsWith('sentry_') || s.step.startsWith('resend_'));
+    expect(fanoutSteps.length).toBeGreaterThan(0);
+  });
+
+  it('handles missing DeletionLog row gracefully on error', async () => {
+    const { user } = await createUser({ email: 'nolog@jdm.test', verified: true });
+    const deletedAt = new Date(Date.now() - 31 * 24 * 3600_000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'deleted', deletedAt },
+    });
+    // Intentionally do NOT create a DeletionLog row
+
+    // Should not throw even if DeletionLog is missing
+    await expect(
+      runDeletionWorkerTick({
+        graceDays: 30,
+        uploads: app.uploads,
+        stripe: app.stripe,
+        env,
+        batchSize: 10,
+      }),
+    ).resolves.not.toThrow();
+  });
 });
