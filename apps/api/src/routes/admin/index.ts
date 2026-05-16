@@ -56,9 +56,22 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(adminStoreInventoryRoutes);
     await scope.register(adminStoreOrderRoutes);
     await scope.register(adminCollectionRoutes);
-    await scope.register(adminBroadcastRoutes);
     await scope.register(adminSupportRoutes);
     await scope.register(adminFeedModerationRoutes);
+  });
+
+  // Broadcasts: organizer/admin with tight rate limit.
+  await app.register(async (scope) => {
+    scope.addHook('preHandler', scope.requireRole('organizer', 'admin'));
+    await scope.register(rateLimit, {
+      max: 5,
+      timeWindow: '15 minutes',
+      keyGenerator: (req) => {
+        const user = req.user as { sub?: string } | undefined;
+        return `broadcast:${user?.sub ?? req.ip}`;
+      },
+    });
+    await scope.register(adminBroadcastRoutes);
   });
 
   // LGPD consent audit: admin-only (exposes PII: email, IP, UA).

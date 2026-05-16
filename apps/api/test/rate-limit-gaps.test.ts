@@ -98,4 +98,29 @@ describe('rate-limit gaps', () => {
     });
     expect(res11.statusCode).toBe(429);
   });
+
+  it('returns 429 after 5 POST /admin/broadcasts from the same admin', async () => {
+    const env = loadEnv();
+    const { user } = await createUser({ role: 'admin', verified: true });
+    const token = bearer(env, user.id, 'admin');
+
+    for (let i = 0; i < 5; i += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/admin/broadcasts',
+        headers: { authorization: token },
+        payload: { title: 'test', body: 'test', targetKind: 'all' },
+      });
+      // Validation or other errors are fine; not 429 yet
+      expect(res.statusCode).not.toBe(429);
+    }
+
+    const res6 = await app.inject({
+      method: 'POST',
+      url: '/admin/broadcasts',
+      headers: { authorization: token },
+      payload: { title: 'test', body: 'test', targetKind: 'all' },
+    });
+    expect(res6.statusCode).toBe(429);
+  });
 });
