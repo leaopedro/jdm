@@ -26,7 +26,9 @@ function parseDobInput(raw: string): string | null {
   // Accepts DD/MM/AAAA and returns YYYY-MM-DD, or null if invalid
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw.trim());
   if (!match) return null;
-  const [, dd, mm, yyyy] = match;
+  const dd = match[1]!;
+  const mm = match[2]!;
+  const yyyy = match[3]!;
   const d = parseInt(dd, 10);
   const m = parseInt(mm, 10);
   const y = parseInt(yyyy, 10);
@@ -176,7 +178,7 @@ export default function SignupScreen() {
               onChangeText={handleDobChange}
               keyboardType="numeric"
               error={errors.dateOfBirth?.message}
-              hint={!errors.dateOfBirth?.message ? authCopy.signup.dobHint : undefined}
+              {...(!errors.dateOfBirth?.message && { hint: authCopy.signup.dobHint })}
             />
 
             <Controller
