@@ -363,72 +363,134 @@ const captureStripeCancelFailure = (
 };
 
 export const orderRoutes: FastifyPluginAsync = async (app) => {
-  app.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const input = createOrderRequestSchema.parse(request.body);
+  await app.register(async (scoped) => {
+    await scoped.register(rateLimit, {
+      max: 10,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const user = req.user as { sub?: string } | undefined;
+        return `order-create:${user?.sub ?? req.ip}`;
+      },
+    });
 
-    const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
-    if (!result.ok) return reply.status(result.status).send(result.body);
-    const data = result.data;
+    scoped.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const input = createOrderRequestSchema.parse(request.body);
 
-    if (input.method === 'pix') {
-      if (!app.abacatepay) {
-        await rollbackReservation(data, data.tier.id);
-        return reply
-          .status(503)
-          .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });
+      const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
+      if (!result.ok) return reply.status(result.status).send(result.body);
+      const data = result.data;
+
+      if (input.method === 'pix') {
+        if (!app.abacatepay) {
+          await rollbackReservation(data, data.tier.id);
+          return reply
+            .status(503)
+            .send({ error: 'ServiceUnavailable', message: 'pix provider not configured' });
+        }
+
+        try {
+          const { order } = await createPendingOrderPix(data);
+
+          let billing;
+          try {
+            billing = await app.abacatepay.createPixBilling({
+              amountCents: data.amountCents,
+              description: `Ingresso ${data.event.title}`,
+              metadata: {
+                orderId: order.id,
+                userId: sub,
+                eventId: data.event.id,
+                tierId: data.tier.id,
+                tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+              },
+            });
+          } catch (providerErr) {
+            if (
+              providerErr instanceof AbacatePayUpstreamError &&
+              providerErr.status >= 400 &&
+              providerErr.status < 500
+            ) {
+              request.log.warn(
+                { err: providerErr, orderId: order.id, status: providerErr.status },
+                'orders: AbacatePay rejected pix billing request',
+              );
+              await prisma.order.update({
+                where: { id: order.id },
+                data: { status: 'expired' },
+              });
+              await rollbackReservation(data, data.tier.id);
+              return reply.status(502).send({
+                error: 'BadGateway',
+                message: 'pix provider rejected the request',
+              });
+            }
+            throw providerErr;
+          }
+
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { providerRef: billing.id, brCode: billing.brCode },
+          });
+
+          return reply.status(201).send(
+            createPixOrderResponseSchema.parse({
+              orderId: order.id,
+              status: 'pending',
+              brCode: billing.brCode,
+              expiresAt: order.expiresAt.toISOString(),
+              amountCents: data.amountCents,
+              baseAmountCents: data.baseAmountCents,
+              devFeePercent: data.devFeePercent,
+              devFeeAmountCents: data.devFeeAmountCents,
+              currency: data.tier.currency,
+            }),
+          );
+        } catch (err) {
+          await rollbackReservation(data, data.tier.id);
+          throw err;
+        }
+      }
+
+      for (const ref of data.expiredProviderRefs) {
+        app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
+          request.log.warn(
+            { err: cancelErr, providerRef: ref },
+            'orders: stripe PI cancel failed after sweep',
+          );
+          captureStripeCancelFailure(cancelErr, {
+            route: 'create_order',
+            providerRef: ref,
+          });
+        });
       }
 
       try {
-        const { order } = await createPendingOrderPix(data);
+        const { order } = await createPendingOrder(data);
 
-        let billing;
-        try {
-          billing = await app.abacatepay.createPixBilling({
-            amountCents: data.amountCents,
-            description: `Ingresso ${data.event.title}`,
-            metadata: {
-              orderId: order.id,
-              userId: sub,
-              eventId: data.event.id,
-              tierId: data.tier.id,
-              tickets: JSON.stringify(data.validationResult.ticketsMetadata),
-            },
-          });
-        } catch (providerErr) {
-          if (
-            providerErr instanceof AbacatePayUpstreamError &&
-            providerErr.status >= 400 &&
-            providerErr.status < 500
-          ) {
-            request.log.warn(
-              { err: providerErr, orderId: order.id, status: providerErr.status },
-              'orders: AbacatePay rejected pix billing request',
-            );
-            await prisma.order.update({
-              where: { id: order.id },
-              data: { status: 'expired' },
-            });
-            await rollbackReservation(data, data.tier.id);
-            return reply.status(502).send({
-              error: 'BadGateway',
-              message: 'pix provider rejected the request',
-            });
-          }
-          throw providerErr;
-        }
+        const intent = await app.stripe.createPaymentIntent({
+          amountCents: data.amountCents,
+          currency: data.tier.currency,
+          idempotencyKey: order.id,
+          metadata: {
+            orderId: order.id,
+            userId: sub,
+            eventId: data.event.id,
+            tierId: data.tier.id,
+            tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+          },
+        });
 
         await prisma.order.update({
           where: { id: order.id },
-          data: { providerRef: billing.id, brCode: billing.brCode },
+          data: { providerRef: intent.id },
         });
 
         return reply.status(201).send(
-          createPixOrderResponseSchema.parse({
+          createOrderResponseSchema.parse({
             orderId: order.id,
             status: 'pending',
-            brCode: billing.brCode,
-            expiresAt: order.expiresAt.toISOString(),
+            clientSecret: intent.clientSecret,
             amountCents: data.amountCents,
             baseAmountCents: data.baseAmountCents,
             devFeePercent: data.devFeePercent,
@@ -440,142 +502,91 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         await rollbackReservation(data, data.tier.id);
         throw err;
       }
-    }
+    });
 
-    for (const ref of data.expiredProviderRefs) {
-      app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
-        request.log.warn(
-          { err: cancelErr, providerRef: ref },
-          'orders: stripe PI cancel failed after sweep',
-        );
-        captureStripeCancelFailure(cancelErr, {
-          route: 'create_order',
-          providerRef: ref,
+    scoped.post('/orders/checkout', { preHandler: [app.authenticate] }, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const parsed = createWebCheckoutRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(422).send({
+          error: 'UnprocessableEntity',
+          message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
         });
-      });
-    }
+      }
+      const input = parsed.data;
 
-    try {
-      const { order } = await createPendingOrder(data);
+      const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
+      if (!result.ok) return reply.status(result.status).send(result.body);
+      const data = result.data;
 
-      const intent = await app.stripe.createPaymentIntent({
-        amountCents: data.amountCents,
-        currency: data.tier.currency,
-        idempotencyKey: order.id,
-        metadata: {
-          orderId: order.id,
-          userId: sub,
-          eventId: data.event.id,
-          tierId: data.tier.id,
-          tickets: JSON.stringify(data.validationResult.ticketsMetadata),
-        },
-      });
-
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { providerRef: intent.id },
-      });
-
-      return reply.status(201).send(
-        createOrderResponseSchema.parse({
-          orderId: order.id,
-          status: 'pending',
-          clientSecret: intent.clientSecret,
-          amountCents: data.amountCents,
-          baseAmountCents: data.baseAmountCents,
-          devFeePercent: data.devFeePercent,
-          devFeeAmountCents: data.devFeeAmountCents,
-          currency: data.tier.currency,
-        }),
-      );
-    } catch (err) {
-      await rollbackReservation(data, data.tier.id);
-      throw err;
-    }
-  });
-
-  app.post('/orders/checkout', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const { sub } = requireUser(request);
-    const parsed = createWebCheckoutRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(422).send({
-        error: 'UnprocessableEntity',
-        message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-      });
-    }
-    const input = parsed.data;
-
-    const result = await prepareOrder(sub, input, app.env.DEV_FEE_PERCENT);
-    if (!result.ok) return reply.status(result.status).send(result.body);
-    const data = result.data;
-
-    for (const ref of data.expiredProviderRefs) {
-      app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
-        request.log.warn(
-          { err: cancelErr, providerRef: ref },
-          'orders: stripe PI cancel failed after sweep',
-        );
-        captureStripeCancelFailure(cancelErr, {
-          route: 'web_checkout',
-          providerRef: ref,
-        });
-      });
-    }
-
-    try {
-      const { order } = await createPendingOrder(data);
-      const successUrl = withReturnParams(input.successUrl, { orderId: order.id });
-      const cancelUrl = withReturnParams(input.cancelUrl, {
-        orderId: order.id,
-        cancelled: 'true',
-      });
-
-      // Stripe requires expires_at >= 30 min from now; order expiry is 15 min.
-      // Use the Stripe minimum so the session is accepted; the order-level sweep
-      // handles early cancellation independently.
-      const STRIPE_MIN_SESSION_MS = 30 * 60 * 1000;
-      const sessionExpiryMs = Math.max(ORDER_EXPIRY_MS, STRIPE_MIN_SESSION_MS);
-      const expiresAtUnix = Math.floor((Date.now() + sessionExpiryMs) / 1000);
-      const session = await app.stripe.createCheckoutSession({
-        amountCents: data.amountCents,
-        currency: data.tier.currency,
-        productName: data.event.title,
-        idempotencyKey: `checkout_${order.id}`,
-        metadata: {
-          orderId: order.id,
-          userId: sub,
-          eventId: data.event.id,
-          tierId: data.tier.id,
-          tickets: JSON.stringify(data.validationResult.ticketsMetadata),
-        },
-        successUrl,
-        cancelUrl,
-        expiresAt: expiresAtUnix,
-      });
-
-      if (session.paymentIntentId) {
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { providerRef: session.paymentIntentId },
+      for (const ref of data.expiredProviderRefs) {
+        app.stripe.cancelPaymentIntent(ref).catch((cancelErr) => {
+          request.log.warn(
+            { err: cancelErr, providerRef: ref },
+            'orders: stripe PI cancel failed after sweep',
+          );
+          captureStripeCancelFailure(cancelErr, {
+            route: 'web_checkout',
+            providerRef: ref,
+          });
         });
       }
 
-      return reply.status(201).send(
-        createWebCheckoutResponseSchema.parse({
+      try {
+        const { order } = await createPendingOrder(data);
+        const successUrl = withReturnParams(input.successUrl, { orderId: order.id });
+        const cancelUrl = withReturnParams(input.cancelUrl, {
           orderId: order.id,
-          status: 'pending',
-          checkoutUrl: session.url,
+          cancelled: 'true',
+        });
+
+        // Stripe requires expires_at >= 30 min from now; order expiry is 15 min.
+        // Use the Stripe minimum so the session is accepted; the order-level sweep
+        // handles early cancellation independently.
+        const STRIPE_MIN_SESSION_MS = 30 * 60 * 1000;
+        const sessionExpiryMs = Math.max(ORDER_EXPIRY_MS, STRIPE_MIN_SESSION_MS);
+        const expiresAtUnix = Math.floor((Date.now() + sessionExpiryMs) / 1000);
+        const session = await app.stripe.createCheckoutSession({
           amountCents: data.amountCents,
-          baseAmountCents: data.baseAmountCents,
-          devFeePercent: data.devFeePercent,
-          devFeeAmountCents: data.devFeeAmountCents,
           currency: data.tier.currency,
-        }),
-      );
-    } catch (err) {
-      await rollbackReservation(data, data.tier.id);
-      throw err;
-    }
+          productName: data.event.title,
+          idempotencyKey: `checkout_${order.id}`,
+          metadata: {
+            orderId: order.id,
+            userId: sub,
+            eventId: data.event.id,
+            tierId: data.tier.id,
+            tickets: JSON.stringify(data.validationResult.ticketsMetadata),
+          },
+          successUrl,
+          cancelUrl,
+          expiresAt: expiresAtUnix,
+        });
+
+        if (session.paymentIntentId) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { providerRef: session.paymentIntentId },
+          });
+        }
+
+        return reply.status(201).send(
+          createWebCheckoutResponseSchema.parse({
+            orderId: order.id,
+            status: 'pending',
+            checkoutUrl: session.url,
+            amountCents: data.amountCents,
+            baseAmountCents: data.baseAmountCents,
+            devFeePercent: data.devFeePercent,
+            devFeeAmountCents: data.devFeeAmountCents,
+            currency: data.tier.currency,
+          }),
+        );
+      } catch (err) {
+        await rollbackReservation(data, data.tier.id);
+        throw err;
+      }
+    });
   });
 
   await app.register(async (scoped) => {
