@@ -26,14 +26,15 @@ export const meConsentRoutes: FastifyPluginAsync = async (app) => {
     await scoped.register(rateLimit, { max: 20, timeWindow: '1 minute' });
 
     scoped.post('/me/consents', { preHandler: [scoped.authenticate] }, async (request) => {
-      const { sub } = requireUser(request);
+      const { sub, role } = requireUser(request);
       const body = grantConsentBodySchema.parse(request.body);
+      const channel = role !== 'user' ? 'web_admin' : 'mobile';
 
       const row = await recordConsent({
         userId: sub,
         purpose: body.purpose,
         version: body.version,
-        channel: 'mobile',
+        channel,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] ?? null,
         evidence: body.evidence as Prisma.InputJsonValue,
