@@ -123,4 +123,30 @@ describe('rate-limit gaps', () => {
     });
     expect(res6.statusCode).toBe(429);
   });
+
+  it('two users on same IP do not share rate-limit quota', async () => {
+    const env = loadEnv();
+    const { user: userA } = await createUser({ verified: true, email: 'a@jdm.test' });
+    const { user: userB } = await createUser({ verified: true, email: 'b@jdm.test' });
+    const tokenA = bearer(env, userA.id);
+    const tokenB = bearer(env, userB.id);
+    const fakeOrderId = '00000000-0000-0000-0000-000000000000';
+
+    // User A exhausts 9 of 10 requests
+    for (let i = 0; i < 9; i += 1) {
+      await app.inject({
+        method: 'POST',
+        url: `/me/orders/${fakeOrderId}/cancel`,
+        headers: { authorization: tokenA },
+      });
+    }
+
+    // User B still gets through (not 429) because quota is per-user, not per-IP
+    const resB = await app.inject({
+      method: 'POST',
+      url: `/me/orders/${fakeOrderId}/cancel`,
+      headers: { authorization: tokenB },
+    });
+    expect(resB.statusCode).not.toBe(429);
+  });
 });

@@ -364,16 +364,18 @@ const captureStripeCancelFailure = (
 
 export const orderRoutes: FastifyPluginAsync = async (app) => {
   await app.register(async (scoped) => {
+    scoped.addHook('preHandler', app.authenticate);
     await scoped.register(rateLimit, {
       max: 10,
       timeWindow: '1 minute',
+      hook: 'preHandler',
       keyGenerator: (req) => {
         const user = req.user as { sub?: string } | undefined;
         return `order-create:${user?.sub ?? req.ip}`;
       },
     });
 
-    scoped.post('/orders', { preHandler: [app.authenticate] }, async (request, reply) => {
+    scoped.post('/orders', {}, async (request, reply) => {
       const { sub } = requireUser(request);
       const input = createOrderRequestSchema.parse(request.body);
 
@@ -504,7 +506,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
-    scoped.post('/orders/checkout', { preHandler: [app.authenticate] }, async (request, reply) => {
+    scoped.post('/orders/checkout', {}, async (request, reply) => {
       const { sub } = requireUser(request);
       const parsed = createWebCheckoutRequestSchema.safeParse(request.body);
       if (!parsed.success) {

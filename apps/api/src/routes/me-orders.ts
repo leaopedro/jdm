@@ -156,76 +156,74 @@ export const meOrdersRoutes: FastifyPluginAsync = async (app) => {
   });
 
   await app.register(async (scoped) => {
+    scoped.addHook('preHandler', app.authenticate);
     await scoped.register(rateLimit, {
       max: 10,
       timeWindow: '1 minute',
+      hook: 'preHandler',
       keyGenerator: (req) => {
         const user = req.user as { sub?: string } | undefined;
         return `order-cancel:${user?.sub ?? req.ip}`;
       },
     });
 
-    scoped.post(
-      '/me/orders/:id/cancel',
-      { preHandler: [app.authenticate] },
-      async (request, reply) => {
-        const { sub } = requireUser(request);
-        const { id } = request.params as { id: string };
+    scoped.post('/me/orders/:id/cancel', {}, async (request, reply) => {
+      const { sub } = requireUser(request);
+      const { id } = request.params as { id: string };
 
-        const prepared = await prepareCancelPendingOrder(id, sub);
-        if (prepared.kind === 'not_found') {
-          return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
-        }
-        if (prepared.kind === 'forbidden') {
-          return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
-        }
-        if (prepared.kind === 'not_pending') {
-          return reply.status(409).send({
-            error: 'Conflict',
-            message: `order cannot be cancelled from status ${prepared.status}`,
+      const prepared = await prepareCancelPendingOrder(id, sub);
+      if (prepared.kind === 'not_found') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+      if (prepared.kind === 'forbidden') {
+        return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
+      }
+      if (prepared.kind === 'not_pending') {
+        return reply.status(409).send({
+          error: 'Conflict',
+          message: `order cannot be cancelled from status ${prepared.status}`,
+        });
+      }
+
+      if (prepared.order.provider === 'stripe' && prepared.order.providerRef) {
+        try {
+          await app.stripe.cancelPaymentIntent(prepared.order.providerRef);
+        } catch (cancelErr) {
+          request.log.warn(
+            {
+              err: cancelErr,
+              orderId: prepared.order.id,
+              providerRef: prepared.order.providerRef,
+            },
+            'me orders: stripe PI cancel failed before local cancellation',
+          );
+          return reply.status(502).send({
+            error: 'BadGateway',
+            message: 'could not confirm stripe payment intent cancellation',
           });
         }
+      }
 
-        if (prepared.order.provider === 'stripe' && prepared.order.providerRef) {
-          try {
-            await app.stripe.cancelPaymentIntent(prepared.order.providerRef);
-          } catch (cancelErr) {
-            request.log.warn(
-              {
-                err: cancelErr,
-                orderId: prepared.order.id,
-                providerRef: prepared.order.providerRef,
-              },
-              'me orders: stripe PI cancel failed before local cancellation',
-            );
-            return reply.status(502).send({
-              error: 'BadGateway',
-              message: 'could not confirm stripe payment intent cancellation',
-            });
-          }
-        }
+      const result = await cancelPendingOrder(id, sub);
+      if (result.kind === 'not_found') {
+        return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
+      }
+      if (result.kind === 'forbidden') {
+        return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
+      }
+      if (result.kind === 'not_pending') {
+        return reply.status(409).send({
+          error: 'Conflict',
+          message: `order cannot be cancelled from status ${result.status}`,
+        });
+      }
 
-        const result = await cancelPendingOrder(id, sub);
-        if (result.kind === 'not_found') {
-          return reply.status(404).send({ error: 'NotFound', message: 'order not found' });
-        }
-        if (result.kind === 'forbidden') {
-          return reply.status(403).send({ error: 'Forbidden', message: 'not your order' });
-        }
-        if (result.kind === 'not_pending') {
-          return reply.status(409).send({
-            error: 'Conflict',
-            message: `order cannot be cancelled from status ${result.status}`,
-          });
-        }
-
-        return reply.status(200).send(
-          cancelMyOrderResponseSchema.parse({
-            orderId: result.order.id,
-            status: result.order.status,
-          }),
-        );
-      },
-    );
+      return reply.status(200).send(
+        cancelMyOrderResponseSchema.parse({
+          orderId: result.order.id,
+          status: result.order.status,
+        }),
+      );
+    });
   });
 };

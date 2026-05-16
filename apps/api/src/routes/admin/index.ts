@@ -66,6 +66,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     await scope.register(rateLimit, {
       max: 5,
       timeWindow: '15 minutes',
+      hook: 'preHandler',
       keyGenerator: (req) => {
         const user = req.user as { sub?: string } | undefined;
         return `broadcast:${user?.sub ?? req.ip}`;
